@@ -62,8 +62,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:title", content: "Pace — Votre rythme de vie premium" },
       { property: "og:description", content: "Sommeil, nutrition, sport, finances — orchestrez chaque jour avec Pace." },
       { name: "twitter:description", content: "Sommeil, nutrition, sport, finances — orchestrez chaque jour avec Pace." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/VczojWNawCSWp2BrFFR31LDpcol1/social-images/social-1778618550952-ChatGPT_Image_12_mai_2026,_21_16_10.webp" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/VczojWNawCSWp2BrFFR31LDpcol1/social-images/social-1778618550952-ChatGPT_Image_12_mai_2026,_21_16_10.webp" },
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:type", content: "website" },
     ],
