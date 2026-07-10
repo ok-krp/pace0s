@@ -14,7 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      legal_consent: {
+        Row: {
+          consented_at: string
+          created_at: string
+          eula_version: string
+          id: string
+          ip_country: string | null
+          opts: Json
+          privacy_version: string
+          region: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          consented_at?: string
+          created_at?: string
+          eula_version: string
+          id?: string
+          ip_country?: string | null
+          opts?: Json
+          privacy_version: string
+          region: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          consented_at?: string
+          created_at?: string
+          eula_version?: string
+          id?: string
+          ip_country?: string | null
+          opts?: Json
+          privacy_version?: string
+          region?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
