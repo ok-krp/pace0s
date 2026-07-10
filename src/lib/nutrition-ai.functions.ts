@@ -5,22 +5,6 @@ import { createLovableAiGatewayProvider } from "./ai-gateway";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { LEGAL_VERSIONS } from "./legal";
 
-const FoodAnalysisSchema = z.object({
-  dish_name: z.string(),
-  detected_items: z.array(z.string()),
-  estimated_grams: z.number(),
-  kcal: z.number(),
-  protein_g: z.number(),
-  carbs_g: z.number(),
-  fat_g: z.number(),
-  fiber_g: z.number(),
-  sodium_mg: z.number(),
-  health_score: z.enum(["green", "orange", "red"]),
-  quality: z.enum(["bulking", "cutting", "balanced", "treat"]),
-  confidence: z.number().min(0).max(1),
-  notes: z.string(),
-});
-
 export const analyzeFoodPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { imageBase64: string; goal?: string }) => {
@@ -66,7 +50,22 @@ Réponds en français pour dish_name, detected_items et notes.${data.goal ? ` Ob
         ],
       });
       const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-      const parsed = FoodAnalysisSchema.safeParse(JSON.parse(cleaned));
+      const foodAnalysisSchema = z.object({
+        dish_name: z.string(),
+        detected_items: z.array(z.string()),
+        estimated_grams: z.number(),
+        kcal: z.number(),
+        protein_g: z.number(),
+        carbs_g: z.number(),
+        fat_g: z.number(),
+        fiber_g: z.number(),
+        sodium_mg: z.number(),
+        health_score: z.enum(["green", "orange", "red"]),
+        quality: z.enum(["bulking", "cutting", "balanced", "treat"]),
+        confidence: z.number().min(0).max(1),
+        notes: z.string(),
+      });
+      const parsed = foodAnalysisSchema.safeParse(JSON.parse(cleaned));
       if (!parsed.success) {
         console.error("AI JSON invalide", parsed.error, cleaned.slice(0, 500));
         return { error: "Réponse IA invalide", result: null };

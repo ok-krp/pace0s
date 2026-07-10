@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { timingSafeEqual } from "node:crypto";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -62,6 +61,7 @@ function withinWindow(target: string | null, hh: number, mm: number): boolean {
 }
 
 async function alreadySent(userId: string, type: string, hours: number): Promise<boolean> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const since = new Date(Date.now() - hours * 3600_000).toISOString();
   const { data } = await supabaseAdmin
     .from("notification_log")
@@ -83,6 +83,7 @@ async function logDebug(entry: {
   payload?: Record<string, unknown>;
 }): Promise<void> {
   try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("reminder_debug_log").insert({
       user_id: entry.user_id,
       type: entry.type,
@@ -103,6 +104,7 @@ async function sendPush(
   title: string,
   message: string,
 ): Promise<{ ok: boolean; reason?: string; segment: string }> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const segment = `external_id:${userId}`;
   const appId = process.env.ONESIGNAL_APP_ID;
   const apiKey = process.env.ONESIGNAL_REST_API_KEY;
@@ -139,6 +141,7 @@ async function buildMessage(
   row: ReminderRow,
   todayDate: string,
 ): Promise<{ title: string; message: string } | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   switch (row.type) {
     case "hydration":
       return { title: "💧 Hydratation", message: "Pense à boire un grand verre d'eau maintenant." };
@@ -207,6 +210,7 @@ export const Route = createFileRoute("/api/public/hooks/reminders")({
   server: {
     handlers: {
       POST: async ({ request }) => {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const provided =
           request.headers.get("x-webhook-secret") ??
           request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ??

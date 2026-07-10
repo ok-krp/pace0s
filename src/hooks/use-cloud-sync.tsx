@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
@@ -21,12 +21,12 @@ export function useCloudSync() {
   const [lastMessage, setLastMessage] = useState<string | null>(null);
   const [consentAllowed, setConsentAllowed] = useState(() => isLegalCategoryAllowed("sync_cloud"));
 
-  useState(() => {
+  useEffect(() => {
     if (typeof window === "undefined") return;
     const refresh = () => setConsentAllowed(isLegalCategoryAllowed("sync_cloud"));
     window.addEventListener("lt.legal.changed", refresh);
     return () => window.removeEventListener("lt.legal.changed", refresh);
-  });
+  }, []);
 
   const pushAll = useCallback(async () => {
     if (!user) return;
