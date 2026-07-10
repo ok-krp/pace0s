@@ -8,6 +8,8 @@ import { useLocalState, lastNDays, fmtDay, todayKey } from "@/lib/storage";
 import { useUserGoals } from "@/hooks/use-user-goals";
 import { useHealthToday } from "@/hooks/use-health";
 import { DashboardDialogs, type DashDialog } from "@/components/DashboardDialogs";
+import { DailyRhythmRing, RhythmLegend, type RhythmMetric } from "@/components/DailyRhythmRing";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
