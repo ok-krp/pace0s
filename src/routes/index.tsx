@@ -3,11 +3,13 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Moon, Droplets, Dumbbell, Briefcase, Wallet, TrendingUp, Flame, CheckCircle2, Scale, Sparkles, Footprints, Activity } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, Area, AreaChart } from "recharts";
-import { PageHeader, Ring, StatCard } from "@/components/Stat";
+import { PageHeader, StatCard } from "@/components/Stat";
 import { useLocalState, lastNDays, fmtDay, todayKey } from "@/lib/storage";
 import { useUserGoals } from "@/hooks/use-user-goals";
 import { useHealthToday } from "@/hooks/use-health";
 import { DashboardDialogs, type DashDialog } from "@/components/DashboardDialogs";
+import { DailyRhythmRing, RhythmLegend, type RhythmMetric } from "@/components/DailyRhythmRing";
+
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -59,6 +61,16 @@ function Dashboard() {
       (Math.min(workMin / 240, 1) * 20)
   );
 
+  // Daily Rhythm — concentric rings, colors tuned to the orange→slate→blue backdrop
+  const rhythmMetrics: RhythmMetric[] = [
+    { key: "sleep",   label: "Sommeil",  value: sleepH,           max: 8,                             unit: "h",   from: "oklch(0.78 0.16 55)",  to: "oklch(0.68 0.19 35)"  },
+    { key: "water",   label: "Hydratation", value: waterMl,       max: waterGoal,                     unit: "ml",  from: "oklch(0.78 0.12 220)", to: "oklch(0.6 0.18 250)"  },
+    { key: "kcal",    label: "Nutrition", value: kcal,             max: kcalGoal,                     unit: "kcal", from: "oklch(0.78 0.14 145)", to: "oklch(0.6 0.17 175)"  },
+    { key: "routine", label: "Routine",  value: routineDoneCount, max: Math.max(routineTotal, 1),                   from: "oklch(0.75 0.15 300)", to: "oklch(0.55 0.2 275)"  },
+    { key: "focus",   label: "Focus",    value: workMin,          max: 240,                            unit: "min", from: "oklch(0.72 0.15 20)",  to: "oklch(0.52 0.2 258)"  },
+  ];
+
+
   const trend = days.map((d) => ({
     day: fmtDay(d).slice(0, 3),
     sommeil: sleep[d]?.hours ?? 0,
@@ -86,29 +98,33 @@ function Dashboard() {
           onClick={() => setDialog("score")}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          whileTap={{ scale: 0.99 }}
-          aria-label="Voir le détail du score quotidien"
-          className="text-left lg:col-span-2 rounded-2xl p-6 stat-grad text-primary-foreground shadow-[var(--shadow-glow)] relative overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          whileTap={{ scale: 0.995 }}
+          aria-label="Voir le détail du Daily Rhythm"
+          className="text-left lg:col-span-2 glass-card p-6 md:p-8 relative overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
-          <div className="absolute -right-10 -top-10 size-48 rounded-full bg-white/10 blur-3xl group-hover:bg-white/15 transition-colors" />
-          <div className="flex items-center justify-between">
-            <div className="text-xs uppercase tracking-widest opacity-80">Score quotidien</div>
-            <div className="text-[10px] uppercase tracking-widest opacity-80 flex items-center gap-1">
-              <Sparkles className="size-3" /> Détails →
+          {/* soft glow accents tuned to the orange→slate→blue backdrop */}
+          <div className="pointer-events-none absolute -top-24 -left-16 size-72 rounded-full blur-3xl opacity-60"
+               style={{ background: "radial-gradient(closest-side, oklch(0.82 0.16 55 / 0.35), transparent)" }} />
+          <div className="pointer-events-none absolute -bottom-24 -right-16 size-72 rounded-full blur-3xl opacity-60"
+               style={{ background: "radial-gradient(closest-side, oklch(0.6 0.18 255 / 0.32), transparent)" }} />
+
+          <div className="flex items-center justify-between relative">
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground">Aujourd'hui</div>
+              <div className="font-display text-lg md:text-xl font-semibold mt-1">Ton rythme quotidien</div>
+            </div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 flex items-center gap-1">
+              <Sparkles className="size-3" /> Détail →
             </div>
           </div>
-          <div className="mt-3 flex items-end gap-6">
-            <Ring value={score} size={120} stroke={11} color="white">
-              <div className="text-center">
-                <div className="font-display text-3xl font-semibold">{score}</div>
-                <div className="text-[10px] uppercase tracking-wider opacity-80">/ 100</div>
-              </div>
-            </Ring>
-            <div className="flex-1 space-y-1.5 text-sm">
-              <Bar label="Sommeil" v={sleepH} max={8} unit="h" />
-              <Bar label="Eau" v={waterMl} max={waterGoal} unit="ml" />
-              <Bar label="Routine" v={routineDoneCount} max={Math.max(routineTotal, 1)} unit="" />
-              <Bar label="Focus" v={workMin} max={240} unit="min" />
+
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-[auto_1fr] items-center gap-6 md:gap-10 relative">
+            <div className="justify-self-center">
+              <DailyRhythmRing metrics={rhythmMetrics} score={score} size={244} stroke={12} gap={8} />
+            </div>
+            <div className="w-full max-w-sm">
+              <RhythmLegend metrics={rhythmMetrics} />
             </div>
           </div>
         </motion.button>
@@ -129,6 +145,7 @@ function Dashboard() {
           </div>
         </StatCard>
       </div>
+
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
         <StatCard label="Sommeil" value={sleepH.toFixed(1)} unit="h" icon={<Moon className="size-4" />} onClick={() => setDialog("sleep")} hint="Modifier" />
@@ -233,27 +250,6 @@ function Dashboard() {
   );
 }
 
-function Bar({ label, v, max, unit }: { label: string; v: number; max: number; unit: string }) {
-  const pct = Math.min(100, (v / max) * 100);
-  return (
-    <div>
-      <div className="flex justify-between text-[11px] opacity-90">
-        <span>{label}</span>
-        <span>
-          {v.toFixed(unit === "h" ? 1 : 0)} {unit}
-        </span>
-      </div>
-      <div className="h-1.5 rounded-full bg-white/20 overflow-hidden mt-1">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="h-full bg-white rounded-full"
-        />
-      </div>
-    </div>
-  );
-}
 
 function Heatmap({ routines }: { routines: Record<string, string[]> }) {
   const navigate = useNavigate();
