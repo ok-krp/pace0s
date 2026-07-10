@@ -9,10 +9,10 @@ const testNotificationSchema = z.object({
 });
 
 export const getOneSignalConfig = createServerFn({ method: "GET" }).handler(async () => {
-  const appId = process.env.ONESIGNAL_APP_ID;
-  if (!appId) throw new Error("ONESIGNAL_APP_ID not configured");
+  const appId = process.env.ONESIGNAL_APP_ID ?? null;
   return { appId };
 });
+
 
 export const sendTestNotification = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
