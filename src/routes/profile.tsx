@@ -50,7 +50,7 @@ function ProfilePage() {
   const save = async () => {
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from("profiles").update(p).eq("user_id", user.id);
+    const { error } = await supabase.from("profiles").upsert({ ...p, user_id: user.id, email: user.email }, { onConflict: "user_id" });
     setSaving(false);
     if (error) toast.error(error.message);
     else toast.success("Profil sauvegardé");

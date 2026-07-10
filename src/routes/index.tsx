@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Moon, Droplets, Dumbbell, Briefcase, Wallet, TrendingUp, Flame, CheckCircle2, Scale, Sparkles, Footprints, Activity } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, Area, AreaChart } from "recharts";
@@ -25,6 +25,7 @@ type Day<T> = Record<string, T>;
 function Dashboard() {
   const navigate = useNavigate();
   const [dialog, setDialog] = useState<DashDialog>(null);
+  const [todayLabel, setTodayLabel] = useState("");
   const { data: health } = useHealthToday();
   const [sleep] = useLocalState<Day<SleepEntry>>("lt.sleep", {});
   const [water] = useLocalState<Day<number>>("lt.water", {});
@@ -68,11 +69,15 @@ function Dashboard() {
   const weightSeries = lastNDays(30).map((d) => ({ d, w: weights[d]?.w })).filter((x) => x.w);
   const lastWeight = weightSeries.length ? weightSeries[weightSeries.length - 1].w! : null;
 
+  useEffect(() => {
+    setTodayLabel(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }));
+  }, []);
+
   return (
     <div>
       <PageHeader
         title="Bonjour 👋"
-        subtitle={new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+        subtitle={todayLabel || "Aujourd’hui"}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
