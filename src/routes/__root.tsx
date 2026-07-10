@@ -16,6 +16,8 @@ import { AppSidebar, MobileTabBar, MobileTopBar } from "@/components/AppSidebar"
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { LegalConsentGate } from "@/components/LegalConsentGate";
+import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
+
 
 function NotFoundComponent() {
   return (
@@ -93,13 +95,16 @@ function RootShell({ children }: { children: React.ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <AuthGate />
-      </AuthProvider>
-    </QueryClientProvider>
+    <GlobalErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <AuthGate />
+        </AuthProvider>
+      </QueryClientProvider>
+    </GlobalErrorBoundary>
   );
 }
+
 
 const PUBLIC_ROUTES = ["/login"];
 

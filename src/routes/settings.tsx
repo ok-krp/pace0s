@@ -17,6 +17,8 @@ import { FinanceLockSettings } from "@/components/FinanceLockSettings";
 import { CloudSyncSettings } from "@/components/CloudSyncSettings";
 import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+import { PrivacyDataSection } from "@/components/PrivacyDataSection";
+
 
 
 export const Route = createFileRoute("/settings")({
@@ -141,15 +143,20 @@ function SettingsPage() {
             <AccordionTrigger className="text-sm font-medium">Synchronisation Cloud</AccordionTrigger>
             <AccordionContent className="pt-2"><CloudSyncSettings /></AccordionContent>
           </AccordionItem>
+          <AccordionItem value="privacy" className="rounded-2xl bg-card border border-border px-4 shadow-[var(--shadow-soft)]">
+            <AccordionTrigger className="text-sm font-medium">Confidentialité & Données</AccordionTrigger>
+            <AccordionContent className="pt-2"><PrivacyDataSection /></AccordionContent>
+          </AccordionItem>
         </Accordion>
 
 
-        <Row icon={<Download className="size-4" />} label="Exporter mes données" desc="Téléchargez un JSON complet de votre vie trackée">
+        <Row icon={<Download className="size-4" />} label="Exporter les données locales" desc="JSON des préférences stockées sur cet appareil">
           <Button variant="secondary" size="sm" onClick={exportData} className="rounded-xl">Exporter</Button>
         </Row>
-        <Row icon={<Trash2 className="size-4" />} label="Réinitialiser" desc="Supprime toutes les données locales">
-          <Button variant="destructive" size="sm" onClick={reset} className="rounded-xl">Supprimer</Button>
+        <Row icon={<Trash2 className="size-4" />} label="Réinitialiser cet appareil" desc="Efface uniquement les données locales">
+          <Button variant="destructive" size="sm" onClick={reset} className="rounded-xl">Effacer</Button>
         </Row>
+
       </div>
     </div>
   );
