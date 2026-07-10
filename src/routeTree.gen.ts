@@ -9,38 +9,395 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WorkRouteImport } from './routes/work'
+import { Route as WaterRouteImport } from './routes/water'
+import { Route as StatsRouteImport } from './routes/stats'
+import { Route as SportRouteImport } from './routes/sport'
+import { Route as SleepRouteImport } from './routes/sleep'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ScanRouteImport } from './routes/scan'
+import { Route as RoutineRouteImport } from './routes/routine'
+import { Route as RecipesRouteImport } from './routes/recipes'
+import { Route as RecallsRouteImport } from './routes/recalls'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as NutritionRouteImport } from './routes/nutrition'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as InvestmentsRouteImport } from './routes/investments'
+import { Route as FinanceRouteImport } from './routes/finance'
+import { Route as CalendarRouteImport } from './routes/calendar'
+import { Route as BodyRouteImport } from './routes/body'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiPublicHooksRemindersRouteImport } from './routes/api/public/hooks/reminders'
 
+const WorkRoute = WorkRouteImport.update({
+  id: '/work',
+  path: '/work',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WaterRoute = WaterRouteImport.update({
+  id: '/water',
+  path: '/water',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatsRoute = StatsRouteImport.update({
+  id: '/stats',
+  path: '/stats',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SportRoute = SportRouteImport.update({
+  id: '/sport',
+  path: '/sport',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SleepRoute = SleepRouteImport.update({
+  id: '/sleep',
+  path: '/sleep',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScanRoute = ScanRouteImport.update({
+  id: '/scan',
+  path: '/scan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoutineRoute = RoutineRouteImport.update({
+  id: '/routine',
+  path: '/routine',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecipesRoute = RecipesRouteImport.update({
+  id: '/recipes',
+  path: '/recipes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecallsRoute = RecallsRouteImport.update({
+  id: '/recalls',
+  path: '/recalls',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NutritionRoute = NutritionRouteImport.update({
+  id: '/nutrition',
+  path: '/nutrition',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvestmentsRoute = InvestmentsRouteImport.update({
+  id: '/investments',
+  path: '/investments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceRoute = FinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalendarRoute = CalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BodyRoute = BodyRouteImport.update({
+  id: '/body',
+  path: '/body',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksRemindersRoute = ApiPublicHooksRemindersRouteImport.update({
+  id: '/api/public/hooks/reminders',
+  path: '/api/public/hooks/reminders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/body': typeof BodyRoute
+  '/calendar': typeof CalendarRoute
+  '/finance': typeof FinanceRoute
+  '/investments': typeof InvestmentsRoute
+  '/login': typeof LoginRoute
+  '/nutrition': typeof NutritionRoute
+  '/profile': typeof ProfileRoute
+  '/recalls': typeof RecallsRoute
+  '/recipes': typeof RecipesRoute
+  '/routine': typeof RoutineRoute
+  '/scan': typeof ScanRoute
+  '/settings': typeof SettingsRoute
+  '/sleep': typeof SleepRoute
+  '/sport': typeof SportRoute
+  '/stats': typeof StatsRoute
+  '/water': typeof WaterRoute
+  '/work': typeof WorkRoute
+  '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/body': typeof BodyRoute
+  '/calendar': typeof CalendarRoute
+  '/finance': typeof FinanceRoute
+  '/investments': typeof InvestmentsRoute
+  '/login': typeof LoginRoute
+  '/nutrition': typeof NutritionRoute
+  '/profile': typeof ProfileRoute
+  '/recalls': typeof RecallsRoute
+  '/recipes': typeof RecipesRoute
+  '/routine': typeof RoutineRoute
+  '/scan': typeof ScanRoute
+  '/settings': typeof SettingsRoute
+  '/sleep': typeof SleepRoute
+  '/sport': typeof SportRoute
+  '/stats': typeof StatsRoute
+  '/water': typeof WaterRoute
+  '/work': typeof WorkRoute
+  '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/body': typeof BodyRoute
+  '/calendar': typeof CalendarRoute
+  '/finance': typeof FinanceRoute
+  '/investments': typeof InvestmentsRoute
+  '/login': typeof LoginRoute
+  '/nutrition': typeof NutritionRoute
+  '/profile': typeof ProfileRoute
+  '/recalls': typeof RecallsRoute
+  '/recipes': typeof RecipesRoute
+  '/routine': typeof RoutineRoute
+  '/scan': typeof ScanRoute
+  '/settings': typeof SettingsRoute
+  '/sleep': typeof SleepRoute
+  '/sport': typeof SportRoute
+  '/stats': typeof StatsRoute
+  '/water': typeof WaterRoute
+  '/work': typeof WorkRoute
+  '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/body'
+    | '/calendar'
+    | '/finance'
+    | '/investments'
+    | '/login'
+    | '/nutrition'
+    | '/profile'
+    | '/recalls'
+    | '/recipes'
+    | '/routine'
+    | '/scan'
+    | '/settings'
+    | '/sleep'
+    | '/sport'
+    | '/stats'
+    | '/water'
+    | '/work'
+    | '/api/public/hooks/reminders'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/body'
+    | '/calendar'
+    | '/finance'
+    | '/investments'
+    | '/login'
+    | '/nutrition'
+    | '/profile'
+    | '/recalls'
+    | '/recipes'
+    | '/routine'
+    | '/scan'
+    | '/settings'
+    | '/sleep'
+    | '/sport'
+    | '/stats'
+    | '/water'
+    | '/work'
+    | '/api/public/hooks/reminders'
+  id:
+    | '__root__'
+    | '/'
+    | '/body'
+    | '/calendar'
+    | '/finance'
+    | '/investments'
+    | '/login'
+    | '/nutrition'
+    | '/profile'
+    | '/recalls'
+    | '/recipes'
+    | '/routine'
+    | '/scan'
+    | '/settings'
+    | '/sleep'
+    | '/sport'
+    | '/stats'
+    | '/water'
+    | '/work'
+    | '/api/public/hooks/reminders'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  BodyRoute: typeof BodyRoute
+  CalendarRoute: typeof CalendarRoute
+  FinanceRoute: typeof FinanceRoute
+  InvestmentsRoute: typeof InvestmentsRoute
+  LoginRoute: typeof LoginRoute
+  NutritionRoute: typeof NutritionRoute
+  ProfileRoute: typeof ProfileRoute
+  RecallsRoute: typeof RecallsRoute
+  RecipesRoute: typeof RecipesRoute
+  RoutineRoute: typeof RoutineRoute
+  ScanRoute: typeof ScanRoute
+  SettingsRoute: typeof SettingsRoute
+  SleepRoute: typeof SleepRoute
+  SportRoute: typeof SportRoute
+  StatsRoute: typeof StatsRoute
+  WaterRoute: typeof WaterRoute
+  WorkRoute: typeof WorkRoute
+  ApiPublicHooksRemindersRoute: typeof ApiPublicHooksRemindersRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/work': {
+      id: '/work'
+      path: '/work'
+      fullPath: '/work'
+      preLoaderRoute: typeof WorkRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/water': {
+      id: '/water'
+      path: '/water'
+      fullPath: '/water'
+      preLoaderRoute: typeof WaterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stats': {
+      id: '/stats'
+      path: '/stats'
+      fullPath: '/stats'
+      preLoaderRoute: typeof StatsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sport': {
+      id: '/sport'
+      path: '/sport'
+      fullPath: '/sport'
+      preLoaderRoute: typeof SportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sleep': {
+      id: '/sleep'
+      path: '/sleep'
+      fullPath: '/sleep'
+      preLoaderRoute: typeof SleepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scan': {
+      id: '/scan'
+      path: '/scan'
+      fullPath: '/scan'
+      preLoaderRoute: typeof ScanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/routine': {
+      id: '/routine'
+      path: '/routine'
+      fullPath: '/routine'
+      preLoaderRoute: typeof RoutineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recipes': {
+      id: '/recipes'
+      path: '/recipes'
+      fullPath: '/recipes'
+      preLoaderRoute: typeof RecipesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recalls': {
+      id: '/recalls'
+      path: '/recalls'
+      fullPath: '/recalls'
+      preLoaderRoute: typeof RecallsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nutrition': {
+      id: '/nutrition'
+      path: '/nutrition'
+      fullPath: '/nutrition'
+      preLoaderRoute: typeof NutritionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/investments': {
+      id: '/investments'
+      path: '/investments'
+      fullPath: '/investments'
+      preLoaderRoute: typeof InvestmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance': {
+      id: '/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof FinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calendar': {
+      id: '/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof CalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/body': {
+      id: '/body'
+      path: '/body'
+      fullPath: '/body'
+      preLoaderRoute: typeof BodyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,11 +405,36 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/reminders': {
+      id: '/api/public/hooks/reminders'
+      path: '/api/public/hooks/reminders'
+      fullPath: '/api/public/hooks/reminders'
+      preLoaderRoute: typeof ApiPublicHooksRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  BodyRoute: BodyRoute,
+  CalendarRoute: CalendarRoute,
+  FinanceRoute: FinanceRoute,
+  InvestmentsRoute: InvestmentsRoute,
+  LoginRoute: LoginRoute,
+  NutritionRoute: NutritionRoute,
+  ProfileRoute: ProfileRoute,
+  RecallsRoute: RecallsRoute,
+  RecipesRoute: RecipesRoute,
+  RoutineRoute: RoutineRoute,
+  ScanRoute: ScanRoute,
+  SettingsRoute: SettingsRoute,
+  SleepRoute: SleepRoute,
+  SportRoute: SportRoute,
+  StatsRoute: StatsRoute,
+  WaterRoute: WaterRoute,
+  WorkRoute: WorkRoute,
+  ApiPublicHooksRemindersRoute: ApiPublicHooksRemindersRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
