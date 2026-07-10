@@ -88,29 +88,33 @@ function Dashboard() {
           onClick={() => setDialog("score")}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          whileTap={{ scale: 0.99 }}
-          aria-label="Voir le détail du score quotidien"
-          className="text-left lg:col-span-2 rounded-2xl p-6 stat-grad text-primary-foreground shadow-[var(--shadow-glow)] relative overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          whileTap={{ scale: 0.995 }}
+          aria-label="Voir le détail du Daily Rhythm"
+          className="text-left lg:col-span-2 glass-card p-6 md:p-8 relative overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
         >
-          <div className="absolute -right-10 -top-10 size-48 rounded-full bg-white/10 blur-3xl group-hover:bg-white/15 transition-colors" />
-          <div className="flex items-center justify-between">
-            <div className="text-xs uppercase tracking-widest opacity-80">Score quotidien</div>
-            <div className="text-[10px] uppercase tracking-widest opacity-80 flex items-center gap-1">
-              <Sparkles className="size-3" /> Détails →
+          {/* soft glow accents tuned to the orange→slate→blue backdrop */}
+          <div className="pointer-events-none absolute -top-24 -left-16 size-72 rounded-full blur-3xl opacity-60"
+               style={{ background: "radial-gradient(closest-side, oklch(0.82 0.16 55 / 0.35), transparent)" }} />
+          <div className="pointer-events-none absolute -bottom-24 -right-16 size-72 rounded-full blur-3xl opacity-60"
+               style={{ background: "radial-gradient(closest-side, oklch(0.6 0.18 255 / 0.32), transparent)" }} />
+
+          <div className="flex items-center justify-between relative">
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground">Aujourd'hui</div>
+              <div className="font-display text-lg md:text-xl font-semibold mt-1">Ton rythme quotidien</div>
+            </div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 flex items-center gap-1">
+              <Sparkles className="size-3" /> Détail →
             </div>
           </div>
-          <div className="mt-3 flex items-end gap-6">
-            <Ring value={score} size={120} stroke={11} color="white">
-              <div className="text-center">
-                <div className="font-display text-3xl font-semibold">{score}</div>
-                <div className="text-[10px] uppercase tracking-wider opacity-80">/ 100</div>
-              </div>
-            </Ring>
-            <div className="flex-1 space-y-1.5 text-sm">
-              <Bar label="Sommeil" v={sleepH} max={8} unit="h" />
-              <Bar label="Eau" v={waterMl} max={waterGoal} unit="ml" />
-              <Bar label="Routine" v={routineDoneCount} max={Math.max(routineTotal, 1)} unit="" />
-              <Bar label="Focus" v={workMin} max={240} unit="min" />
+
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-[auto_1fr] items-center gap-6 md:gap-10 relative">
+            <div className="justify-self-center">
+              <DailyRhythmRing metrics={rhythmMetrics} score={score} size={244} stroke={12} gap={8} />
+            </div>
+            <div className="w-full max-w-sm">
+              <RhythmLegend metrics={rhythmMetrics} />
             </div>
           </div>
         </motion.button>
@@ -131,6 +135,7 @@ function Dashboard() {
           </div>
         </StatCard>
       </div>
+
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
         <StatCard label="Sommeil" value={sleepH.toFixed(1)} unit="h" icon={<Moon className="size-4" />} onClick={() => setDialog("sleep")} hint="Modifier" />
