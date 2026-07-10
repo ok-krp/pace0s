@@ -61,6 +61,16 @@ function Dashboard() {
       (Math.min(workMin / 240, 1) * 20)
   );
 
+  // Daily Rhythm — concentric rings, colors tuned to the orange→slate→blue backdrop
+  const rhythmMetrics: RhythmMetric[] = [
+    { key: "sleep",   label: "Sommeil",  value: sleepH,           max: 8,                             unit: "h",   from: "oklch(0.78 0.16 55)",  to: "oklch(0.68 0.19 35)"  },
+    { key: "water",   label: "Hydratation", value: waterMl,       max: waterGoal,                     unit: "ml",  from: "oklch(0.78 0.12 220)", to: "oklch(0.6 0.18 250)"  },
+    { key: "kcal",    label: "Nutrition", value: kcal,             max: kcalGoal,                     unit: "kcal", from: "oklch(0.78 0.14 145)", to: "oklch(0.6 0.17 175)"  },
+    { key: "routine", label: "Routine",  value: routineDoneCount, max: Math.max(routineTotal, 1),                   from: "oklch(0.75 0.15 300)", to: "oklch(0.55 0.2 275)"  },
+    { key: "focus",   label: "Focus",    value: workMin,          max: 240,                            unit: "min", from: "oklch(0.72 0.15 20)",  to: "oklch(0.52 0.2 258)"  },
+  ];
+
+
   const trend = days.map((d) => ({
     day: fmtDay(d).slice(0, 3),
     sommeil: sleep[d]?.hours ?? 0,
