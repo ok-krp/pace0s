@@ -87,7 +87,9 @@ export function usePush() {
       try {
         setError(null);
         const cfg = await fetchConfig();
+        if (!cfg.appId) { setError("Notifications non configurées"); return; }
         await initOneSignal(cfg.appId);
+
         if (cancelled) return;
         const OneSignal = (await import("react-onesignal")).default;
         setReady(true);
