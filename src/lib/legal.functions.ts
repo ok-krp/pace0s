@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { DEFAULT_LEGAL_OPTS, LEGAL_VERSIONS, type LegalConsentOptions } from "./legal";
-import { getRequestCountry, legalRegionForCountry } from "./legal.server";
 
 const consentSchema = z.object({
   opts: z.object({
@@ -15,6 +14,7 @@ const consentSchema = z.object({
 });
 
 export const getGeoLegalContext = createServerFn({ method: "GET" }).handler(async () => {
+  const { getRequestCountry, legalRegionForCountry } = await import("./legal.server");
   const country = getRequestCountry();
   return { country, region: legalRegionForCountry(country) };
 });
@@ -22,6 +22,7 @@ export const getGeoLegalContext = createServerFn({ method: "GET" }).handler(asyn
 export const getLegalConsentStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { getRequestCountry, legalRegionForCountry } = await import("./legal.server");
     const { data, error } = await context.supabase
       .from("legal_consent")
       .select("region,eula_version,privacy_version,opts,consented_at,ip_country")
@@ -43,6 +44,7 @@ export const saveLegalConsent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => consentSchema.parse(data))
   .handler(async ({ data, context }) => {
+    const { getRequestCountry, legalRegionForCountry } = await import("./legal.server");
     const country = getRequestCountry();
     const region = legalRegionForCountry(country);
     const { error } = await context.supabase.from("legal_consent").upsert(

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { LEGAL_VERSIONS } from "./legal";
 
 const testNotificationSchema = z.object({
   title: z.string().trim().max(100).optional(),
@@ -17,6 +18,16 @@ export const sendTestNotification = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => testNotificationSchema.parse(data ?? {}))
   .handler(async ({ data, context }) => {
+    const { data: consent, error: consentError } = await context.supabase
+      .from("legal_consent")
+      .select("opts")
+      .eq("eula_version", LEGAL_VERSIONS.eula)
+      .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .maybeSingle();
+    if (consentError) throw new Error(consentError.message);
+    if ((consent?.opts as { notifications?: boolean } | null)?.notifications !== true) {
+      throw new Error("Consentement Notifications requis");
+    }
     const appId = process.env.ONESIGNAL_APP_ID;
     const apiKey = process.env.ONESIGNAL_REST_API_KEY;
     if (!appId || !apiKey) throw new Error("OneSignal non configuré");
