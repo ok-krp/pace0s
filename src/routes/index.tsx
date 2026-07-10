@@ -250,27 +250,6 @@ function Dashboard() {
   );
 }
 
-function Bar({ label, v, max, unit }: { label: string; v: number; max: number; unit: string }) {
-  const pct = Math.min(100, (v / max) * 100);
-  return (
-    <div>
-      <div className="flex justify-between text-[11px] opacity-90">
-        <span>{label}</span>
-        <span>
-          {v.toFixed(unit === "h" ? 1 : 0)} {unit}
-        </span>
-      </div>
-      <div className="h-1.5 rounded-full bg-white/20 overflow-hidden mt-1">
-        <motion.div
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-          className="h-full bg-white rounded-full"
-        />
-      </div>
-    </div>
-  );
-}
 
 function Heatmap({ routines }: { routines: Record<string, string[]> }) {
   const navigate = useNavigate();
