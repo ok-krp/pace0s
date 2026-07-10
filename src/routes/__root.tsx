@@ -15,6 +15,7 @@ import appCss from "../styles.css?url";
 import { AppSidebar, MobileTabBar, MobileTopBar } from "@/components/AppSidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { LegalConsentGate } from "@/components/LegalConsentGate";
 
 function NotFoundComponent() {
   return (
@@ -74,13 +75,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Figtree:wght@400;500;600&display=swap" },
-    ],
-    scripts: [
-      { src: "https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js", defer: true },
-      {
-        type: "text/javascript",
-        children: `window.OneSignalDeferred = window.OneSignalDeferred || []; OneSignalDeferred.push(async function(OneSignal) { await OneSignal.init({ appId: "0e7c193d-a18e-43c9-a81b-d9a8b5ad2a51" }); });`,
-      },
     ],
   }),
   shellComponent: RootShell,
@@ -149,6 +143,7 @@ function AuthGate() {
         </div>
       </main>
       <MobileTabBar />
+      <LegalConsentGate />
       <Toaster />
     </div>
   );

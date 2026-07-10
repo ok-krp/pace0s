@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { getOneSignalConfig } from "@/lib/push.functions";
+import { isLegalCategoryAllowed } from "@/lib/legal";
 
 let initPromise: Promise<void> | null = null;
 
@@ -32,10 +33,23 @@ export function usePush() {
   const [subscribed, setSubscribed] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "default" | "unsupported">(readPermission);
   const [error, setError] = useState<string | null>(null);
+  const [consentAllowed, setConsentAllowed] = useState(() => isLegalCategoryAllowed("notifications"));
+
+  useEffect(() => {
+    const refresh = () => setConsentAllowed(isLegalCategoryAllowed("notifications"));
+    window.addEventListener("lt.legal.changed", refresh);
+    return () => window.removeEventListener("lt.legal.changed", refresh);
+  }, []);
 
   // Keep permission state in sync (user may change it in browser settings without reload)
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!consentAllowed) {
+      setReady(false);
+      setSubscribed(false);
+      setError("Consentement notifications requis.");
+      return;
+    }
     let permStatus: PermissionStatus | null = null;
     let cancelled = false;
 
@@ -98,9 +112,12 @@ export function usePush() {
       }
     })();
     return () => { cancelled = true; };
-  }, [fetchConfig, user?.id]);
+  }, [consentAllowed, fetchConfig, user?.id]);
 
   const enable = useCallback(async () => {
+    if (!isLegalCategoryAllowed("notifications")) {
+      throw new Error("Activez d'abord le consentement Notifications dans la fenêtre confidentialité.");
+    }
     const OneSignal = (await import("react-onesignal")).default;
     try {
       await OneSignal.Notifications.requestPermission();

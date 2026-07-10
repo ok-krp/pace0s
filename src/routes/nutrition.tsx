@@ -20,6 +20,7 @@ import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { fetchProductByBarcode, type OFFProduct } from "@/lib/openfoodfacts";
 import { analyzeFoodPhoto } from "@/lib/nutrition-ai.functions";
 import { toast } from "sonner";
+import { isLegalCategoryAllowed } from "@/lib/legal";
 
 const searchSchema = z.object({ tab: z.enum(["nutrition", "recipes", "water"]).optional() });
 
@@ -68,6 +69,7 @@ function NutritionPage() {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    if (!isLegalCategoryAllowed("ai")) { toast.error("Consentement Analyse IA requis."); return; }
     if (file.size > 6 * 1024 * 1024) { toast.error("Image trop lourde (max 6 Mo)"); return; }
     const reader = new FileReader();
     reader.onload = async () => {

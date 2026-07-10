@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import { isLegalCategoryAllowed } from "@/lib/legal";
 
 const LT_PREFIX = "lt.";
 // Keys excluded from sync (volatile / device-specific)
@@ -18,9 +19,22 @@ export function useCloudSync() {
   const { user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
   const [lastMessage, setLastMessage] = useState<string | null>(null);
+  const [consentAllowed, setConsentAllowed] = useState(() => isLegalCategoryAllowed("sync_cloud"));
+
+  useState(() => {
+    if (typeof window === "undefined") return;
+    const refresh = () => setConsentAllowed(isLegalCategoryAllowed("sync_cloud"));
+    window.addEventListener("lt.legal.changed", refresh);
+    return () => window.removeEventListener("lt.legal.changed", refresh);
+  });
 
   const pushAll = useCallback(async () => {
     if (!user) return;
+    if (!isLegalCategoryAllowed("sync_cloud")) {
+      setStatus("error");
+      setLastMessage("Consentement Synchronisation Cloud requis.");
+      return;
+    }
     setStatus("syncing");
     try {
       const rows = localKeys()
@@ -40,6 +54,11 @@ export function useCloudSync() {
 
   const pullAll = useCallback(async (overwrite = true) => {
     if (!user) return;
+    if (!isLegalCategoryAllowed("sync_cloud")) {
+      setStatus("error");
+      setLastMessage("Consentement Synchronisation Cloud requis.");
+      return;
+    }
     setStatus("syncing");
     try {
       const { data, error } = await supabase.from("user_state").select("key,value").eq("user_id", user.id);
@@ -58,5 +77,5 @@ export function useCloudSync() {
     }
   }, [user]);
 
-  return { status, lastMessage, pushAll, pullAll, available: !!user };
+  return { status, lastMessage, pushAll, pullAll, available: !!user && consentAllowed };
 }

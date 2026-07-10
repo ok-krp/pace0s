@@ -15,6 +15,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useNutritionCols, NUT_COLS, type NutCol } from "@/hooks/use-nutrition-cols";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { isLegalCategoryAllowed } from "@/lib/legal";
 
 const SHORT: Record<NutCol, string> = {
   kcal: "kcal", protein: "P", carbs: "G", fat: "L", sat_fat: "Sat", sugar: "Suc",
@@ -182,6 +183,7 @@ function ScanPage() {
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (!isLegalCategoryAllowed("ai")) { toast.error("Consentement Analyse IA requis."); return; }
     if (file.size > 6 * 1024 * 1024) { toast.error("Image trop lourde (max 6 Mo)"); return; }
     const reader = new FileReader();
     reader.onload = async () => {

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { generateText } from "ai";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { LEGAL_VERSIONS } from "./legal";
 
 const FoodAnalysisSchema = z.object({
   dish_name: z.string(),
@@ -28,7 +29,17 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
       goal: z.string().optional(),
     }).parse(d);
   })
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { data: consent, error: consentError } = await context.supabase
+      .from("legal_consent")
+      .select("opts")
+      .eq("eula_version", LEGAL_VERSIONS.eula)
+      .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .maybeSingle();
+    if (consentError) throw new Error(consentError.message);
+    if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
+      return { error: "Consentement Analyse IA requis", result: null };
+    }
     const key = process.env.LOVABLE_API_KEY;
     if (!key) return { error: "AI Gateway non configuré", result: null };
 
@@ -73,7 +84,17 @@ export const nutritionAdvice = createServerFn({ method: "POST" })
   .inputValidator((d: { summary: string }) =>
     z.object({ summary: z.string().min(1).max(4000) }).parse(d)
   )
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
+    const { data: consent, error: consentError } = await context.supabase
+      .from("legal_consent")
+      .select("opts")
+      .eq("eula_version", LEGAL_VERSIONS.eula)
+      .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .maybeSingle();
+    if (consentError) throw new Error(consentError.message);
+    if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
+      return { advice: null, error: "Consentement Analyse IA requis" };
+    }
     const key = process.env.LOVABLE_API_KEY;
     if (!key) return { advice: null, error: "AI Gateway non configuré" };
     try {
