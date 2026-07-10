@@ -22,7 +22,13 @@ export function PrivacyDataSection() {
     setBusy("export");
     try {
       const payload = await runExport();
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const pretty = {
+        generated_at: payload.generated_at,
+        user: { id: payload.user_id, email: payload.email },
+        schema_version: payload.schema_version,
+        data: JSON.parse(payload.json),
+      };
+      const blob = new Blob([JSON.stringify(pretty, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -36,6 +42,7 @@ export function PrivacyDataSection() {
       setBusy(null);
     }
   };
+
 
   const handleDelete = async () => {
     if (confirmText !== "SUPPRIMER") return;

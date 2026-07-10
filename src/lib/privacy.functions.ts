@@ -21,19 +21,22 @@ const USER_TABLES = [
 export const exportMyData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const tables: Record<string, unknown> = {};
+    const tables: Record<string, unknown[]> = {};
     for (const t of USER_TABLES) {
       const { data, error } = await context.supabase.from(t).select("*").eq("user_id", context.userId);
       if (error) throw new Error(`${t}: ${error.message}`);
-      tables[t] = data ?? [];
+      tables[t] = (data ?? []) as unknown[];
     }
+    // Return a JSON string so nested Supabase row shapes don't fight the RPC serializer.
     return {
       generated_at: new Date().toISOString(),
-      user: { id: context.userId, email: context.claims?.email ?? null },
+      user_id: context.userId,
+      email: (context.claims?.email as string | undefined) ?? null,
       schema_version: 1,
-      data: tables,
+      json: JSON.stringify(tables),
     };
   });
+
 
 /**
  * Droit à l'oubli (RGPD Art. 17 / LGPD Art. 18 / CCPA §1798.105)
