@@ -7,6 +7,7 @@ import { insertHealthSamples } from "@/lib/health.functions";
 import { useHealthToday } from "@/hooks/use-health";
 import { useLocalState, todayKey } from "@/lib/storage";
 import { toast } from "sonner";
+import { explainBluetoothError, getBluetooth } from "@/lib/ble";
 
 const HEART_RATE_SERVICE = 0x180d;
 const HEART_RATE_MEASUREMENT = 0x2a37;
@@ -19,9 +20,9 @@ type Sample = { ts: string; type: "steps" | "kcal_active" | "heart_rate" | "dist
 type WeightReading = { weightKg: number; bodyFatPct?: number; muscleKg?: number };
 
 async function connectHeartRate(onValue: (bpm: number) => void): Promise<() => void> {
-  const nav = navigator as Navigator & { bluetooth?: { requestDevice: (opts: unknown) => Promise<BluetoothDeviceLike> } };
-  if (!nav.bluetooth) throw new Error("Web Bluetooth non supporté sur ce navigateur (essaie Chrome/Edge Android ou desktop).");
-  const device = await nav.bluetooth.requestDevice({
+  const bt = getBluetooth();
+  if (!bt) throw new Error("Web Bluetooth non supporté sur ce navigateur (essaie Chrome/Edge Android ou desktop).");
+  const device = await bt.requestDevice({
     filters: [{ services: [HEART_RATE_SERVICE] }],
     optionalServices: [HEART_RATE_SERVICE],
   });
@@ -41,9 +42,9 @@ async function connectHeartRate(onValue: (bpm: number) => void): Promise<() => v
 
 /** Standard BLE Weight Scale (0x181D) + optional Body Composition (0x181B). Works with any GATT-compliant scale. */
 async function connectScale(onReading: (r: WeightReading) => void): Promise<{ stop: () => void; name: string }> {
-  const nav = navigator as Navigator & { bluetooth?: { requestDevice: (opts: unknown) => Promise<BluetoothDeviceLike> } };
-  if (!nav.bluetooth) throw new Error("Web Bluetooth non supporté sur ce navigateur.");
-  const device = await nav.bluetooth.requestDevice({
+  const bt = getBluetooth();
+  if (!bt) throw new Error("Web Bluetooth non supporté sur ce navigateur.");
+  const device = await bt.requestDevice({
     filters: [{ services: [WEIGHT_SCALE_SERVICE] }, { services: [BODY_COMPOSITION_SERVICE] }],
     optionalServices: [WEIGHT_SCALE_SERVICE, BODY_COMPOSITION_SERVICE],
   });
@@ -162,7 +163,7 @@ export function HealthSettings() {
       setDisconnect(() => stop);
       toast.success("Montre connectée (fréquence cardiaque)");
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(explainBluetoothError(e));
     }
   };
 
@@ -172,7 +173,7 @@ export function HealthSettings() {
       setScale(s);
       toast.success(`Balance ${s.name} connectée`);
     } catch (e) {
-      toast.error((e as Error).message);
+      toast.error(explainBluetoothError(e));
     }
   };
 

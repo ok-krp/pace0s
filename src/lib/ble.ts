@@ -117,8 +117,39 @@ export interface BluetoothGattCharacteristicLike {
   removeEventListener?: (event: string, cb: (e: Event) => void) => void;
 }
 
+const BLUETOOTH_POLICY_MESSAGE =
+  "Bluetooth est bloqué par la politique de permissions de cet aperçu. Ouvrez l'app publiée ou une fenêtre HTTPS directe pour appairer un appareil.";
+
+function isBluetoothAllowedByPolicy(): boolean {
+  if (typeof document === "undefined") return true;
+  const doc = document as Document & {
+    permissionsPolicy?: { allowsFeature: (feature: string) => boolean };
+    featurePolicy?: { allowsFeature: (feature: string) => boolean };
+  };
+  try {
+    return doc.permissionsPolicy?.allowsFeature("bluetooth") ?? doc.featurePolicy?.allowsFeature("bluetooth") ?? true;
+  } catch {
+    return true;
+  }
+}
+
+export function explainBluetoothError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/permissions policy|disallowed by permissions policy|bluetooth.*disallowed/i.test(message)) {
+    return BLUETOOTH_POLICY_MESSAGE;
+  }
+  return message;
+}
+
 export function getBluetooth(): { requestDevice: (opts: unknown) => Promise<BluetoothDeviceLike> } | null {
   if (typeof navigator === "undefined") return null;
+  if (!isBluetoothAllowedByPolicy()) {
+    return {
+      requestDevice: async () => {
+        throw new Error(BLUETOOTH_POLICY_MESSAGE);
+      },
+    };
+  }
   const nav = navigator as unknown as { bluetooth?: { requestDevice: (opts: unknown) => Promise<BluetoothDeviceLike> } };
   return nav.bluetooth ?? null;
 }

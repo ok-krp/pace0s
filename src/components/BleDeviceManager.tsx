@@ -13,6 +13,7 @@ import { useHealthToday } from "@/hooks/use-health";
 import { useLocalState, todayKey } from "@/lib/storage";
 import {
   ALLOWED_SERVICES, findService, getBluetooth, isAllowedService,
+  explainBluetoothError,
   parseBattery, parseBodyFat, parseHeartRate, parseRunningCadence, parseWeight,
   type BleMeasurement, type BluetoothDeviceLike, type BluetoothGattCharacteristicLike,
   type BluetoothGattServerLike, type MeasurementType,
@@ -247,7 +248,7 @@ export function BleDeviceManager() {
       const device = await bt.requestDevice({ filters, optionalServices: services });
       await connectDevice(device, false);
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = explainBluetoothError(e);
       if (!/user cancelled/i.test(msg)) toast.error(msg);
     } finally { setPairing(false); }
   }, [connectDevice]);
@@ -264,7 +265,7 @@ export function BleDeviceManager() {
       });
       await connectDevice(device, true);
     } catch (e) {
-      const msg = (e as Error).message;
+      const msg = explainBluetoothError(e);
       if (!/user cancelled/i.test(msg)) toast.error(msg);
     }
   }, [connectDevice]);
