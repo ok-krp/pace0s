@@ -127,7 +127,7 @@ export function MobileTopBar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = NAV_REGISTRY[path as NavItemKey]?.label ?? "Pace";
   return (
-    <header className="md:hidden sticky top-0 z-40 glass border-b border-border flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+    <header className="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] border-b border-white/20 dark:border-white/10 bg-[color-mix(in_oklab,var(--background)_55%,transparent)] backdrop-blur-2xl backdrop-saturate-150">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger className="size-10 grid place-items-center rounded-lg hover:bg-muted transition-colors" aria-label="Menu">
           <Menu className="size-5" />
