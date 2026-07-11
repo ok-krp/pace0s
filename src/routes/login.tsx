@@ -78,14 +78,14 @@ function LoginPage() {
           <p className="text-sm text-muted-foreground mt-1">Votre centre de contrôle de vie</p>
         </div>
 
-        <div className="rounded-2xl bg-card border border-border p-6 shadow-[var(--shadow-card)]">
+        <div className="rounded-2xl glass-card p-6">
           <div className="flex gap-1 p-1 bg-muted rounded-xl mb-5">
             {(["login", "signup"] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
                 className={`flex-1 py-2 text-sm rounded-lg transition-all ${
-                  mode === m ? "bg-card shadow-[var(--shadow-soft)] font-medium" : "text-muted-foreground"
+                  mode === m ? "bg-card font-medium" : "text-muted-foreground"
                 }`}
               >
                 {m === "login" ? "Connexion" : "Créer un compte"}

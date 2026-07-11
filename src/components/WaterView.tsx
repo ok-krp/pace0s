@@ -35,7 +35,7 @@ export function WaterView() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-      <div className="lg:col-span-1 rounded-2xl bg-card border border-border p-6 shadow-[var(--shadow-soft)] flex flex-col items-center">
+      <div className="lg:col-span-1 rounded-2xl glass-card p-6 flex flex-col items-center">
         <Ring value={cur} max={goal} size={180} stroke={14} color="var(--chart-2)">
           <div className="text-center">
             <div className="font-display text-3xl font-semibold">{(cur / 1000).toFixed(1)}</div>
@@ -70,7 +70,7 @@ export function WaterView() {
       <div className="lg:col-span-2 grid grid-cols-2 gap-4">
         <StatCard label="Moyenne 14j" value={(avg / 1000).toFixed(1)} unit="L" icon={<Droplets className="size-4" />} />
         <StatCard label="Meilleur" value={(best / 1000).toFixed(1)} unit="L" />
-        <div className="col-span-2 rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)]">
+        <div className="col-span-2 rounded-2xl glass-card p-5">
           <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">Historique</div>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={series}>

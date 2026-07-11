@@ -104,7 +104,7 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
 export function AppSidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <aside className="hidden md:flex flex-col w-60 shrink-0 h-screen sticky top-0 border-r border-sidebar-border bg-sidebar px-3 py-5">
+    <aside className="hidden md:flex flex-col w-60 shrink-0 h-screen sticky top-0 px-3 py-5 border-r border-white/20 dark:border-white/10 bg-[color-mix(in_oklab,var(--sidebar)_55%,transparent)] backdrop-blur-2xl backdrop-saturate-150">
       <Link to="/" className="flex items-center gap-2 px-3 py-2 mb-4">
         <div className="size-8 rounded-xl stat-grad grid place-items-center text-primary-foreground shadow-[var(--shadow-glow)]">
           <Sparkles className="size-4" />
@@ -127,7 +127,7 @@ export function MobileTopBar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = NAV_REGISTRY[path as NavItemKey]?.label ?? "Pace";
   return (
-    <header className="md:hidden sticky top-0 z-40 glass border-b border-border flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))]">
+    <header className="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] border-b border-white/20 dark:border-white/10 bg-[color-mix(in_oklab,var(--background)_55%,transparent)] backdrop-blur-2xl backdrop-saturate-150">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger className="size-10 grid place-items-center rounded-lg hover:bg-muted transition-colors" aria-label="Menu">
           <Menu className="size-5" />
@@ -154,26 +154,30 @@ export function MobileTabBar() {
   const { bottom } = useNavPrefs();
   if (bottom.length === 0) return null;
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 glass border-t border-border pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-      <div className="flex gap-1 overflow-x-auto scrollbar-none px-2">
-        {bottom.map((to) => {
-          const it = NAV_REGISTRY[to];
-          if (!it) return null;
-          const active = path === to;
-          const Icon = it.icon;
-          return (
-            <Link
-              key={to}
-              to={to}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] transition-colors shrink-0 min-w-[58px] ${
-                active ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <Icon className="size-5 shrink-0" />
-              <span className="truncate max-w-full">{it.label}</span>
-            </Link>
-          );
-        })}
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 pointer-events-none">
+      <div className="glass-card pointer-events-auto mx-auto max-w-md px-2 py-1.5">
+        <div className="flex gap-1 overflow-x-auto scrollbar-none">
+          {bottom.map((to) => {
+            const it = NAV_REGISTRY[to];
+            if (!it) return null;
+            const active = path === to;
+            const Icon = it.icon;
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[10px] transition-all shrink-0 min-w-[58px] ${
+                  active
+                    ? "text-primary bg-[color-mix(in_oklab,var(--primary)_12%,transparent)]"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="size-5 shrink-0" />
+                <span className="truncate max-w-full">{it.label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );

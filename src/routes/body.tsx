@@ -45,7 +45,7 @@ function BodyPage() {
     <div>
       <PageHeader title="Poids & Corps" subtitle="Le corps évolue, mesurez la trajectoire." />
 
-      <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)] mb-4">
+      <div className="rounded-2xl glass-card p-5 mb-4">
         <div className="flex flex-wrap gap-3 items-end">
           <div>
             <label className="text-xs text-muted-foreground">Poids (kg)</label>
@@ -70,7 +70,7 @@ function BodyPage() {
         <StatCard label="Variation" value={delta ? (delta > 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1)) : "—"} unit="kg" delta={delta && first ? (delta / first) * 100 : undefined} />
       </div>
 
-      <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)]">
+      <div className="rounded-2xl glass-card p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="font-display text-lg font-semibold">Évolution</div>
           <div className="flex gap-1">

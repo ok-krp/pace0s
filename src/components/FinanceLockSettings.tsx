@@ -61,7 +61,7 @@ export function FinanceLockSettings() {
   };
 
   return (
-    <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)] space-y-4">
+    <div className="rounded-2xl glass-card p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="size-9 rounded-xl bg-muted grid place-items-center">{enabled ? <Lock className="size-4" /> : <LockOpen className="size-4" />}</div>

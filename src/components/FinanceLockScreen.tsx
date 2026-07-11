@@ -58,7 +58,7 @@ export function FinanceLock({ children }: { children: React.ReactNode }) {
         {isProtected() && (
           <button
             onClick={() => { lockSession(); location.reload(); }}
-            className="fixed bottom-20 md:bottom-4 right-4 text-xs text-muted-foreground bg-card border border-border rounded-lg px-2 py-1 shadow-[var(--shadow-soft)] hover:text-foreground z-50"
+            className="fixed bottom-20 md:bottom-4 right-4 text-xs text-muted-foreground glass-card rounded-lg px-2 py-1 hover:text-foreground z-50"
           >
             <Lock className="size-3 inline mr-1" />Verrouiller
           </button>
@@ -69,7 +69,7 @@ export function FinanceLock({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="max-w-sm mx-auto py-16 px-4">
-      <div className="rounded-2xl bg-card border border-border p-6 shadow-[var(--shadow-card)] text-center">
+      <div className="rounded-2xl glass-card p-6 text-center">
         <div className="size-12 rounded-2xl bg-primary/10 text-primary grid place-items-center mx-auto mb-3">
           <Lock className="size-6" />
         </div>

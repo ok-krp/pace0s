@@ -58,7 +58,7 @@ function WorkPage() {
         <StatCard label="Total 14j" value={`${Math.floor(totalMin / 60)}h`} />
       </div>
 
-      <div className="rounded-2xl bg-card border border-border p-6 shadow-[var(--shadow-soft)] mb-4 flex flex-col items-center gap-4">
+      <div className="rounded-2xl glass-card p-6 mb-4 flex flex-col items-center gap-4">
         <div className="font-display text-6xl font-semibold tabular-nums tracking-tight">{fmt(seconds)}</div>
         <Select value={cat} onValueChange={setCat}>
           <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
@@ -72,7 +72,7 @@ function WorkPage() {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)] mb-4">
+      <div className="rounded-2xl glass-card p-5 mb-4">
         <div className="font-display text-lg font-semibold mb-3">Heures travaillées 14j</div>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={series}>
@@ -85,7 +85,7 @@ function WorkPage() {
       </div>
 
       {sessions.length > 0 && (
-        <div className="rounded-2xl bg-card border border-border overflow-hidden shadow-[var(--shadow-soft)]">
+        <div className="rounded-2xl glass-card overflow-hidden">
           <div className="px-5 py-3 border-b border-border bg-muted/30 font-display text-sm font-semibold">Sessions récentes</div>
           <ul className="divide-y divide-border max-h-72 overflow-y-auto">
             {sessions.map((s) => (

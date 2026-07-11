@@ -78,7 +78,7 @@ function FinancePage() {
         <StatCard label="Net" value={`${net >= 0 ? "+" : ""}${net.toFixed(0)}`} unit="€" />
       </div>
 
-      <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)] mb-4">
+      <div className="rounded-2xl glass-card p-5 mb-4">
         <div className="flex flex-wrap gap-2">
           <div className="flex rounded-xl bg-muted p-1">
             <button onClick={() => setType("out")} className={`px-4 py-1.5 rounded-lg text-sm transition ${type === "out" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>Dépense</button>
@@ -96,7 +96,7 @@ function FinancePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-        <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)]">
+        <div className="rounded-2xl glass-card p-5">
           <div className="font-display text-lg font-semibold mb-3">Cashflow</div>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={last30}>
@@ -109,7 +109,7 @@ function FinancePage() {
             </BarChart>
           </ResponsiveContainer>
         </div>
-        <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)]">
+        <div className="rounded-2xl glass-card p-5">
           <div className="font-display text-lg font-semibold mb-3">Par catégorie</div>
           {byCat.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
@@ -125,7 +125,7 @@ function FinancePage() {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-card border border-border overflow-hidden shadow-[var(--shadow-soft)]">
+      <div className="rounded-2xl glass-card overflow-hidden">
         <div className="px-5 py-3 border-b border-border bg-muted/30 font-display text-sm font-semibold">Historique</div>
         <ul className="divide-y divide-border max-h-96 overflow-y-auto">
           {tx.map((x) => (
@@ -176,7 +176,7 @@ function InvestPage() {
         <StatCard label="ROI" value={`${roi >= 0 ? "+" : ""}${roi.toFixed(1)}`} unit="%" delta={roi} />
       </div>
 
-      <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)] mb-4">
+      <div className="rounded-2xl glass-card p-5 mb-4">
         <div className="grid md:grid-cols-5 gap-2">
           <Select value={type} onValueChange={setType}>
             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -194,7 +194,7 @@ function InvestPage() {
           const p = a.current - a.invested;
           const r = a.invested ? (p / a.invested) * 100 : 0;
           return (
-            <div key={a.id} className="group rounded-2xl bg-card border border-border p-4 shadow-[var(--shadow-soft)] flex items-center gap-4">
+            <div key={a.id} className="group rounded-2xl glass-card p-4 flex items-center gap-4">
               <div className="text-xs uppercase tracking-wider text-muted-foreground w-20">{a.type}</div>
               <div className="flex-1 min-w-0">
                 <div className="font-medium">{a.name}</div>
