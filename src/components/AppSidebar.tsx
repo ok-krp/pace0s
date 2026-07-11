@@ -180,18 +180,21 @@ export function MobileTabBar() {
             const active = path === to;
             const Icon = it.icon;
             return (
-              <Link
+              <MotionLink
                 key={to}
                 to={to}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[10px] transition-all shrink-0 min-w-[58px] ${
+                whileHover={{ y: -2, scale: 1.05 }}
+                whileTap={{ scale: 0.92 }}
+                transition={springSnap}
+                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-2xl text-[10px] shrink-0 min-w-[58px] will-change-transform ${interactiveRing} ${
                   active
-                    ? "text-primary bg-[color-mix(in_oklab,var(--primary)_12%,transparent)]"
+                    ? "text-primary bg-[color-mix(in_oklab,var(--primary)_14%,transparent)]"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Icon className="size-5 shrink-0" />
                 <span className="truncate max-w-full">{it.label}</span>
-              </Link>
+              </MotionLink>
             );
           })}
         </div>
