@@ -67,9 +67,10 @@ export function StatCard({
         onClick={onClick}
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        whileHover={{ y: -2, scale: 1.005 }}
-        whileTap={{ scale: 0.975 }}
-        transition={{ type: "spring", stiffness: 320, damping: 26, mass: 0.6 }}
+        whileHover={{ y: -2, scale: 1.01 }}
+        whileFocus={{ y: -2, scale: 1.01 }}
+        whileTap={{ scale: 0.97 }}
+        transition={springSnap}
         aria-label={`${label} — ${hint ?? "ouvrir"}`}
         className={className}
       >
@@ -82,7 +83,7 @@ export function StatCard({
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ type: "spring", stiffness: 260, damping: 28, mass: 0.7 }}
+      transition={springSoft}
       className={className}
     >
       {inner}
