@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
+import { motion } from "framer-motion";
 import {
   LayoutDashboard,
   Moon,
@@ -22,6 +23,9 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useNavPrefs, type NavItemKey } from "@/hooks/use-nav-prefs";
 import { useLocalState } from "@/lib/storage";
+import { springSoft, springSnap, interactiveRing } from "@/lib/motion";
+
+const MotionLink = motion(Link);
 
 export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof LayoutDashboard }> = {
   "/": { label: "Dashboard", icon: LayoutDashboard },
@@ -53,18 +57,21 @@ function NavLink({ to, active, onNavigate }: { to: NavItemKey; active: boolean; 
   if (!it) return null;
   const Icon = it.icon;
   return (
-    <Link
+    <MotionLink
       to={to}
       onClick={onNavigate}
-      className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+      whileHover={{ x: 2, scale: 1.01 }}
+      whileTap={{ scale: 0.97 }}
+      transition={springSnap}
+      className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-sm will-change-transform ${interactiveRing} ${
         active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-[var(--shadow-soft)]"
-          : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/60"
+          ? "bg-[color-mix(in_oklab,var(--sidebar-accent)_80%,transparent)] text-sidebar-accent-foreground font-medium"
+          : "text-muted-foreground hover:text-foreground hover:bg-[color-mix(in_oklab,var(--sidebar-accent)_45%,transparent)]"
       }`}
     >
       <Icon className={`size-4 ${active ? "text-primary" : ""}`} />
       <span>{it.label}</span>
-    </Link>
+    </MotionLink>
   );
 }
 
@@ -85,9 +92,11 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
             onOpenChange={(v) => setOpenMap((p) => ({ ...p, [g.id]: v }))}
             className="mt-1"
           >
-            <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground rounded-lg">
+            <CollapsibleTrigger className={`w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground rounded-lg ${interactiveRing}`}>
               <span>{g.label}</span>
-              <ChevronDown className={`size-3 transition-transform ${open ? "rotate-180" : ""}`} />
+              <motion.span animate={{ rotate: open ? 180 : 0 }} transition={springSoft} className="inline-flex">
+                <ChevronDown className="size-3" />
+              </motion.span>
             </CollapsibleTrigger>
             <CollapsibleContent className="flex flex-col gap-0.5 mt-0.5">
               {g.items.map((to) => (
@@ -129,8 +138,16 @@ export function MobileTopBar() {
   return (
     <header className="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] border-b border-white/20 dark:border-white/10 bg-[color-mix(in_oklab,var(--background)_55%,transparent)] backdrop-blur-2xl backdrop-saturate-150">
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger className="size-10 grid place-items-center rounded-lg hover:bg-muted transition-colors" aria-label="Menu">
-          <Menu className="size-5" />
+        <SheetTrigger asChild>
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.9 }}
+            transition={springSnap}
+            className={`size-10 grid place-items-center rounded-xl hover:bg-muted will-change-transform ${interactiveRing}`}
+            aria-label="Menu"
+          >
+            <Menu className="size-5" />
+          </motion.button>
         </SheetTrigger>
         <SheetContent side="left" className="w-72 p-4 flex flex-col">
           <Link to="/" onClick={() => setOpen(false)} className="flex items-center gap-2 px-1 py-2 mb-3">
@@ -163,18 +180,21 @@ export function MobileTabBar() {
             const active = path === to;
             const Icon = it.icon;
             return (
-              <Link
+              <MotionLink
                 key={to}
                 to={to}
-                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[10px] transition-all shrink-0 min-w-[58px] ${
+                whileHover={{ y: -2, scale: 1.05 }}
+                whileTap={{ scale: 0.92 }}
+                transition={springSnap}
+                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-2xl text-[10px] shrink-0 min-w-[58px] will-change-transform ${interactiveRing} ${
                   active
-                    ? "text-primary bg-[color-mix(in_oklab,var(--primary)_12%,transparent)]"
+                    ? "text-primary bg-[color-mix(in_oklab,var(--primary)_14%,transparent)]"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Icon className="size-5 shrink-0" />
                 <span className="truncate max-w-full">{it.label}</span>
-              </Link>
+              </MotionLink>
             );
           })}
         </div>
