@@ -518,7 +518,7 @@ function OverloadTab({ exs }: { exs: Exercise[] }) {
             const prevW = rows[1]?.weight ?? 0;
             const delta = lastW - prevW;
             return (
-              <div key={ex.id} className="rounded-2xl border border-border bg-card overflow-hidden">
+              <div key={ex.id} className="rounded-2xl glass-card overflow-hidden">
                 <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-muted/30 flex-wrap">
                   <div className="min-w-0">
                     <div className="font-medium truncate">{ex.name}</div>

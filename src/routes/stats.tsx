@@ -63,7 +63,7 @@ function StatsPage() {
 
       <div className="space-y-3">
         {insights.map((t, i) => (
-          <div key={i} className="rounded-2xl border border-border bg-card p-4 flex items-start gap-3">
+          <div key={i} className="rounded-2xl glass-card p-4 flex items-start gap-3">
             <div className="size-9 rounded-xl stat-grad grid place-items-center text-primary-foreground shrink-0">
               <Sparkles className="size-4" />
             </div>
