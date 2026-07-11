@@ -154,26 +154,30 @@ export function MobileTabBar() {
   const { bottom } = useNavPrefs();
   if (bottom.length === 0) return null;
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 glass border-t border-border pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-      <div className="flex gap-1 overflow-x-auto scrollbar-none px-2">
-        {bottom.map((to) => {
-          const it = NAV_REGISTRY[to];
-          if (!it) return null;
-          const active = path === to;
-          const Icon = it.icon;
-          return (
-            <Link
-              key={to}
-              to={to}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-[10px] transition-colors shrink-0 min-w-[58px] ${
-                active ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              <Icon className="size-5 shrink-0" />
-              <span className="truncate max-w-full">{it.label}</span>
-            </Link>
-          );
-        })}
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 pointer-events-none">
+      <div className="glass-card pointer-events-auto mx-auto max-w-md px-2 py-1.5">
+        <div className="flex gap-1 overflow-x-auto scrollbar-none">
+          {bottom.map((to) => {
+            const it = NAV_REGISTRY[to];
+            if (!it) return null;
+            const active = path === to;
+            const Icon = it.icon;
+            return (
+              <Link
+                key={to}
+                to={to}
+                className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl text-[10px] transition-all shrink-0 min-w-[58px] ${
+                  active
+                    ? "text-primary bg-[color-mix(in_oklab,var(--primary)_12%,transparent)]"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="size-5 shrink-0" />
+                <span className="truncate max-w-full">{it.label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
