@@ -92,9 +92,11 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
             onOpenChange={(v) => setOpenMap((p) => ({ ...p, [g.id]: v }))}
             className="mt-1"
           >
-            <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground rounded-lg">
+            <CollapsibleTrigger className={`w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground rounded-lg ${interactiveRing}`}>
               <span>{g.label}</span>
-              <ChevronDown className={`size-3 transition-transform ${open ? "rotate-180" : ""}`} />
+              <motion.span animate={{ rotate: open ? 180 : 0 }} transition={springSoft} className="inline-flex">
+                <ChevronDown className="size-3" />
+              </motion.span>
             </CollapsibleTrigger>
             <CollapsibleContent className="flex flex-col gap-0.5 mt-0.5">
               {g.items.map((to) => (
