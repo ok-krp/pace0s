@@ -57,18 +57,21 @@ function NavLink({ to, active, onNavigate }: { to: NavItemKey; active: boolean; 
   if (!it) return null;
   const Icon = it.icon;
   return (
-    <Link
+    <MotionLink
       to={to}
       onClick={onNavigate}
-      className={`group flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+      whileHover={{ x: 2, scale: 1.01 }}
+      whileTap={{ scale: 0.97 }}
+      transition={springSnap}
+      className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-sm will-change-transform ${interactiveRing} ${
         active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-[var(--shadow-soft)]"
-          : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/60"
+          ? "bg-[color-mix(in_oklab,var(--sidebar-accent)_80%,transparent)] text-sidebar-accent-foreground font-medium"
+          : "text-muted-foreground hover:text-foreground hover:bg-[color-mix(in_oklab,var(--sidebar-accent)_45%,transparent)]"
       }`}
     >
       <Icon className={`size-4 ${active ? "text-primary" : ""}`} />
       <span>{it.label}</span>
-    </Link>
+    </MotionLink>
   );
 }
 
