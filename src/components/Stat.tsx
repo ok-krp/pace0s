@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { ReactNode } from "react";
+import { springSoft, springSnap, interactiveRing } from "@/lib/motion";
 
 export function StatCard({
   label,
