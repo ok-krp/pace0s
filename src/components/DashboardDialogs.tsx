@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { liquidTooltipStyle } from "@/lib/chart-style";
 import { motion } from "framer-motion";
 import { Droplets, Flame, Moon, Scale, Sparkles, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -126,7 +127,7 @@ function ScoreDetails() {
         <ResponsiveContainer width="100%" height={80}>
           <LineChart data={history}>
             <YAxis hide domain={[0, 100]} />
-            <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 11 }} />
+            <Tooltip contentStyle={liquidTooltipStyle} />
             <Line type="monotone" dataKey="score" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3, fill: "var(--primary)" }} />
           </LineChart>
         </ResponsiveContainer>

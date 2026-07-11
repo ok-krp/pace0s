@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { liquidTooltipStyle } from "@/lib/chart-style";
 import { useState } from "react";
 import { Moon, Plus } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
@@ -82,7 +83,7 @@ function SleepPage() {
             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
             <YAxis fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
-            <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }} />
+            <Tooltip contentStyle={liquidTooltipStyle} />
             <Line type="monotone" dataKey="h" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3 }} />
           </LineChart>
         </ResponsiveContainer>

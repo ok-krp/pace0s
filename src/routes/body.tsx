@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { liquidTooltipStyle } from "@/lib/chart-style";
 import { useState } from "react";
 import { Scale, Plus } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
@@ -86,7 +87,7 @@ function BodyPage() {
             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="d" fontSize={10} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
             <YAxis fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} domain={["dataMin - 1", "dataMax + 1"]} />
-            <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }} />
+            <Tooltip contentStyle={liquidTooltipStyle} />
             <Line type="monotone" dataKey="w" name="Poids" stroke="var(--primary)" strokeWidth={2.5} dot={false} connectNulls />
             <Line type="monotone" dataKey="muscle" name="Muscle %" stroke="var(--chart-2)" strokeWidth={2} dot={false} connectNulls />
             <Line type="monotone" dataKey="fat" name="Gras %" stroke="var(--chart-4)" strokeWidth={2} dot={false} connectNulls />

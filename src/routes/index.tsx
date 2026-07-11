@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { liquidTooltipStyle } from "@/lib/chart-style";
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { Moon, Droplets, Dumbbell, Briefcase, Wallet, TrendingUp, Flame, CheckCircle2, Scale, Sparkles, Footprints, Activity } from "lucide-react";
@@ -182,7 +183,7 @@ function Dashboard() {
               </defs>
               <XAxis dataKey="day" stroke="var(--muted-foreground)" fontSize={11} tickLine={false} axisLine={false} />
               <YAxis hide />
-              <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }} />
+              <Tooltip contentStyle={liquidTooltipStyle} />
               <Area type="monotone" dataKey="sommeil" stroke="var(--primary)" strokeWidth={2} fill="url(#g1)" />
               <Line type="monotone" dataKey="eau" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
             </AreaChart>
@@ -238,7 +239,7 @@ function Dashboard() {
             <LineChart data={weightSeries}>
               <XAxis dataKey="d" hide />
               <YAxis hide domain={["dataMin - 1", "dataMax + 1"]} />
-              <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }} />
+              <Tooltip contentStyle={liquidTooltipStyle} />
               <Line type="monotone" dataKey="w" stroke="var(--primary)" strokeWidth={2.5} dot={false} />
             </LineChart>
           </ResponsiveContainer>

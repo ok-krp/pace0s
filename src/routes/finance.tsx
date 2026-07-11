@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { liquidTooltipStyle } from "@/lib/chart-style";
 import { useState } from "react";
 import { z } from "zod";
 import { Plus, Trash2, TrendingDown, TrendingUp } from "lucide-react";
@@ -102,7 +103,7 @@ function FinancePage() {
             <BarChart data={last30}>
               <XAxis dataKey="d" fontSize={10} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
               <YAxis fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
-              <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }} />
+              <Tooltip contentStyle={liquidTooltipStyle} />
               <Bar dataKey="net" radius={[6, 6, 0, 0]}>
                 {last30.map((x, i) => <Cell key={i} fill={x.net >= 0 ? "var(--success)" : "var(--destructive)"} />)}
               </Bar>
@@ -117,7 +118,7 @@ function FinancePage() {
                 <Pie data={byCat} dataKey="value" nameKey="name" innerRadius={50} outerRadius={85} paddingAngle={2}>
                   {byCat.map((_, i) => <Cell key={i} fill={colors[i % colors.length]} />)}
                 </Pie>
-                <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }} />
+                <Tooltip contentStyle={liquidTooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
               </PieChart>
             </ResponsiveContainer>
