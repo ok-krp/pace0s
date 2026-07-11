@@ -1,5 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
+import { motion } from "framer-motion";
 import {
   LayoutDashboard,
   Moon,
@@ -22,6 +23,9 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useNavPrefs, type NavItemKey } from "@/hooks/use-nav-prefs";
 import { useLocalState } from "@/lib/storage";
+import { springSoft, springSnap, interactiveRing } from "@/lib/motion";
+
+const MotionLink = motion(Link);
 
 export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof LayoutDashboard }> = {
   "/": { label: "Dashboard", icon: LayoutDashboard },
