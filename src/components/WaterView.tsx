@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { liquidTooltipStyle } from "@/lib/chart-style";
 import { Droplets, Plus, Minus } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { Ring, StatCard } from "@/components/Stat";
@@ -76,7 +77,7 @@ export function WaterView() {
             <BarChart data={series}>
               <XAxis dataKey="day" fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
               <YAxis hide />
-              <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }} />
+              <Tooltip contentStyle={liquidTooltipStyle} />
               <Bar dataKey="ml" fill="var(--chart-2)" radius={[8, 8, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>

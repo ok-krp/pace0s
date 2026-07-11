@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { liquidTooltipStyle } from "@/lib/chart-style";
 import { useEffect, useRef, useState } from "react";
 import { Play, Pause, RotateCcw, Briefcase, Trash2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
@@ -78,7 +79,7 @@ function WorkPage() {
           <BarChart data={series}>
             <XAxis dataKey="d" fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
             <YAxis fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
-            <Tooltip contentStyle={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, fontSize: 12 }} />
+            <Tooltip contentStyle={liquidTooltipStyle} />
             <Bar dataKey="min" fill="var(--primary)" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
