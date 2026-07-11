@@ -123,7 +123,7 @@ function SportPage() {
       {active ? (
         <ActiveSession active={active} setActive={setActive} exs={exs} onFinish={finishSession} onCancel={cancelSession} />
       ) : (
-        <div className="rounded-2xl bg-card border border-border p-4 sm:p-5 shadow-[var(--shadow-soft)] mb-3">
+        <div className="rounded-2xl glass-card p-4 sm:p-5 mb-3">
           <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
             <div className="font-display text-base sm:text-lg font-semibold flex items-center gap-2"><CalIcon className="size-4 text-muted-foreground" /> Aujourd'hui ({DAYS_LABELS[todayDow]})</div>
           </div>
@@ -201,7 +201,7 @@ function ActiveSession({ active, setActive, exs, onFinish, onCancel }: {
   };
 
   return (
-    <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-card)] mb-4">
+    <div className="rounded-2xl glass-card p-5 mb-4">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
           <div className="text-xs text-primary font-medium uppercase tracking-wider">Séance en cours</div>

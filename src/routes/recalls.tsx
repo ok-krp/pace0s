@@ -56,13 +56,13 @@ function RecallsPage() {
       <PageHeader title="Rappels conso" subtitle="Alertes officielles RappelConso sur les produits que tu as scannés." />
 
       {loading && (
-        <div className="rounded-2xl bg-card border border-border p-6 text-sm text-muted-foreground">
+        <div className="rounded-2xl glass-card p-6 text-sm text-muted-foreground">
           Analyse de tes produits scannés… ({checked} vérifiés)
         </div>
       )}
 
       {!loading && rows.length === 0 && (
-        <div className="rounded-2xl bg-card border border-border p-6 flex items-center gap-3">
+        <div className="rounded-2xl glass-card p-6 flex items-center gap-3">
           <ShieldCheck className="size-6 text-emerald-500" />
           <div>
             <div className="font-medium">Aucun rappel actif</div>
@@ -73,7 +73,7 @@ function RecallsPage() {
 
       <div className="space-y-3 mt-3">
         {rows.map((r) => (
-          <div key={r.barcode!} className="rounded-2xl bg-card border border-rose-500/30 p-4 shadow-[var(--shadow-soft)]">
+          <div key={r.barcode!} className="rounded-2xl bg-card border border-rose-500/30 p-4">
             <div className="flex items-start gap-3">
               <div className="size-10 rounded-xl bg-rose-500/10 grid place-items-center text-rose-600 shrink-0"><AlertTriangle className="size-5" /></div>
               <div className="flex-1 min-w-0">

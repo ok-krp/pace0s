@@ -135,7 +135,7 @@ export function RecipesView() {
 
   return (
     <div>
-      <div className="rounded-2xl bg-card border border-border p-3 shadow-[var(--shadow-soft)] mb-4 flex flex-wrap gap-2 items-center">
+      <div className="rounded-2xl glass-card p-3 mb-4 flex flex-wrap gap-2 items-center">
         <div className="relative flex-1 min-w-48">
           <Search className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher (nom, ingrédient…)" className="pl-9" />
@@ -146,7 +146,7 @@ export function RecipesView() {
         </Button>
       </div>
 
-      <div className="rounded-2xl bg-card border border-border p-3 shadow-[var(--shadow-soft)] mb-4">
+      <div className="rounded-2xl glass-card p-3 mb-4">
         <div className="text-xs text-muted-foreground mb-2">Catégories</div>
         <div className="flex flex-wrap gap-2 items-center">
           {DEFAULT_CATS.map((c) => <span key={c} className="text-xs rounded-full bg-muted px-3 py-1">{c}</span>)}
@@ -251,7 +251,7 @@ function RecipeGrid({ list, favs, setFavs, onEdit, onView, onRemove, onAddToLog,
   return (
     <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
       {list.map((r) => (
-        <div key={r.id} className="rounded-2xl bg-card border border-border p-4 shadow-[var(--shadow-soft)] hover:shadow-[var(--shadow-card)] transition flex flex-col">
+        <div key={r.id} className="rounded-2xl glass-card p-4 hover:shadow-[var(--shadow-card)] transition flex flex-col">
           <div className="flex items-start justify-between gap-2">
             {r.photo ? (
               <img src={r.photo} alt={r.name} className="size-16 rounded-xl object-cover aspect-square" />

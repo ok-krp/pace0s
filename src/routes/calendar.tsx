@@ -58,7 +58,7 @@ function CalendarPage() {
     <div>
       <PageHeader title="Calendrier" subtitle="Tout ce que vous avez vécu, jour par jour." />
 
-      <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)]">
+      <div className="rounded-2xl glass-card p-5">
         <div className="flex items-center justify-between mb-4">
           <div className="font-display text-xl font-semibold capitalize">{monthName}</div>
           <div className="flex gap-1">
@@ -132,7 +132,7 @@ function DayDetails({ date, sleep, water, nutTotal, nutList, routineIds, habits,
   const habitsDone = habits.filter((h) => routineIds.includes(h.id));
 
   return (
-    <div className="mt-4 rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)]">
+    <div className="mt-4 rounded-2xl glass-card p-5">
       <div className="font-display text-lg font-semibold mb-3">
         {new Date(date).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
       </div>

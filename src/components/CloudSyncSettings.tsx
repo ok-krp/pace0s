@@ -18,7 +18,7 @@ export function CloudSyncSettings() {
   };
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl bg-card border border-border p-4 shadow-[var(--shadow-soft)]">
+    <div className="flex items-center gap-4 rounded-2xl glass-card p-4">
       <div className="size-10 rounded-xl bg-muted grid place-items-center text-foreground"><Cloud className="size-4" /></div>
       <div className="flex-1 min-w-0">
         <div className="font-medium">Synchronisation cloud</div>

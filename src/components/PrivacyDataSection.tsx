@@ -70,7 +70,7 @@ export function PrivacyDataSection() {
       <button
         type="button"
         onClick={() => openConsentSheet()}
-        className="w-full flex items-center gap-3 rounded-2xl bg-card border border-border p-4 shadow-[var(--shadow-soft)] hover:border-primary/40 transition-colors text-left"
+        className="w-full flex items-center gap-3 rounded-2xl glass-card p-4 hover:border-primary/40 transition-colors text-left"
       >
         <div className="size-10 rounded-xl bg-muted grid place-items-center"><Settings2 className="size-4" /></div>
         <div className="flex-1 min-w-0">
@@ -80,7 +80,7 @@ export function PrivacyDataSection() {
         <span className="text-xs text-muted-foreground">Ouvrir →</span>
       </button>
 
-      <div className="flex items-center gap-4 rounded-2xl bg-card border border-border p-4 shadow-[var(--shadow-soft)]">
+      <div className="flex items-center gap-4 rounded-2xl glass-card p-4">
         <div className="size-10 rounded-xl bg-muted grid place-items-center"><Download className="size-4" /></div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium">Exporter mes données</div>

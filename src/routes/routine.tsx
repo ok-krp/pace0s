@@ -74,7 +74,7 @@ function RoutinePage() {
         <StatCard label="Habitudes" value={habits.length} />
       </div>
 
-      <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)] mb-4">
+      <div className="rounded-2xl glass-card p-5 mb-4">
         <div className="flex gap-2">
           <Input value={emoji} onChange={(e) => setEmoji(e.target.value)} className="w-16 text-center" />
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nouvelle habitude" />

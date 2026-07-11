@@ -63,7 +63,7 @@ function ProfilePage() {
     <div>
       <PageHeader title="Mon profil" subtitle="Vos infos guident l'IA et vos objectifs." />
 
-      <div className="rounded-2xl bg-card border border-border p-6 shadow-[var(--shadow-soft)] mb-4">
+      <div className="rounded-2xl glass-card p-6 mb-4">
         <div className="flex items-center gap-3 mb-5">
           <div className="size-12 rounded-full stat-grad grid place-items-center text-primary-foreground">
             <UserIcon className="size-5" />
@@ -122,7 +122,7 @@ function ProfilePage() {
         </div>
       </div>
 
-      <div className="rounded-2xl bg-card border border-border p-6 shadow-[var(--shadow-soft)] mb-4">
+      <div className="rounded-2xl glass-card p-6 mb-4">
         <div className="font-display text-lg font-semibold mb-4">Objectifs quotidiens</div>
         <div className="grid sm:grid-cols-3 gap-4">
           <div>

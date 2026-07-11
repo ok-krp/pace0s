@@ -256,7 +256,7 @@ function ScanPage() {
         <motion.button
           whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
           onClick={() => setScanning(true)}
-          className="rounded-2xl bg-card border border-border p-5 text-left shadow-[var(--shadow-soft)] hover:shadow-[var(--shadow-card)] transition group"
+          className="rounded-2xl glass-card p-5 text-left hover:shadow-[var(--shadow-card)] transition group"
         >
           <div className="size-11 rounded-xl stat-grad grid place-items-center text-primary-foreground mb-3 shadow-[var(--shadow-glow)]">
             <ScanLine className="size-5" />
@@ -268,7 +268,7 @@ function ScanPage() {
         <motion.button
           whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
           onClick={() => fileRef.current?.click()}
-          className="rounded-2xl bg-card border border-border p-5 text-left shadow-[var(--shadow-soft)] hover:shadow-[var(--shadow-card)] transition"
+          className="rounded-2xl glass-card p-5 text-left hover:shadow-[var(--shadow-card)] transition"
         >
           <div className="size-11 rounded-xl bg-gradient-to-br from-fuchsia-500 to-purple-600 grid place-items-center text-white mb-3 shadow-[var(--shadow-glow)]">
             <Camera className="size-5" />
@@ -292,14 +292,14 @@ function ScanPage() {
       </div>
 
       {busy && (
-        <div className="rounded-2xl bg-card border border-border p-8 text-center mb-4">
+        <div className="rounded-2xl glass-card p-8 text-center mb-4">
           <Loader2 className="size-6 animate-spin mx-auto text-primary" />
           <p className="text-sm text-muted-foreground mt-3">Analyse en cours…</p>
         </div>
       )}
 
       {product && scoreInfo && !busy && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-card border border-border overflow-hidden shadow-[var(--shadow-card)] mb-4">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass-card overflow-hidden mb-4">
           <div className="flex gap-4 p-5">
             {product.image_url && <img src={product.image_url} alt={product.name} className="size-20 rounded-xl object-cover" />}
             <div className="flex-1 min-w-0">
@@ -370,7 +370,7 @@ function ScanPage() {
       )}
 
       {aiResult && photo && !busy && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-card border border-border overflow-hidden shadow-[var(--shadow-card)] mb-4">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass-card overflow-hidden mb-4">
           <div className="flex gap-4 p-5">
             <img src={photo} alt="repas" className="size-20 rounded-xl object-cover" />
             <div className="flex-1 min-w-0">

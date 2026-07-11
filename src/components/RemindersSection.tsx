@@ -21,7 +21,7 @@ export function RemindersSection() {
   };
 
   return (
-    <div className="rounded-2xl bg-card border border-border p-4 shadow-[var(--shadow-soft)]">
+    <div className="rounded-2xl glass-card p-4">
       <div className="mb-3">
         <div className="font-medium">Rappels intelligents</div>
         <div className="text-xs text-muted-foreground">Notifications contextuelles basées sur tes données du jour</div>

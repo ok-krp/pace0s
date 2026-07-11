@@ -123,27 +123,27 @@ function SettingsPage() {
         </Row>
         <BleDeviceManager />
         <Accordion type="multiple" className="space-y-3">
-          <AccordionItem value="reminders" className="rounded-2xl bg-card border border-border px-4 shadow-[var(--shadow-soft)]">
+          <AccordionItem value="reminders" className="rounded-2xl glass-card px-4">
             <AccordionTrigger className="text-sm font-medium">Rappels & notifications</AccordionTrigger>
             <AccordionContent className="pt-2 space-y-3"><RemindersSection /><ReminderDebugSection /></AccordionContent>
           </AccordionItem>
-          <AccordionItem value="mobilenav" className="rounded-2xl bg-card border border-border px-4 shadow-[var(--shadow-soft)]">
+          <AccordionItem value="mobilenav" className="rounded-2xl glass-card px-4">
             <AccordionTrigger className="text-sm font-medium">Navigation mobile</AccordionTrigger>
             <AccordionContent className="pt-2"><MobileNavSettings /></AccordionContent>
           </AccordionItem>
-          <AccordionItem value="nutcols" className="rounded-2xl bg-card border border-border px-4 shadow-[var(--shadow-soft)]">
+          <AccordionItem value="nutcols" className="rounded-2xl glass-card px-4">
             <AccordionTrigger className="text-sm font-medium">Colonnes Nutrition</AccordionTrigger>
             <AccordionContent className="pt-2"><NutritionColsSettings /></AccordionContent>
           </AccordionItem>
-          <AccordionItem value="finlock" className="rounded-2xl bg-card border border-border px-4 shadow-[var(--shadow-soft)]">
+          <AccordionItem value="finlock" className="rounded-2xl glass-card px-4">
             <AccordionTrigger className="text-sm font-medium">Verrou Finance</AccordionTrigger>
             <AccordionContent className="pt-2"><FinanceLockSettings /></AccordionContent>
           </AccordionItem>
-          <AccordionItem value="cloud" className="rounded-2xl bg-card border border-border px-4 shadow-[var(--shadow-soft)]">
+          <AccordionItem value="cloud" className="rounded-2xl glass-card px-4">
             <AccordionTrigger className="text-sm font-medium">Synchronisation Cloud</AccordionTrigger>
             <AccordionContent className="pt-2"><CloudSyncSettings /></AccordionContent>
           </AccordionItem>
-          <AccordionItem value="privacy" className="rounded-2xl bg-card border border-border px-4 shadow-[var(--shadow-soft)]">
+          <AccordionItem value="privacy" className="rounded-2xl glass-card px-4">
             <AccordionTrigger className="text-sm font-medium">Confidentialité & Données</AccordionTrigger>
             <AccordionContent className="pt-2"><PrivacyDataSection /></AccordionContent>
           </AccordionItem>
@@ -164,7 +164,7 @@ function SettingsPage() {
 
 function Row({ icon, label, desc, children }: { icon: React.ReactNode; label: string; desc: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl bg-card border border-border p-4 shadow-[var(--shadow-soft)]">
+    <div className="flex items-center gap-4 rounded-2xl glass-card p-4">
       <div className="size-10 rounded-xl bg-muted grid place-items-center text-foreground">{icon}</div>
       <div className="flex-1 min-w-0">
         <div className="font-medium">{label}</div>

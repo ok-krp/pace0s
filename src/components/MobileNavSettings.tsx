@@ -8,7 +8,7 @@ export function MobileNavSettings() {
   const { order, bottom, toggleBottom, move, setOrder, visible, toggleVisible } = useNavPrefs();
 
   return (
-    <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)]">
+    <div className="rounded-2xl glass-card p-5">
       <div className="font-display text-lg font-semibold mb-1">Navigation mobile</div>
       <div className="text-xs text-muted-foreground mb-4">
         Choisissez les sections visibles dans le volet, vos raccourcis du bas (scrollables) et l'ordre.

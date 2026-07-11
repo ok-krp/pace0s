@@ -52,7 +52,7 @@ export function ReminderDebugSection() {
   }, [open, refresh]);
 
   return (
-    <div className="rounded-2xl bg-card border border-border p-4 shadow-[var(--shadow-soft)]">
+    <div className="rounded-2xl glass-card p-4">
       <div className="flex items-center gap-3">
         <div className="size-10 rounded-xl bg-muted grid place-items-center">
           <Bug className="size-4" />

@@ -165,7 +165,7 @@ function Dashboard() {
 
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <div className="lg:col-span-2 rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)]">
+        <div className="lg:col-span-2 rounded-2xl glass-card p-5">
           <div className="flex items-center justify-between mb-3">
             <div>
               <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tendance 7 jours</div>
@@ -192,7 +192,7 @@ function Dashboard() {
         <button
           type="button"
           onClick={() => navigate({ to: "/finance" })}
-          className="text-left rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)] hover:shadow-[var(--shadow-card)] hover:border-primary/40 hover:-translate-y-0.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="text-left rounded-2xl glass-card p-5 hover:shadow-[var(--shadow-card)] hover:border-primary/40 hover:-translate-y-0.5 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Finances du jour</div>
@@ -217,7 +217,7 @@ function Dashboard() {
         </button>
       </div>
 
-      <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)] mb-4">
+      <div className="rounded-2xl glass-card p-5 mb-4">
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Heatmap habitudes (90 jours)</div>
         <Heatmap routines={routines} />
       </div>
@@ -226,7 +226,7 @@ function Dashboard() {
         <button
           type="button"
           onClick={() => setDialog("weight")}
-          className="w-full text-left rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)] hover:shadow-[var(--shadow-card)] hover:border-primary/40 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="w-full text-left rounded-2xl glass-card p-5 hover:shadow-[var(--shadow-card)] hover:border-primary/40 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">

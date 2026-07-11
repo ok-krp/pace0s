@@ -63,7 +63,7 @@ function StatsPage() {
 
       <div className="space-y-3">
         {insights.map((t, i) => (
-          <div key={i} className="rounded-2xl border border-border bg-card p-4 shadow-[var(--shadow-soft)] flex items-start gap-3">
+          <div key={i} className="rounded-2xl border border-border bg-card p-4 flex items-start gap-3">
             <div className="size-9 rounded-xl stat-grad grid place-items-center text-primary-foreground shrink-0">
               <Sparkles className="size-4" />
             </div>
@@ -73,7 +73,7 @@ function StatsPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-4 mt-6">
-        <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)]">
+        <div className="rounded-2xl glass-card p-5">
           <div className="flex items-center gap-2 text-[color:var(--success)] text-sm font-medium">
             <TrendingUp className="size-4" /> Records 30 jours
           </div>
@@ -83,7 +83,7 @@ function StatsPage() {
             <li>Meilleur jour habitudes : <span className="text-foreground font-medium">{Math.max(0, ...d30.map((d) => (routines[d] ?? []).length))} cochées</span></li>
           </ul>
         </div>
-        <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)]">
+        <div className="rounded-2xl glass-card p-5">
           <div className="flex items-center gap-2 text-destructive text-sm font-medium">
             <TrendingDown className="size-4" /> À surveiller
           </div>

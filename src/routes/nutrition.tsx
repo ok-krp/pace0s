@@ -294,7 +294,7 @@ function NutritionLogView() {
         <StatCard label="Lipides" value={t.f.toFixed(0)} unit="g" />
       </div>
 
-      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)] mb-4">
+      <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass-card p-5 mb-4">
         <div className="grid md:grid-cols-3 gap-2 mb-2">
           <Input placeholder="Aliment" value={name} onChange={(e) => setName(e.target.value)} className="md:col-span-2" />
           <Select value={meal} onValueChange={setMeal}>
@@ -323,7 +323,7 @@ function NutritionLogView() {
           const sub = list.filter((x) => x.meal === m);
           if (sub.length === 0) return null;
           return (
-            <div key={m} className="rounded-2xl bg-card border border-border overflow-hidden shadow-[var(--shadow-soft)]">
+            <div key={m} className="rounded-2xl glass-card overflow-hidden">
               <div className="px-5 py-3 border-b border-border flex justify-between items-center bg-muted/30 flex-wrap gap-2">
                 <div className="font-medium">{m}</div>
                 <div className="text-xs text-muted-foreground flex flex-wrap gap-3">

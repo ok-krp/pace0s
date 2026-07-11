@@ -45,7 +45,7 @@ function SleepPage() {
     <div>
       <PageHeader title="Sommeil" subtitle="Détectez les patterns, comblez la dette." />
 
-      <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)] mb-4">
+      <div className="rounded-2xl glass-card p-5 mb-4">
         <div className="flex flex-wrap items-end gap-3">
           <div>
             <label className="text-xs text-muted-foreground">Endormi à</label>
@@ -75,7 +75,7 @@ function SleepPage() {
         <StatCard label="Dette" value={debt.toFixed(1)} unit="h" />
       </div>
 
-      <div className="rounded-2xl bg-card border border-border p-5 shadow-[var(--shadow-soft)]">
+      <div className="rounded-2xl glass-card p-5">
         <div className="font-display text-lg font-semibold mb-3">Tendance 30 jours</div>
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={data}>
