@@ -26,9 +26,9 @@ export function StatCard({
   const positive = delta !== undefined && delta >= 0;
   const interactive = !!onClick;
   const className =
-    "text-left w-full glass-card p-5 transition-all " +
+    "text-left w-full glass-card p-5 will-change-transform " +
     (interactive
-      ? "hover:-translate-y-0.5 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+      ? `cursor-pointer ${interactiveRing}`
       : "");
 
   const inner = (
