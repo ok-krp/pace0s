@@ -116,8 +116,11 @@ function AuthGate() {
 
   useEffect(() => {
     if (loading) return;
-    if (!user && !isPublic) navigate({ to: "/login" });
-  }, [user, loading, isPublic, navigate]);
+    if (!user && !isPublic) {
+      const next = path + (typeof window !== "undefined" ? window.location.search : "");
+      navigate({ to: "/login", search: { next } });
+    }
+  }, [user, loading, isPublic, navigate, path]);
 
   if (loading) {
     return (
