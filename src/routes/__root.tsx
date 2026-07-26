@@ -118,6 +118,14 @@ function AuthGate() {
   const isPublic = PUBLIC_ROUTES.includes(path);
 
   useEffect(() => {
+    // Apply wallpaper + adaptive glass tint on mount and when dark mode toggles.
+    applyWallpaper(readWallpaperChoice());
+    const obs = new MutationObserver(() => applyWallpaper(readWallpaperChoice()));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
+
+  useEffect(() => {
     if (loading) return;
     if (!user && !isPublic) {
       const next = path + (typeof window !== "undefined" ? window.location.search : "");
