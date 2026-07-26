@@ -17,6 +17,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { LegalConsentGate } from "@/components/LegalConsentGate";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
+import { applyWallpaper, readWallpaperChoice } from "@/hooks/use-wallpaper";
 
 
 function NotFoundComponent() {
