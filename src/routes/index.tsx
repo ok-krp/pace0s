@@ -15,7 +15,7 @@ import { DailyRhythmRing, RhythmLegend, type RhythmMetric } from "@/components/D
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Pace" },
+      { title: "Pace" },
       { name: "description", content: "Score quotidien, calories, eau, sommeil, finances, productivité — tout en un coup d'œil." },
     ],
   }),
