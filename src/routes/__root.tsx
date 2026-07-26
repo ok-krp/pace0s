@@ -17,6 +17,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { LegalConsentGate } from "@/components/LegalConsentGate";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
+import { applyWallpaper, readWallpaperChoice } from "@/hooks/use-wallpaper";
 
 
 function NotFoundComponent() {
@@ -115,6 +116,14 @@ function AuthGate() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const isPublic = PUBLIC_ROUTES.includes(path);
+
+  useEffect(() => {
+    // Apply wallpaper + adaptive glass tint on mount and when dark mode toggles.
+    applyWallpaper(readWallpaperChoice());
+    const obs = new MutationObserver(() => applyWallpaper(readWallpaperChoice()));
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
+  }, []);
 
   useEffect(() => {
     if (loading) return;

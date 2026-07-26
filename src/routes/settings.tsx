@@ -18,6 +18,7 @@ import { CloudSyncSettings } from "@/components/CloudSyncSettings";
 import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
+import { WallpaperSettings } from "@/components/WallpaperSettings";
 
 
 
@@ -122,6 +123,7 @@ function SettingsPage() {
           </Button>
         </Row>
         <BleDeviceManager />
+        <WallpaperSettings />
         <Accordion type="multiple" className="space-y-3">
           <AccordionItem value="reminders" className="rounded-2xl glass-card px-4">
             <AccordionTrigger className="text-sm font-medium">Rappels & notifications</AccordionTrigger>
