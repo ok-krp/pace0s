@@ -11,12 +11,22 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "Connexion — Pace" }] }),
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : "",
+  }),
   component: LoginPage,
 });
+
+function safeNext(next: string): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
+  return next;
+}
 
 function LoginPage() {
   const navigate = useNavigate();
   const { user, loading } = useAuth();
+  const { next } = Route.useSearch();
+  const target = safeNext(next);
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -24,8 +34,11 @@ function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) navigate({ to: "/" });
-  }, [user, loading, navigate]);
+    if (!loading && user) {
+      if (target.startsWith("/") && target !== "/login") window.location.href = target;
+      else navigate({ to: "/" });
+    }
+  }, [user, loading, navigate, target]);
 
   const handleEmail = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +48,7 @@ function LoginPage() {
         const { error } = await supabase.auth.signUp({
           email, password,
           options: {
-            emailRedirectTo: window.location.origin,
+            emailRedirectTo: window.location.origin + target,
             data: { full_name: name },
           },
         });
@@ -45,7 +58,8 @@ function LoginPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
         toast.success("Bienvenue !");
-        navigate({ to: "/" });
+        if (target !== "/") window.location.href = target;
+        else navigate({ to: "/" });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur d'authentification");
@@ -56,7 +70,9 @@ function LoginPage() {
 
   const handleGoogle = async () => {
     setBusy(true);
-    const result = await lovable.auth.signInWithOAuth("google", { redirect_uri: window.location.origin });
+    const result = await lovable.auth.signInWithOAuth("google", {
+      redirect_uri: window.location.origin + target,
+    });
     if (result.error) {
       toast.error("Connexion Google échouée");
       setBusy(false);

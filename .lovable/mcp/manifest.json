@@ -1,0 +1,158 @@
+{
+  "version": 1,
+  "sdk_version": "0.24.0",
+  "path": "/mcp",
+  "auth": {
+    "type": "oauth",
+    "issuer": "https://vqpnhqxrsmcyalotiypk.supabase.co/auth/v1",
+    "accepted_audiences": [
+      "authenticated"
+    ]
+  },
+  "mcp": {
+    "server": {
+      "name": "pace-mcp",
+      "version": "0.1.0",
+      "title": "Pace"
+    },
+    "tools": [
+      {
+        "name": "get_profile",
+        "title": "Get my profile",
+        "description": "Return the signed-in user's Pace profile row.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {}
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_food_log",
+        "title": "List food log entries",
+        "description": "List the signed-in user's food_log entries, optionally filtered by date range (YYYY-MM-DD). Returns up to `limit` most recent rows.",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string",
+              "description": "Start date YYYY-MM-DD (inclusive)"
+            },
+            "to": {
+              "type": "string",
+              "description": "End date YYYY-MM-DD (inclusive)"
+            },
+            "limit": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "Max rows (default 50)"
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "add_food_log",
+        "title": "Add food log entry",
+        "description": "Insert a food_log entry for the signed-in user.",
+        "annotations": {
+          "readOnlyHint": false,
+          "destructiveHint": false,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "meal": {
+              "type": "string",
+              "description": "breakfast | lunch | dinner | snack"
+            },
+            "kcal": {
+              "type": "number",
+              "minimum": 0
+            },
+            "protein_g": {
+              "type": "number",
+              "minimum": 0
+            },
+            "carbs_g": {
+              "type": "number",
+              "minimum": 0
+            },
+            "fat_g": {
+              "type": "number",
+              "minimum": 0
+            },
+            "fiber_g": {
+              "type": "number",
+              "minimum": 0
+            },
+            "sodium_mg": {
+              "type": "number",
+              "minimum": 0
+            },
+            "log_date": {
+              "type": "string",
+              "description": "YYYY-MM-DD, defaults to today"
+            }
+          },
+          "required": [
+            "name",
+            "meal",
+            "kcal"
+          ],
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      },
+      {
+        "name": "list_health_samples",
+        "title": "List health samples",
+        "description": "List the signed-in user's health_samples (weight, steps, hr, sleep, etc.). Optional type filter and time range (ISO timestamps).",
+        "annotations": {
+          "readOnlyHint": true,
+          "idempotentHint": true,
+          "openWorldHint": false
+        },
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Sample type filter (e.g. weight, steps, hr)"
+            },
+            "since": {
+              "type": "string",
+              "description": "ISO timestamp — only samples after"
+            },
+            "limit": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "description": "Max rows (default 100)"
+            }
+          },
+          "additionalProperties": false,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "outputSchema": null
+      }
+    ]
+  }
+}
