@@ -138,14 +138,15 @@ export function MobileTopBar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = NAV_REGISTRY[path as NavItemKey]?.label ?? "Pace";
   return (
-    <header className="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] border-b border-white/20 dark:border-white/10 bg-[color-mix(in_oklab,var(--background)_55%,transparent)] backdrop-blur-2xl backdrop-saturate-150">
+    <header className="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] border-b border-[color-mix(in_oklab,white_calc(var(--glass-edge)*35%),transparent)] bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.7))] backdrop-blur-[var(--glass-blur)] backdrop-saturate-[var(--glass-saturate)]">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.9 }}
             transition={springSnap}
-            className={`size-10 grid place-items-center rounded-xl hover:bg-muted will-change-transform ${interactiveRing}`}
+            className={`glass-icon size-10 will-change-transform ${interactiveRing}`}
+
             aria-label="Menu"
           >
             <Menu className="size-5" />
