@@ -115,7 +115,7 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
 export function AppSidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <aside className="hidden md:flex flex-col w-60 shrink-0 h-screen sticky top-0 px-3 py-5 border-r border-white/20 dark:border-white/10 bg-[color-mix(in_oklab,var(--sidebar)_55%,transparent)] backdrop-blur-2xl backdrop-saturate-150">
+    <aside className="hidden md:flex flex-col w-60 shrink-0 h-screen sticky top-0 px-3 py-5 border-r border-[color-mix(in_oklab,white_calc(var(--glass-edge)*35%),transparent)] bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.6))] backdrop-blur-[var(--glass-blur)] backdrop-saturate-[var(--glass-saturate)]">
       <Link to="/" className="flex items-center gap-2 px-3 py-2 mb-4">
         <div className="size-8 rounded-xl stat-grad grid place-items-center text-primary-foreground shadow-[var(--shadow-glow)]">
           <Sparkles className="size-4" />
