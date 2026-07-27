@@ -4,24 +4,31 @@ import { cva, type VariantProps } from "class-variance-authority";
 
 import { cn } from "@/lib/utils";
 
+/**
+ * Liquid Glass buttons — thin glass material, Fresnel rim, spring press.
+ * Motion is limited to transform/opacity so every state stays GPU-composited.
+ */
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-2xl text-sm font-medium will-change-transform transition-[transform,box-shadow,background-color,opacity] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
-        destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
-        outline:
-          "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
-        secondary: "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
-        ghost: "hover:bg-accent hover:text-accent-foreground",
-        link: "text-primary underline-offset-4 hover:underline",
+        default:
+          "text-primary-foreground bg-[color-mix(in_oklab,var(--primary)_88%,transparent)] backdrop-blur-[var(--glass-blur-thin)] backdrop-saturate-[var(--glass-saturate)] border border-[color-mix(in_oklab,white_28%,transparent)] shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_35%,transparent),var(--glass-elev-1)] hover:bg-[color-mix(in_oklab,var(--primary)_96%,transparent)] hover:shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_45%,transparent),var(--glass-elev-2)]",
+        destructive:
+          "text-destructive-foreground bg-[color-mix(in_oklab,var(--destructive)_86%,transparent)] backdrop-blur-[var(--glass-blur-thin)] border border-[color-mix(in_oklab,white_24%,transparent)] shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_30%,transparent),var(--glass-elev-1)] hover:bg-[color-mix(in_oklab,var(--destructive)_96%,transparent)]",
+        outline: "glass-thin",
+        secondary: "glass-thin",
+        glass: "glass-thin",
+        ghost:
+          "text-muted-foreground hover:text-foreground hover:bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.5))] hover:backdrop-blur-[var(--glass-blur-thin)]",
+        link: "text-primary underline-offset-4 hover:underline rounded-md active:scale-100",
       },
       size: {
         default: "h-9 px-4 py-2",
-        sm: "h-8 rounded-md px-3 text-xs",
-        lg: "h-10 rounded-md px-8",
-        icon: "h-9 w-9",
+        sm: "h-8 rounded-xl px-3 text-xs",
+        lg: "h-11 rounded-2xl px-8",
+        icon: "h-9 w-9 rounded-full",
       },
     },
     defaultVariants: {

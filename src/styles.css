@@ -109,10 +109,30 @@
 
   /* Liquid Glass — adaptive tint reacts to wallpaper (overridden per-wallpaper). */
   --glass-tint: 255 255 255;       /* rgb triplet blended into surfaces */
-  --glass-tint-strength: 0.42;     /* how much wallpaper tint shows through */
-  --glass-blur: 40px;
+  --glass-tint-strength: 0.30;     /* how much wallpaper tint shows through */
+  --glass-blur: 32px;
+  --glass-blur-thin: 20px;
   --glass-saturate: 180%;
   --glass-radius: 24px;
+  --glass-radius-sm: 18px;
+  /* Fresnel / specular */
+  --glass-edge: 0.55;              /* rim light intensity */
+  --glass-sheen: 0.1;              /* specular sheen intensity */
+  --glass-sheen-x: 50%;            /* pointer position (set by use-glass-pointer) */
+  --glass-sheen-y: 0%;
+  /* Elevation (ambient + contact) */
+  --glass-elev-1:
+    0 1px 1px oklch(0.2 0.04 260 / 0.04),
+    0 2px 6px -2px oklch(0.2 0.04 260 / 0.10);
+  --glass-elev-2:
+    0 1px 2px oklch(0.2 0.04 260 / 0.05),
+    0 10px 28px -12px oklch(0.2 0.04 260 / 0.16),
+    0 28px 64px -28px oklch(0.2 0.04 260 / 0.12);
+  --glass-elev-3:
+    0 2px 4px oklch(0.2 0.04 260 / 0.07),
+    0 18px 44px -16px oklch(0.2 0.04 260 / 0.22),
+    0 40px 90px -36px oklch(0.2 0.04 260 / 0.18);
+
 
   /* Wallpaper — default premium abstract (Apple-inspired). */
   --wallpaper:
@@ -161,7 +181,21 @@
   --sidebar-ring: oklch(0.7 0.18 258);
 
   --glass-tint: 22 26 40;
-  --glass-tint-strength: 0.55;
+  --glass-tint-strength: 0.42;
+  --glass-edge: 0.28;
+  --glass-sheen: 0.07;
+  --glass-elev-1:
+    0 1px 1px oklch(0 0 0 / 0.25),
+    0 2px 6px -2px oklch(0 0 0 / 0.4);
+  --glass-elev-2:
+    0 1px 2px oklch(0 0 0 / 0.3),
+    0 10px 28px -12px oklch(0 0 0 / 0.5),
+    0 28px 64px -28px oklch(0 0 0 / 0.42);
+  --glass-elev-3:
+    0 2px 4px oklch(0 0 0 / 0.35),
+    0 18px 44px -16px oklch(0 0 0 / 0.55),
+    0 40px 90px -36px oklch(0 0 0 / 0.45);
+
 
   --wallpaper:
     radial-gradient(1200px 700px at -10% -10%, oklch(0.28 0.08 250 / 0.6), transparent 60%),
@@ -239,41 +273,122 @@
  * Liquid Glass — Apple iOS 26 material.
  * Adaptive: `--glass-tint` (rgb triplet) is set per-wallpaper so surfaces
  * inherit a subtle wash of the current background.
+ *
+ * Layers (single element, GPU-friendly):
+ *   background   → translucent body with vertical density falloff
+ *   ::before     → Fresnel rim (masked gradient border, no hard outline)
+ *   ::after      → specular sheen driven by --glass-sheen-x/y
+ *   box-shadow   → internal reflection + ambient + contact shadow
  */
 @utility glass-card {
+  position: relative;
+  isolation: isolate;
   background:
+    radial-gradient(120% 80% at var(--glass-sheen-x) -20%,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.1)) 0%,
+      transparent 70%),
     linear-gradient(180deg,
-      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.06)) 0%,
-      rgb(var(--glass-tint) / var(--glass-tint-strength)) 100%);
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.05)) 0%,
+      rgb(var(--glass-tint) / var(--glass-tint-strength)) 55%,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.03)) 100%);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  border: 1px solid color-mix(in oklab, white 28%, transparent);
   border-radius: var(--glass-radius);
   box-shadow:
-    inset 0 1px 0 0 color-mix(in oklab, white 55%, transparent),
-    inset 0 0 0 1px color-mix(in oklab, white 6%, transparent),
-    0 1px 2px oklch(0.2 0.04 260 / 0.05),
-    0 12px 40px -12px oklch(0.2 0.04 260 / 0.18),
-    0 24px 60px -24px oklch(0.2 0.04 260 / 0.12);
+    inset 0 0 24px 0 rgb(var(--glass-tint) / 0.12),
+    inset 0 -1px 1px 0 color-mix(in oklab, white calc(var(--glass-edge) * 22%), transparent),
+    var(--glass-elev-2);
+  contain: paint;
   transition: box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
               transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/* Fresnel rim — brighter where light grazes the edge, diffused, never a flat outline */
+.glass-card::before,
+[class*="glass-card"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklab, white calc(var(--glass-edge) * 95%), transparent) 0%,
+    color-mix(in oklab, white calc(var(--glass-edge) * 22%), transparent) 32%,
+    transparent 55%,
+    color-mix(in oklab, white calc(var(--glass-edge) * 38%), transparent) 82%,
+    color-mix(in oklab, white calc(var(--glass-edge) * 70%), transparent) 100%
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Specular sheen — soft moving highlight, tracks the pointer via CSS vars only */
+.glass-card::after,
+[class*="glass-card"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(60% 55% at var(--glass-sheen-x) var(--glass-sheen-y),
+      rgb(255 255 255 / var(--glass-sheen)) 0%,
+      transparent 68%);
+  opacity: 0.9;
+  pointer-events: none;
+  z-index: -1;
+}
+
 .dark .glass-card,
 .dark [class*="glass-card"] {
-  border-color: color-mix(in oklab, white 10%, transparent);
   box-shadow:
-    inset 0 1px 0 0 color-mix(in oklab, white 10%, transparent),
-    inset 0 0 0 1px color-mix(in oklab, white 4%, transparent),
-    0 1px 2px oklch(0 0 0 / 0.3),
-    0 12px 40px -12px oklch(0 0 0 / 0.55),
-    0 24px 60px -24px oklch(0 0 0 / 0.4);
+    inset 0 0 26px 0 rgb(255 255 255 / 0.03),
+    inset 0 -1px 1px 0 color-mix(in oklab, white 6%, transparent),
+    var(--glass-elev-2);
 }
 
 /* Alias */
 @utility liquid-glass {
   background: rgb(var(--glass-tint) / var(--glass-tint-strength));
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  border: 1px solid color-mix(in oklab, white 28%, transparent);
+  border: 1px solid color-mix(in oklab, white calc(var(--glass-edge) * 45%), transparent);
   border-radius: var(--glass-radius);
+}
+
+/* Thin glass — buttons, pills, segmented controls, tooltips */
+@utility glass-thin {
+  position: relative;
+  background:
+    linear-gradient(180deg,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.14)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.04)) 100%);
+  backdrop-filter: blur(var(--glass-blur-thin)) saturate(var(--glass-saturate));
+  border: 1px solid color-mix(in oklab, white calc(var(--glass-edge) * 55%), transparent);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklab, white calc(var(--glass-edge) * 70%), transparent),
+    var(--glass-elev-1);
+  color: var(--foreground);
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+              background 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.glass-thin:hover {
+  background:
+    linear-gradient(180deg,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.22)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.1)) 100%);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklab, white calc(var(--glass-edge) * 90%), transparent),
+    var(--glass-elev-2);
+}
+.glass-thin:active {
+  transform: scale(0.97);
+  box-shadow:
+    inset 0 1px 3px 0 oklch(0.2 0.04 260 / 0.14),
+    var(--glass-elev-1);
 }
 
 /* Circular Liquid Glass icon button — for SF-symbol-style icons */
@@ -281,22 +396,27 @@
   display: inline-grid;
   place-items: center;
   border-radius: 999px;
-  background: rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.15));
-  backdrop-filter: blur(24px) saturate(180%);
-  border: 1px solid color-mix(in oklab, white 30%, transparent);
+  background:
+    linear-gradient(180deg,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.18)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.06)) 100%);
+  backdrop-filter: blur(var(--glass-blur-thin)) saturate(var(--glass-saturate));
+  border: 1px solid color-mix(in oklab, white calc(var(--glass-edge) * 55%), transparent);
   box-shadow:
-    inset 0 1px 0 0 color-mix(in oklab, white 50%, transparent),
-    0 4px 12px -4px oklch(0.2 0.04 260 / 0.18);
+    inset 0 1px 0 0 color-mix(in oklab, white calc(var(--glass-edge) * 80%), transparent),
+    var(--glass-elev-1);
   color: var(--foreground);
   transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
               box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.dark .glass-icon {
-  border-color: color-mix(in oklab, white 10%, transparent);
-  box-shadow:
-    inset 0 1px 0 0 color-mix(in oklab, white 10%, transparent),
-    0 4px 12px -4px oklch(0 0 0 / 0.5);
+
+/* Reduced motion / low-power: drop the dynamic sheen, keep the material */
+@media (prefers-reduced-motion: reduce) {
+  .glass-card::after,
+  [class*="glass-card"]::after { display: none; }
+  .glass-card, [class*="glass-card"], .glass-thin, .glass-icon { transition: none; }
 }
+
 
 @keyframes shimmer {
   0% { background-position: -200% 0; }

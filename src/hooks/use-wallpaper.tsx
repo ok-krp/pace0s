@@ -145,9 +145,10 @@ export function applyWallpaper(choice: WallpaperChoice) {
       "--wallpaper",
       `linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.15)), url("${choice.dataUrl}") center/cover no-repeat`,
     );
-    // Neutral tint for custom photos — safe default.
+    // Neutral tint for custom photos + a slightly stronger floor so text stays
+    // readable on busy imagery (accessibility guard).
     root.style.setProperty("--glass-tint", isDark ? "20 22 28" : "255 255 255");
-    root.style.setProperty("--glass-tint-strength", isDark ? "0.5" : "0.38");
+    root.style.setProperty("--glass-tint-strength", isDark ? "0.5" : "0.4");
     return;
   }
 
@@ -156,7 +157,8 @@ export function applyWallpaper(choice: WallpaperChoice) {
   const tint = (isDark && preset.tintDark) ? preset.tintDark : preset.tint;
   root.style.setProperty("--wallpaper", css.trim());
   root.style.setProperty("--glass-tint", tint);
-  root.style.setProperty("--glass-tint-strength", isDark ? "0.55" : "0.42");
+  root.style.setProperty("--glass-tint-strength", isDark ? "0.42" : "0.3");
+
 }
 
 /** Read choice synchronously from storage (for early paint in root). */

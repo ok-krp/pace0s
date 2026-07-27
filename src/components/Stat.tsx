@@ -1,8 +1,8 @@
 import { motion } from "framer-motion";
-import { ReactNode } from "react";
+import { memo, type ReactNode } from "react";
 import { springSoft, springSnap, interactiveRing } from "@/lib/motion";
 
-export function StatCard({
+function StatCardBase({
   label,
   value,
   unit,
@@ -90,6 +90,8 @@ export function StatCard({
     </motion.div>
   );
 }
+
+export const StatCard = memo(StatCardBase);
 
 export function Ring({
   value,

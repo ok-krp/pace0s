@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard,
@@ -52,7 +52,7 @@ const GROUPS: Group[] = [
   { id: "autres", label: "Autres", items: ["/stats", "/profile", "/settings"] },
 ];
 
-function NavLink({ to, active, onNavigate }: { to: NavItemKey; active: boolean; onNavigate?: () => void }) {
+const NavLink = memo(function NavLink({ to, active, onNavigate }: { to: NavItemKey; active: boolean; onNavigate?: () => void }) {
   const it = NAV_REGISTRY[to];
   if (!it) return null;
   const Icon = it.icon;
@@ -60,20 +60,21 @@ function NavLink({ to, active, onNavigate }: { to: NavItemKey; active: boolean; 
     <MotionLink
       to={to}
       onClick={onNavigate}
-      whileHover={{ x: 2, scale: 1.01 }}
+      whileHover={{ x: 2 }}
       whileTap={{ scale: 0.97 }}
       transition={springSnap}
-      className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-sm will-change-transform ${interactiveRing} ${
+      className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-sm will-change-transform transition-[background,box-shadow,color] duration-300 ${interactiveRing} ${
         active
-          ? "bg-[color-mix(in_oklab,var(--sidebar-accent)_80%,transparent)] text-sidebar-accent-foreground font-medium"
-          : "text-muted-foreground hover:text-foreground hover:bg-[color-mix(in_oklab,var(--sidebar-accent)_45%,transparent)]"
+          ? "text-foreground font-medium bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)+0.12))] shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_calc(var(--glass-edge)*60%),transparent),0_0_0_1px_color-mix(in_oklab,var(--primary)_18%,transparent),0_6px_18px_-10px_color-mix(in_oklab,var(--primary)_60%,transparent)]"
+          : "text-muted-foreground hover:text-foreground hover:bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.45))]"
       }`}
     >
       <Icon className={`size-4 ${active ? "text-primary" : ""}`} />
       <span>{it.label}</span>
     </MotionLink>
   );
-}
+});
+
 
 function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) {
   const [openMap, setOpenMap] = useLocalState<Record<string, boolean>>("lt.sidebar.groups", {
@@ -90,9 +91,10 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
             key={g.id}
             open={open}
             onOpenChange={(v) => setOpenMap((p) => ({ ...p, [g.id]: v }))}
-            className="mt-1"
+            className="mt-3 pt-3 border-t border-[color-mix(in_oklab,white_calc(var(--glass-edge)*30%),transparent)]"
           >
-            <CollapsibleTrigger className={`w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground rounded-lg ${interactiveRing}`}>
+            <CollapsibleTrigger className={`w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground rounded-lg transition-colors duration-300 ${interactiveRing}`}>
+
               <span>{g.label}</span>
               <motion.span animate={{ rotate: open ? 180 : 0 }} transition={springSoft} className="inline-flex">
                 <ChevronDown className="size-3" />
@@ -113,7 +115,7 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
 export function AppSidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <aside className="hidden md:flex flex-col w-60 shrink-0 h-screen sticky top-0 px-3 py-5 border-r border-white/20 dark:border-white/10 bg-[color-mix(in_oklab,var(--sidebar)_55%,transparent)] backdrop-blur-2xl backdrop-saturate-150">
+    <aside className="hidden md:flex flex-col w-60 shrink-0 h-screen sticky top-0 px-3 py-5 border-r border-[color-mix(in_oklab,white_calc(var(--glass-edge)*35%),transparent)] bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.6))] backdrop-blur-[var(--glass-blur)] backdrop-saturate-[var(--glass-saturate)]">
       <Link to="/" className="flex items-center gap-2 px-3 py-2 mb-4">
         <div className="size-8 rounded-xl stat-grad grid place-items-center text-primary-foreground shadow-[var(--shadow-glow)]">
           <Sparkles className="size-4" />
@@ -136,14 +138,15 @@ export function MobileTopBar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = NAV_REGISTRY[path as NavItemKey]?.label ?? "Pace";
   return (
-    <header className="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] border-b border-white/20 dark:border-white/10 bg-[color-mix(in_oklab,var(--background)_55%,transparent)] backdrop-blur-2xl backdrop-saturate-150">
+    <header className="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] border-b border-[color-mix(in_oklab,white_calc(var(--glass-edge)*35%),transparent)] bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.7))] backdrop-blur-[var(--glass-blur)] backdrop-saturate-[var(--glass-saturate)]">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.9 }}
             transition={springSnap}
-            className={`size-10 grid place-items-center rounded-xl hover:bg-muted will-change-transform ${interactiveRing}`}
+            className={`glass-icon size-10 will-change-transform ${interactiveRing}`}
+
             aria-label="Menu"
           >
             <Menu className="size-5" />
