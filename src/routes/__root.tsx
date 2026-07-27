@@ -18,6 +18,7 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { LegalConsentGate } from "@/components/LegalConsentGate";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { applyWallpaper, readWallpaperChoice } from "@/hooks/use-wallpaper";
+import { useGlassPointer } from "@/hooks/use-glass-pointer";
 
 
 function NotFoundComponent() {
@@ -116,6 +117,9 @@ function AuthGate() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const isPublic = PUBLIC_ROUTES.includes(path);
+
+  // Single rAF-throttled pointer loop powering every glass specular highlight.
+  useGlassPointer();
 
   useEffect(() => {
     // Apply wallpaper + adaptive glass tint on mount and when dark mode toggles.
