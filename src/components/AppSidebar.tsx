@@ -52,7 +52,7 @@ const GROUPS: Group[] = [
   { id: "autres", label: "Autres", items: ["/stats", "/profile", "/settings"] },
 ];
 
-function NavLink({ to, active, onNavigate }: { to: NavItemKey; active: boolean; onNavigate?: () => void }) {
+const NavLink = memo(function NavLink({ to, active, onNavigate }: { to: NavItemKey; active: boolean; onNavigate?: () => void }) {
   const it = NAV_REGISTRY[to];
   if (!it) return null;
   const Icon = it.icon;
@@ -60,20 +60,21 @@ function NavLink({ to, active, onNavigate }: { to: NavItemKey; active: boolean; 
     <MotionLink
       to={to}
       onClick={onNavigate}
-      whileHover={{ x: 2, scale: 1.01 }}
+      whileHover={{ x: 2 }}
       whileTap={{ scale: 0.97 }}
       transition={springSnap}
-      className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-sm will-change-transform ${interactiveRing} ${
+      className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-sm will-change-transform transition-[background,box-shadow,color] duration-300 ${interactiveRing} ${
         active
-          ? "bg-[color-mix(in_oklab,var(--sidebar-accent)_80%,transparent)] text-sidebar-accent-foreground font-medium"
-          : "text-muted-foreground hover:text-foreground hover:bg-[color-mix(in_oklab,var(--sidebar-accent)_45%,transparent)]"
+          ? "text-foreground font-medium bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)+0.12))] shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_calc(var(--glass-edge)*60%),transparent),0_0_0_1px_color-mix(in_oklab,var(--primary)_18%,transparent),0_6px_18px_-10px_color-mix(in_oklab,var(--primary)_60%,transparent)]"
+          : "text-muted-foreground hover:text-foreground hover:bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.45))]"
       }`}
     >
       <Icon className={`size-4 ${active ? "text-primary" : ""}`} />
       <span>{it.label}</span>
     </MotionLink>
   );
-}
+});
+
 
 function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) {
   const [openMap, setOpenMap] = useLocalState<Record<string, boolean>>("lt.sidebar.groups", {
