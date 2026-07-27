@@ -1,5 +1,5 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   LayoutDashboard,
