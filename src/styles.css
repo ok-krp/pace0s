@@ -339,7 +339,7 @@
       transparent 68%);
   opacity: 0.9;
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
 }
 
 .dark .glass-card,
