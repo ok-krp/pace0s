@@ -91,9 +91,10 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
             key={g.id}
             open={open}
             onOpenChange={(v) => setOpenMap((p) => ({ ...p, [g.id]: v }))}
-            className="mt-1"
+            className="mt-3 pt-3 border-t border-[color-mix(in_oklab,white_calc(var(--glass-edge)*30%),transparent)]"
           >
-            <CollapsibleTrigger className={`w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground rounded-lg ${interactiveRing}`}>
+            <CollapsibleTrigger className={`w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground rounded-lg transition-colors duration-300 ${interactiveRing}`}>
+
               <span>{g.label}</span>
               <motion.span animate={{ rotate: open ? 180 : 0 }} transition={springSoft} className="inline-flex">
                 <ChevronDown className="size-3" />
