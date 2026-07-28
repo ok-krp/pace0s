@@ -63,10 +63,10 @@ const NavLink = memo(function NavLink({ to, active, onNavigate }: { to: NavItemK
       whileHover={{ x: 2 }}
       whileTap={{ scale: 0.97 }}
       transition={springSnap}
-      className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-sm will-change-transform transition-[background,box-shadow,color] duration-300 ${interactiveRing} ${
+      className={`group flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-[background,box-shadow,color] duration-300 ${interactiveRing} ${
         active
-          ? "text-foreground font-medium bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)+0.12))] shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_calc(var(--glass-edge)*60%),transparent),0_0_0_1px_color-mix(in_oklab,var(--primary)_18%,transparent),0_6px_18px_-10px_color-mix(in_oklab,var(--primary)_60%,transparent)]"
-          : "text-muted-foreground hover:text-foreground hover:bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.45))]"
+          ? "text-foreground font-medium bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)+0.16))] shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_calc(var(--glass-edge)*55%),transparent),0_0_0_1px_color-mix(in_oklab,var(--primary)_14%,transparent),0_6px_18px_-12px_color-mix(in_oklab,var(--primary)_50%,transparent)]"
+          : "text-muted-foreground hover:text-foreground hover:bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.5))]"
       }`}
     >
       <Icon className={`size-4 ${active ? "text-primary" : ""}`} />
