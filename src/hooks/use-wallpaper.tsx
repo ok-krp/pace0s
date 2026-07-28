@@ -147,8 +147,8 @@ export function applyWallpaper(choice: WallpaperChoice) {
     );
     // Neutral tint for custom photos + a slightly stronger floor so text stays
     // readable on busy imagery (accessibility guard).
-    root.style.setProperty("--glass-tint", isDark ? "20 22 28" : "255 255 255");
-    root.style.setProperty("--glass-tint-strength", isDark ? "0.5" : "0.4");
+    root.style.setProperty("--glass-tint", isDark ? "18 20 26" : "255 255 255");
+    root.style.setProperty("--glass-tint-strength", isDark ? "0.26" : "0.18");
     return;
   }
 
@@ -157,7 +157,7 @@ export function applyWallpaper(choice: WallpaperChoice) {
   const tint = (isDark && preset.tintDark) ? preset.tintDark : preset.tint;
   root.style.setProperty("--wallpaper", css.trim());
   root.style.setProperty("--glass-tint", tint);
-  root.style.setProperty("--glass-tint-strength", isDark ? "0.42" : "0.3");
+  root.style.setProperty("--glass-tint-strength", isDark ? "0.2" : "0.12");
 
 }
 
