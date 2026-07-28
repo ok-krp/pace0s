@@ -115,7 +115,7 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
 export function AppSidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   return (
-    <aside className="hidden md:flex flex-col w-60 shrink-0 h-screen sticky top-0 px-3 py-5 border-r border-[color-mix(in_oklab,white_calc(var(--glass-edge)*35%),transparent)] bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.6))] backdrop-blur-[var(--glass-blur)] backdrop-saturate-[var(--glass-saturate)]">
+    <aside className="hidden md:flex flex-col w-60 shrink-0 h-[calc(100vh-1.5rem)] sticky top-3 ml-3 my-3 px-3 py-5 glass-card rounded-[28px]">
       <Link to="/" className="flex items-center gap-2 px-3 py-2 mb-4">
         <div className="size-8 rounded-xl stat-grad grid place-items-center text-primary-foreground shadow-[var(--shadow-glow)]">
           <Sparkles className="size-4" />
@@ -130,6 +130,7 @@ export function AppSidebar() {
       </div>
       <div className="px-3 pt-4 text-[11px] text-muted-foreground">v2 · cloud sync</div>
     </aside>
+
   );
 }
 
@@ -138,7 +139,7 @@ export function MobileTopBar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = NAV_REGISTRY[path as NavItemKey]?.label ?? "Pace";
   return (
-    <header className="md:hidden sticky top-0 z-40 flex items-center gap-2 px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] border-b border-[color-mix(in_oklab,white_calc(var(--glass-edge)*35%),transparent)] bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.7))] backdrop-blur-[var(--glass-blur)] backdrop-saturate-[var(--glass-saturate)]">
+    <header className="md:hidden sticky top-0 z-40 flex items-center gap-2 mx-3 mt-[max(0.5rem,env(safe-area-inset-top))] mb-1 px-3 py-2 glass-card rounded-[22px]">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
           <motion.button

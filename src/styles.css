@@ -61,35 +61,36 @@
   --radius: 1rem;
 
   --background: oklch(0.992 0.002 247);
-  --foreground: oklch(0.18 0.025 260);
+  --foreground: oklch(0.16 0.025 260);
 
-  --surface: oklch(0.97 0.005 247);
-  --surface-elevated: oklch(1 0 0);
+  --surface: oklch(1 0 0 / 0.34);
+  --surface-elevated: oklch(1 0 0 / 0.52);
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.025 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.025 260);
+  /* Surfaces are translucent so every control inherits the glass language. */
+  --card: oklch(1 0 0 / 0.4);
+  --card-foreground: oklch(0.16 0.025 260);
+  --popover: oklch(1 0 0 / 0.88);
+  --popover-foreground: oklch(0.16 0.025 260);
 
   --primary: oklch(0.55 0.21 258);
   --primary-foreground: oklch(0.99 0 0);
 
-  --secondary: oklch(0.95 0.008 247);
-  --secondary-foreground: oklch(0.25 0.03 260);
+  --secondary: oklch(1 0 0 / 0.36);
+  --secondary-foreground: oklch(0.2 0.03 260);
 
-  --muted: oklch(0.96 0.006 247);
-  --muted-foreground: oklch(0.5 0.018 257);
+  --muted: oklch(1 0 0 / 0.3);
+  --muted-foreground: oklch(0.42 0.02 257);
 
-  --accent: oklch(0.94 0.025 255);
-  --accent-foreground: oklch(0.25 0.03 260);
+  --accent: oklch(1 0 0 / 0.46);
+  --accent-foreground: oklch(0.2 0.03 260);
 
   --destructive: oklch(0.62 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
   --success: oklch(0.68 0.16 155);
   --warning: oklch(0.78 0.15 80);
 
-  --border: oklch(0.92 0.008 250);
-  --input: oklch(0.93 0.008 250);
+  --border: oklch(1 0 0 / 0.4);
+  --input: oklch(1 0 0 / 0.42);
   --ring: oklch(0.55 0.21 258);
 
   --chart-1: oklch(0.55 0.21 258);
@@ -109,15 +110,16 @@
 
   /* Liquid Glass — adaptive tint reacts to wallpaper (overridden per-wallpaper). */
   --glass-tint: 255 255 255;       /* rgb triplet blended into surfaces */
-  --glass-tint-strength: 0.12;     /* panel opacity — crystal, not acrylic */
-  --glass-blur: 22px;
-  --glass-blur-thin: 14px;
-  --glass-saturate: 165%;
-  --glass-radius: 24px;
+  --glass-tint-strength: 0.13;     /* panel opacity — crystal, not acrylic */
+  /* Clear glass: just enough blur to soften, never frosted. */
+  --glass-blur: 9px;
+  --glass-blur-thin: 7px;
+  --glass-saturate: 150%;
+  --glass-radius: 26px;
   --glass-radius-sm: 18px;
   /* Fresnel / specular */
-  --glass-edge: 0.34;              /* rim light intensity */
-  --glass-sheen: 0.06;             /* specular sheen intensity */
+  --glass-edge: 0.42;              /* rim light intensity */
+  --glass-sheen: 0.1;              /* specular sheen intensity */
   --glass-sheen-x: 50%;            /* pointer position (set by use-glass-pointer) */
   --glass-sheen-y: 0%;
   /* Elevation — minimal, contact-first */
@@ -145,28 +147,29 @@
 
 .dark {
   --background: oklch(0.13 0.015 260);
-  --foreground: oklch(0.97 0.005 247);
-  --surface: oklch(0.17 0.018 260);
-  --surface-elevated: oklch(0.2 0.02 260);
-  --card: oklch(0.18 0.02 260);
-  --card-foreground: oklch(0.97 0.005 247);
-  --popover: oklch(0.18 0.02 260);
-  --popover-foreground: oklch(0.97 0.005 247);
-  --primary: oklch(0.7 0.18 258);
+  --foreground: oklch(0.99 0.002 247);
+  --surface: oklch(1 0 0 / 0.08);
+  --surface-elevated: oklch(1 0 0 / 0.12);
+  --card: oklch(1 0 0 / 0.09);
+  --card-foreground: oklch(0.99 0.002 247);
+  --popover: oklch(0.17 0.02 260 / 0.92);
+  --popover-foreground: oklch(0.99 0.002 247);
+  --primary: oklch(0.72 0.18 258);
   --primary-foreground: oklch(0.13 0.015 260);
-  --secondary: oklch(0.22 0.02 260);
-  --secondary-foreground: oklch(0.97 0.005 247);
-  --muted: oklch(0.22 0.02 260);
-  --muted-foreground: oklch(0.65 0.015 250);
-  --accent: oklch(0.25 0.04 258);
-  --accent-foreground: oklch(0.97 0.005 247);
-  --destructive: oklch(0.7 0.2 25);
-  --destructive-foreground: oklch(0.97 0 0);
-  --success: oklch(0.72 0.16 155);
-  --warning: oklch(0.8 0.15 80);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.7 0.18 258);
+  --secondary: oklch(1 0 0 / 0.1);
+  --secondary-foreground: oklch(0.99 0.002 247);
+  --muted: oklch(1 0 0 / 0.1);
+  /* Legibility on photographic wallpapers: keep secondary text high-contrast. */
+  --muted-foreground: oklch(0.84 0.012 250);
+  --accent: oklch(1 0 0 / 0.14);
+  --accent-foreground: oklch(0.99 0.002 247);
+  --destructive: oklch(0.72 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.78 0.16 155);
+  --warning: oklch(0.85 0.15 80);
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.72 0.18 258);
   --chart-1: oklch(0.7 0.18 258);
   --chart-2: oklch(0.72 0.16 155);
   --chart-3: oklch(0.8 0.15 80);
@@ -181,10 +184,10 @@
   --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: oklch(0.7 0.18 258);
 
-  --glass-tint: 20 24 36;
-  --glass-tint-strength: 0.20;
-  --glass-edge: 0.18;
-  --glass-sheen: 0.045;
+  --glass-tint: 12 16 26;
+  --glass-tint-strength: 0.26;
+  --glass-edge: 0.3;
+  --glass-sheen: 0.08;
   --glass-elev-1:
     0 1px 1px oklch(0 0 0 / 0.16),
     0 2px 5px -3px oklch(0 0 0 / 0.26);
