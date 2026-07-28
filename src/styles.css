@@ -109,29 +109,30 @@
 
   /* Liquid Glass — adaptive tint reacts to wallpaper (overridden per-wallpaper). */
   --glass-tint: 255 255 255;       /* rgb triplet blended into surfaces */
-  --glass-tint-strength: 0.30;     /* how much wallpaper tint shows through */
-  --glass-blur: 32px;
-  --glass-blur-thin: 20px;
-  --glass-saturate: 180%;
+  --glass-tint-strength: 0.12;     /* panel opacity — crystal, not acrylic */
+  --glass-blur: 22px;
+  --glass-blur-thin: 14px;
+  --glass-saturate: 165%;
   --glass-radius: 24px;
   --glass-radius-sm: 18px;
   /* Fresnel / specular */
-  --glass-edge: 0.55;              /* rim light intensity */
-  --glass-sheen: 0.1;              /* specular sheen intensity */
+  --glass-edge: 0.34;              /* rim light intensity */
+  --glass-sheen: 0.06;             /* specular sheen intensity */
   --glass-sheen-x: 50%;            /* pointer position (set by use-glass-pointer) */
   --glass-sheen-y: 0%;
-  /* Elevation (ambient + contact) */
+  /* Elevation — minimal, contact-first */
   --glass-elev-1:
-    0 1px 1px oklch(0.2 0.04 260 / 0.04),
-    0 2px 6px -2px oklch(0.2 0.04 260 / 0.10);
+    0 1px 1px oklch(0.2 0.04 260 / 0.03),
+    0 2px 5px -3px oklch(0.2 0.04 260 / 0.07);
   --glass-elev-2:
-    0 1px 2px oklch(0.2 0.04 260 / 0.05),
-    0 10px 28px -12px oklch(0.2 0.04 260 / 0.16),
-    0 28px 64px -28px oklch(0.2 0.04 260 / 0.12);
+    0 1px 2px oklch(0.2 0.04 260 / 0.035),
+    0 8px 20px -14px oklch(0.2 0.04 260 / 0.10),
+    0 20px 44px -30px oklch(0.2 0.04 260 / 0.08);
   --glass-elev-3:
-    0 2px 4px oklch(0.2 0.04 260 / 0.07),
-    0 18px 44px -16px oklch(0.2 0.04 260 / 0.22),
-    0 40px 90px -36px oklch(0.2 0.04 260 / 0.18);
+    0 2px 3px oklch(0.2 0.04 260 / 0.05),
+    0 14px 32px -18px oklch(0.2 0.04 260 / 0.14),
+    0 30px 70px -40px oklch(0.2 0.04 260 / 0.12);
+
 
 
   /* Wallpaper — default premium abstract (Apple-inspired). */
