@@ -184,10 +184,10 @@
   --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: oklch(0.7 0.18 258);
 
-  --glass-tint: 20 24 36;
-  --glass-tint-strength: 0.20;
-  --glass-edge: 0.18;
-  --glass-sheen: 0.045;
+  --glass-tint: 12 16 26;
+  --glass-tint-strength: 0.26;
+  --glass-edge: 0.3;
+  --glass-sheen: 0.08;
   --glass-elev-1:
     0 1px 1px oklch(0 0 0 / 0.16),
     0 2px 5px -3px oklch(0 0 0 / 0.26);
