@@ -95,13 +95,13 @@ function LoginPage() {
         </div>
 
         <div className="rounded-2xl glass-card p-6">
-          <div className="flex gap-1 p-1 bg-muted rounded-xl mb-5">
+          <div className="flex gap-1 p-1 glass-thin rounded-2xl mb-5">
             {(["login", "signup"] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setMode(m)}
                 className={`flex-1 py-2 text-sm rounded-lg transition-all ${
-                  mode === m ? "bg-card font-medium" : "text-muted-foreground"
+                  mode === m ? "bg-[oklch(1_0_0_/_0.6)] dark:bg-[oklch(1_0_0_/_0.16)] font-medium" : "text-muted-foreground"
                 }`}
               >
                 {m === "login" ? "Connexion" : "Créer un compte"}

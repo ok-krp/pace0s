@@ -81,9 +81,9 @@ function FinancePage() {
 
       <div className="rounded-2xl glass-card p-5 mb-4">
         <div className="flex flex-wrap gap-2">
-          <div className="flex rounded-xl bg-muted p-1">
-            <button onClick={() => setType("out")} className={`px-4 py-1.5 rounded-lg text-sm transition ${type === "out" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>Dépense</button>
-            <button onClick={() => setType("in")} className={`px-4 py-1.5 rounded-lg text-sm transition ${type === "in" ? "bg-card shadow-sm" : "text-muted-foreground"}`}>Revenu</button>
+          <div className="flex rounded-2xl glass-thin p-1">
+            <button onClick={() => setType("out")} className={`px-4 py-1.5 rounded-lg text-sm transition ${type === "out" ? "bg-[oklch(1_0_0_/_0.6)] dark:bg-[oklch(1_0_0_/_0.16)] shadow-sm" : "text-muted-foreground"}`}>Dépense</button>
+            <button onClick={() => setType("in")} className={`px-4 py-1.5 rounded-lg text-sm transition ${type === "in" ? "bg-[oklch(1_0_0_/_0.6)] dark:bg-[oklch(1_0_0_/_0.16)] shadow-sm" : "text-muted-foreground"}`}>Revenu</button>
           </div>
           <Input type="number" step="0.01" placeholder="Montant" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-32" />
           <Select value={cat} onValueChange={setCat}>
