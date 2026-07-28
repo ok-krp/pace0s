@@ -262,13 +262,29 @@
   .scrollbar-none { scrollbar-width: none; }
 }
 
-/* Pace — wallpaper-driven background, fixed, fills the viewport */
+/*
+ * Pace — wallpaper layer.
+ * Rendered as a single fixed, GPU-composited layer instead of
+ * `background-attachment: fixed`, which forces a full repaint of a
+ * high-resolution custom wallpaper on every scroll frame.
+ */
 .pace-bg {
+  position: relative;
+  isolation: isolate;
+}
+.pace-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
   background: var(--wallpaper);
-  background-attachment: fixed;
   background-size: cover;
   background-position: center;
+  background-repeat: no-repeat;
+  transform: translateZ(0);
+  pointer-events: none;
 }
+
 
 /*
  * Liquid Glass — Apple iOS 26 material.
