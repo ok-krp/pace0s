@@ -449,11 +449,78 @@
   contain-intrinsic-size: auto 220px;
 }
 
+/*
+ * Niveaux de « Qualité Glass » (data-glass sur <html>).
+ * Seuls blur / sheen / Fresnel changent : aucune règle de layout, de rayon
+ * ni de hiérarchie n'est touchée.
+ */
+[data-glass="balanced"] {
+  --glass-blur: 6px;
+  --glass-blur-thin: 4px;
+  --glass-saturate: 135%;
+  --glass-edge: 0.34;
+  --glass-sheen: 0.06;
+  --glass-tint-strength: calc(var(--glass-tint-base, 0.13) + 0.02);
+}
+[data-glass="low"] {
+  --glass-blur: 0px;
+  --glass-blur-thin: 0px;
+  --glass-saturate: 110%;
+  --glass-edge: 0.24;
+  --glass-sheen: 0;
+  --glass-tint-strength: calc(var(--glass-tint-base, 0.13) + 0.06);
+}
+[data-glass="low"] .glass-card,
+[data-glass="low"] [class*="glass-card"],
+[data-glass="low"] .glass-thin,
+[data-glass="low"] .glass-icon {
+  backdrop-filter: none;
+}
+[data-glass="low"] .glass-card::after,
+[data-glass="low"] [class*="glass-card"]::after { display: none; }
+
+/* Le reflet spéculaire ne s'anime que pendant une interaction pointeur. */
+.glass-card::after,
+[class*="glass-card"]::after { opacity: 0; transition: opacity 0.25s ease; }
+[data-glass-active] .glass-card::after,
+[data-glass-active] [class*="glass-card"]::after { opacity: 1; }
+
+/*
+ * Lisibilité adaptative : sur fond photo (wallpaper personnalisé), le texte et
+ * les bordures gagnent en contraste sans opacifier le verre.
+ */
+[data-wallpaper="custom"] {
+  --glass-edge: calc(0.42 + 0.12);
+  --border: oklch(1 0 0 / 0.55);
+}
+[data-wallpaper="custom"] .glass-card,
+[data-wallpaper="custom"] [class*="glass-card"],
+[data-wallpaper="custom"] .glass-thin {
+  text-shadow: 0 1px 2px oklch(0 0 0 / 0.16);
+}
+.dark[data-wallpaper="custom"] {
+  --muted-foreground: oklch(0.89 0.01 250);
+  --border: oklch(1 0 0 / 0.22);
+}
+.dark[data-wallpaper="custom"] .glass-card,
+.dark[data-wallpaper="custom"] [class*="glass-card"],
+.dark[data-wallpaper="custom"] .glass-thin {
+  text-shadow: 0 1px 3px oklch(0 0 0 / 0.5);
+}
+
 /* Reduced motion / low-power: drop the dynamic sheen, keep the material */
 @media (prefers-reduced-motion: reduce) {
+  /* On conserve l'apparence Liquid Glass : seul le reflet dynamique est figé. */
   .glass-card::after,
-  [class*="glass-card"]::after { display: none; }
-  .glass-card, [class*="glass-card"], .glass-thin, .glass-icon { transition: none; }
+  [class*="glass-card"]::after {
+    opacity: 1;
+    transition: none;
+    background: radial-gradient(70% 60% at 50% 0%,
+      rgb(255 255 255 / calc(var(--glass-sheen) * 0.7)) 0%, transparent 70%);
+  }
+  .glass-card, [class*="glass-card"], .glass-thin, .glass-icon,
+  .glass-thin:hover, .glass-thin:active { transition: none; }
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
 }
 
 
