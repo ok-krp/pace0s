@@ -110,7 +110,8 @@
 
   /* Liquid Glass — adaptive tint reacts to wallpaper (overridden per-wallpaper). */
   --glass-tint: 255 255 255;       /* rgb triplet blended into surfaces */
-  --glass-tint-strength: 0.13;     /* panel opacity — crystal, not acrylic */
+  --glass-tint-base: 0.13;
+  --glass-tint-strength: var(--glass-tint-base);  /* panel opacity — crystal, not acrylic */
   /* Clear glass: just enough blur to soften, never frosted. */
   --glass-blur: 9px;
   --glass-blur-thin: 7px;
@@ -185,7 +186,8 @@
   --sidebar-ring: oklch(0.7 0.18 258);
 
   --glass-tint: 12 16 26;
-  --glass-tint-strength: 0.26;
+  --glass-tint-base: 0.26;
+  --glass-tint-strength: var(--glass-tint-base);
   --glass-edge: 0.3;
   --glass-sheen: 0.08;
   --glass-elev-1:
@@ -460,7 +462,7 @@
   --glass-saturate: 135%;
   --glass-edge: 0.34;
   --glass-sheen: 0.06;
-  --glass-tint-strength: calc(var(--glass-tint-base, 0.13) + 0.02);
+  --glass-tint-strength: calc(var(--glass-tint-base) + 0.02);
 }
 [data-glass="low"] {
   --glass-blur: 0px;
@@ -468,7 +470,7 @@
   --glass-saturate: 110%;
   --glass-edge: 0.24;
   --glass-sheen: 0;
-  --glass-tint-strength: calc(var(--glass-tint-base, 0.13) + 0.06);
+  --glass-tint-strength: calc(var(--glass-tint-base) + 0.06);
 }
 [data-glass="low"] .glass-card,
 [data-glass="low"] [class*="glass-card"],

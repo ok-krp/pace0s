@@ -149,7 +149,6 @@ export function applyWallpaper(choice: WallpaperChoice) {
     // readable on busy imagery (accessibility guard).
     root.style.setProperty("--glass-tint", isDark ? "10 14 22" : "255 255 255");
     root.style.setProperty("--glass-tint-base", isDark ? "0.34" : "0.2");
-    root.style.setProperty("--glass-tint-strength", isDark ? "0.34" : "0.2");
     root.setAttribute("data-wallpaper", "custom");
     return;
   }
@@ -160,7 +159,6 @@ export function applyWallpaper(choice: WallpaperChoice) {
   root.style.setProperty("--wallpaper", css.trim());
   root.style.setProperty("--glass-tint", tint);
   root.style.setProperty("--glass-tint-base", isDark ? "0.26" : "0.13");
-  root.style.setProperty("--glass-tint-strength", isDark ? "0.26" : "0.13");
   root.setAttribute("data-wallpaper", preset.id);
 
 }
