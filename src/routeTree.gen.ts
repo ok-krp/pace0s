@@ -11,7 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkRouteImport } from './routes/work'
 import { Route as WaterRouteImport } from './routes/water'
-import { Route as StatsRouteImport } from './routes/stats'
 import { Route as SportRouteImport } from './routes/sport'
 import { Route as SleepRouteImport } from './routes/sleep'
 import { Route as SettingsRouteImport } from './routes/settings'
@@ -42,11 +41,6 @@ const WorkRoute = WorkRouteImport.update({
 const WaterRoute = WaterRouteImport.update({
   id: '/water',
   path: '/water',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const StatsRoute = StatsRouteImport.update({
-  id: '/stats',
-  path: '/stats',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SportRoute = SportRouteImport.update({
@@ -175,7 +169,6 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/sleep': typeof SleepRoute
   '/sport': typeof SportRoute
-  '/stats': typeof StatsRoute
   '/water': typeof WaterRoute
   '/work': typeof WorkRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -201,7 +194,6 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/sleep': typeof SleepRoute
   '/sport': typeof SportRoute
-  '/stats': typeof StatsRoute
   '/water': typeof WaterRoute
   '/work': typeof WorkRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -228,7 +220,6 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/sleep': typeof SleepRoute
   '/sport': typeof SportRoute
-  '/stats': typeof StatsRoute
   '/water': typeof WaterRoute
   '/work': typeof WorkRoute
   '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
@@ -256,7 +247,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sleep'
     | '/sport'
-    | '/stats'
     | '/water'
     | '/work'
     | '/.mcp/list-tools'
@@ -282,7 +272,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sleep'
     | '/sport'
-    | '/stats'
     | '/water'
     | '/work'
     | '/.mcp/list-tools'
@@ -308,7 +297,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/sleep'
     | '/sport'
-    | '/stats'
     | '/water'
     | '/work'
     | '/.mcp/list-tools'
@@ -335,7 +323,6 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SleepRoute: typeof SleepRoute
   SportRoute: typeof SportRoute
-  StatsRoute: typeof StatsRoute
   WaterRoute: typeof WaterRoute
   WorkRoute: typeof WorkRoute
   Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
@@ -359,13 +346,6 @@ declare module '@tanstack/react-router' {
       path: '/water'
       fullPath: '/water'
       preLoaderRoute: typeof WaterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/stats': {
-      id: '/stats'
-      path: '/stats'
-      fullPath: '/stats'
-      preLoaderRoute: typeof StatsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sport': {
@@ -535,7 +515,6 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SleepRoute: SleepRoute,
   SportRoute: SportRoute,
-  StatsRoute: StatsRoute,
   WaterRoute: WaterRoute,
   WorkRoute: WorkRoute,
   Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,

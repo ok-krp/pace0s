@@ -116,7 +116,7 @@ type CustomWallpaper = { kind: "custom"; dataUrl: string };
 type WallpaperChoice = { id: string } | CustomWallpaper;
 
 const KEY = "lt.wallpaper";
-const DEFAULT: WallpaperChoice = { id: "aurora" };
+const DEFAULT: WallpaperChoice = { id: "graphite" };
 
 export function useWallpaper() {
   const [choice, setChoice] = useLocalState<WallpaperChoice>(KEY, DEFAULT);

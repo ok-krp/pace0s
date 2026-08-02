@@ -19,7 +19,7 @@ import { LegalConsentGate } from "@/components/LegalConsentGate";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { applyWallpaper, readWallpaperChoice } from "@/hooks/use-wallpaper";
 import { useGlassPointer } from "@/hooks/use-glass-pointer";
-import { applyGlassQuality, readGlassQuality } from "@/hooks/use-glass-quality";
+import { applyGlassQuality } from "@/hooks/use-glass-quality";
 
 
 function NotFoundComponent() {
@@ -124,7 +124,7 @@ function AuthGate() {
 
   useEffect(() => {
     // Apply wallpaper + adaptive glass tint on mount and when dark mode toggles.
-    applyGlassQuality(readGlassQuality());
+    applyGlassQuality("balanced");
     applyWallpaper(readWallpaperChoice());
     const obs = new MutationObserver(() => applyWallpaper(readWallpaperChoice()));
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });

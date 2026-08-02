@@ -11,7 +11,6 @@ export type NavItemKey =
   | "/calendar"
   | "/recalls"
   | "/finance"
-  | "/stats"
   | "/profile"
   | "/settings";
 
@@ -26,7 +25,6 @@ export const NAV_DEFAULT_ORDER: NavItemKey[] = [
   "/calendar",
   "/recalls",
   "/finance",
-  "/stats",
   "/profile",
   "/settings",
 ];
