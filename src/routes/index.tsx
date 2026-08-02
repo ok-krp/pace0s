@@ -11,6 +11,8 @@ import { useHealthToday } from "@/hooks/use-health";
 import { DashboardDialogs, type DashDialog } from "@/components/DashboardDialogs";
 import { DailyRhythmRing, type RhythmMetric } from "@/components/DailyRhythmRing";
 import { DailyInsight } from "@/components/DailyInsight";
+import { WeeklyHabits } from "@/components/WeeklyHabits";
+
 import { SmartCard } from "@/components/SmartCard";
 import { buildIntel, statusColor, type ModuleKey } from "@/lib/insights";
 import { toast } from "sonner";
@@ -302,10 +304,8 @@ function Dashboard() {
         </button>
       </div>
 
-      <div className="rounded-2xl glass-card p-5 mb-4">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">Heatmap habitudes (90 jours)</div>
-        <Heatmap routines={routines} />
-      </div>
+      <WeeklyHabits routines={routines} total={allRoutines.length} />
+
 
       {weightSeries.length > 1 && (
         <button
