@@ -334,38 +334,3 @@ function Dashboard() {
     </div>
   );
 }
-
-function Heatmap({ routines }: { routines: Record<string, string[]> }) {
-  const navigate = useNavigate();
-  const days = useMemo(() => lastNDays(91), []);
-  const weeks: string[][] = [];
-  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
-
-  return (
-    <div className="flex gap-1 overflow-x-auto scrollbar-none">
-      {weeks.map((week, i) => (
-        <div key={i} className="flex flex-col gap-1">
-          {week.map((d) => {
-            const c = (routines[d] ?? []).length;
-            const intensity = c === 0 ? 0 : Math.min(1, c / 4);
-            return (
-              <button
-                key={d}
-                type="button"
-                onClick={() => navigate({ to: "/calendar", search: { d } as never })}
-                title={`${d} · ${c} habitudes — clique pour voir le détail`}
-                className="size-3 rounded-sm hover:ring-2 hover:ring-primary/40 transition-shadow"
-                style={{
-                  background:
-                    intensity === 0
-                      ? "var(--muted)"
-                      : `color-mix(in oklab, var(--primary) ${intensity * 100}%, var(--muted))`,
-                }}
-              />
-            );
-          })}
-        </div>
-      ))}
-    </div>
-  );
-}
