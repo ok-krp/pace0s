@@ -577,7 +577,7 @@ function OverloadTab({ exs, focusExerciseId }: { exs: Exercise[]; focusExerciseI
             <button
               key={m}
               onClick={() => setMuscle(m)}
-              className={`px-3 py-1.5 rounded-lg text-xs ${currentMuscle === m ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}
+              className={`px-3 py-1.5 rounded-lg text-xs ${currentMuscle === m ? "glass-thin text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}
             >
               {m}
             </button>
@@ -597,7 +597,7 @@ function OverloadTab({ exs, focusExerciseId }: { exs: Exercise[]; focusExerciseI
             const delta = lastW - prevW;
             return (
               <div key={ex.id} id={`ov-${ex.id}`} className="rounded-2xl glass-card overflow-hidden scroll-mt-24">
-                <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-muted/30 flex-wrap">
+                <div className="flex items-center justify-between gap-2 p-3 border-b border-border/50 flex-wrap">
                   <div className="min-w-0">
                     <div className="font-medium truncate">{ex.name}</div>
                     {ex.equipment && <div className="text-[11px] text-muted-foreground">{ex.equipment}</div>}
