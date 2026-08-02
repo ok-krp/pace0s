@@ -10,7 +10,6 @@ import {
   Briefcase,
   Calendar,
   Wallet,
-  BarChart3,
   Settings,
   Sparkles,
   User as UserIcon,
@@ -38,7 +37,6 @@ export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof Layo
   "/calendar": { label: "Calendrier", icon: Calendar },
   "/recalls": { label: "Rappels conso", icon: AlertTriangle },
   "/finance": { label: "Finance & Invest.", icon: Wallet },
-  "/stats": { label: "Statistiques", icon: BarChart3 },
   "/profile": { label: "Profil", icon: UserIcon },
   "/settings": { label: "Paramètres", icon: Settings },
 };
@@ -49,7 +47,7 @@ const GROUPS: Group[] = [
   { id: "nutrition", label: "Nutrition", items: ["/nutrition", "/recalls"] },
   { id: "activite", label: "Activité", items: ["/body", "/sport", "/sleep", "/calendar", "/routine", "/work"] },
   { id: "finance", label: "Finance", items: ["/finance"] },
-  { id: "autres", label: "Autres", items: ["/stats", "/profile", "/settings"] },
+  { id: "autres", label: "Autres", items: ["/profile", "/settings"] },
 ];
 
 const NavLink = memo(function NavLink({ to, active, onNavigate }: { to: NavItemKey; active: boolean; onNavigate?: () => void }) {

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dumbbell, Plus, Trash2, Play, Square, Check, Pencil, Calendar as CalIcon, History } from "lucide-react";
 import { PageHeader, StatCard } from "@/components/Stat";
 import { useLocalState, todayKey, lastNDays } from "@/lib/storage";
@@ -60,6 +60,16 @@ function SportPage() {
   const [progs, setProgs] = useLocalState<Program[]>("lt.sport.programs", []);
   const [sessions, setSessions] = useLocalState<WorkoutSession[]>("lt.sport.sessions", []);
   const [active, setActive] = useLocalState<WorkoutSession | null>("lt.sport.active", null);
+  const [tab, setTab] = useState("programs");
+  const [focusEx, setFocusEx] = useState<string | null>(null);
+
+  // Ancrage contextuel : un clic sur un exercice bascule sur Surcharge et
+  // scrolle directement sur ses données.
+  const openOverload = (exerciseId: string) => {
+    setFocusEx(exerciseId);
+    setTab("overload");
+  };
+
 
   const todayDow = new Date().getDay();
   const todayPrograms = progs.filter((p) => p.days.includes(todayDow));
@@ -132,7 +142,7 @@ function SportPage() {
           ) : (
             <div className="grid sm:grid-cols-2 gap-2">
               {todayPrograms.map((p) => (
-                <div key={p.id} className="rounded-xl border border-border p-3 flex items-center gap-3">
+                <div key={p.id} className="rounded-xl glass-thin p-3 flex items-center gap-3">
                   <div className="text-2xl">{p.emoji}</div>
                   <div className="flex-1 min-w-0">
                     <div className="font-medium truncate">{p.name}</div>
@@ -146,7 +156,7 @@ function SportPage() {
         </div>
       )}
 
-      <Tabs defaultValue="programs" className="w-full">
+      <Tabs value={tab} onValueChange={setTab} className="w-full">
         <div className="overflow-x-auto -mx-1 px-1 mb-2 scrollbar-hide">
           <TabsList className="inline-flex w-max min-w-full">
             <TabsTrigger value="programs" className="text-xs sm:text-sm">Programmes</TabsTrigger>
@@ -157,7 +167,7 @@ function SportPage() {
         </div>
 
         <TabsContent value="programs">
-          <ProgramsTab progs={progs} setProgs={setProgs} exs={exs} />
+          <ProgramsTab progs={progs} setProgs={setProgs} exs={exs} onOpenExercise={openOverload} />
         </TabsContent>
 
         <TabsContent value="exercises">
@@ -165,13 +175,14 @@ function SportPage() {
         </TabsContent>
 
         <TabsContent value="overload">
-          <OverloadTab exs={exs} />
+          <OverloadTab exs={exs} focusExerciseId={focusEx} />
         </TabsContent>
 
         <TabsContent value="history">
           <HistoryTab sessions={sessions} exs={exs} onDelete={(id) => setSessions((p) => p.filter((s) => s.id !== id))} />
         </TabsContent>
       </Tabs>
+
     </div>
   );
 }
@@ -217,7 +228,7 @@ function ActiveSession({ active, setActive, exs, onFinish, onCancel }: {
         {active.exercises.map((e, exIdx) => {
           const meta = exs.find((x) => x.id === e.exerciseId);
           return (
-            <div key={exIdx} className="rounded-xl border border-border p-3">
+            <div key={exIdx} className="rounded-xl glass-thin p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">{meta?.name ?? "Exercice"} <span className="text-xs text-muted-foreground">{meta?.muscle}</span></div>
                 <button onClick={() => removeExercise(exIdx)} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
@@ -273,7 +284,7 @@ function ExercisesTab({ exs, setExs }: { exs: Exercise[]; setExs: (v: Exercise[]
       ) : (
         <div className="grid sm:grid-cols-2 gap-2">
           {exs.map((e) => (
-            <div key={e.id} className="rounded-xl border border-border p-3 flex items-start justify-between gap-2">
+            <div key={e.id} className="rounded-xl glass-thin p-3 flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="font-medium">{e.name}</div>
                 <div className="text-xs text-muted-foreground">{e.muscle}{e.equipment ? ` · ${e.equipment}` : ""}</div>
@@ -315,9 +326,10 @@ function ExerciseForm({ ex, onSave, onCancel }: { ex: Exercise | null; onSave: (
   );
 }
 
-function ProgramsTab({ progs, setProgs, exs }: { progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; exs: Exercise[] }) {
+function ProgramsTab({ progs, setProgs, exs, onOpenExercise }: { progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; exs: Exercise[]; onOpenExercise: (exerciseId: string) => void }) {
   const [editing, setEditing] = useState<Program | null>(null);
   const [open, setOpen] = useState(false);
+  const [openedId, setOpenedId] = useState<string | null>(null);
 
   const save = (p: Program) => {
     setProgs((prev) => {
@@ -327,6 +339,58 @@ function ProgramsTab({ progs, setProgs, exs }: { progs: Program[]; setProgs: (v:
     });
     setEditing(null); setOpen(false);
   };
+
+  const opened = progs.find((p) => p.id === openedId) ?? null;
+
+  if (opened) {
+    // Vue détaillée : exercices du programme regroupés par groupe musculaire.
+    const groups = new Map<string, { item: ProgramItem; ex: Exercise }[]>();
+    opened.items.forEach((item) => {
+      const ex = exs.find((x) => x.id === item.exerciseId);
+      if (!ex) return;
+      const arr = groups.get(ex.muscle) ?? [];
+      arr.push({ item, ex });
+      groups.set(ex.muscle, arr);
+    });
+
+    return (
+      <div className="space-y-3">
+        <button onClick={() => setOpenedId(null)} className="text-sm text-muted-foreground hover:text-foreground">← Programmes</button>
+        <div className="rounded-2xl glass-card p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-2xl">{opened.emoji}</span>
+            <div>
+              <div className="font-display text-lg font-semibold">{opened.name}</div>
+              <div className="text-xs text-muted-foreground">{opened.items.length} exercice{opened.items.length === 1 ? "" : "s"} · {opened.days.map((d) => DAYS_LABELS[d]).join(" · ") || "Aucun jour"}</div>
+            </div>
+          </div>
+        </div>
+
+        {groups.size === 0 ? (
+          <div className="text-sm text-muted-foreground text-center py-8">Aucun exercice dans ce programme.</div>
+        ) : (
+          [...groups.entries()].map(([muscle, list]) => (
+            <div key={muscle} className="space-y-1.5">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">{muscle}</div>
+              {list.map(({ item, ex }) => (
+                <button
+                  key={ex.id + item.exerciseId}
+                  onClick={() => onOpenExercise(ex.id)}
+                  className="w-full text-left rounded-xl glass-thin p-3 flex items-center justify-between gap-3 hover:bg-[rgb(var(--glass-tint)/0.08)]"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{ex.name}</div>
+                    <div className="text-xs text-muted-foreground">{item.sets} × {item.reps}{item.weight ? ` · ${item.weight} kg` : ""}{ex.equipment ? ` · ${ex.equipment}` : ""}</div>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground shrink-0 flex items-center gap-1"><TrendingUp className="size-3" />Surcharge →</span>
+                </button>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -343,15 +407,15 @@ function ProgramsTab({ progs, setProgs, exs }: { progs: Program[]; setProgs: (v:
       ) : (
         <div className="grid sm:grid-cols-2 gap-2">
           {progs.map((p) => (
-            <div key={p.id} className="rounded-xl border border-border p-3">
+            <div key={p.id} className="rounded-xl glass-thin p-3">
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
+                <button onClick={() => setOpenedId(p.id)} className="flex items-center gap-2 min-w-0 text-left flex-1">
                   <div className="text-2xl">{p.emoji}</div>
                   <div className="min-w-0">
                     <div className="font-medium truncate">{p.name}</div>
                     <div className="text-xs text-muted-foreground">{p.days.map((d) => DAYS_LABELS[d]).join(" · ") || "Aucun jour"} · {p.items.length} ex.</div>
                   </div>
-                </div>
+                </button>
                 <div className="flex gap-1 shrink-0">
                   <button onClick={() => { setEditing(p); setOpen(true); }} className="text-muted-foreground hover:text-foreground"><Pencil className="size-3.5" /></button>
                   <button onClick={() => setProgs((prev) => prev.filter((x) => x.id !== p.id))} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
@@ -364,6 +428,7 @@ function ProgramsTab({ progs, setProgs, exs }: { progs: Program[]; setProgs: (v:
     </div>
   );
 }
+
 
 function ProgramForm({ prog, exs, onSave, onCancel }: { prog: Program | null; exs: Exercise[]; onSave: (p: Program) => void; onCancel: () => void }) {
   const [p, setP] = useState<Program | null>(prog);
@@ -439,7 +504,7 @@ function HistoryTab({ sessions, exs, onDelete }: { sessions: WorkoutSession[]; e
             {list.map((s) => {
               const vol = s.exercises.reduce((a, e) => a + e.sets.filter((x) => x.done).reduce((b, x) => b + x.reps * x.weight, 0), 0);
               return (
-                <div key={s.id} className="rounded-xl border border-border p-3">
+                <div key={s.id} className="rounded-xl glass-thin p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="font-medium">{s.name}</div>
@@ -468,12 +533,25 @@ type OverloadRow = { id: string; date: string; weight: number; reps: number; set
 type OverloadStore = Record<string, OverloadRow[]>; // exerciseId → rows
 
 
-function OverloadTab({ exs }: { exs: Exercise[] }) {
+function OverloadTab({ exs, focusExerciseId }: { exs: Exercise[]; focusExerciseId?: string | null }) {
   const [store, setStore] = useLocalState<OverloadStore>("lt.sport.overload", {});
   const muscles = useMemo(() => Array.from(new Set(exs.map((e) => e.muscle))), [exs]);
   const [muscle, setMuscle] = useState<string>("");
   const currentMuscle = muscle || muscles[0] || "";
   const muscleExs = exs.filter((e) => e.muscle === currentMuscle);
+
+  // Ancrage précis : on sélectionne le bon groupe puis on scrolle sur la carte.
+  useEffect(() => {
+    if (!focusExerciseId) return;
+    const target = exs.find((e) => e.id === focusExerciseId);
+    if (!target) return;
+    setMuscle(target.muscle);
+    const id = requestAnimationFrame(() => {
+      document.getElementById(`ov-${focusExerciseId}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [focusExerciseId, exs]);
+
 
   const addRow = (exerciseId: string) => {
     const r: OverloadRow = { id: crypto.randomUUID(), date: todayKey(), weight: 0, reps: 0, sets: 0 };
@@ -499,7 +577,7 @@ function OverloadTab({ exs }: { exs: Exercise[] }) {
             <button
               key={m}
               onClick={() => setMuscle(m)}
-              className={`px-3 py-1.5 rounded-lg text-xs ${currentMuscle === m ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/70"}`}
+              className={`px-3 py-1.5 rounded-lg text-xs ${currentMuscle === m ? "glass-thin text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}
             >
               {m}
             </button>
@@ -518,8 +596,8 @@ function OverloadTab({ exs }: { exs: Exercise[] }) {
             const prevW = rows[1]?.weight ?? 0;
             const delta = lastW - prevW;
             return (
-              <div key={ex.id} className="rounded-2xl glass-card overflow-hidden">
-                <div className="flex items-center justify-between gap-2 p-3 border-b border-border bg-muted/30 flex-wrap">
+              <div key={ex.id} id={`ov-${ex.id}`} className="rounded-2xl glass-card overflow-hidden scroll-mt-24">
+                <div className="flex items-center justify-between gap-2 p-3 border-b border-border/50 flex-wrap">
                   <div className="min-w-0">
                     <div className="font-medium truncate">{ex.name}</div>
                     {ex.equipment && <div className="text-[11px] text-muted-foreground">{ex.equipment}</div>}

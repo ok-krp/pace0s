@@ -19,7 +19,6 @@ import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
-import { GlassQualitySettings } from "@/components/GlassQualitySettings";
 
 
 
@@ -125,7 +124,6 @@ function SettingsPage() {
         </Row>
         <BleDeviceManager />
         <WallpaperSettings />
-        <GlassQualitySettings />
         <Accordion type="multiple" className="space-y-3">
           <AccordionItem value="reminders" className="rounded-2xl glass-card px-4">
             <AccordionTrigger className="text-sm font-medium">Rappels & notifications</AccordionTrigger>
