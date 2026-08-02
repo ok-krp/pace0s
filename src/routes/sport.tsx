@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dumbbell, Plus, Trash2, Play, Square, Check, Pencil, Calendar as CalIcon, History } from "lucide-react";
 import { PageHeader, StatCard } from "@/components/Stat";
 import { useLocalState, todayKey, lastNDays } from "@/lib/storage";
