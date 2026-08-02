@@ -326,9 +326,10 @@ function ExerciseForm({ ex, onSave, onCancel }: { ex: Exercise | null; onSave: (
   );
 }
 
-function ProgramsTab({ progs, setProgs, exs }: { progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; exs: Exercise[] }) {
+function ProgramsTab({ progs, setProgs, exs, onOpenExercise }: { progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; exs: Exercise[]; onOpenExercise: (exerciseId: string) => void }) {
   const [editing, setEditing] = useState<Program | null>(null);
   const [open, setOpen] = useState(false);
+  const [openedId, setOpenedId] = useState<string | null>(null);
 
   const save = (p: Program) => {
     setProgs((prev) => {
@@ -338,6 +339,58 @@ function ProgramsTab({ progs, setProgs, exs }: { progs: Program[]; setProgs: (v:
     });
     setEditing(null); setOpen(false);
   };
+
+  const opened = progs.find((p) => p.id === openedId) ?? null;
+
+  if (opened) {
+    // Vue détaillée : exercices du programme regroupés par groupe musculaire.
+    const groups = new Map<string, { item: ProgramItem; ex: Exercise }[]>();
+    opened.items.forEach((item) => {
+      const ex = exs.find((x) => x.id === item.exerciseId);
+      if (!ex) return;
+      const arr = groups.get(ex.muscle) ?? [];
+      arr.push({ item, ex });
+      groups.set(ex.muscle, arr);
+    });
+
+    return (
+      <div className="space-y-3">
+        <button onClick={() => setOpenedId(null)} className="text-sm text-muted-foreground hover:text-foreground">← Programmes</button>
+        <div className="rounded-2xl glass-card p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-2xl">{opened.emoji}</span>
+            <div>
+              <div className="font-display text-lg font-semibold">{opened.name}</div>
+              <div className="text-xs text-muted-foreground">{opened.items.length} exercice{opened.items.length === 1 ? "" : "s"} · {opened.days.map((d) => DAYS_LABELS[d]).join(" · ") || "Aucun jour"}</div>
+            </div>
+          </div>
+        </div>
+
+        {groups.size === 0 ? (
+          <div className="text-sm text-muted-foreground text-center py-8">Aucun exercice dans ce programme.</div>
+        ) : (
+          [...groups.entries()].map(([muscle, list]) => (
+            <div key={muscle} className="space-y-1.5">
+              <div className="text-[11px] uppercase tracking-wider text-muted-foreground px-1">{muscle}</div>
+              {list.map(({ item, ex }) => (
+                <button
+                  key={ex.id + item.exerciseId}
+                  onClick={() => onOpenExercise(ex.id)}
+                  className="w-full text-left rounded-xl glass-thin p-3 flex items-center justify-between gap-3 hover:bg-[rgb(var(--glass-tint)/0.08)]"
+                >
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{ex.name}</div>
+                    <div className="text-xs text-muted-foreground">{item.sets} × {item.reps}{item.weight ? ` · ${item.weight} kg` : ""}{ex.equipment ? ` · ${ex.equipment}` : ""}</div>
+                  </div>
+                  <span className="text-[11px] text-muted-foreground shrink-0 flex items-center gap-1"><TrendingUp className="size-3" />Surcharge →</span>
+                </button>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -356,13 +409,13 @@ function ProgramsTab({ progs, setProgs, exs }: { progs: Program[]; setProgs: (v:
           {progs.map((p) => (
             <div key={p.id} className="rounded-xl glass-thin p-3">
               <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
+                <button onClick={() => setOpenedId(p.id)} className="flex items-center gap-2 min-w-0 text-left flex-1">
                   <div className="text-2xl">{p.emoji}</div>
                   <div className="min-w-0">
                     <div className="font-medium truncate">{p.name}</div>
                     <div className="text-xs text-muted-foreground">{p.days.map((d) => DAYS_LABELS[d]).join(" · ") || "Aucun jour"} · {p.items.length} ex.</div>
                   </div>
-                </div>
+                </button>
                 <div className="flex gap-1 shrink-0">
                   <button onClick={() => { setEditing(p); setOpen(true); }} className="text-muted-foreground hover:text-foreground"><Pencil className="size-3.5" /></button>
                   <button onClick={() => setProgs((prev) => prev.filter((x) => x.id !== p.id))} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
@@ -375,6 +428,7 @@ function ProgramsTab({ progs, setProgs, exs }: { progs: Program[]; setProgs: (v:
     </div>
   );
 }
+
 
 function ProgramForm({ prog, exs, onSave, onCancel }: { prog: Program | null; exs: Exercise[]; onSave: (p: Program) => void; onCancel: () => void }) {
   const [p, setP] = useState<Program | null>(prog);
