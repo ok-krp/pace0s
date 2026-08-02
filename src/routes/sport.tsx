@@ -60,6 +60,16 @@ function SportPage() {
   const [progs, setProgs] = useLocalState<Program[]>("lt.sport.programs", []);
   const [sessions, setSessions] = useLocalState<WorkoutSession[]>("lt.sport.sessions", []);
   const [active, setActive] = useLocalState<WorkoutSession | null>("lt.sport.active", null);
+  const [tab, setTab] = useState("programs");
+  const [focusEx, setFocusEx] = useState<string | null>(null);
+
+  // Ancrage contextuel : un clic sur un exercice bascule sur Surcharge et
+  // scrolle directement sur ses données.
+  const openOverload = (exerciseId: string) => {
+    setFocusEx(exerciseId);
+    setTab("overload");
+  };
+
 
   const todayDow = new Date().getDay();
   const todayPrograms = progs.filter((p) => p.days.includes(todayDow));
@@ -146,7 +156,7 @@ function SportPage() {
         </div>
       )}
 
-      <Tabs defaultValue="programs" className="w-full">
+      <Tabs value={tab} onValueChange={setTab} className="w-full">
         <div className="overflow-x-auto -mx-1 px-1 mb-2 scrollbar-hide">
           <TabsList className="inline-flex w-max min-w-full">
             <TabsTrigger value="programs" className="text-xs sm:text-sm">Programmes</TabsTrigger>
@@ -157,7 +167,7 @@ function SportPage() {
         </div>
 
         <TabsContent value="programs">
-          <ProgramsTab progs={progs} setProgs={setProgs} exs={exs} />
+          <ProgramsTab progs={progs} setProgs={setProgs} exs={exs} onOpenExercise={openOverload} />
         </TabsContent>
 
         <TabsContent value="exercises">
@@ -165,13 +175,14 @@ function SportPage() {
         </TabsContent>
 
         <TabsContent value="overload">
-          <OverloadTab exs={exs} />
+          <OverloadTab exs={exs} focusExerciseId={focusEx} />
         </TabsContent>
 
         <TabsContent value="history">
           <HistoryTab sessions={sessions} exs={exs} onDelete={(id) => setSessions((p) => p.filter((s) => s.id !== id))} />
         </TabsContent>
       </Tabs>
+
     </div>
   );
 }
