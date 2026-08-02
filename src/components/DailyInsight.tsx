@@ -44,21 +44,6 @@ function DailyInsightBase({ intel }: { intel: DashboardIntel }) {
             </ul>
           )}
 
-          {intel.achievements.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {intel.achievements.map((a) => (
-                <motion.span
-                  key={a}
-                  initial={{ opacity: 0, scale: 0.94 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={springSoft}
-                  className="glass-thin rounded-full px-2.5 py-1 text-[10px] font-medium flex items-center gap-1"
-                >
-                  <Trophy className="size-3 opacity-70" /> {a}
-                </motion.span>
-              ))}
-            </div>
-          )}
         </div>
       </div>
     </motion.section>
