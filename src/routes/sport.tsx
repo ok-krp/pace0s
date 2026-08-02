@@ -533,12 +533,25 @@ type OverloadRow = { id: string; date: string; weight: number; reps: number; set
 type OverloadStore = Record<string, OverloadRow[]>; // exerciseId → rows
 
 
-function OverloadTab({ exs }: { exs: Exercise[] }) {
+function OverloadTab({ exs, focusExerciseId }: { exs: Exercise[]; focusExerciseId?: string | null }) {
   const [store, setStore] = useLocalState<OverloadStore>("lt.sport.overload", {});
   const muscles = useMemo(() => Array.from(new Set(exs.map((e) => e.muscle))), [exs]);
   const [muscle, setMuscle] = useState<string>("");
   const currentMuscle = muscle || muscles[0] || "";
   const muscleExs = exs.filter((e) => e.muscle === currentMuscle);
+
+  // Ancrage précis : on sélectionne le bon groupe puis on scrolle sur la carte.
+  useEffect(() => {
+    if (!focusExerciseId) return;
+    const target = exs.find((e) => e.id === focusExerciseId);
+    if (!target) return;
+    setMuscle(target.muscle);
+    const id = requestAnimationFrame(() => {
+      document.getElementById(`ov-${focusExerciseId}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [focusExerciseId, exs]);
+
 
   const addRow = (exerciseId: string) => {
     const r: OverloadRow = { id: crypto.randomUUID(), date: todayKey(), weight: 0, reps: 0, sets: 0 };
