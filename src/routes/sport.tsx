@@ -583,14 +583,16 @@ function OverloadTab({ exs, progs, focusExerciseId }: { exs: Exercise[]; progs: 
       for (const [exId, rows] of Object.entries(p)) {
         const tgt = targets[exId];
         if (!tgt || !rows?.length) continue;
+        let local = false;
         const updated = rows.map((r) =>
           r.date === t && (r.sets !== tgt.sets || r.reps !== tgt.reps)
-            ? ((changed = true), { ...r, sets: tgt.sets, reps: tgt.reps })
+            ? ((local = true), { ...r, sets: tgt.sets, reps: tgt.reps })
             : r,
         );
-        if (changed) next[exId] = updated;
+        if (local) { next[exId] = updated; changed = true; }
       }
       return changed ? next : p;
+
     });
   }, [targets, setStore]);
 
