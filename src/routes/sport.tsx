@@ -175,8 +175,9 @@ function SportPage() {
         </TabsContent>
 
         <TabsContent value="overload">
-          <OverloadTab exs={exs} focusExerciseId={focusEx} />
+          <OverloadTab exs={exs} progs={progs} focusExerciseId={focusEx} />
         </TabsContent>
+
 
         <TabsContent value="history">
           <HistoryTab sessions={sessions} exs={exs} onDelete={(id) => setSessions((p) => p.filter((s) => s.id !== id))} />
