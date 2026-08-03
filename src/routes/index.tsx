@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { liquidTooltipStyle } from "@/lib/chart-style";
+import { liquidTooltipStyle, liquidDot } from "@/lib/chart-style";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Moon, Droplets, Dumbbell, Briefcase, Wallet, TrendingUp, Flame, CheckCircle2, Scale, Sparkles, Footprints, Activity } from "lucide-react";
@@ -270,8 +270,8 @@ function Dashboard() {
               <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
               <YAxis hide />
               <Tooltip contentStyle={liquidTooltipStyle} />
-              <Area type="monotone" dataKey="sommeil" stroke="var(--primary)" strokeWidth={2} fill="url(#g1)" />
-              <Area type="monotone" dataKey="eau" stroke="var(--chart-2)" strokeWidth={2} fill="url(#g2)" />
+              <Area type="monotone" dataKey="sommeil" stroke="var(--primary)" strokeWidth={2} fill="url(#g1)" dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} connectNulls={false} />
+              <Area type="monotone" dataKey="eau" stroke="var(--chart-2)" strokeWidth={2} fill="url(#g2)" dot={liquidDot("var(--chart-2)")} activeDot={{ r: 5 }} connectNulls={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -324,7 +324,7 @@ function Dashboard() {
               <XAxis dataKey="d" hide />
               <YAxis hide domain={["dataMin - 1", "dataMax + 1"]} />
               <Tooltip contentStyle={liquidTooltipStyle} />
-              <Line type="monotone" dataKey="w" stroke="var(--primary)" strokeWidth={2.5} dot={false} />
+              <Line type="monotone" dataKey="w" stroke="var(--primary)" strokeWidth={2.5} dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} connectNulls={false} />
             </LineChart>
           </ResponsiveContainer>
         </button>

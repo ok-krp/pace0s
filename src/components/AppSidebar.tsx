@@ -44,13 +44,14 @@ export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof Layo
 type Group = { id: string; label: string; items: NavItemKey[] };
 
 const GROUPS: Group[] = [
-  { id: "nutrition", label: "Nutrition", items: ["/nutrition", "/recalls"] },
+  // Nutrition et Rappels conso sont fusionnés en une seule carte de navigation.
+  { id: "nutrition", label: "Nutrition", items: ["/nutrition"] },
   { id: "activite", label: "Activité", items: ["/body", "/sport", "/sleep", "/calendar", "/routine", "/work"] },
   { id: "finance", label: "Finance", items: ["/finance"] },
   { id: "autres", label: "Autres", items: ["/profile", "/settings"] },
 ];
 
-const NavLink = memo(function NavLink({ to, active, onNavigate }: { to: NavItemKey; active: boolean; onNavigate?: () => void }) {
+const NavLink = memo(function NavLink({ to, active, onNavigate, alert }: { to: NavItemKey; active: boolean; onNavigate?: () => void; alert?: number }) {
   const it = NAV_REGISTRY[to];
   if (!it) return null;
   const Icon = it.icon;
@@ -67,7 +68,17 @@ const NavLink = memo(function NavLink({ to, active, onNavigate }: { to: NavItemK
           : "text-muted-foreground hover:text-foreground hover:bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.5))]"
       }`}
     >
-      <Icon className={`size-4 ${active ? "text-primary" : ""}`} />
+      <span className="glass-icon size-8 shrink-0 relative">
+        <Icon className={`size-4 ${active ? "text-primary" : ""}`} />
+        {!!alert && (
+          <span
+            aria-label={`${alert} rappel${alert > 1 ? "s" : ""} conso`}
+            className="absolute -top-1 -right-1 size-4 rounded-full grid place-items-center bg-rose-500 text-white shadow-[0_2px_6px_-1px_rgba(0,0,0,0.4)] ring-1 ring-white/40"
+          >
+            <AlertTriangle className="size-2.5" />
+          </span>
+        )}
+      </span>
       <span>{it.label}</span>
     </MotionLink>
   );
@@ -78,6 +89,7 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
   const [openMap, setOpenMap] = useLocalState<Record<string, boolean>>("lt.sidebar.groups", {
     nutrition: true, activite: true, finance: true, autres: false,
   });
+  const [recallCount] = useLocalState<number>("lt.recalls.count", 0);
   return (
     <nav className="flex flex-col gap-0.5">
       <NavLink to="/" active={currentPath === "/"} onNavigate={onNavigate} />
@@ -100,7 +112,7 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
             </CollapsibleTrigger>
             <CollapsibleContent className="flex flex-col gap-0.5 mt-0.5">
               {g.items.map((to) => (
-                <NavLink key={to} to={to} active={currentPath === to} onNavigate={onNavigate} />
+                <NavLink key={to} to={to} active={currentPath === to} onNavigate={onNavigate} alert={to === "/nutrition" ? recallCount : 0} />
               ))}
             </CollapsibleContent>
           </Collapsible>
@@ -194,7 +206,7 @@ export function MobileTabBar() {
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Icon className="size-5 shrink-0" />
+                <span className="glass-icon size-8 shrink-0"><Icon className="size-5 shrink-0" /></span>
                 <span className="truncate max-w-full">{it.label}</span>
               </MotionLink>
             );

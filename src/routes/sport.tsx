@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Dumbbell, Plus, Trash2, Play, Square, Check, Pencil, Calendar as CalIcon, History } from "lucide-react";
 import { PageHeader, StatCard } from "@/components/Stat";
 import { useLocalState, todayKey, lastNDays } from "@/lib/storage";
@@ -65,10 +65,10 @@ function SportPage() {
 
   // Ancrage contextuel : un clic sur un exercice bascule sur Surcharge et
   // scrolle directement sur ses données.
-  const openOverload = (exerciseId: string) => {
+  const openOverload = useCallback((exerciseId: string) => {
     setFocusEx(exerciseId);
     setTab("overload");
-  };
+  }, []);
 
 
   const todayDow = new Date().getDay();
@@ -175,8 +175,9 @@ function SportPage() {
         </TabsContent>
 
         <TabsContent value="overload">
-          <OverloadTab exs={exs} focusExerciseId={focusEx} />
+          <OverloadTab exs={exs} progs={progs} focusExerciseId={focusEx} />
         </TabsContent>
+
 
         <TabsContent value="history">
           <HistoryTab sessions={sessions} exs={exs} onDelete={(id) => setSessions((p) => p.filter((s) => s.id !== id))} />
@@ -260,7 +261,7 @@ function ActiveSession({ active, setActive, exs, onFinish, onCancel }: {
   );
 }
 
-function ExercisesTab({ exs, setExs }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void }) {
+const ExercisesTab = memo(function ExercisesTab({ exs, setExs }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void }) {
   const [editing, setEditing] = useState<Exercise | null>(null);
   const [open, setOpen] = useState(false);
   const save = (e: Exercise) => {
@@ -300,7 +301,7 @@ function ExercisesTab({ exs, setExs }: { exs: Exercise[]; setExs: (v: Exercise[]
       )}
     </div>
   );
-}
+});
 
 function ExerciseForm({ ex, onSave, onCancel }: { ex: Exercise | null; onSave: (e: Exercise) => void; onCancel: () => void }) {
   const [e, setE] = useState<Exercise | null>(ex);
@@ -326,7 +327,7 @@ function ExerciseForm({ ex, onSave, onCancel }: { ex: Exercise | null; onSave: (
   );
 }
 
-function ProgramsTab({ progs, setProgs, exs, onOpenExercise }: { progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; exs: Exercise[]; onOpenExercise: (exerciseId: string) => void }) {
+const ProgramsTab = memo(function ProgramsTab({ progs, setProgs, exs, onOpenExercise }: { progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; exs: Exercise[]; onOpenExercise: (exerciseId: string) => void }) {
   const [editing, setEditing] = useState<Program | null>(null);
   const [open, setOpen] = useState(false);
   const [openedId, setOpenedId] = useState<string | null>(null);
@@ -427,7 +428,7 @@ function ProgramsTab({ progs, setProgs, exs, onOpenExercise }: { progs: Program[
       )}
     </div>
   );
-}
+});
 
 
 function ProgramForm({ prog, exs, onSave, onCancel }: { prog: Program | null; exs: Exercise[]; onSave: (p: Program) => void; onCancel: () => void }) {
@@ -486,7 +487,7 @@ function ProgramForm({ prog, exs, onSave, onCancel }: { prog: Program | null; ex
   );
 }
 
-function HistoryTab({ sessions, exs, onDelete }: { sessions: WorkoutSession[]; exs: Exercise[]; onDelete: (id: string) => void }) {
+const HistoryTab = memo(function HistoryTab({ sessions, exs, onDelete }: { sessions: WorkoutSession[]; exs: Exercise[]; onDelete: (id: string) => void }) {
   const grouped = useMemo(() => {
     const map: Record<string, WorkoutSession[]> = {};
     sessions.forEach((s) => { (map[s.date] ??= []).push(s); });
@@ -527,18 +528,36 @@ function HistoryTab({ sessions, exs, onDelete }: { sessions: WorkoutSession[]; e
       ))}
     </div>
   );
-}
+});
 
 type OverloadRow = { id: string; date: string; weight: number; reps: number; sets: number; note?: string };
 type OverloadStore = Record<string, OverloadRow[]>; // exerciseId → rows
 
 
-function OverloadTab({ exs, focusExerciseId }: { exs: Exercise[]; focusExerciseId?: string | null }) {
+const OverloadTab = memo(function OverloadTab({ exs, progs, focusExerciseId }: { exs: Exercise[]; progs: Program[]; focusExerciseId?: string | null }) {
   const [store, setStore] = useLocalState<OverloadStore>("lt.sport.overload", {});
   const muscles = useMemo(() => Array.from(new Set(exs.map((e) => e.muscle))), [exs]);
   const [muscle, setMuscle] = useState<string>("");
   const currentMuscle = muscle || muscles[0] || "";
-  const muscleExs = exs.filter((e) => e.muscle === currentMuscle);
+  const muscleExs = useMemo(() => exs.filter((e) => e.muscle === currentMuscle), [exs, currentMuscle]);
+
+  /**
+   * Cible de surcharge par exercice : séries / répétitions / charge issues du
+   * programme (ou des valeurs par défaut de l'exercice). Mémoïsée : recalculée
+   * uniquement quand les programmes ou les exercices changent.
+   */
+  const targets = useMemo(() => {
+    const map: Record<string, { sets: number; reps: number; weight: number }> = {};
+    exs.forEach((e) => {
+      map[e.id] = { sets: e.defaultSets ?? 3, reps: e.defaultReps ?? 10, weight: e.defaultWeight ?? 0 };
+    });
+    progs.forEach((p) => {
+      p.items.forEach((it) => {
+        map[it.exerciseId] = { sets: it.sets, reps: it.reps, weight: it.weight ?? map[it.exerciseId]?.weight ?? 0 };
+      });
+    });
+    return map;
+  }, [exs, progs]);
 
   // Ancrage précis : on sélectionne le bon groupe puis on scrolle sur la carte.
   useEffect(() => {
@@ -552,9 +571,41 @@ function OverloadTab({ exs, focusExerciseId }: { exs: Exercise[]; focusExerciseI
     return () => cancelAnimationFrame(id);
   }, [focusExerciseId, exs]);
 
+  /**
+   * Synchronisation automatique : la dernière ligne du jour suit les séries et
+   * répétitions configurées pour l'exercice — plus besoin d'ouvrir « Modifier ».
+   */
+  useEffect(() => {
+    const t = todayKey();
+    setStore((p) => {
+      let changed = false;
+      const next: OverloadStore = { ...p };
+      for (const [exId, rows] of Object.entries(p)) {
+        const tgt = targets[exId];
+        if (!tgt || !rows?.length) continue;
+        let local = false;
+        const updated = rows.map((r) =>
+          r.date === t && (r.sets !== tgt.sets || r.reps !== tgt.reps)
+            ? ((local = true), { ...r, sets: tgt.sets, reps: tgt.reps })
+            : r,
+        );
+        if (local) { next[exId] = updated; changed = true; }
+      }
+      return changed ? next : p;
+
+    });
+  }, [targets, setStore]);
 
   const addRow = (exerciseId: string) => {
-    const r: OverloadRow = { id: crypto.randomUUID(), date: todayKey(), weight: 0, reps: 0, sets: 0 };
+    const tgt = targets[exerciseId] ?? { sets: 3, reps: 10, weight: 0 };
+    const prev = (store[exerciseId] ?? []).slice().sort((a, b) => b.date.localeCompare(a.date))[0];
+    const r: OverloadRow = {
+      id: crypto.randomUUID(),
+      date: todayKey(),
+      weight: prev?.weight ?? tgt.weight,
+      reps: tgt.reps,
+      sets: tgt.sets,
+    };
     setStore((p) => ({ ...p, [exerciseId]: [r, ...(p[exerciseId] ?? [])] }));
   };
   const updateRow = (exerciseId: string, id: string, patch: Partial<OverloadRow>) => {
@@ -591,7 +642,7 @@ function OverloadTab({ exs, focusExerciseId }: { exs: Exercise[]; focusExerciseI
         <div className="space-y-4">
           {muscleExs.map((ex) => {
             const rows = (store[ex.id] ?? []).slice().sort((a, b) => b.date.localeCompare(a.date));
-            const best = rows.reduce((m, r) => Math.max(m, r.weight * r.reps), 0);
+            const tgt = targets[ex.id];
             const lastW = rows[0]?.weight ?? 0;
             const prevW = rows[1]?.weight ?? 0;
             const delta = lastW - prevW;
@@ -603,7 +654,7 @@ function OverloadTab({ exs, focusExerciseId }: { exs: Exercise[]; focusExerciseI
                     {ex.equipment && <div className="text-[11px] text-muted-foreground">{ex.equipment}</div>}
                   </div>
                   <div className="flex items-center gap-1.5 flex-wrap text-[11px]">
-                    {best > 0 && <span className="px-2 py-0.5 rounded-md bg-muted">Vol. max <b>{best}</b></span>}
+                    {tgt && <span className="px-2 py-0.5 rounded-md glass-thin">Cible <b>{tgt.sets} × {tgt.reps}</b></span>}
                     {rows.length >= 2 && (
                       <span className={`px-2 py-0.5 rounded-md ${delta > 0 ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : delta < 0 ? "bg-rose-500/15 text-rose-700 dark:text-rose-300" : "bg-muted"}`}>
                         {delta > 0 ? "↑" : delta < 0 ? "↓" : "="} {Math.abs(delta)} kg
@@ -614,6 +665,7 @@ function OverloadTab({ exs, focusExerciseId }: { exs: Exercise[]; focusExerciseI
                     </Button>
                   </div>
                 </div>
+
 
                 {rows.length === 0 ? (
                   <div className="text-xs text-muted-foreground text-center py-4">Aucune entrée. Ajoute ta première série.</div>
@@ -648,5 +700,5 @@ function OverloadTab({ exs, focusExerciseId }: { exs: Exercise[]; focusExerciseI
       )}
     </div>
   );
-}
+});
 

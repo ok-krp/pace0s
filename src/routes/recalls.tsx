@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/Stat";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { checkRecallByBarcode, type RecallInfo } from "@/lib/rappel-conso";
+import { useLocalState } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/recalls")({
@@ -20,6 +21,7 @@ function RecallsPage() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<RecallRow[]>([]);
   const [checked, setChecked] = useState(0);
+  const [, setRecallCount] = useLocalState<number>("lt.recalls.count", 0);
 
   useEffect(() => {
     if (!user) return;
@@ -42,10 +44,10 @@ function RecallsPage() {
         if (recalls.length > 0) out.push({ ...s, recalls });
         setChecked((c) => c + 1);
       }
-      if (!cancelled) { setRows(out); setLoading(false); }
+      if (!cancelled) { setRows(out); setRecallCount(out.length); setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, setRecallCount]);
 
   if (!user) {
     return <div className="text-center py-12 text-muted-foreground">Connectez-vous pour voir les rappels.</div>;

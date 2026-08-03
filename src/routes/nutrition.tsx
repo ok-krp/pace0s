@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState, useEffect, useRef } from "react";
 import { z } from "zod";
-import { Apple, Plus, Trash2, ScanBarcode, Camera, Loader2, X } from "lucide-react";
+import { Apple, Plus, Trash2, ScanBarcode, Camera, Loader2, X, AlertTriangle, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader, StatCard } from "@/components/Stat";
@@ -44,6 +44,7 @@ function NutritionPage() {
   const { tab } = Route.useSearch();
   const currentTab = tab ?? "nutrition";
   const [scanOpen, setScanOpen] = useState(false);
+  const [recallCount] = useLocalState<number>("lt.recalls.count", 0);
   const [pending, setPending] = useState<
     | { kind: "barcode"; product: OFFProduct; grams: number; meal: string }
     | { kind: "photo"; photo: string; result: PhotoResult; grams: number; meal: string }
@@ -136,6 +137,30 @@ function NutritionPage() {
         </Tabs>
       </div>
 
+      {/* Nutrition + Rappels conso fusionnés en une seule carte. */}
+      <Link
+        to="/recalls"
+        className="mb-4 flex items-center gap-3 rounded-2xl glass-card p-4 hover:opacity-95 transition"
+      >
+        <span className="glass-icon size-11 shrink-0 relative text-emerald-500">
+          {recallCount > 0 ? <AlertTriangle className="size-5 text-rose-500" /> : <ShieldCheck className="size-5" />}
+          {recallCount > 0 && (
+            <span className="absolute -top-1 -right-1 size-4.5 rounded-full grid place-items-center bg-rose-500 text-white ring-1 ring-white/40 shadow-[0_2px_6px_-1px_rgba(0,0,0,0.4)]">
+              <AlertTriangle className="size-2.5" />
+            </span>
+          )}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">Rappels conso</div>
+          <div className="text-xs text-muted-foreground">
+            {recallCount > 0
+              ? `${recallCount} produit${recallCount > 1 ? "s" : ""} scanné${recallCount > 1 ? "s" : ""} concerné${recallCount > 1 ? "s" : ""} par un rappel`
+              : "Aucun rappel actif sur tes produits scannés"}
+          </div>
+        </div>
+        <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 shrink-0">Ouvrir →</span>
+      </Link>
+
       {currentTab === "nutrition" && <NutritionLogView />}
       {currentTab === "recipes" && <RecipesView />}
       {currentTab === "water" && <WaterView />}
@@ -145,12 +170,12 @@ function NutritionPage() {
           <button
             onClick={() => photoInputRef.current?.click()}
             aria-label="Analyser un repas par photo"
-            className="size-14 rounded-full grid place-items-center bg-gradient-to-br from-fuchsia-500 to-purple-600 text-white shadow-[var(--shadow-glow)] hover:scale-105 active:scale-95 transition"
+            className="glass-icon size-14 text-white bg-gradient-to-br from-fuchsia-500/70 to-purple-600/70 shadow-[var(--shadow-glow)] hover:scale-105 active:scale-95 transition"
           >{busy ? <Loader2 className="size-6 animate-spin" /> : <Camera className="size-6" />}</button>
           <button
             onClick={() => setScanOpen(true)}
             aria-label="Scanner un code-barres"
-            className="size-14 rounded-full grid place-items-center bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-[var(--shadow-glow)] hover:scale-105 active:scale-95 transition"
+            className="glass-icon size-14 text-white bg-gradient-to-br from-emerald-500/70 to-teal-600/70 shadow-[var(--shadow-glow)] hover:scale-105 active:scale-95 transition"
           ><ScanBarcode className="size-6" /></button>
           <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
         </div>
