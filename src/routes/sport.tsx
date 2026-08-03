@@ -301,7 +301,7 @@ const ExercisesTab = memo(function ExercisesTab({ exs, setExs }: { exs: Exercise
       )}
     </div>
   );
-}
+});
 
 function ExerciseForm({ ex, onSave, onCancel }: { ex: Exercise | null; onSave: (e: Exercise) => void; onCancel: () => void }) {
   const [e, setE] = useState<Exercise | null>(ex);
@@ -428,7 +428,7 @@ const ProgramsTab = memo(function ProgramsTab({ progs, setProgs, exs, onOpenExer
       )}
     </div>
   );
-}
+});
 
 
 function ProgramForm({ prog, exs, onSave, onCancel }: { prog: Program | null; exs: Exercise[]; onSave: (p: Program) => void; onCancel: () => void }) {
@@ -528,7 +528,7 @@ const HistoryTab = memo(function HistoryTab({ sessions, exs, onDelete }: { sessi
       ))}
     </div>
   );
-}
+});
 
 type OverloadRow = { id: string; date: string; weight: number; reps: number; sets: number; note?: string };
 type OverloadStore = Record<string, OverloadRow[]>; // exerciseId → rows
@@ -700,5 +700,5 @@ const OverloadTab = memo(function OverloadTab({ exs, progs, focusExerciseId }: {
       )}
     </div>
   );
-}
+});
 
