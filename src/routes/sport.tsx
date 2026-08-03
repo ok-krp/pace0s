@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Dumbbell, Plus, Trash2, Play, Square, Check, Pencil, Calendar as CalIcon, History } from "lucide-react";
 import { PageHeader, StatCard } from "@/components/Stat";
 import { useLocalState, todayKey, lastNDays } from "@/lib/storage";
@@ -65,10 +65,10 @@ function SportPage() {
 
   // Ancrage contextuel : un clic sur un exercice bascule sur Surcharge et
   // scrolle directement sur ses données.
-  const openOverload = (exerciseId: string) => {
+  const openOverload = useCallback((exerciseId: string) => {
     setFocusEx(exerciseId);
     setTab("overload");
-  };
+  }, []);
 
 
   const todayDow = new Date().getDay();
@@ -261,7 +261,7 @@ function ActiveSession({ active, setActive, exs, onFinish, onCancel }: {
   );
 }
 
-function ExercisesTab({ exs, setExs }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void }) {
+const ExercisesTab = memo(function ExercisesTab({ exs, setExs }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void }) {
   const [editing, setEditing] = useState<Exercise | null>(null);
   const [open, setOpen] = useState(false);
   const save = (e: Exercise) => {
@@ -327,7 +327,7 @@ function ExerciseForm({ ex, onSave, onCancel }: { ex: Exercise | null; onSave: (
   );
 }
 
-function ProgramsTab({ progs, setProgs, exs, onOpenExercise }: { progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; exs: Exercise[]; onOpenExercise: (exerciseId: string) => void }) {
+const ProgramsTab = memo(function ProgramsTab({ progs, setProgs, exs, onOpenExercise }: { progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; exs: Exercise[]; onOpenExercise: (exerciseId: string) => void }) {
   const [editing, setEditing] = useState<Program | null>(null);
   const [open, setOpen] = useState(false);
   const [openedId, setOpenedId] = useState<string | null>(null);
@@ -487,7 +487,7 @@ function ProgramForm({ prog, exs, onSave, onCancel }: { prog: Program | null; ex
   );
 }
 
-function HistoryTab({ sessions, exs, onDelete }: { sessions: WorkoutSession[]; exs: Exercise[]; onDelete: (id: string) => void }) {
+const HistoryTab = memo(function HistoryTab({ sessions, exs, onDelete }: { sessions: WorkoutSession[]; exs: Exercise[]; onDelete: (id: string) => void }) {
   const grouped = useMemo(() => {
     const map: Record<string, WorkoutSession[]> = {};
     sessions.forEach((s) => { (map[s.date] ??= []).push(s); });
@@ -534,7 +534,7 @@ type OverloadRow = { id: string; date: string; weight: number; reps: number; set
 type OverloadStore = Record<string, OverloadRow[]>; // exerciseId → rows
 
 
-function OverloadTab({ exs, progs, focusExerciseId }: { exs: Exercise[]; progs: Program[]; focusExerciseId?: string | null }) {
+const OverloadTab = memo(function OverloadTab({ exs, progs, focusExerciseId }: { exs: Exercise[]; progs: Program[]; focusExerciseId?: string | null }) {
   const [store, setStore] = useLocalState<OverloadStore>("lt.sport.overload", {});
   const muscles = useMemo(() => Array.from(new Set(exs.map((e) => e.muscle))), [exs]);
   const [muscle, setMuscle] = useState<string>("");
