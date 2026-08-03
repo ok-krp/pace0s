@@ -23,9 +23,12 @@ export const liquidTooltipCursor = {
 };
 
 /** Shared line/area rendering defaults — thinner strokes, crisper AA. */
+/** Point de données toujours visible, même sans ligne de liaison. */
+export const liquidDot = (color: string) => ({ r: 3, fill: color, stroke: "transparent", strokeWidth: 0 });
+
 export const liquidLineProps = {
   strokeWidth: 1.75,
-  dot: false as const,
+  dot: { r: 3, strokeWidth: 0 },
   activeDot: { r: 3.5, strokeWidth: 0 },
   isAnimationActive: false as const,
 };
