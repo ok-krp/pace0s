@@ -37,7 +37,7 @@ function StatCardBase({
         <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</div>
         {icon && (
           <div
-            className="size-8 rounded-lg grid place-items-center text-primary shrink-0"
+            className="glass-icon size-8 rounded-xl text-primary shrink-0"
             style={{ background: accent ?? "color-mix(in oklab, var(--primary) 12%, transparent)" }}
           >
             {icon}

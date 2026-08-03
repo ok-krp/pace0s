@@ -46,7 +46,7 @@ function SmartCardBase({
         <div className="flex items-start justify-between gap-2">
           <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{metric.label}</div>
           <div
-            className="size-8 rounded-xl grid place-items-center shrink-0"
+            className="glass-icon size-8 rounded-xl shrink-0"
             style={{ background: `color-mix(in oklab, ${color} 16%, transparent)`, color }}
           >
             {icon}
