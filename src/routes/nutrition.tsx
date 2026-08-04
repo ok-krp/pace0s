@@ -19,6 +19,8 @@ import { RecipesView } from "@/components/RecipesView";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { fetchProductByBarcode, type OFFProduct } from "@/lib/openfoodfacts";
 import { analyzeFoodPhoto } from "@/lib/nutrition-ai.functions";
+import { sumItems, type FoodAnalysis, type FoodItem } from "@/lib/nutrition-ai.shared";
+import { FoodAnalysisEditor } from "@/components/FoodAnalysisEditor";
 import { toast } from "sonner";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 
