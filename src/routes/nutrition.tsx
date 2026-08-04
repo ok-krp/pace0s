@@ -79,8 +79,8 @@ function NutritionPage() {
       try {
         const res = await analyzePhoto({ data: { imageBase64: b64 } });
         if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
-        const r = res.result as PhotoResult;
-        setPending({ kind: "photo", photo: b64, result: r, grams: Math.max(1, Math.round(r.estimated_grams || 100)), meal: "Déjeuner" });
+        const r = res.result as FoodAnalysis;
+        setPending({ kind: "photo", photo: b64, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner" });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Erreur IA");
       } finally { setBusy(false); }
