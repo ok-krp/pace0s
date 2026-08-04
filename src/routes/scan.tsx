@@ -11,6 +11,8 @@ import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { fetchProductByBarcode, computeHealthScore, computeScore100, type OFFProduct } from "@/lib/openfoodfacts";
 import { checkRecallByBarcode, type RecallInfo } from "@/lib/rappel-conso";
 import { analyzeFoodPhoto } from "@/lib/nutrition-ai.functions";
+import { sumItems, type FoodAnalysis, type FoodItem } from "@/lib/nutrition-ai.shared";
+import { FoodAnalysisEditor } from "@/components/FoodAnalysisEditor";
 import { useAuth } from "@/hooks/use-auth";
 import { useNutritionCols, NUT_COLS, type NutCol } from "@/hooks/use-nutrition-cols";
 import { supabase } from "@/integrations/supabase/client";
@@ -39,17 +41,6 @@ function offValue(p: OFFProduct, c: NutCol): number {
   }
 }
 
-function aiValue(r: { kcal: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number; sodium_mg: number }, c: NutCol): number {
-  switch (c) {
-    case "kcal": return r.kcal;
-    case "protein": return r.protein_g;
-    case "carbs": return r.carbs_g;
-    case "fat": return r.fat_g;
-    case "fiber": return r.fiber_g;
-    case "sodium": return r.sodium_mg;
-    default: return 0;
-  }
-}
 
 function NutGrid({ cols, factor, getter }: { cols: NutCol[]; factor: number; getter: (c: NutCol) => number }) {
   const visible = cols.length ? cols : (["kcal", "protein", "carbs", "fat"] as NutCol[]);
@@ -81,21 +72,8 @@ export const Route = createFileRoute("/scan")({
   component: ScanPage,
 });
 
-type AnalysisResult = {
-  dish_name: string;
-  detected_items: string[];
-  estimated_grams: number;
-  kcal: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  fiber_g: number;
-  sodium_mg: number;
-  health_score: "green" | "orange" | "red";
-  quality: string;
-  confidence: number;
-  notes: string;
-};
+type AnalysisResult = FoodAnalysis;
+
 
 const scoreColors = {
   green: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
@@ -120,7 +98,7 @@ function ScanPage() {
   const [productGrams, setProductGrams] = useState<number>(100);
   const [photo, setPhoto] = useState<string | null>(null);
   const [aiResult, setAiResult] = useState<AnalysisResult | null>(null);
-  const [aiGrams, setAiGrams] = useState<number>(0);
+  const [aiItems, setAiItems] = useState<FoodItem[]>([]);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -196,7 +174,7 @@ function ScanPage() {
         if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
         const r = res.result as AnalysisResult;
         setAiResult(r);
-        setAiGrams(Math.max(1, Math.round(r.estimated_grams || 100)));
+        setAiItems(r.items);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Erreur IA");
       } finally {
@@ -228,25 +206,26 @@ function ScanPage() {
   };
 
   const addAiToLog = async () => {
-    if (!aiResult) return;
-    const base = aiResult.estimated_grams || aiGrams || 1;
-    const f = (aiGrams || base) / base;
+    if (!aiResult || aiItems.length === 0) return;
+    const t = sumItems(aiItems);
     const { error } = await supabase.from("food_log").insert({
       user_id: user.id,
       meal,
-      name: `${aiResult.dish_name} (${aiGrams}g)`,
-      kcal: +(aiResult.kcal * f).toFixed(1),
-      protein_g: +(aiResult.protein_g * f).toFixed(1),
-      carbs_g: +(aiResult.carbs_g * f).toFixed(1),
-      fat_g: +(aiResult.fat_g * f).toFixed(1),
-      fiber_g: +(aiResult.fiber_g * f).toFixed(1),
-      sodium_mg: +(aiResult.sodium_mg * f).toFixed(1),
+      name: `${aiResult.dish_name} (${Math.round(t.grams)}g)`,
+      kcal: +t.kcal.toFixed(1),
+      protein_g: +t.protein_g.toFixed(1),
+      carbs_g: +t.carbs_g.toFixed(1),
+      fat_g: +t.fat_g.toFixed(1),
+      fiber_g: +t.fiber_g.toFixed(1),
+      sugar_g: +t.sugar_g.toFixed(1),
+      sodium_mg: +t.sodium_mg.toFixed(1),
       source: "photo", health_score: aiResult.health_score,
-      meta: { quality: aiResult.quality, confidence: aiResult.confidence, items: aiResult.detected_items, grams: aiGrams },
+      meta: { quality: aiResult.quality, confidence: aiResult.confidence, items: aiItems, grams: Math.round(t.grams) },
     });
     if (error) toast.error(error.message);
-    else { toast.success("Repas ajouté au journal"); setAiResult(null); setPhoto(null); }
+    else { toast.success("Repas ajouté au journal"); setAiResult(null); setAiItems([]); setPhoto(null); }
   };
+
 
   return (
     <div>
@@ -381,7 +360,7 @@ function ScanPage() {
                     <span className="text-[10px] uppercase tracking-wider text-primary font-medium">Analyse IA</span>
                   </div>
                   <div className="font-display text-lg font-semibold truncate">{aiResult.dish_name}</div>
-                  <div className="text-xs text-muted-foreground">~{aiResult.estimated_grams}g · {aiResult.detected_items.slice(0,3).join(", ")}</div>
+                  <div className="text-xs text-muted-foreground">~{Math.round(sumItems(aiItems).grams)}g · {aiItems.slice(0,3).map((i) => i.name).join(", ")}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <div className={`px-2.5 py-1 rounded-full text-[11px] font-medium border ${scoreColors[aiResult.health_score]}`}>
@@ -399,23 +378,13 @@ function ScanPage() {
               </div>
             </div>
           </div>
-          {(() => {
-            const base = aiResult.estimated_grams || aiGrams || 1;
-            const f = (aiGrams || base) / base;
-            return <NutGrid cols={nutCols} factor={f} getter={(c) => aiValue(aiResult, c)} />;
-          })()}
-
-          <div className="px-5 py-3 border-t border-border flex items-center gap-3">
-            <label className="text-xs text-muted-foreground shrink-0">Quantité réelle</label>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={aiGrams}
-              onChange={(e) => setAiGrams(Math.max(0, Number(e.target.value) || 0))}
-              className="h-9 w-24 rounded-xl"
+          <div className="px-5 pb-4">
+            <FoodAnalysisEditor
+              items={aiItems}
+              onChange={setAiItems}
+              confidence={aiResult.confidence}
+              confidenceNote={aiResult.confidence_note || aiResult.notes}
             />
-            <span className="text-xs text-muted-foreground">g (IA estime ~{aiResult.estimated_grams}g)</span>
           </div>
           {aiResult.notes && (
             <div className="px-5 py-3 bg-muted/30 border-t border-border text-xs text-muted-foreground">
@@ -423,7 +392,7 @@ function ScanPage() {
             </div>
           )}
           <div className="p-4 border-t border-border flex gap-2 items-center">
-            <Button onClick={addAiToLog} disabled={!aiGrams} className="flex-1 rounded-xl"><Check className="size-4 mr-1" />Ajouter au journal</Button>
+            <Button onClick={addAiToLog} disabled={aiItems.length === 0} className="flex-1 rounded-xl"><Check className="size-4 mr-1" />Ajouter au journal</Button>
             <span className="text-[10px] text-muted-foreground">confiance {Math.round(aiResult.confidence * 100)}%</span>
           </div>
         </motion.div>

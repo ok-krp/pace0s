@@ -19,6 +19,8 @@ import { RecipesView } from "@/components/RecipesView";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { fetchProductByBarcode, type OFFProduct } from "@/lib/openfoodfacts";
 import { analyzeFoodPhoto } from "@/lib/nutrition-ai.functions";
+import { sumItems, type FoodAnalysis, type FoodItem } from "@/lib/nutrition-ai.shared";
+import { FoodAnalysisEditor } from "@/components/FoodAnalysisEditor";
 import { toast } from "sonner";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 
@@ -47,7 +49,7 @@ function NutritionPage() {
   const [recallCount] = useLocalState<number>("lt.recalls.count", 0);
   const [pending, setPending] = useState<
     | { kind: "barcode"; product: OFFProduct; grams: number; meal: string }
-    | { kind: "photo"; photo: string; result: PhotoResult; grams: number; meal: string }
+    | { kind: "photo"; photo: string; result: FoodAnalysis; items: FoodItem[]; grams: number; meal: string }
     | null
   >(null);
   const [busy, setBusy] = useState(false);
@@ -79,8 +81,8 @@ function NutritionPage() {
       try {
         const res = await analyzePhoto({ data: { imageBase64: b64 } });
         if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
-        const r = res.result as PhotoResult;
-        setPending({ kind: "photo", photo: b64, result: r, grams: Math.max(1, Math.round(r.estimated_grams || 100)), meal: "Déjeuner" });
+        const r = res.result as FoodAnalysis;
+        setPending({ kind: "photo", photo: b64, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner" });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Erreur IA");
       } finally { setBusy(false); }
@@ -104,17 +106,17 @@ function NutritionPage() {
         sodium: +(pending.product.sodium_mg * f).toFixed(1),
       });
     } else {
-      const base = pending.result.estimated_grams || pending.grams || 1;
-      const f = pending.grams / base;
+      const t = sumItems(pending.items);
       addNutritionItem({
-        name: `${pending.result.dish_name} (${pending.grams}g)`,
+        name: `${pending.result.dish_name} (${Math.round(t.grams)}g)`,
         meal: pending.meal,
-        kcal: Math.round(pending.result.kcal * f),
-        p: +(pending.result.protein_g * f).toFixed(1),
-        c: +(pending.result.carbs_g * f).toFixed(1),
-        f: +(pending.result.fat_g * f).toFixed(1),
-        fiber: +(pending.result.fiber_g * f).toFixed(1),
-        sodium: +(pending.result.sodium_mg * f).toFixed(1),
+        kcal: t.kcal,
+        p: t.protein_g,
+        c: t.carbs_g,
+        f: t.fat_g,
+        fiber: t.fiber_g,
+        sugar: t.sugar_g,
+        sodium: t.sodium_mg,
       });
     }
     toast.success(`Ajouté à ${pending.meal}`);
@@ -203,30 +205,37 @@ function NutritionPage() {
               {pending.kind === "barcode" && pending.product.image_url && (
                 <img src={pending.product.image_url} alt={pending.product.name} className="size-24 rounded-xl object-cover mx-auto" />
               )}
-              <div className="text-xs text-muted-foreground text-center">
-                {pending.kind === "barcode"
-                  ? `Ref 100g : ${pending.product.kcal} kcal · P ${pending.product.protein_g} · G ${pending.product.carbs_g} · L ${pending.product.fat_g}`
-                  : `Estimation : ${pending.result.kcal} kcal · P ${pending.result.protein_g} · G ${pending.result.carbs_g} · L ${pending.result.fat_g} (pour ${pending.result.estimated_grams}g)`}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[11px] text-muted-foreground">Quantité (g)</label>
-                  <Input
-                    type="number" inputMode="numeric" min={1} value={pending.grams}
-                    onChange={(e) => setPending({ ...pending, grams: Math.max(0, +e.target.value || 0) })}
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-muted-foreground">Repas</label>
-                  <Select value={pending.meal} onValueChange={(v) => setPending({ ...pending, meal: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{MEALS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
+              {pending.kind === "barcode" ? (
+                <>
+                  <div className="text-xs text-muted-foreground text-center">
+                    {`Ref 100g : ${pending.product.kcal} kcal · P ${pending.product.protein_g} · G ${pending.product.carbs_g} · L ${pending.product.fat_g}`}
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground">Quantité (g)</label>
+                    <Input
+                      type="number" inputMode="numeric" min={1} value={pending.grams}
+                      onChange={(e) => setPending({ ...pending, grams: Math.max(0, +e.target.value || 0) })}
+                    />
+                  </div>
+                </>
+              ) : (
+                <FoodAnalysisEditor
+                  items={pending.items}
+                  onChange={(items) => setPending({ ...pending, items, grams: sumItems(items).grams })}
+                  confidence={pending.result.confidence}
+                  confidenceNote={pending.result.confidence_note || pending.result.notes}
+                />
+              )}
+              <div>
+                <label className="text-[11px] text-muted-foreground">Repas</label>
+                <Select value={pending.meal} onValueChange={(v) => setPending({ ...pending, meal: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{MEALS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="ghost" onClick={() => setPending(null)}><X className="size-4 mr-1" />Annuler</Button>
-                <Button onClick={confirmAdd} disabled={!pending.grams}><Plus className="size-4 mr-1" />Ajouter</Button>
+                <Button onClick={confirmAdd} disabled={pending.kind === "barcode" ? !pending.grams : pending.items.length === 0}><Plus className="size-4 mr-1" />Ajouter</Button>
               </div>
             </div>
           </DialogContent>
@@ -236,16 +245,6 @@ function NutritionPage() {
   );
 }
 
-type PhotoResult = {
-  dish_name: string;
-  estimated_grams: number;
-  kcal: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  fiber_g: number;
-  sodium_mg: number;
-};
 
 function NutritionLogView() {
   const [items, setItems] = useLocalState<Record<string, Item[]>>("lt.nutrition.items", {});

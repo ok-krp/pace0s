@@ -4,15 +4,19 @@ import { generateText } from "ai";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { LEGAL_VERSIONS } from "./legal";
+import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema } from "./nutrition-ai.shared";
 
 export const analyzeFoodPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { imageBase64: string; goal?: string }) => {
-    return z.object({
-      imageBase64: z.string().min(20).max(8_000_000),
-      goal: z.string().optional(),
-    }).parse(d);
-  })
+  .inputValidator((d: { imageBase64: string; goal?: string; hint?: string }) =>
+    z
+      .object({
+        imageBase64: z.string().min(20).max(8_000_000),
+        goal: z.string().max(300).optional(),
+        hint: z.string().max(300).optional(),
+      })
+      .parse(d)
+  )
   .handler(async ({ data, context }) => {
     const { data: consent, error: consentError } = await context.supabase
       .from("legal_consent")
@@ -29,60 +33,43 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
 
     try {
       const gateway = createLovableAiGatewayProvider(key);
-      const model = gateway("google/gemini-2.5-flash");
-      const sys = `Tu es un nutritionniste expert. Analyse la photo d'un plat et estime ses macros.
-Sois précis sur les quantités. health_score: green=sain, orange=moyen, red=ultra transformé/très gras/très sucré.
-quality: bulking | cutting | balanced | treat.
-Réponds UNIQUEMENT avec un objet JSON valide (pas de markdown, pas de \`\`\`), avec EXACTEMENT ces clés:
-{"dish_name":string,"detected_items":string[],"estimated_grams":number,"kcal":number,"protein_g":number,"carbs_g":number,"fat_g":number,"fiber_g":number,"sodium_mg":number,"health_score":"green"|"orange"|"red","quality":"bulking"|"cutting"|"balanced"|"treat","confidence":number,"notes":string}
-Réponds en français pour dish_name, detected_items et notes.${data.goal ? ` Objectif utilisateur: ${data.goal}.` : ""}`;
+      const prompt = [
+        PHOTO_INSTRUCTIONS,
+        data.goal ? `Objectif de l'utilisateur : ${data.goal}.` : "",
+        data.hint ? `Indice fourni par l'utilisateur : ${data.hint}.` : "",
+        "Analyse la photo ci-dessous et réponds en JSON pur.",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
       const { text } = await generateText({
-        model,
+        model: gateway(AI_MODEL),
         messages: [
-          { role: "system", content: sys },
           {
             role: "user",
             content: [
-              { type: "text", text: "Analyse ce plat. Réponds en JSON pur." },
+              { type: "text", text: prompt },
               { type: "image", image: data.imageBase64 },
             ],
           },
         ],
       });
-      const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
-      const foodAnalysisSchema = z.object({
-        dish_name: z.string(),
-        detected_items: z.array(z.string()),
-        estimated_grams: z.number(),
-        kcal: z.number(),
-        protein_g: z.number(),
-        carbs_g: z.number(),
-        fat_g: z.number(),
-        fiber_g: z.number(),
-        sodium_mg: z.number(),
-        health_score: z.enum(["green", "orange", "red"]),
-        quality: z.enum(["bulking", "cutting", "balanced", "treat"]),
-        confidence: z.number().min(0).max(1),
-        notes: z.string(),
-      });
-      const parsed = foodAnalysisSchema.safeParse(JSON.parse(cleaned));
+
+      const parsed = foodAnalysisSchema.safeParse(extractJson(text));
       if (!parsed.success) {
-        console.error("AI JSON invalide", parsed.error, cleaned.slice(0, 500));
+        console.error("AI JSON invalide", parsed.error, text.slice(0, 500));
         return { error: "Réponse IA invalide", result: null };
       }
       return { error: null, result: parsed.data };
     } catch (e) {
       console.error("analyzeFoodPhoto error", e);
-      const msg = e instanceof Error ? e.message : "Erreur IA";
-      return { error: msg, result: null };
+      return { error: e instanceof Error ? e.message : "Erreur IA", result: null };
     }
   });
 
 export const nutritionAdvice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { summary: string }) =>
-    z.object({ summary: z.string().min(1).max(4000) }).parse(d)
-  )
+  .inputValidator((d: { summary: string }) => z.object({ summary: z.string().min(1).max(4000) }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: consent, error: consentError } = await context.supabase
       .from("legal_consent")
@@ -98,16 +85,13 @@ export const nutritionAdvice = createServerFn({ method: "POST" })
     if (!key) return { advice: null, error: "AI Gateway non configuré" };
     try {
       const gateway = createLovableAiGatewayProvider(key);
-      const model = gateway("google/gemini-2.5-flash");
       const { text } = await generateText({
-        model,
+        model: gateway(AI_MODEL),
         messages: [
           {
-            role: "system",
-            content:
-              "Tu es un coach nutrition. Donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français. Format: '• conseil'. Pas de salutation, pas d'intro.",
+            role: "user",
+            content: `Tu es un coach nutrition. À partir du résumé ci-dessous, donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français, au format "• conseil". Pas de salutation, pas d'introduction.\n\nRésumé :\n${data.summary}`,
           },
-          { role: "user", content: data.summary },
         ],
       });
       return { advice: text, error: null };

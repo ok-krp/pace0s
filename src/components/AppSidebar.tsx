@@ -28,6 +28,7 @@ const MotionLink = motion(Link);
 
 export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof LayoutDashboard }> = {
   "/": { label: "Dashboard", icon: LayoutDashboard },
+  "/assistant": { label: "Assistant IA", icon: Sparkles },
   "/nutrition": { label: "Nutrition", icon: Apple },
   "/sport": { label: "Sport", icon: Dumbbell },
   "/sleep": { label: "Sommeil", icon: Moon },
@@ -44,6 +45,7 @@ export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof Layo
 type Group = { id: string; label: string; items: NavItemKey[] };
 
 const GROUPS: Group[] = [
+  { id: "assistant", label: "Assistant", items: ["/assistant"] },
   // Nutrition et Rappels conso sont fusionnés en une seule carte de navigation.
   { id: "nutrition", label: "Nutrition", items: ["/nutrition"] },
   { id: "activite", label: "Activité", items: ["/body", "/sport", "/sleep", "/calendar", "/routine", "/work"] },
@@ -87,7 +89,7 @@ const NavLink = memo(function NavLink({ to, active, onNavigate, alert }: { to: N
 
 function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) {
   const [openMap, setOpenMap] = useLocalState<Record<string, boolean>>("lt.sidebar.groups", {
-    nutrition: true, activite: true, finance: true, autres: false,
+    assistant: true, nutrition: true, activite: true, finance: true, autres: false,
   });
   const [recallCount] = useLocalState<number>("lt.recalls.count", 0);
   return (
