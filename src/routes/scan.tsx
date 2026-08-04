@@ -41,17 +41,6 @@ function offValue(p: OFFProduct, c: NutCol): number {
   }
 }
 
-function aiValue(r: { kcal: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number; sodium_mg: number }, c: NutCol): number {
-  switch (c) {
-    case "kcal": return r.kcal;
-    case "protein": return r.protein_g;
-    case "carbs": return r.carbs_g;
-    case "fat": return r.fat_g;
-    case "fiber": return r.fiber_g;
-    case "sodium": return r.sodium_mg;
-    default: return 0;
-  }
-}
 
 function NutGrid({ cols, factor, getter }: { cols: NutCol[]; factor: number; getter: (c: NutCol) => number }) {
   const visible = cols.length ? cols : (["kcal", "protein", "carbs", "fat"] as NutCol[]);
