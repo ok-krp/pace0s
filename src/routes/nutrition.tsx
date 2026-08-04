@@ -205,30 +205,37 @@ function NutritionPage() {
               {pending.kind === "barcode" && pending.product.image_url && (
                 <img src={pending.product.image_url} alt={pending.product.name} className="size-24 rounded-xl object-cover mx-auto" />
               )}
-              <div className="text-xs text-muted-foreground text-center">
-                {pending.kind === "barcode"
-                  ? `Ref 100g : ${pending.product.kcal} kcal · P ${pending.product.protein_g} · G ${pending.product.carbs_g} · L ${pending.product.fat_g}`
-                  : `Estimation : ${pending.result.kcal} kcal · P ${pending.result.protein_g} · G ${pending.result.carbs_g} · L ${pending.result.fat_g} (pour ${pending.result.estimated_grams}g)`}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[11px] text-muted-foreground">Quantité (g)</label>
-                  <Input
-                    type="number" inputMode="numeric" min={1} value={pending.grams}
-                    onChange={(e) => setPending({ ...pending, grams: Math.max(0, +e.target.value || 0) })}
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-muted-foreground">Repas</label>
-                  <Select value={pending.meal} onValueChange={(v) => setPending({ ...pending, meal: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{MEALS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
+              {pending.kind === "barcode" ? (
+                <>
+                  <div className="text-xs text-muted-foreground text-center">
+                    {`Ref 100g : ${pending.product.kcal} kcal · P ${pending.product.protein_g} · G ${pending.product.carbs_g} · L ${pending.product.fat_g}`}
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground">Quantité (g)</label>
+                    <Input
+                      type="number" inputMode="numeric" min={1} value={pending.grams}
+                      onChange={(e) => setPending({ ...pending, grams: Math.max(0, +e.target.value || 0) })}
+                    />
+                  </div>
+                </>
+              ) : (
+                <FoodAnalysisEditor
+                  items={pending.items}
+                  onChange={(items) => setPending({ ...pending, items, grams: sumItems(items).grams })}
+                  confidence={pending.result.confidence}
+                  confidenceNote={pending.result.confidence_note || pending.result.notes}
+                />
+              )}
+              <div>
+                <label className="text-[11px] text-muted-foreground">Repas</label>
+                <Select value={pending.meal} onValueChange={(v) => setPending({ ...pending, meal: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{MEALS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="ghost" onClick={() => setPending(null)}><X className="size-4 mr-1" />Annuler</Button>
-                <Button onClick={confirmAdd} disabled={!pending.grams}><Plus className="size-4 mr-1" />Ajouter</Button>
+                <Button onClick={confirmAdd} disabled={pending.kind === "barcode" ? !pending.grams : pending.items.length === 0}><Plus className="size-4 mr-1" />Ajouter</Button>
               </div>
             </div>
           </DialogContent>
