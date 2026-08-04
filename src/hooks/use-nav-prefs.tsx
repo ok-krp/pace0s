@@ -2,6 +2,7 @@ import { useLocalState } from "@/lib/storage";
 
 export type NavItemKey =
   | "/"
+  | "/assistant"
   | "/nutrition"
   | "/sport"
   | "/sleep"
@@ -16,6 +17,7 @@ export type NavItemKey =
 
 export const NAV_DEFAULT_ORDER: NavItemKey[] = [
   "/",
+  "/assistant",
   "/nutrition",
   "/sport",
   "/sleep",
