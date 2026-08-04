@@ -47,7 +47,7 @@ function NutritionPage() {
   const [recallCount] = useLocalState<number>("lt.recalls.count", 0);
   const [pending, setPending] = useState<
     | { kind: "barcode"; product: OFFProduct; grams: number; meal: string }
-    | { kind: "photo"; photo: string; result: PhotoResult; grams: number; meal: string }
+    | { kind: "photo"; photo: string; result: FoodAnalysis; items: FoodItem[]; grams: number; meal: string }
     | null
   >(null);
   const [busy, setBusy] = useState(false);
