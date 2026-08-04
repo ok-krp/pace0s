@@ -360,7 +360,7 @@ function ScanPage() {
                     <span className="text-[10px] uppercase tracking-wider text-primary font-medium">Analyse IA</span>
                   </div>
                   <div className="font-display text-lg font-semibold truncate">{aiResult.dish_name}</div>
-                  <div className="text-xs text-muted-foreground">~{aiResult.estimated_grams}g · {aiResult.detected_items.slice(0,3).join(", ")}</div>
+                  <div className="text-xs text-muted-foreground">~{Math.round(sumItems(aiItems).grams)}g · {aiItems.slice(0,3).map((i) => i.name).join(", ")}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
                   <div className={`px-2.5 py-1 rounded-full text-[11px] font-medium border ${scoreColors[aiResult.health_score]}`}>
@@ -378,23 +378,13 @@ function ScanPage() {
               </div>
             </div>
           </div>
-          {(() => {
-            const base = aiResult.estimated_grams || aiGrams || 1;
-            const f = (aiGrams || base) / base;
-            return <NutGrid cols={nutCols} factor={f} getter={(c) => aiValue(aiResult, c)} />;
-          })()}
-
-          <div className="px-5 py-3 border-t border-border flex items-center gap-3">
-            <label className="text-xs text-muted-foreground shrink-0">Quantité réelle</label>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={aiGrams}
-              onChange={(e) => setAiGrams(Math.max(0, Number(e.target.value) || 0))}
-              className="h-9 w-24 rounded-xl"
+          <div className="px-5 pb-4">
+            <FoodAnalysisEditor
+              items={aiItems}
+              onChange={setAiItems}
+              confidence={aiResult.confidence}
+              confidenceNote={aiResult.confidence_note || aiResult.notes}
             />
-            <span className="text-xs text-muted-foreground">g (IA estime ~{aiResult.estimated_grams}g)</span>
           </div>
           {aiResult.notes && (
             <div className="px-5 py-3 bg-muted/30 border-t border-border text-xs text-muted-foreground">
@@ -402,7 +392,7 @@ function ScanPage() {
             </div>
           )}
           <div className="p-4 border-t border-border flex gap-2 items-center">
-            <Button onClick={addAiToLog} disabled={!aiGrams} className="flex-1 rounded-xl"><Check className="size-4 mr-1" />Ajouter au journal</Button>
+            <Button onClick={addAiToLog} disabled={aiItems.length === 0} className="flex-1 rounded-xl"><Check className="size-4 mr-1" />Ajouter au journal</Button>
             <span className="text-[10px] text-muted-foreground">confiance {Math.round(aiResult.confidence * 100)}%</span>
           </div>
         </motion.div>
