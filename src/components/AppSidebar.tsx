@@ -89,7 +89,7 @@ const NavLink = memo(function NavLink({ to, active, onNavigate, alert }: { to: N
 
 function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) {
   const [openMap, setOpenMap] = useLocalState<Record<string, boolean>>("lt.sidebar.groups", {
-    nutrition: true, activite: true, finance: true, autres: false,
+    assistant: true, nutrition: true, activite: true, finance: true, autres: false,
   });
   const [recallCount] = useLocalState<number>("lt.recalls.count", 0);
   return (
