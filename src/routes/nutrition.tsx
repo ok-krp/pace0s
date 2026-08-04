@@ -106,17 +106,17 @@ function NutritionPage() {
         sodium: +(pending.product.sodium_mg * f).toFixed(1),
       });
     } else {
-      const base = pending.result.estimated_grams || pending.grams || 1;
-      const f = pending.grams / base;
+      const t = sumItems(pending.items);
       addNutritionItem({
-        name: `${pending.result.dish_name} (${pending.grams}g)`,
+        name: `${pending.result.dish_name} (${Math.round(t.grams)}g)`,
         meal: pending.meal,
-        kcal: Math.round(pending.result.kcal * f),
-        p: +(pending.result.protein_g * f).toFixed(1),
-        c: +(pending.result.carbs_g * f).toFixed(1),
-        f: +(pending.result.fat_g * f).toFixed(1),
-        fiber: +(pending.result.fiber_g * f).toFixed(1),
-        sodium: +(pending.result.sodium_mg * f).toFixed(1),
+        kcal: t.kcal,
+        p: t.protein_g,
+        c: t.carbs_g,
+        f: t.fat_g,
+        fiber: t.fiber_g,
+        sugar: t.sugar_g,
+        sodium: t.sodium_mg,
       });
     }
     toast.success(`Ajouté à ${pending.meal}`);
