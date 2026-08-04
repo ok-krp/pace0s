@@ -72,21 +72,8 @@ export const Route = createFileRoute("/scan")({
   component: ScanPage,
 });
 
-type AnalysisResult = {
-  dish_name: string;
-  detected_items: string[];
-  estimated_grams: number;
-  kcal: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  fiber_g: number;
-  sodium_mg: number;
-  health_score: "green" | "orange" | "red";
-  quality: string;
-  confidence: number;
-  notes: string;
-};
+type AnalysisResult = FoodAnalysis;
+
 
 const scoreColors = {
   green: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
