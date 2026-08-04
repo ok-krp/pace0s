@@ -28,6 +28,7 @@ const MotionLink = motion(Link);
 
 export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof LayoutDashboard }> = {
   "/": { label: "Dashboard", icon: LayoutDashboard },
+  "/assistant": { label: "Assistant IA", icon: Sparkles },
   "/nutrition": { label: "Nutrition", icon: Apple },
   "/sport": { label: "Sport", icon: Dumbbell },
   "/sleep": { label: "Sommeil", icon: Moon },
