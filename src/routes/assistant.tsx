@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { motion } from "framer-motion";
-import { Sparkles, Send, Loader2, Apple, Dumbbell, Trash2 } from "lucide-react";
+import { Send, Loader2, Apple, Dumbbell, Trash2 } from "lucide-react";
 import { PageHeader } from "@/components/Stat";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
