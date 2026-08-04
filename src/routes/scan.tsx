@@ -174,7 +174,7 @@ function ScanPage() {
         if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
         const r = res.result as AnalysisResult;
         setAiResult(r);
-        setAiGrams(Math.max(1, Math.round(r.estimated_grams || 100)));
+        setAiItems(r.items);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Erreur IA");
       } finally {
