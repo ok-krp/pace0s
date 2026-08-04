@@ -98,7 +98,7 @@ function ScanPage() {
   const [productGrams, setProductGrams] = useState<number>(100);
   const [photo, setPhoto] = useState<string | null>(null);
   const [aiResult, setAiResult] = useState<AnalysisResult | null>(null);
-  const [aiGrams, setAiGrams] = useState<number>(0);
+  const [aiItems, setAiItems] = useState<FoodItem[]>([]);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
