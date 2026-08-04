@@ -245,16 +245,6 @@ function NutritionPage() {
   );
 }
 
-type PhotoResult = {
-  dish_name: string;
-  estimated_grams: number;
-  kcal: number;
-  protein_g: number;
-  carbs_g: number;
-  fat_g: number;
-  fiber_g: number;
-  sodium_mg: number;
-};
 
 function NutritionLogView() {
   const [items, setItems] = useLocalState<Record<string, Item[]>>("lt.nutrition.items", {});
