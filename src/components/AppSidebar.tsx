@@ -45,6 +45,7 @@ export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof Layo
 type Group = { id: string; label: string; items: NavItemKey[] };
 
 const GROUPS: Group[] = [
+  { id: "assistant", label: "Assistant", items: ["/assistant"] },
   // Nutrition et Rappels conso sont fusionnés en une seule carte de navigation.
   { id: "nutrition", label: "Nutrition", items: ["/nutrition"] },
   { id: "activite", label: "Activité", items: ["/body", "/sport", "/sleep", "/calendar", "/routine", "/work"] },
