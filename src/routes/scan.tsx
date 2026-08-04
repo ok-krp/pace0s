@@ -11,6 +11,8 @@ import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { fetchProductByBarcode, computeHealthScore, computeScore100, type OFFProduct } from "@/lib/openfoodfacts";
 import { checkRecallByBarcode, type RecallInfo } from "@/lib/rappel-conso";
 import { analyzeFoodPhoto } from "@/lib/nutrition-ai.functions";
+import { sumItems, type FoodAnalysis, type FoodItem } from "@/lib/nutrition-ai.shared";
+import { FoodAnalysisEditor } from "@/components/FoodAnalysisEditor";
 import { useAuth } from "@/hooks/use-auth";
 import { useNutritionCols, NUT_COLS, type NutCol } from "@/hooks/use-nutrition-cols";
 import { supabase } from "@/integrations/supabase/client";
