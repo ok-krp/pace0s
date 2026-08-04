@@ -206,25 +206,26 @@ function ScanPage() {
   };
 
   const addAiToLog = async () => {
-    if (!aiResult) return;
-    const base = aiResult.estimated_grams || aiGrams || 1;
-    const f = (aiGrams || base) / base;
+    if (!aiResult || aiItems.length === 0) return;
+    const t = sumItems(aiItems);
     const { error } = await supabase.from("food_log").insert({
       user_id: user.id,
       meal,
-      name: `${aiResult.dish_name} (${aiGrams}g)`,
-      kcal: +(aiResult.kcal * f).toFixed(1),
-      protein_g: +(aiResult.protein_g * f).toFixed(1),
-      carbs_g: +(aiResult.carbs_g * f).toFixed(1),
-      fat_g: +(aiResult.fat_g * f).toFixed(1),
-      fiber_g: +(aiResult.fiber_g * f).toFixed(1),
-      sodium_mg: +(aiResult.sodium_mg * f).toFixed(1),
+      name: `${aiResult.dish_name} (${Math.round(t.grams)}g)`,
+      kcal: +t.kcal.toFixed(1),
+      protein_g: +t.protein_g.toFixed(1),
+      carbs_g: +t.carbs_g.toFixed(1),
+      fat_g: +t.fat_g.toFixed(1),
+      fiber_g: +t.fiber_g.toFixed(1),
+      sugar_g: +t.sugar_g.toFixed(1),
+      sodium_mg: +t.sodium_mg.toFixed(1),
       source: "photo", health_score: aiResult.health_score,
-      meta: { quality: aiResult.quality, confidence: aiResult.confidence, items: aiResult.detected_items, grams: aiGrams },
+      meta: { quality: aiResult.quality, confidence: aiResult.confidence, items: aiItems, grams: Math.round(t.grams) },
     });
     if (error) toast.error(error.message);
-    else { toast.success("Repas ajouté au journal"); setAiResult(null); setPhoto(null); }
+    else { toast.success("Repas ajouté au journal"); setAiResult(null); setAiItems([]); setPhoto(null); }
   };
+
 
   return (
     <div>
