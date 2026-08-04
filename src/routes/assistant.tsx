@@ -142,7 +142,7 @@ function AssistantPage() {
   return (
     <div className="flex flex-col h-[calc(100dvh-8rem)]">
       <div className="flex items-start justify-between gap-3">
-        <PageHeader title="Assistant IA" subtitle="Dites-le naturellement, Pace enregistre." icon={Sparkles} />
+        <PageHeader title="Assistant IA" subtitle="Dites-le naturellement, Pace enregistre." />
         {messages.length > 0 && (
           <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => setMessages([])}>
             <Trash2 className="size-4 mr-1" />Effacer
