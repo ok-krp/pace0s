@@ -27,7 +27,6 @@ import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as DevelopmentRouteImport } from './routes/development'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as BodyRouteImport } from './routes/body'
-import { Route as AssistantRouteImport } from './routes/assistant'
 import { Route as AiActivityRouteImport } from './routes/ai-activity'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAiChatRouteImport } from './routes/api/ai-chat'
@@ -127,11 +126,6 @@ const BodyRoute = BodyRouteImport.update({
   path: '/body',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AssistantRoute = AssistantRouteImport.update({
-  id: '/assistant',
-  path: '/assistant',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const AiActivityRoute = AiActivityRouteImport.update({
   id: '/ai-activity',
   path: '/ai-activity',
@@ -179,7 +173,6 @@ const ApiPublicHooksRemindersRoute = ApiPublicHooksRemindersRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai-activity': typeof AiActivityRoute
-  '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
   '/development': typeof DevelopmentRoute
@@ -208,7 +201,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai-activity': typeof AiActivityRoute
-  '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
   '/development': typeof DevelopmentRoute
@@ -238,7 +230,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/ai-activity': typeof AiActivityRoute
-  '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
   '/development': typeof DevelopmentRoute
@@ -269,7 +260,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/ai-activity'
-    | '/assistant'
     | '/body'
     | '/calendar'
     | '/development'
@@ -298,7 +288,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/ai-activity'
-    | '/assistant'
     | '/body'
     | '/calendar'
     | '/development'
@@ -327,7 +316,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/ai-activity'
-    | '/assistant'
     | '/body'
     | '/calendar'
     | '/development'
@@ -357,7 +345,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AiActivityRoute: typeof AiActivityRoute
-  AssistantRoute: typeof AssistantRoute
   BodyRoute: typeof BodyRoute
   CalendarRoute: typeof CalendarRoute
   DevelopmentRoute: typeof DevelopmentRoute
@@ -512,13 +499,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BodyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/assistant': {
-      id: '/assistant'
-      path: '/assistant'
-      fullPath: '/assistant'
-      preLoaderRoute: typeof AssistantRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/ai-activity': {
       id: '/ai-activity'
       path: '/ai-activity'
@@ -581,7 +561,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AiActivityRoute: AiActivityRoute,
-  AssistantRoute: AssistantRoute,
   BodyRoute: BodyRoute,
   CalendarRoute: CalendarRoute,
   DevelopmentRoute: DevelopmentRoute,
