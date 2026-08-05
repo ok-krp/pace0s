@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, Json } from "@/integrations/supabase/types";
-import type { UIMessage } from "ai";
 import { DEFAULT_AI_PERMISSIONS, type AgentType, type AiPermissions, type AiPreferences } from "./ai-history.types";
 
 type Client = SupabaseClient<Database>;
@@ -23,7 +22,7 @@ export async function getConversationServer(client: Client, userId: string, id: 
   if (!conversation) return null;
   const { data: rows, error: messageError } = await client.from("ai_messages").select("id,role,parts").eq("conversation_id", id).eq("user_id", userId).order("created_at");
   if (messageError) throw new Error(messageError.message);
-  const messages = rows.map((row) => ({ id: row.id, role: row.role as UIMessage["role"], parts: row.parts as UIMessage["parts"] }));
+  const messages = rows.map((row) => ({ id: row.id, role: row.role, parts: row.parts }));
   return { conversation, messages };
 }
 

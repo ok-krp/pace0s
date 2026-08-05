@@ -24,9 +24,11 @@ import { Route as McpRouteImport } from './routes/mcp'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InvestmentsRouteImport } from './routes/investments'
 import { Route as FinanceRouteImport } from './routes/finance'
+import { Route as DevelopmentRouteImport } from './routes/development'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as BodyRouteImport } from './routes/body'
 import { Route as AssistantRouteImport } from './routes/assistant'
+import { Route as AiActivityRouteImport } from './routes/ai-activity'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAiChatRouteImport } from './routes/api/ai-chat'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
@@ -110,6 +112,11 @@ const FinanceRoute = FinanceRouteImport.update({
   path: '/finance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevelopmentRoute = DevelopmentRouteImport.update({
+  id: '/development',
+  path: '/development',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CalendarRoute = CalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
@@ -123,6 +130,11 @@ const BodyRoute = BodyRouteImport.update({
 const AssistantRoute = AssistantRouteImport.update({
   id: '/assistant',
   path: '/assistant',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AiActivityRoute = AiActivityRouteImport.update({
+  id: '/ai-activity',
+  path: '/ai-activity',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -166,9 +178,11 @@ const ApiPublicHooksRemindersRoute = ApiPublicHooksRemindersRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ai-activity': typeof AiActivityRoute
   '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
+  '/development': typeof DevelopmentRoute
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
   '/login': typeof LoginRoute
@@ -193,9 +207,11 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ai-activity': typeof AiActivityRoute
   '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
+  '/development': typeof DevelopmentRoute
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
   '/login': typeof LoginRoute
@@ -221,9 +237,11 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ai-activity': typeof AiActivityRoute
   '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
+  '/development': typeof DevelopmentRoute
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
   '/login': typeof LoginRoute
@@ -250,9 +268,11 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/ai-activity'
     | '/assistant'
     | '/body'
     | '/calendar'
+    | '/development'
     | '/finance'
     | '/investments'
     | '/login'
@@ -277,9 +297,11 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/ai-activity'
     | '/assistant'
     | '/body'
     | '/calendar'
+    | '/development'
     | '/finance'
     | '/investments'
     | '/login'
@@ -304,9 +326,11 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/ai-activity'
     | '/assistant'
     | '/body'
     | '/calendar'
+    | '/development'
     | '/finance'
     | '/investments'
     | '/login'
@@ -332,9 +356,11 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AiActivityRoute: typeof AiActivityRoute
   AssistantRoute: typeof AssistantRoute
   BodyRoute: typeof BodyRoute
   CalendarRoute: typeof CalendarRoute
+  DevelopmentRoute: typeof DevelopmentRoute
   FinanceRoute: typeof FinanceRoute
   InvestmentsRoute: typeof InvestmentsRoute
   LoginRoute: typeof LoginRoute
@@ -465,6 +491,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof FinanceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/development': {
+      id: '/development'
+      path: '/development'
+      fullPath: '/development'
+      preLoaderRoute: typeof DevelopmentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/calendar': {
       id: '/calendar'
       path: '/calendar'
@@ -484,6 +517,13 @@ declare module '@tanstack/react-router' {
       path: '/assistant'
       fullPath: '/assistant'
       preLoaderRoute: typeof AssistantRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ai-activity': {
+      id: '/ai-activity'
+      path: '/ai-activity'
+      fullPath: '/ai-activity'
+      preLoaderRoute: typeof AiActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -540,9 +580,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AiActivityRoute: AiActivityRoute,
   AssistantRoute: AssistantRoute,
   BodyRoute: BodyRoute,
   CalendarRoute: CalendarRoute,
+  DevelopmentRoute: DevelopmentRoute,
   FinanceRoute: FinanceRoute,
   InvestmentsRoute: InvestmentsRoute,
   LoginRoute: LoginRoute,

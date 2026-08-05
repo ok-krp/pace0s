@@ -51,7 +51,14 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
       inputSchema: z.object({ weight_kg: z.number().nullable(), weight_goal_kg: z.number().nullable(), daily_calorie_goal: z.number().nullable(), daily_protein_goal: z.number().nullable(), daily_water_ml_goal: z.number().nullable(), training_goal: z.string().nullable() }),
       execute: async (input) => {
         if (!permissions.profile) return { ok: false, message: "Permission Profil désactivée" };
-        const patch = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== null));
+        const patch: Database["public"]["Tables"]["profiles"]["Update"] = {
+          ...(input.weight_kg === null ? {} : { weight_kg: input.weight_kg }),
+          ...(input.weight_goal_kg === null ? {} : { weight_goal_kg: input.weight_goal_kg }),
+          ...(input.daily_calorie_goal === null ? {} : { daily_calorie_goal: input.daily_calorie_goal }),
+          ...(input.daily_protein_goal === null ? {} : { daily_protein_goal: input.daily_protein_goal }),
+          ...(input.daily_water_ml_goal === null ? {} : { daily_water_ml_goal: input.daily_water_ml_goal }),
+          ...(input.training_goal === null ? {} : { training_goal: input.training_goal }),
+        };
         const { error } = await client.from("profiles").update(patch).eq("user_id", userId);
         if (error) { await logAction(client, userId, conversationId, "coach", "update_profile", "Mise à jour du profil", input, "failed"); throw new Error(error.message); }
         await logAction(client, userId, conversationId, "coach", "update_profile", "Profil mis à jour", input, "executed");
