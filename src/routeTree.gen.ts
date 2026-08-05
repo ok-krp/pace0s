@@ -27,11 +27,13 @@ import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as DevelopmentRouteImport } from './routes/development'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as BodyRouteImport } from './routes/body'
+import { Route as AssistantRouteImport } from './routes/assistant'
 import { Route as AiActivityRouteImport } from './routes/ai-activity'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAiChatRouteImport } from './routes/api/ai-chat'
 import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
+import { Route as AiAgentTypeConversationIdRouteImport } from './routes/ai.$agentType.$conversationId'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as ApiPublicHooksRemindersRouteImport } from './routes/api/public/hooks/reminders'
@@ -126,6 +128,11 @@ const BodyRoute = BodyRouteImport.update({
   path: '/body',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AssistantRoute = AssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AiActivityRoute = AiActivityRouteImport.update({
   id: '/ai-activity',
   path: '/ai-activity',
@@ -153,6 +160,12 @@ const Char91DotmcpChar93ListToolsRoute =
     path: '/.mcp/list-tools',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AiAgentTypeConversationIdRoute =
+  AiAgentTypeConversationIdRouteImport.update({
+    id: '/ai/$agentType/$conversationId',
+    path: '/ai/$agentType/$conversationId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const Char91DotmcpChar93InvokeToolToolRoute =
   Char91DotmcpChar93InvokeToolToolRouteImport.update({
     id: '/.mcp/invoke-tool/$tool',
@@ -173,6 +186,7 @@ const ApiPublicHooksRemindersRoute = ApiPublicHooksRemindersRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ai-activity': typeof AiActivityRoute
+  '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
   '/development': typeof DevelopmentRoute
@@ -196,11 +210,13 @@ export interface FileRoutesByFullPath {
   '/api/ai-chat': typeof ApiAiChatRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/ai/$agentType/$conversationId': typeof AiAgentTypeConversationIdRoute
   '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ai-activity': typeof AiActivityRoute
+  '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
   '/development': typeof DevelopmentRoute
@@ -224,12 +240,14 @@ export interface FileRoutesByTo {
   '/api/ai-chat': typeof ApiAiChatRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/ai/$agentType/$conversationId': typeof AiAgentTypeConversationIdRoute
   '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/ai-activity': typeof AiActivityRoute
+  '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
   '/development': typeof DevelopmentRoute
@@ -253,6 +271,7 @@ export interface FileRoutesById {
   '/api/ai-chat': typeof ApiAiChatRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
+  '/ai/$agentType/$conversationId': typeof AiAgentTypeConversationIdRoute
   '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
 export interface FileRouteTypes {
@@ -260,6 +279,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/ai-activity'
+    | '/assistant'
     | '/body'
     | '/calendar'
     | '/development'
@@ -283,11 +303,13 @@ export interface FileRouteTypes {
     | '/api/ai-chat'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/ai/$agentType/$conversationId'
     | '/api/public/hooks/reminders'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/ai-activity'
+    | '/assistant'
     | '/body'
     | '/calendar'
     | '/development'
@@ -311,11 +333,13 @@ export interface FileRouteTypes {
     | '/api/ai-chat'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/ai/$agentType/$conversationId'
     | '/api/public/hooks/reminders'
   id:
     | '__root__'
     | '/'
     | '/ai-activity'
+    | '/assistant'
     | '/body'
     | '/calendar'
     | '/development'
@@ -339,12 +363,14 @@ export interface FileRouteTypes {
     | '/api/ai-chat'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
+    | '/ai/$agentType/$conversationId'
     | '/api/public/hooks/reminders'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AiActivityRoute: typeof AiActivityRoute
+  AssistantRoute: typeof AssistantRoute
   BodyRoute: typeof BodyRoute
   CalendarRoute: typeof CalendarRoute
   DevelopmentRoute: typeof DevelopmentRoute
@@ -368,6 +394,7 @@ export interface RootRouteChildren {
   ApiAiChatRoute: typeof ApiAiChatRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
+  AiAgentTypeConversationIdRoute: typeof AiAgentTypeConversationIdRoute
   ApiPublicHooksRemindersRoute: typeof ApiPublicHooksRemindersRoute
 }
 
@@ -499,6 +526,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BodyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/assistant': {
+      id: '/assistant'
+      path: '/assistant'
+      fullPath: '/assistant'
+      preLoaderRoute: typeof AssistantRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/ai-activity': {
       id: '/ai-activity'
       path: '/ai-activity'
@@ -534,6 +568,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ai/$agentType/$conversationId': {
+      id: '/ai/$agentType/$conversationId'
+      path: '/ai/$agentType/$conversationId'
+      fullPath: '/ai/$agentType/$conversationId'
+      preLoaderRoute: typeof AiAgentTypeConversationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.mcp/invoke-tool/$tool': {
       id: '/.mcp/invoke-tool/$tool'
       path: '/.mcp/invoke-tool/$tool'
@@ -561,6 +602,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AiActivityRoute: AiActivityRoute,
+  AssistantRoute: AssistantRoute,
   BodyRoute: BodyRoute,
   CalendarRoute: CalendarRoute,
   DevelopmentRoute: DevelopmentRoute,
@@ -585,6 +627,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAiChatRoute: ApiAiChatRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
+  AiAgentTypeConversationIdRoute: AiAgentTypeConversationIdRoute,
   ApiPublicHooksRemindersRoute: ApiPublicHooksRemindersRoute,
 }
 export const routeTree = rootRouteImport
