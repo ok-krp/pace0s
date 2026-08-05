@@ -14,6 +14,210 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_action_log: {
+        Row: {
+          action_type: string
+          agent_type: string
+          conversation_id: string | null
+          created_at: string
+          error_message: string | null
+          executed_at: string | null
+          id: string
+          label: string
+          payload: Json
+          status: string
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          agent_type: string
+          conversation_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          label: string
+          payload?: Json
+          status?: string
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          agent_type?: string
+          conversation_id?: string | null
+          created_at?: string
+          error_message?: string | null
+          executed_at?: string | null
+          id?: string
+          label?: string
+          payload?: Json
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_action_log_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_conversations: {
+        Row: {
+          agent_type: string
+          created_at: string
+          id: string
+          is_archived: boolean
+          is_ephemeral: boolean
+          is_starred: boolean
+          memory_summary: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agent_type: string
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          is_ephemeral?: boolean
+          is_starred?: boolean
+          memory_summary?: string | null
+          title?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agent_type?: string
+          created_at?: string
+          id?: string
+          is_archived?: boolean
+          is_ephemeral?: boolean
+          is_starred?: boolean
+          memory_summary?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ai_messages: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          id: string
+          model_message_id: string | null
+          parts: Json
+          plain_text: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          id?: string
+          model_message_id?: string | null
+          parts?: Json
+          plain_text?: string
+          role: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          model_message_id?: string | null
+          parts?: Json
+          plain_text?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_preferences: {
+        Row: {
+          confirm_actions: boolean
+          created_at: string
+          memory_level: string
+          permissions: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confirm_actions?: boolean
+          created_at?: string
+          memory_level?: string
+          permissions?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confirm_actions?: boolean
+          created_at?: string
+          memory_level?: string
+          permissions?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      development_tasks: {
+        Row: {
+          conversation_id: string | null
+          created_at: string
+          description: string
+          id: string
+          kind: string
+          priority: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          conversation_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          kind: string
+          priority?: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          conversation_id?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          kind?: string
+          priority?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "development_tasks_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       food_log: {
         Row: {
           carbs_g: number

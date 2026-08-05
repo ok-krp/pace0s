@@ -17,6 +17,9 @@ import {
   Dumbbell,
   AlertTriangle,
   ChevronDown,
+  Code2,
+  History,
+  Wrench,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -29,6 +32,8 @@ const MotionLink = motion(Link);
 export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof LayoutDashboard }> = {
   "/": { label: "Dashboard", icon: LayoutDashboard },
   "/assistant": { label: "Assistant IA", icon: Sparkles },
+  "/development": { label: "Développement", icon: Wrench },
+  "/ai-activity": { label: "Actions IA", icon: History },
   "/nutrition": { label: "Nutrition", icon: Apple },
   "/sport": { label: "Sport", icon: Dumbbell },
   "/sleep": { label: "Sommeil", icon: Moon },
@@ -45,7 +50,7 @@ export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof Layo
 type Group = { id: string; label: string; items: NavItemKey[] };
 
 const GROUPS: Group[] = [
-  { id: "assistant", label: "Assistant", items: ["/assistant"] },
+  { id: "assistant", label: "Intelligence Artificielle", items: ["/assistant", "/development", "/ai-activity"] },
   // Nutrition et Rappels conso sont fusionnés en une seule carte de navigation.
   { id: "nutrition", label: "Nutrition", items: ["/nutrition"] },
   { id: "activite", label: "Activité", items: ["/body", "/sport", "/sleep", "/calendar", "/routine", "/work"] },

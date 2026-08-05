@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Moon, Sun, Download, Trash2, Bell, Send } from "lucide-react";
+import { Moon, Sun, Download, Trash2, Bell, Send, Brain } from "lucide-react";
 
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
@@ -19,11 +19,12 @@ import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
+import { AiSettings } from "@/components/AiSettings";
 
 
 
 export const Route = createFileRoute("/settings")({
-  head: () => ({ meta: [{ title: "Paramètres — Pace" }] }),
+  head: () => ({ meta: [{ title: "Paramètres — Pace" }, { name: "description", content: "Personnalisez Pace, la confidentialité et les assistants IA." }, { property: "og:title", content: "Paramètres — Pace" }, { property: "og:description", content: "Personnalisez Pace, la confidentialité et les assistants IA." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
   component: SettingsPage,
 });
 
@@ -125,6 +126,10 @@ function SettingsPage() {
         <BleDeviceManager />
         <WallpaperSettings />
         <Accordion type="multiple" className="space-y-3">
+          <AccordionItem value="ai" className="rounded-2xl glass-card px-4">
+            <AccordionTrigger className="text-sm font-medium"><span className="flex items-center gap-2"><Brain className="size-4 text-primary" />Intelligence Artificielle</span></AccordionTrigger>
+            <AccordionContent className="pt-2"><AiSettings /></AccordionContent>
+          </AccordionItem>
           <AccordionItem value="reminders" className="rounded-2xl glass-card px-4">
             <AccordionTrigger className="text-sm font-medium">Rappels & notifications</AccordionTrigger>
             <AccordionContent className="pt-2 space-y-3"><RemindersSection /><ReminderDebugSection /></AccordionContent>
