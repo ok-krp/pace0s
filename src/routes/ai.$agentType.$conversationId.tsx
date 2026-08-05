@@ -50,7 +50,16 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState("");
-  const transport = useMemo(() => new DefaultChatTransport({ api: "/api/ai-chat", headers: async () => { const { data } = await supabase.auth.getSession(); return data.session ? { Authorization: `Bearer ${data.session.access_token}` } : {}; }, body: { conversationId, agentType, ephemeral } }), [agentType, conversationId, ephemeral]);
+  const transport = useMemo(() => new DefaultChatTransport({
+    api: "/api/ai-chat",
+    fetch: async (input, init) => {
+      const { data } = await supabase.auth.getSession();
+      const headers = new Headers(init?.headers);
+      if (data.session) headers.set("Authorization", `Bearer ${data.session.access_token}`);
+      return fetch(input, { ...init, headers });
+    },
+    body: { conversationId, agentType, ephemeral },
+  }), [agentType, conversationId, ephemeral]);
   const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, onFinish: () => inputRef.current?.focus(), onError: (chatError) => toast.error(chatError.message) });
   const busy = status === "submitted" || status === "streaming";
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
