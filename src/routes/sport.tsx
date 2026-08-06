@@ -99,14 +99,26 @@ function SportPage() {
     const final: WorkoutSession = { ...active, endedAt: ended, durationMin: Math.round((ended - active.startedAt) / 60000) };
     setSessions((p) => [final, ...p]);
     setActive(null);
-    // Synchro séance → exercice : les dernières perfs réelles deviennent la nouvelle cible par défaut.
-    setExs((p) => p.map((e) => {
-      const se = final.exercises.find((x) => x.exerciseId === e.id);
-      const done = se?.sets.filter((s) => s.done) ?? [];
-      if (done.length === 0) return e;
+    // Synchro séance → exercice ET programmes : les dernières perfs réelles deviennent
+    // la nouvelle cible par défaut, partout où l'exercice apparaît (source unique).
+    const perf = new Map<string, { weight: number; reps: number; sets: number }>();
+    final.exercises.forEach((se) => {
+      const done = se.sets.filter((s) => s.done);
+      if (done.length === 0) return;
       const best = done.reduce((a, b) => (b.weight > a.weight ? b : a));
-      return { ...e, defaultWeight: best.weight, defaultReps: best.reps, defaultSets: done.length };
+      perf.set(se.exerciseId, { weight: best.weight, reps: best.reps, sets: done.length });
+    });
+    setExs((p) => p.map((e) => {
+      const pf = perf.get(e.id);
+      return pf ? { ...e, defaultWeight: pf.weight, defaultReps: pf.reps, defaultSets: pf.sets } : e;
     }));
+    setProgs((p) => p.map((prog) => ({
+      ...prog,
+      items: prog.items.map((it) => {
+        const pf = perf.get(it.exerciseId);
+        return pf ? { ...it, weight: pf.weight, reps: pf.reps, sets: pf.sets } : it;
+      }),
+    })));
     toast.success(`Séance terminée — ${final.durationMin} min`);
   };
 
@@ -183,7 +195,7 @@ function SportPage() {
         </TabsContent>
 
         <TabsContent value="overload">
-          <OverloadTab exs={exs} setExs={setExs} progs={progs} sessions={sessions} focusExerciseId={focusEx} />
+          <OverloadTab exs={exs} setExs={setExs} progs={progs} setProgs={setProgs} sessions={sessions} focusExerciseId={focusEx} />
         </TabsContent>
 
 
@@ -569,7 +581,7 @@ function deriveSessionRows(sessions: WorkoutSession[], exerciseId: string): Over
 }
 
 
-const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, sessions, focusExerciseId }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void; progs: Program[]; sessions: WorkoutSession[]; focusExerciseId?: string | null }) {
+const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, sessions, focusExerciseId }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void; progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; sessions: WorkoutSession[]; focusExerciseId?: string | null }) {
   const [manualStore, setManualStore] = useLocalState<OverloadStore>("lt.sport.overload", {});
   /**
    * Fusion des deux sources en une seule liste cohérente : les lignes issues
@@ -645,9 +657,14 @@ const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, sessions, fo
     });
   }, [targets, setManualStore]);
 
-  /** Synchro surcharge → exercice : une ligne manuelle ajoutée/modifiée devient la nouvelle cible par défaut de l'exercice. */
+  /** Synchro surcharge → exercice + programmes : une ligne manuelle ajoutée/modifiée devient
+   * la nouvelle cible par défaut de l'exercice, partout où il apparaît (même source de données). */
   const syncExerciseFromRow = (exerciseId: string, r: OverloadRow) => {
     setExs((p) => p.map((e) => e.id === exerciseId ? { ...e, defaultWeight: r.weight, defaultReps: r.reps, defaultSets: r.sets } : e));
+    setProgs((p) => p.map((prog) => ({
+      ...prog,
+      items: prog.items.map((it) => it.exerciseId === exerciseId ? { ...it, weight: r.weight, reps: r.reps, sets: r.sets } : it),
+    })));
   };
 
   const addRow = (exerciseId: string) => {
