@@ -4,7 +4,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Archive, Bot, Brain, Check, ChevronRight, Clock3, Code2, History, Loader2, Menu, MoreHorizontal, Plus, Send, Sparkles, Star, Trash2, X } from "lucide-react";
+import { AlertTriangle, Archive, Bot, Brain, Check, ChevronRight, Clock3, Code2, History, Loader2, Menu, MoreHorizontal, Plus, RefreshCw, Send, Sparkles, Star, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -160,4 +160,18 @@ function ConversationHistory({ activeId, agentType }: { activeId: string; agentT
   useEffect(() => { void refresh(); }, [agentType]);
   const newConversation = async () => { const row = await create({ data: { agentType } }); await navigate({ to: "/ai/$agentType/$conversationId", params: { agentType, conversationId: row.id } }); };
   return <div className="h-full flex flex-col"><div className="flex items-center justify-between px-1 pb-3"><div className="font-medium flex items-center gap-2"><History className="size-4" />Conversations</div><Button size="icon" variant="ghost" onClick={() => void newConversation()} aria-label="Nouvelle conversation"><Plus className="size-4" /></Button></div><div className="flex-1 min-h-0 overflow-y-auto space-y-1">{rows.map((row) => <div key={row.id} className={`group flex items-center rounded-xl ${row.id === activeId ? "bg-primary/10 text-foreground" : "hover:bg-muted/50 text-muted-foreground"}`}><Button variant="ghost" className="flex-1 min-w-0 justify-start font-normal" onClick={() => void navigate({ to: "/ai/$agentType/$conversationId", params: { agentType, conversationId: row.id } })}>{row.is_starred && <Star className="size-3.5 fill-current text-amber-500 shrink-0" />}<span className="truncate">{row.title}</span></Button><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-8 opacity-60 group-hover:opacity-100"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={async () => { await update({ data: { id: row.id, isStarred: !row.is_starred } }); await refresh(); }}><Star />{row.is_starred ? "Retirer des favoris" : "Ajouter aux favoris"}</DropdownMenuItem><DropdownMenuItem onClick={async () => { await update({ data: { id: row.id, isArchived: true } }); await refresh(); }}><Archive />Archiver</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={async () => { await remove({ data: { id: row.id } }); const remaining = rows.filter((item) => item.id !== row.id); if (row.id === activeId) { const next = remaining[0] ?? await create({ data: { agentType } }); await navigate({ to: "/ai/$agentType/$conversationId", params: { agentType, conversationId: next.id } }); } else await refresh(); }}><Trash2 />Supprimer</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>)}</div><Button variant="outline" className="mt-3" onClick={() => void navigate({ to: "/ai-activity" })}><Sparkles className="size-4 mr-2" />Historique des actions</Button></div>;
+}
+function DebugPanel() {
+  const [, force] = useState(0);
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    setEnabled(isDebugEnabled());
+    return subscribeAiDebug(() => { setEnabled(isDebugEnabled()); force((value) => value + 1); });
+  }, []);
+  if (!enabled) return null;
+  const entries = getAiDebugEntries();
+  return <div className="mt-2 glass-thin rounded-xl p-2 max-h-40 overflow-y-auto text-[10px] font-mono">
+    <div className="flex items-center justify-between pb-1"><span className="font-medium">Journal de débogage</span><Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={clearAiDebug}>Vider</Button></div>
+    {entries.length === 0 ? <div className="text-muted-foreground">Aucune requête enregistrée.</div> : entries.map((entry) => <div key={entry.id} className={entry.phase === "erreur" ? "text-destructive" : "text-muted-foreground"}>{new Date(entry.at).toLocaleTimeString("fr-FR")} · {entry.phase} · {entry.message}{entry.durationMs === undefined ? "" : ` · ${entry.durationMs} ms`}{entry.detail ? ` · ${entry.detail}` : ""}</div>)}
+  </div>;
 }
