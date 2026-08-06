@@ -141,9 +141,36 @@ export function explainBluetoothError(error: unknown): string {
   return message;
 }
 
+function isInsideCrossOriginFrame(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    // Accessing window.top throws in a cross-origin iframe — that alone means we're framed.
+    return true;
+  }
+}
+
+const BLUETOOTH_TIMEOUT_MS = 15_000;
+
+/**
+ * requestDevice() ne rejette pas toujours quand le Bluetooth est bloqué par la politique de
+ * permissions d'un iframe (ex: aperçu Lovable) : l'appel reste simplement en attente pour
+ * toujours, sans succès ni erreur. On ajoute donc un timeout de sécurité pour échouer
+ * proprement avec un message clair plutôt que de bloquer l'UI indéfiniment.
+ */
+function withBluetoothTimeout(promise: Promise<BluetoothDeviceLike>): Promise<BluetoothDeviceLike> {
+  return Promise.race([
+    promise,
+    new Promise<BluetoothDeviceLike>((_, reject) => {
+      setTimeout(() => reject(new Error(BLUETOOTH_POLICY_MESSAGE)), BLUETOOTH_TIMEOUT_MS);
+    }),
+  ]);
+}
+
 export function getBluetooth(): { requestDevice: (opts: unknown) => Promise<BluetoothDeviceLike> } | null {
   if (typeof navigator === "undefined") return null;
-  if (!isBluetoothAllowedByPolicy()) {
+  if (!isBluetoothAllowedByPolicy() || isInsideCrossOriginFrame()) {
     return {
       requestDevice: async () => {
         throw new Error(BLUETOOTH_POLICY_MESSAGE);
@@ -151,5 +178,8 @@ export function getBluetooth(): { requestDevice: (opts: unknown) => Promise<Blue
     };
   }
   const nav = navigator as unknown as { bluetooth?: { requestDevice: (opts: unknown) => Promise<BluetoothDeviceLike> } };
-  return nav.bluetooth ?? null;
+  if (!nav.bluetooth) return null;
+  return {
+    requestDevice: (opts: unknown) => withBluetoothTimeout(nav.bluetooth!.requestDevice(opts)),
+  };
 }
