@@ -99,6 +99,14 @@ function SportPage() {
     const final: WorkoutSession = { ...active, endedAt: ended, durationMin: Math.round((ended - active.startedAt) / 60000) };
     setSessions((p) => [final, ...p]);
     setActive(null);
+    // Synchro séance → exercice : les dernières perfs réelles deviennent la nouvelle cible par défaut.
+    setExs((p) => p.map((e) => {
+      const se = final.exercises.find((x) => x.exerciseId === e.id);
+      const done = se?.sets.filter((s) => s.done) ?? [];
+      if (done.length === 0) return e;
+      const best = done.reduce((a, b) => (b.weight > a.weight ? b : a));
+      return { ...e, defaultWeight: best.weight, defaultReps: best.reps, defaultSets: done.length };
+    }));
     toast.success(`Séance terminée — ${final.durationMin} min`);
   };
 
@@ -175,7 +183,7 @@ function SportPage() {
         </TabsContent>
 
         <TabsContent value="overload">
-          <OverloadTab exs={exs} progs={progs} sessions={sessions} focusExerciseId={focusEx} />
+          <OverloadTab exs={exs} setExs={setExs} progs={progs} sessions={sessions} focusExerciseId={focusEx} />
         </TabsContent>
 
 
@@ -561,7 +569,7 @@ function deriveSessionRows(sessions: WorkoutSession[], exerciseId: string): Over
 }
 
 
-const OverloadTab = memo(function OverloadTab({ exs, progs, sessions, focusExerciseId }: { exs: Exercise[]; progs: Program[]; sessions: WorkoutSession[]; focusExerciseId?: string | null }) {
+const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, sessions, focusExerciseId }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void; progs: Program[]; sessions: WorkoutSession[]; focusExerciseId?: string | null }) {
   const [manualStore, setManualStore] = useLocalState<OverloadStore>("lt.sport.overload", {});
   /**
    * Fusion des deux sources en une seule liste cohérente : les lignes issues
@@ -637,6 +645,11 @@ const OverloadTab = memo(function OverloadTab({ exs, progs, sessions, focusExerc
     });
   }, [targets, setManualStore]);
 
+  /** Synchro surcharge → exercice : une ligne manuelle ajoutée/modifiée devient la nouvelle cible par défaut de l'exercice. */
+  const syncExerciseFromRow = (exerciseId: string, r: OverloadRow) => {
+    setExs((p) => p.map((e) => e.id === exerciseId ? { ...e, defaultWeight: r.weight, defaultReps: r.reps, defaultSets: r.sets } : e));
+  };
+
   const addRow = (exerciseId: string) => {
     const tgt = targets[exerciseId] ?? { sets: 3, reps: 10, weight: 0 };
     const prev = (rowsByExercise[exerciseId] ?? [])[0];
@@ -649,9 +662,22 @@ const OverloadTab = memo(function OverloadTab({ exs, progs, sessions, focusExerc
       source: "manual",
     };
     setManualStore((p) => ({ ...p, [exerciseId]: [r, ...(p[exerciseId] ?? [])] }));
+    syncExerciseFromRow(exerciseId, r);
   };
   const updateRow = (exerciseId: string, id: string, patch: Partial<OverloadRow>) => {
-    setManualStore((p) => ({ ...p, [exerciseId]: (p[exerciseId] ?? []).map((r) => r.id === id ? { ...r, ...patch } : r) }));
+    let updatedRow: OverloadRow | null = null;
+    setManualStore((p) => ({
+      ...p,
+      [exerciseId]: (p[exerciseId] ?? []).map((r) => {
+        if (r.id !== id) return r;
+        updatedRow = { ...r, ...patch };
+        return updatedRow;
+      }),
+    }));
+    // Ne resynchronise que si c'est bien la ligne la plus récente (sinon on écraserait
+    // la cible avec une valeur passée).
+    const rows = rowsByExercise[exerciseId] ?? [];
+    if (updatedRow && rows[0]?.id === id) syncExerciseFromRow(exerciseId, updatedRow);
   };
   const removeRow = (exerciseId: string, id: string) => {
     setManualStore((p) => ({ ...p, [exerciseId]: (p[exerciseId] ?? []).filter((r) => r.id !== id) }));
