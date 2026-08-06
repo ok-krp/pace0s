@@ -40,7 +40,7 @@ function ProfilePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!user) { navigate({ to: "/login" }); return; }
+    if (!user) { navigate({ to: "/login", search: { next: "/" } }); return; }
     supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => {
       if (data) setP({ ...p, ...data } as Profile);
     });
@@ -142,7 +142,7 @@ function ProfilePage() {
 
       <div className="flex gap-2">
         <Button onClick={save} disabled={saving} className="rounded-xl"><Save className="size-4 mr-1" />{saving ? "…" : "Sauvegarder"}</Button>
-        <Button variant="outline" onClick={async () => { await signOut(); navigate({ to: "/login" }); }} className="rounded-xl">
+        <Button variant="outline" onClick={async () => { await signOut(); navigate({ to: "/login", search: { next: "/" } }); }} className="rounded-xl">
           <LogOut className="size-4 mr-1" />Se déconnecter
         </Button>
       </div>
