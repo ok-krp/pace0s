@@ -4,7 +4,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { Archive, Bot, Brain, Check, ChevronRight, Clock3, Code2, History, Loader2, Menu, MoreHorizontal, Plus, Send, Sparkles, Star, Trash2, X } from "lucide-react";
+import { AlertTriangle, Archive, Bot, Brain, Check, ChevronRight, Clock3, Code2, History, Loader2, Menu, MoreHorizontal, Plus, RefreshCw, Send, Sparkles, Star, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from "@/integrations/supabase/client";
 import { createAiConversation, deleteAiConversation, getAiConversation, listAiConversations, updateAiConversation } from "@/lib/ai-history.functions";
 import type { AgentType, AiConversation } from "@/lib/ai-history.types";
+import { clearAiDebug, clearPendingMessage, describeChatError, getAiDebugEntries, isDebugEnabled, logAiDebug, readPendingMessage, savePendingMessage, setDebugEnabled, subscribeAiDebug } from "@/lib/ai-debug";
 
 export const Route = createFileRoute("/ai/$agentType/$conversationId")({
   params: { parse: (params) => ({ agentType: params.agentType === "build" ? "build" as const : "coach" as const, conversationId: params.conversationId }) },
@@ -50,22 +51,73 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState("");
+  const [failure, setFailure] = useState<string | null>(null);
   const transport = useMemo(() => new DefaultChatTransport({
     api: "/api/ai-chat",
-    fetch: async (input, init) => {
-      const { data } = await supabase.auth.getSession();
+    fetch: async (url, init) => {
+      const startedAt = performance.now();
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !data.session) throw new Error("Authentification expirée : reconnectez-vous puis renvoyez votre message.");
       const headers = new Headers(init?.headers);
-      if (data.session) headers.set("Authorization", `Bearer ${data.session.access_token}`);
-      return fetch(input, { ...init, headers });
+      headers.set("Authorization", `Bearer ${data.session.access_token}`);
+      // Garde-fou anti chargement infini : on abandonne proprement au bout de 5 minutes.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 300_000);
+      init?.signal?.addEventListener("abort", () => controller.abort());
+      logAiDebug({ phase: "envoi", message: `POST /api/ai-chat (${agentType})` });
+      try {
+        const response = await fetch(url, { ...init, headers, signal: controller.signal });
+        const ms = Math.round(performance.now() - startedAt);
+        if (!response.ok) {
+          const detail = (await response.clone().text().catch(() => "")).slice(0, 400);
+          logAiDebug({ phase: "erreur", message: `HTTP ${response.status}`, durationMs: ms, detail });
+          throw new Error(detail || `Serveur indisponible (HTTP ${response.status}).`);
+        }
+        logAiDebug({ phase: "réception", message: "Flux de réponse ouvert", durationMs: ms });
+        return response;
+      } catch (fetchError) {
+        const ms = Math.round(performance.now() - startedAt);
+        const described = describeChatError(fetchError);
+        logAiDebug({ phase: "erreur", message: described, durationMs: ms });
+        throw fetchError instanceof Error ? new Error(described) : new Error(described);
+      } finally {
+        clearTimeout(timeout);
+      }
     },
+    // On n'envoie que la fenêtre récente : le serveur reconstitue la mémoire longue via son résumé.
+    prepareSendMessagesRequest: ({ messages: all, body }) => ({ body: { ...body, messages: all.slice(-30) } }),
     body: { conversationId, agentType, ephemeral },
   }), [agentType, conversationId, ephemeral]);
-  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, onFinish: () => inputRef.current?.focus(), onError: (chatError) => toast.error(chatError.message) });
+  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, onFinish: () => { clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => setFailure(describeChatError(chatError)) });
   const busy = status === "submitted" || status === "streaming";
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
-  useEffect(() => { if (error) toast.error(error.message); }, [error]);
-  const send = async (text = input) => { const clean = text.trim(); if (!clean || busy) return; setInput(""); await sendMessage({ text: clean }); inputRef.current?.focus(); };
+  useEffect(() => { if (error) setFailure(describeChatError(error)); }, [error]);
+  const send = async (text = input) => {
+    const clean = text.trim();
+    if (!clean || busy) return;
+    setInput("");
+    setFailure(null);
+    savePendingMessage(conversationId, clean);
+    try {
+      await sendMessage({ text: clean });
+      clearPendingMessage(conversationId);
+    } catch (sendError) {
+      setFailure(describeChatError(sendError));
+    } finally {
+      inputRef.current?.focus();
+    }
+  };
+  const retryPending = useMemo(() => () => {
+    const pending = readPendingMessage(conversationId);
+    if (pending && !busy) void send(pending);
+  }, [busy, conversationId]);
+  // Renvoi automatique dès le retour de la connexion.
+  useEffect(() => {
+    const onOnline = () => retryPending();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [retryPending]);
   const switchAgent = async (next: AgentType) => {
     if (next === agentType) return;
     const { data } = await supabase.from("ai_conversations").select("id").eq("agent_type", next).eq("is_archived", false).order("updated_at", { ascending: false }).limit(1).maybeSingle();
@@ -87,9 +139,10 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
         {messages.length === 0 && <EmptyState agentType={agentType} onPick={(text) => void send(text)} />}
         {messages.map((message) => <MessageBubble key={message.id} message={message} onApproval={(id, approved) => addToolApprovalResponse({ id, approved })} />)}
         {status === "submitted" && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Réflexion en cours…</div>}
+        {failure && <div className="glass-card rounded-2xl p-3 text-sm border border-destructive/40"><div className="flex items-start gap-2"><AlertTriangle className="size-4 text-destructive mt-0.5 shrink-0" /><div className="min-w-0 flex-1"><div className="font-medium text-destructive">Envoi impossible</div><div className="text-muted-foreground mt-1 break-words">{failure}</div><div className="flex gap-2 mt-3"><Button size="sm" variant="outline" onClick={retryPending} disabled={busy}><RefreshCw className="size-3.5 mr-1" />Réessayer</Button><Button size="sm" variant="ghost" onClick={() => setFailure(null)}>Ignorer</Button></div></div></div></div>}
         <div ref={bottomRef} />
       </div>
-      <footer className="shrink-0 p-3 sm:p-4 border-t border-border/60"><div className="glass-thin rounded-2xl p-2 flex items-end gap-2"><Textarea ref={inputRef} autoFocus value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={agentType === "coach" ? "Parlez de votre journée ou demandez une action…" : "Décrivez un bug, une idée ou une fonctionnalité…"} rows={1} className="min-h-11 max-h-40 resize-none border-0 bg-transparent focus-visible:ring-0" /><Button size="icon" onClick={() => void send()} disabled={!input.trim() || busy} aria-label="Envoyer">{busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</Button></div><div className="mt-2 text-center text-[10px] text-muted-foreground">Les actions et accès aux données respectent vos permissions IA.</div></footer>
+      <footer className="shrink-0 p-3 sm:p-4 border-t border-border/60"><div className="glass-thin rounded-2xl p-2 flex items-end gap-2"><Textarea ref={inputRef} autoFocus value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={agentType === "coach" ? "Parlez de votre journée ou demandez une action…" : "Décrivez un bug, une idée ou une fonctionnalité…"} rows={1} className="min-h-11 max-h-40 resize-none border-0 bg-transparent focus-visible:ring-0" /><Button size="icon" onClick={() => void send()} disabled={!input.trim() || busy} aria-label="Envoyer">{busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</Button></div><div className="mt-2 flex items-center justify-center gap-3 text-[10px] text-muted-foreground"><span>Les actions et accès aux données respectent vos permissions IA.</span><button type="button" className="underline" onClick={() => setDebugEnabled(!isDebugEnabled())}>Mode développeur</button></div><DebugPanel /></footer>
     </section>
     <aside className="hidden md:block w-72 shrink-0 glass-card rounded-[24px] p-3 overflow-hidden"><ConversationHistory activeId={conversationId} agentType={agentType} /></aside>
   </div>;
@@ -107,4 +160,19 @@ function ConversationHistory({ activeId, agentType }: { activeId: string; agentT
   useEffect(() => { void refresh(); }, [agentType]);
   const newConversation = async () => { const row = await create({ data: { agentType } }); await navigate({ to: "/ai/$agentType/$conversationId", params: { agentType, conversationId: row.id } }); };
   return <div className="h-full flex flex-col"><div className="flex items-center justify-between px-1 pb-3"><div className="font-medium flex items-center gap-2"><History className="size-4" />Conversations</div><Button size="icon" variant="ghost" onClick={() => void newConversation()} aria-label="Nouvelle conversation"><Plus className="size-4" /></Button></div><div className="flex-1 min-h-0 overflow-y-auto space-y-1">{rows.map((row) => <div key={row.id} className={`group flex items-center rounded-xl ${row.id === activeId ? "bg-primary/10 text-foreground" : "hover:bg-muted/50 text-muted-foreground"}`}><Button variant="ghost" className="flex-1 min-w-0 justify-start font-normal" onClick={() => void navigate({ to: "/ai/$agentType/$conversationId", params: { agentType, conversationId: row.id } })}>{row.is_starred && <Star className="size-3.5 fill-current text-amber-500 shrink-0" />}<span className="truncate">{row.title}</span></Button><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-8 opacity-60 group-hover:opacity-100"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={async () => { await update({ data: { id: row.id, isStarred: !row.is_starred } }); await refresh(); }}><Star />{row.is_starred ? "Retirer des favoris" : "Ajouter aux favoris"}</DropdownMenuItem><DropdownMenuItem onClick={async () => { await update({ data: { id: row.id, isArchived: true } }); await refresh(); }}><Archive />Archiver</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={async () => { await remove({ data: { id: row.id } }); const remaining = rows.filter((item) => item.id !== row.id); if (row.id === activeId) { const next = remaining[0] ?? await create({ data: { agentType } }); await navigate({ to: "/ai/$agentType/$conversationId", params: { agentType, conversationId: next.id } }); } else await refresh(); }}><Trash2 />Supprimer</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>)}</div><Button variant="outline" className="mt-3" onClick={() => void navigate({ to: "/ai-activity" })}><Sparkles className="size-4 mr-2" />Historique des actions</Button></div>;
+}
+function DebugPanel() {
+  const [, force] = useState(0);
+  const [enabled, setEnabled] = useState(false);
+  useEffect(() => {
+    setEnabled(isDebugEnabled());
+    const unsubscribe = subscribeAiDebug(() => { setEnabled(isDebugEnabled()); force((value) => value + 1); });
+    return () => { unsubscribe(); };
+  }, []);
+  if (!enabled) return null;
+  const entries = getAiDebugEntries();
+  return <div className="mt-2 glass-thin rounded-xl p-2 max-h-40 overflow-y-auto text-[10px] font-mono">
+    <div className="flex items-center justify-between pb-1"><span className="font-medium">Journal de débogage</span><Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={clearAiDebug}>Vider</Button></div>
+    {entries.length === 0 ? <div className="text-muted-foreground">Aucune requête enregistrée.</div> : entries.map((entry) => <div key={entry.id} className={entry.phase === "erreur" ? "text-destructive" : "text-muted-foreground"}>{new Date(entry.at).toLocaleTimeString("fr-FR")} · {entry.phase} · {entry.message}{entry.durationMs === undefined ? "" : ` · ${entry.durationMs} ms`}{entry.detail ? ` · ${entry.detail}` : ""}</div>)}
+  </div>;
 }

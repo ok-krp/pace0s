@@ -118,7 +118,7 @@ function ScanPage() {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground mb-4">Connectez-vous pour scanner et analyser vos repas.</p>
-        <Button onClick={() => navigate({ to: "/login" })}>Se connecter</Button>
+        <Button onClick={() => navigate({ to: "/login", search: { next: "/" } })}>Se connecter</Button>
       </div>
     );
   }
