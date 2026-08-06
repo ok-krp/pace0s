@@ -175,7 +175,7 @@ function SportPage() {
         </TabsContent>
 
         <TabsContent value="overload">
-          <OverloadTab exs={exs} progs={progs} focusExerciseId={focusEx} />
+          <OverloadTab exs={exs} progs={progs} sessions={sessions} focusExerciseId={focusEx} />
         </TabsContent>
 
 
@@ -530,12 +530,53 @@ const HistoryTab = memo(function HistoryTab({ sessions, exs, onDelete }: { sessi
   );
 });
 
-type OverloadRow = { id: string; date: string; weight: number; reps: number; sets: number; note?: string };
-type OverloadStore = Record<string, OverloadRow[]>; // exerciseId → rows
+type OverloadRow = { id: string; date: string; weight: number; reps: number; sets: number; note?: string; source: "session" | "manual" };
+type OverloadStore = Record<string, OverloadRow[]>; // exerciseId → rows manuels uniquement
+
+/**
+ * Source unique de vérité : chaque séance terminée dans laquelle l'exercice a
+ * au moins une série validée ("done") génère automatiquement une ligne de
+ * surcharge — poids max atteint, reps associées, nombre de séries validées.
+ * Plus besoin de ressaisir à la main ce qui vient d'être fait en séance.
+ */
+function deriveSessionRows(sessions: WorkoutSession[], exerciseId: string): OverloadRow[] {
+  const rows: OverloadRow[] = [];
+  for (const s of sessions) {
+    const se = s.exercises.find((e) => e.exerciseId === exerciseId);
+    if (!se) continue;
+    const done = se.sets.filter((x) => x.done);
+    if (done.length === 0) continue;
+    const best = done.reduce((a, b) => (b.weight > a.weight ? b : a));
+    rows.push({
+      id: `sess-${s.id}`,
+      date: s.date,
+      weight: best.weight,
+      reps: best.reps,
+      sets: done.length,
+      note: se.note,
+      source: "session",
+    });
+  }
+  return rows;
+}
 
 
-const OverloadTab = memo(function OverloadTab({ exs, progs, focusExerciseId }: { exs: Exercise[]; progs: Program[]; focusExerciseId?: string | null }) {
-  const [store, setStore] = useLocalState<OverloadStore>("lt.sport.overload", {});
+const OverloadTab = memo(function OverloadTab({ exs, progs, sessions, focusExerciseId }: { exs: Exercise[]; progs: Program[]; sessions: WorkoutSession[]; focusExerciseId?: string | null }) {
+  const [manualStore, setManualStore] = useLocalState<OverloadStore>("lt.sport.overload", {});
+  /**
+   * Fusion des deux sources en une seule liste cohérente : les lignes issues
+   * de vraies séances (auto, non éditables ici — on modifie la séance dans
+   * Historique) + les lignes ajoutées manuellement (ex: séance faite hors app).
+   */
+  const rowsByExercise = useMemo(() => {
+    const map: Record<string, OverloadRow[]> = {};
+    exs.forEach((e) => {
+      const sessionRows = deriveSessionRows(sessions, e.id);
+      const manualRows = manualStore[e.id] ?? [];
+      map[e.id] = [...sessionRows, ...manualRows].sort((a, b) => b.date.localeCompare(a.date));
+    });
+    return map;
+  }, [exs, sessions, manualStore]);
   const muscles = useMemo(() => Array.from(new Set(exs.map((e) => e.muscle))), [exs]);
   const [muscle, setMuscle] = useState<string>("");
   const currentMuscle = muscle || muscles[0] || "";
@@ -572,12 +613,13 @@ const OverloadTab = memo(function OverloadTab({ exs, progs, focusExerciseId }: {
   }, [focusExerciseId, exs]);
 
   /**
-   * Synchronisation automatique : la dernière ligne du jour suit les séries et
-   * répétitions configurées pour l'exercice — plus besoin d'ouvrir « Modifier ».
+   * Synchronisation automatique (lignes manuelles uniquement) : une ligne du
+   * jour ajoutée à la main suit les séries/répétitions cibles de l'exercice
+   * tant qu'elle n'a pas été modifiée manuellement.
    */
   useEffect(() => {
     const t = todayKey();
-    setStore((p) => {
+    setManualStore((p) => {
       let changed = false;
       const next: OverloadStore = { ...p };
       for (const [exId, rows] of Object.entries(p)) {
@@ -592,27 +634,34 @@ const OverloadTab = memo(function OverloadTab({ exs, progs, focusExerciseId }: {
         if (local) { next[exId] = updated; changed = true; }
       }
       return changed ? next : p;
-
     });
-  }, [targets, setStore]);
+  }, [targets, setManualStore]);
 
   const addRow = (exerciseId: string) => {
     const tgt = targets[exerciseId] ?? { sets: 3, reps: 10, weight: 0 };
-    const prev = (store[exerciseId] ?? []).slice().sort((a, b) => b.date.localeCompare(a.date))[0];
+    const prev = (rowsByExercise[exerciseId] ?? [])[0];
     const r: OverloadRow = {
       id: crypto.randomUUID(),
       date: todayKey(),
       weight: prev?.weight ?? tgt.weight,
       reps: tgt.reps,
       sets: tgt.sets,
+      source: "manual",
     };
-    setStore((p) => ({ ...p, [exerciseId]: [r, ...(p[exerciseId] ?? [])] }));
+    setManualStore((p) => ({ ...p, [exerciseId]: [r, ...(p[exerciseId] ?? [])] }));
   };
   const updateRow = (exerciseId: string, id: string, patch: Partial<OverloadRow>) => {
-    setStore((p) => ({ ...p, [exerciseId]: (p[exerciseId] ?? []).map((r) => r.id === id ? { ...r, ...patch } : r) }));
+    setManualStore((p) => ({ ...p, [exerciseId]: (p[exerciseId] ?? []).map((r) => r.id === id ? { ...r, ...patch } : r) }));
   };
   const removeRow = (exerciseId: string, id: string) => {
-    setStore((p) => ({ ...p, [exerciseId]: (p[exerciseId] ?? []).filter((r) => r.id !== id) }));
+    setManualStore((p) => ({ ...p, [exerciseId]: (p[exerciseId] ?? []).filter((r) => r.id !== id) }));
+  };
+  const guardSession = (row: OverloadRow) => {
+    if (row.source === "session") {
+      toast.info("Cette ligne vient d'une séance réelle — modifie-la dans l'onglet Historique.");
+      return true;
+    }
+    return false;
   };
 
   if (exs.length === 0) {
@@ -641,7 +690,7 @@ const OverloadTab = memo(function OverloadTab({ exs, progs, focusExerciseId }: {
       ) : (
         <div className="space-y-4">
           {muscleExs.map((ex) => {
-            const rows = (store[ex.id] ?? []).slice().sort((a, b) => b.date.localeCompare(a.date));
+            const rows = rowsByExercise[ex.id] ?? [];
             const tgt = targets[ex.id];
             const lastW = rows[0]?.weight ?? 0;
             const prevW = rows[1]?.weight ?? 0;
@@ -661,17 +710,17 @@ const OverloadTab = memo(function OverloadTab({ exs, progs, focusExerciseId }: {
                       </span>
                     )}
                     <Button size="sm" variant="secondary" onClick={() => addRow(ex.id)} className="rounded-lg h-7 text-xs">
-                      <Plus className="size-3 mr-0.5" />Ligne
+                      <Plus className="size-3 mr-0.5" />Ligne manuelle
                     </Button>
                   </div>
                 </div>
 
 
                 {rows.length === 0 ? (
-                  <div className="text-xs text-muted-foreground text-center py-4">Aucune entrée. Ajoute ta première série.</div>
+                  <div className="text-xs text-muted-foreground text-center py-4">Aucune entrée. Termine une séance avec cet exercice, ou ajoute une ligne manuelle.</div>
                 ) : (
                   <div className="overflow-x-auto">
-                    <div className="min-w-[520px]">
+                    <div className="min-w-[560px]">
                       <div className="grid grid-cols-[110px_90px_70px_70px_1fr_36px] gap-px bg-border text-[11px] uppercase tracking-wider text-muted-foreground">
                         <div className="bg-card px-2 py-1.5">Date</div>
                         <div className="bg-card px-2 py-1.5 text-center">Poids</div>
@@ -680,16 +729,22 @@ const OverloadTab = memo(function OverloadTab({ exs, progs, focusExerciseId }: {
                         <div className="bg-card px-2 py-1.5">Note</div>
                         <div className="bg-card px-2 py-1.5" />
                       </div>
-                      {rows.map((r) => (
-                        <div key={r.id} className="grid grid-cols-[110px_90px_70px_70px_1fr_36px] gap-px bg-border text-sm">
-                          <div className="bg-card px-1 py-1"><Input type="date" value={r.date} onChange={(e) => updateRow(ex.id, r.id, { date: e.target.value })} className="h-8 text-xs" /></div>
-                          <div className="bg-card px-1 py-1"><Input type="number" value={r.weight || ""} onChange={(e) => updateRow(ex.id, r.id, { weight: +e.target.value || 0 })} className="h-8 text-center" /></div>
-                          <div className="bg-card px-1 py-1"><Input type="number" value={r.reps || ""} onChange={(e) => updateRow(ex.id, r.id, { reps: +e.target.value || 0 })} className="h-8 text-center" /></div>
-                          <div className="bg-card px-1 py-1"><Input type="number" value={r.sets || ""} onChange={(e) => updateRow(ex.id, r.id, { sets: +e.target.value || 0 })} className="h-8 text-center" /></div>
-                          <div className="bg-card px-1 py-1"><Input value={r.note ?? ""} onChange={(e) => updateRow(ex.id, r.id, { note: e.target.value })} placeholder="Ressenti…" className="h-8 text-xs" /></div>
-                          <button onClick={() => removeRow(ex.id, r.id)} className="bg-card grid place-items-center text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
-                        </div>
-                      ))}
+                      {rows.map((r) => {
+                        const locked = r.source === "session";
+                        return (
+                          <div key={r.id} className="grid grid-cols-[110px_90px_70px_70px_1fr_36px] gap-px bg-border text-sm">
+                            <div className="bg-card px-1 py-1 flex items-center gap-1">
+                              <Input type="date" value={r.date} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { date: e.target.value })} className="h-8 text-xs" />
+                              {locked && <span title="Issue d'une séance réelle" className="text-[10px] text-primary shrink-0">●</span>}
+                            </div>
+                            <div className="bg-card px-1 py-1"><Input type="number" value={r.weight || ""} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { weight: +e.target.value || 0 })} className="h-8 text-center" /></div>
+                            <div className="bg-card px-1 py-1"><Input type="number" value={r.reps || ""} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { reps: +e.target.value || 0 })} className="h-8 text-center" /></div>
+                            <div className="bg-card px-1 py-1"><Input type="number" value={r.sets || ""} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { sets: +e.target.value || 0 })} className="h-8 text-center" /></div>
+                            <div className="bg-card px-1 py-1"><Input value={r.note ?? ""} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { note: e.target.value })} placeholder="Ressenti…" className="h-8 text-xs" /></div>
+                            <button onClick={() => (locked ? guardSession(r) : removeRow(ex.id, r.id))} className="bg-card grid place-items-center text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
