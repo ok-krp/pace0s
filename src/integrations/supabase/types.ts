@@ -73,6 +73,8 @@ export type Database = {
           is_ephemeral: boolean
           is_starred: boolean
           memory_summary: string | null
+          summarized_count: number
+          summary: string | null
           title: string
           updated_at: string
           user_id: string
@@ -85,6 +87,8 @@ export type Database = {
           is_ephemeral?: boolean
           is_starred?: boolean
           memory_summary?: string | null
+          summarized_count?: number
+          summary?: string | null
           title?: string
           updated_at?: string
           user_id: string
@@ -97,6 +101,8 @@ export type Database = {
           is_ephemeral?: boolean
           is_starred?: boolean
           memory_summary?: string | null
+          summarized_count?: number
+          summary?: string | null
           title?: string
           updated_at?: string
           user_id?: string
