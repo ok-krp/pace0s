@@ -50,22 +50,73 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState("");
+  const [failure, setFailure] = useState<string | null>(null);
   const transport = useMemo(() => new DefaultChatTransport({
     api: "/api/ai-chat",
-    fetch: async (input, init) => {
-      const { data } = await supabase.auth.getSession();
+    fetch: async (url, init) => {
+      const startedAt = performance.now();
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !data.session) throw new Error("Authentification expirée : reconnectez-vous puis renvoyez votre message.");
       const headers = new Headers(init?.headers);
-      if (data.session) headers.set("Authorization", `Bearer ${data.session.access_token}`);
-      return fetch(input, { ...init, headers });
+      headers.set("Authorization", `Bearer ${data.session.access_token}`);
+      // Garde-fou anti chargement infini : on abandonne proprement au bout de 5 minutes.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 300_000);
+      init?.signal?.addEventListener("abort", () => controller.abort());
+      logAiDebug({ phase: "envoi", message: `POST /api/ai-chat (${agentType})` });
+      try {
+        const response = await fetch(url, { ...init, headers, signal: controller.signal });
+        const ms = Math.round(performance.now() - startedAt);
+        if (!response.ok) {
+          const detail = (await response.clone().text().catch(() => "")).slice(0, 400);
+          logAiDebug({ phase: "erreur", message: `HTTP ${response.status}`, durationMs: ms, detail });
+          throw new Error(detail || `Serveur indisponible (HTTP ${response.status}).`);
+        }
+        logAiDebug({ phase: "réception", message: "Flux de réponse ouvert", durationMs: ms });
+        return response;
+      } catch (fetchError) {
+        const ms = Math.round(performance.now() - startedAt);
+        const described = describeChatError(fetchError);
+        logAiDebug({ phase: "erreur", message: described, durationMs: ms });
+        throw fetchError instanceof Error ? new Error(described) : new Error(described);
+      } finally {
+        clearTimeout(timeout);
+      }
     },
+    // On n'envoie que la fenêtre récente : le serveur reconstitue la mémoire longue via son résumé.
+    prepareSendMessagesRequest: ({ messages: all, body }) => ({ body: { ...body, messages: all.slice(-30) } }),
     body: { conversationId, agentType, ephemeral },
   }), [agentType, conversationId, ephemeral]);
-  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, onFinish: () => inputRef.current?.focus(), onError: (chatError) => toast.error(chatError.message) });
+  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, onFinish: () => { clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => setFailure(describeChatError(chatError)) });
   const busy = status === "submitted" || status === "streaming";
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
-  useEffect(() => { if (error) toast.error(error.message); }, [error]);
-  const send = async (text = input) => { const clean = text.trim(); if (!clean || busy) return; setInput(""); await sendMessage({ text: clean }); inputRef.current?.focus(); };
+  useEffect(() => { if (error) setFailure(describeChatError(error)); }, [error]);
+  const send = async (text = input) => {
+    const clean = text.trim();
+    if (!clean || busy) return;
+    setInput("");
+    setFailure(null);
+    savePendingMessage(conversationId, clean);
+    try {
+      await sendMessage({ text: clean });
+      clearPendingMessage(conversationId);
+    } catch (sendError) {
+      setFailure(describeChatError(sendError));
+    } finally {
+      inputRef.current?.focus();
+    }
+  };
+  const retryPending = useMemo(() => () => {
+    const pending = readPendingMessage(conversationId);
+    if (pending && !busy) void send(pending);
+  }, [busy, conversationId]);
+  // Renvoi automatique dès le retour de la connexion.
+  useEffect(() => {
+    const onOnline = () => retryPending();
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [retryPending]);
   const switchAgent = async (next: AgentType) => {
     if (next === agentType) return;
     const { data } = await supabase.from("ai_conversations").select("id").eq("agent_type", next).eq("is_archived", false).order("updated_at", { ascending: false }).limit(1).maybeSingle();
