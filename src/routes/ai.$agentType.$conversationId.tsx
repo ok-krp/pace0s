@@ -166,7 +166,8 @@ function DebugPanel() {
   const [enabled, setEnabled] = useState(false);
   useEffect(() => {
     setEnabled(isDebugEnabled());
-    return subscribeAiDebug(() => { setEnabled(isDebugEnabled()); force((value) => value + 1); });
+    const unsubscribe = subscribeAiDebug(() => { setEnabled(isDebugEnabled()); force((value) => value + 1); });
+    return () => { unsubscribe(); };
   }, []);
   if (!enabled) return null;
   const entries = getAiDebugEntries();
