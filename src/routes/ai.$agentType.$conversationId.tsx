@@ -14,6 +14,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from "@/integrations/supabase/client";
 import { createAiConversation, deleteAiConversation, getAiConversation, listAiConversations, updateAiConversation } from "@/lib/ai-history.functions";
 import type { AgentType, AiConversation } from "@/lib/ai-history.types";
+import { clearAiDebug, clearPendingMessage, describeChatError, getAiDebugEntries, isDebugEnabled, logAiDebug, readPendingMessage, savePendingMessage, setDebugEnabled, subscribeAiDebug } from "@/lib/ai-debug";
 
 export const Route = createFileRoute("/ai/$agentType/$conversationId")({
   params: { parse: (params) => ({ agentType: params.agentType === "build" ? "build" as const : "coach" as const, conversationId: params.conversationId }) },
