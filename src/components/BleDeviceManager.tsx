@@ -348,13 +348,13 @@ function PairingActions({ pairing, onPair }: { pairing: boolean; onPair: (c: "wa
       <div className="text-xs font-medium mb-2 flex items-center gap-2"><Radio className="size-3.5" /> Mode couplage</div>
       <div className="flex gap-2 flex-wrap">
         <Button size="sm" onClick={() => onPair("watch")} disabled={pairing} className="rounded-xl">
-          <Watch className="size-3.5 mr-1" /> Appairer une montre
+          {pairing ? <RefreshCw className="size-3.5 mr-1 animate-spin" /> : <Watch className="size-3.5 mr-1" />} {pairing ? "Recherche…" : "Appairer une montre"}
         </Button>
         <Button size="sm" onClick={() => onPair("scale")} disabled={pairing} className="rounded-xl">
-          <Scale className="size-3.5 mr-1" /> Appairer une balance
+          {pairing ? <RefreshCw className="size-3.5 mr-1 animate-spin" /> : <Scale className="size-3.5 mr-1" />} {pairing ? "Recherche…" : "Appairer une balance"}
         </Button>
         <Button size="sm" variant="secondary" onClick={() => onPair("any")} disabled={pairing} className="rounded-xl">
-          <Bluetooth className="size-3.5 mr-1" /> Détection auto
+          {pairing ? <RefreshCw className="size-3.5 mr-1 animate-spin" /> : <Bluetooth className="size-3.5 mr-1" />} {pairing ? "Recherche…" : "Détection auto"}
         </Button>
       </div>
       <div className="text-[11px] text-muted-foreground mt-2">
