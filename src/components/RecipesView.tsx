@@ -353,7 +353,7 @@ function RecipeForm({ recipe, cats, onSave, onCancel }: { recipe: Recipe; cats: 
         <div className="flex gap-3 items-center">
           {r.photo ? (
             <div className="relative">
-              <img src={r.photo} alt="preview" className="size-20 rounded-xl object-cover aspect-square" />
+              <img src={r.photo} alt={`Photo de la recette ${r.name}`} className="size-20 rounded-xl object-cover aspect-square" />
               <button onClick={() => update("photo", undefined)} className="absolute -top-1 -right-1 size-5 rounded-full bg-destructive text-destructive-foreground grid place-items-center"><X className="size-3" /></button>
             </div>
           ) : (
