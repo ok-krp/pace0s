@@ -201,7 +201,7 @@ function NutritionPage() {
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              {pending.kind === "photo" && <img src={pending.photo} alt="repas" className="w-full aspect-video object-cover rounded-xl" />}
+              {pending.kind === "photo" && <img src={pending.photo} alt="Photo du repas à analyser" className="w-full aspect-video object-cover rounded-xl" />}
               {pending.kind === "barcode" && pending.product.image_url && (
                 <img src={pending.product.image_url} alt={pending.product.name} className="size-24 rounded-xl object-cover mx-auto" />
               )}

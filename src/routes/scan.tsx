@@ -351,7 +351,7 @@ function ScanPage() {
       {aiResult && photo && !busy && (
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass-card overflow-hidden mb-4">
           <div className="flex gap-4 p-5">
-            <img src={photo} alt="repas" className="size-20 rounded-xl object-cover" />
+            <img src={photo} alt="Photo du repas scanné" className="size-20 rounded-xl object-cover" />
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
