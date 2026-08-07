@@ -138,15 +138,22 @@ export function PageHeader({
   title,
   subtitle,
   right,
+  a11yLabel,
 }: {
   title: string;
   subtitle?: string;
   right?: ReactNode;
+  /** Préfixe lu par les lecteurs d'écran seulement (ex: "Tableau de bord — ") quand
+   * le titre visible est un salut générique ("Bonjour 👋") plutôt que descriptif. */
+  a11yLabel?: string;
 }) {
   return (
     <div className="flex items-end justify-between gap-4 mb-6">
       <div>
-        <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight">
+          {a11yLabel && <span className="sr-only">{a11yLabel} — </span>}
+          {title}
+        </h1>
         {subtitle && <p className="text-muted-foreground mt-1">{subtitle}</p>}
       </div>
       {right}
