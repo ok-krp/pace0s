@@ -25,7 +25,7 @@ export function CloudSyncSettings() {
         <div className="font-medium">Synchronisation cloud</div>
         <div className="text-xs text-muted-foreground">
           {user
-            ? "Automatique et en temps réel sur tous tes appareils — rien à faire."
+            ? "Automatique sur tous tes appareils (quelques secondes de délai) — rien à faire."
             : "Connecte-toi pour activer la sync."}
         </div>
       </div>
