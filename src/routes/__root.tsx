@@ -20,7 +20,7 @@ import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { applyWallpaper, readWallpaperChoice } from "@/hooks/use-wallpaper";
 import { useGlassPointer } from "@/hooks/use-glass-pointer";
 import { applyGlassQuality } from "@/hooks/use-glass-quality";
-// import { CloudSyncProvider } from "@/hooks/use-cloud-sync-engine"; // ISOLATION TEST — ne pas réactiver avant confirmation
+import { CloudSyncProvider } from "@/hooks/use-cloud-sync-engine";
 
 
 function NotFoundComponent() {
@@ -104,7 +104,9 @@ function RootComponent() {
     <GlobalErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <AuthGate />
+          <CloudSyncProvider>
+            <AuthGate />
+          </CloudSyncProvider>
         </AuthProvider>
       </QueryClientProvider>
     </GlobalErrorBoundary>
