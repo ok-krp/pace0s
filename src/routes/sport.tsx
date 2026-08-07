@@ -593,7 +593,7 @@ const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, se
     exs.forEach((e) => {
       const sessionRows = deriveSessionRows(sessions, e.id);
       const manualRows = manualStore[e.id] ?? [];
-      map[e.id] = [...sessionRows, ...manualRows].sort((a, b) => b.date.localeCompare(a.date));
+      map[e.id] = [...sessionRows, ...manualRows].sort((a, b) => b.date.localeCompare(a.date) || (a.source === "manual" ? -1 : 1));
     });
     return map;
   }, [exs, sessions, manualStore]);
@@ -632,30 +632,10 @@ const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, se
     return () => cancelAnimationFrame(id);
   }, [focusExerciseId, exs]);
 
-  /**
-   * Synchronisation automatique (lignes manuelles uniquement) : une ligne du
-   * jour ajoutée à la main suit les séries/répétitions cibles de l'exercice
-   * tant qu'elle n'a pas été modifiée manuellement.
-   */
-  useEffect(() => {
-    const t = todayKey();
-    setManualStore((p) => {
-      let changed = false;
-      const next: OverloadStore = { ...p };
-      for (const [exId, rows] of Object.entries(p)) {
-        const tgt = targets[exId];
-        if (!tgt || !rows?.length) continue;
-        let local = false;
-        const updated = rows.map((r) =>
-          r.date === t && (r.sets !== tgt.sets || r.reps !== tgt.reps)
-            ? ((local = true), { ...r, sets: tgt.sets, reps: tgt.reps })
-            : r,
-        );
-        if (local) { next[exId] = updated; changed = true; }
-      }
-      return changed ? next : p;
-    });
-  }, [targets, setManualStore]);
+  /* L'ancienne synchro "cible → ligne du jour" a été retirée : elle entrait en
+   * conflit avec la synchro "ligne → cible" ci-dessous et écrasait en boucle les
+   * reps/séries tapées à la main. addRow() initialise déjà une nouvelle ligne
+   * avec la cible du moment ; au-delà, la ligne fait foi. */
 
   /** Synchro surcharge → exercice + programmes : une ligne manuelle ajoutée/modifiée devient
    * la nouvelle cible par défaut de l'exercice, partout où il apparaît (même source de données). */
