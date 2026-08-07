@@ -7,6 +7,7 @@ import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 const LT_PREFIX = "lt.";
 const EXCLUDED = new Set<string>(["lt.sport.active"]); // en cours, propre à l'appareil
 const DEBOUNCE_MS = 1200;
+const POLL_MS = 15_000;
 const QUEUE_KEY = "lt.__sync_queue"; // clés en attente d'envoi (hors-ligne / échec)
 // Identifiant de cet onglet/appareil : sert à ignorer nos propres écritures
 // quand elles reviennent via le canal temps réel (évite les boucles).
@@ -22,11 +23,11 @@ function writeQueue(keys: string[]) {
 }
 
 /**
- * Sync Cloud automatique et temps réel. Aucune action manuelle requise :
+ * Sync Cloud automatique, sans bouton. Aucune action manuelle requise :
  * - chaque écriture locale (via useLocalState) est poussée vers Supabase après un
  *   court debounce, taguée avec l'appareil d'origine et un timestamp ;
- * - les changements des autres appareils arrivent via Realtime et sont appliqués
- *   immédiatement en local (sans recharger la page) ;
+ * - les changements des autres appareils sont récupérés par sondage périodique
+ *   (toutes les 15s) et appliqués en local sans recharger la page ;
  * - hors-ligne : les clés modifiées sont mises en file d'attente locale et
  *   renvoyées automatiquement dès le retour de la connexion.
  */
@@ -46,7 +47,6 @@ export function useCloudSyncEngineInternal() {
     if (!allowed) return;
 
     let cancelled = false;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
 
     const pushKey = async (key: string) => {
       try {
@@ -81,10 +81,14 @@ export function useCloudSyncEngineInternal() {
       } catch {}
     };
 
-    // Premier montage : on récupère ce qui existe déjà dans le Cloud (ex: nouvel
-    // appareil, ou app réinstallée) — silencieux, sans bouton ni confirmation.
-    const initialPull = async () => {
+    // Récupération périodique : pas de WebSocket temps réel (retiré — trop de risque
+    // en environnement edge de production), un sondage léger toutes les 15s suffit
+    // largement pour un usage personnel et reste "automatique, sans bouton". Appelé
+    // une première fois immédiatement (nouvel appareil / app réinstallée), puis en
+    // boucle.
+    const pull = async () => {
       try {
+        if (!navigator.onLine) return;
         const { data, error } = await supabase.from("user_state").select("key,value,updated_by").eq("user_id", user.id);
         if (error || !data || cancelled) return;
         data.forEach((row) => {
@@ -95,11 +99,10 @@ export function useCloudSyncEngineInternal() {
           } catch {}
         });
       } catch {
-        // Colonne manquante (migration pas encore appliquée), Realtime/DB indisponible, etc.
-        // On échoue silencieusement — la sync réessaiera aux prochaines écritures.
+        // Colonne manquante, réseau indisponible, etc. — échec silencieux, on retentera au prochain sondage.
       }
     };
-    initialPull();
+    pull();
 
     // Écriture locale → push debouncé (regroupe les saisies rapides, ex: un slider).
     const offLocal = onLocalWrite((key) => {
@@ -115,36 +118,14 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("online", flushQueue);
     try { if (navigator.onLine) flushQueue(); else setStatus("offline"); } catch {}
 
-    // Canal temps réel : un autre appareil modifie une donnée → on l'applique ici,
-    // en direct, sans recharger la page. Si Realtime n'est pas activé côté Supabase,
-    // l'abonnement échoue silencieusement (statut du canal), sans jeter d'exception.
-    try {
-      channel = supabase
-        .channel(`user_state:${user.id}`)
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` },
-          (payload) => {
-            try {
-              const row = (payload.new ?? payload.old) as { key?: string; value?: unknown; updated_by?: string } | null;
-              if (!row?.key || EXCLUDED.has(row.key)) return;
-              if (row.updated_by === DEVICE_ID) return; // écho de notre propre push, on ignore
-              if (payload.eventType === "DELETE") return;
-              applyRemoteWrite(row.key, row.value);
-            } catch {}
-          },
-        )
-        .subscribe();
-    } catch {
-      // Realtime indisponible : la sync reste fonctionnelle en push/pull, juste pas instantanée.
-    }
+    const pollInterval = setInterval(pull, POLL_MS);
 
     return () => {
       cancelled = true;
       try { offLocal(); } catch {}
       window.removeEventListener("online", flushQueue);
       Object.keys(timers.current).forEach((k) => clearTimeout(timers.current[k]));
-      try { if (channel) supabase.removeChannel(channel); } catch {}
+      clearInterval(pollInterval);
     };
   }, [user]);
 
