@@ -157,6 +157,7 @@ function Dashboard() {
       <PageHeader
         title={`${intel.greeting} 👋`}
         subtitle={todayLabel || "Aujourd’hui"}
+        a11yLabel="Tableau de bord Pace"
       />
 
       <DailyInsight intel={intel} />
