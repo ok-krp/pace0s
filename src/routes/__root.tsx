@@ -61,11 +61,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
-      { title: "Pace" },
+      { title: "Pace — suivi santé, sport, nutrition et finances au quotidien" },
       { name: "description", content: "Score quotidien, calories, eau, sommeil, finances, productivité — tout en un coup d'œil." },
       { name: "theme-color", content: "#f8fafc" },
-      { property: "og:title", content: "Pace" },
-      { name: "twitter:title", content: "Pace" },
+      { property: "og:title", content: "Pace — ton centre de contrôle quotidien" },
+      { name: "twitter:title", content: "Pace — ton centre de contrôle quotidien" },
       { property: "og:description", content: "Score quotidien, calories, eau, sommeil, finances, productivité — tout en un coup d'œil." },
       { name: "twitter:description", content: "Score quotidien, calories, eau, sommeil, finances, productivité — tout en un coup d'œil." },
       { name: "twitter:card", content: "summary_large_image" },
@@ -92,7 +92,24 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <head><HeadContent /></head>
+      <head>
+        <HeadContent />
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "SoftwareApplication",
+              name: "Pace",
+              applicationCategory: "HealthApplication",
+              operatingSystem: "Web",
+              description: "Suivi quotidien santé, sport, nutrition, sommeil et finances personnelles.",
+              offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
+            }),
+          }}
+        />
+      </head>
       <body>{children}<Scripts /></body>
     </html>
   );

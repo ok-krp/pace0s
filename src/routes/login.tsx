@@ -10,7 +10,13 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/login")({
-  head: () => ({ meta: [{ title: "Connexion — Pace" }] }),
+  head: () => ({
+    meta: [
+      { title: "Connexion — Pace" },
+      { name: "description", content: "Connecte-toi à Pace pour retrouver ton suivi santé, sport, nutrition et finances." },
+      { property: "og:title", content: "Connexion — Pace" },
+    ],
+  }),
   validateSearch: (s: Record<string, unknown>) => ({
     next: typeof s.next === "string" ? s.next : "",
   }),
