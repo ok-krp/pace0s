@@ -83,7 +83,37 @@ async function contextForCoach(client: Client, userId: string, permissions: AiPe
 }
 
 async function logAction(client: Client, userId: string, conversationId: string, agentType: AgentType, actionType: string, label: string, payload: unknown, status: "executed" | "failed") {
-  await client.from("ai_action_log").insert({ user_id: userId, conversation_id: conversationId, agent_type: agentType, action_type: actionType, label, payload: payload as Json, status, executed_at: status === "executed" ? new Date().toISOString() : null });
+  // Le log d'audit ne doit jamais faire échouer l'outil lui-même : best-effort.
+  try {
+    await client.from("ai_action_log").insert({ user_id: userId, conversation_id: conversationId, agent_type: agentType, action_type: actionType, label, payload: payload as Json, status, executed_at: status === "executed" ? new Date().toISOString() : null });
+  } catch (error) {
+    console.error("[ai-chat] logAction impossible", { actionType, error });
+  }
+}
+
+/**
+ * Garantit qu'un outil ne peut JAMAIS terminer sans renvoyer de résultat, même en
+ * cas d'exception imprévue (bug, timeout réseau, erreur inattendue) — c'est la
+ * cause probable des erreurs "Tool result is missing". Logue systématiquement :
+ * appel, paramètres, début, fin, durée, résultat ou erreur.
+ */
+function withToolLogging<Input, Output extends { ok: boolean; message: string }>(
+  name: string,
+  execute: (input: Input) => Promise<Output>,
+): (input: Input) => Promise<Output> {
+  return async (input: Input) => {
+    const startedAt = Date.now();
+    console.info("[ai-tool] appelé", { name, input });
+    try {
+      const output = await execute(input);
+      console.info("[ai-tool] terminé", { name, ms: Date.now() - startedAt, ok: output.ok });
+      return output;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[ai-tool] échec inattendu", { name, ms: Date.now() - startedAt, error: message });
+      return { ok: false, message: `Action interrompue par une erreur inattendue : ${message}` } as Output;
+    }
+  };
 }
 
 function coachTools(client: Client, userId: string, conversationId: string, permissions: AiPermissions) {
@@ -91,7 +121,7 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
     update_profile: tool({
       description: "Mettre à jour le poids, les objectifs ou les informations du profil Pace.",
       inputSchema: z.object({ weight_kg: z.number().nullable(), weight_goal_kg: z.number().nullable(), daily_calorie_goal: z.number().nullable(), daily_protein_goal: z.number().nullable(), daily_water_ml_goal: z.number().nullable(), training_goal: z.string().nullable() }),
-      execute: async (input) => {
+      execute: withToolLogging("update_profile", async (input) => {
         if (!permissions.profile) return { ok: false, message: "Permission Profil désactivée" };
         const patch: Database["public"]["Tables"]["profiles"]["Update"] = {
           ...(input.weight_kg === null ? {} : { weight_kg: input.weight_kg }),
@@ -105,29 +135,29 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
         if (error) { await logAction(client, userId, conversationId, "coach", "update_profile", "Mise à jour du profil", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
         await logAction(client, userId, conversationId, "coach", "update_profile", "Profil mis à jour", input, "executed");
         return { ok: true, message: "Profil mis à jour" };
-      },
+      }),
     }),
     add_food: tool({
       description: "Ajouter un repas ou aliment au journal nutritionnel avec estimation complète des macros.",
       inputSchema: z.object({ name: z.string(), meal: z.string(), kcal: z.number(), protein_g: z.number(), carbs_g: z.number(), fat_g: z.number(), fiber_g: z.number(), sugar_g: z.number(), sodium_mg: z.number(), grams: z.number() }),
-      execute: async (input) => {
+      execute: withToolLogging("add_food", async (input) => {
         if (!permissions.nutrition) return { ok: false, message: "Permission Nutrition désactivée" };
         const { error } = await client.from("food_log").insert({ user_id: userId, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, protein_g: input.protein_g, carbs_g: input.carbs_g, fat_g: input.fat_g, fiber_g: input.fiber_g, sugar_g: input.sugar_g, sodium_mg: input.sodium_mg, source: "coach_ai" });
         if (error) { await logAction(client, userId, conversationId, "coach", "add_food", "Ajout nutrition", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
         await logAction(client, userId, conversationId, "coach", "add_food", `${input.name} ajouté`, input, "executed");
         return { ok: true, message: `${input.name} ajouté au journal` };
-      },
+      }),
     }),
     add_health_sample: tool({
       description: "Enregistrer une mesure de santé comme le poids ou la masse grasse.",
       inputSchema: z.object({ type: z.string(), value: z.number() }),
-      execute: async (input) => {
+      execute: withToolLogging("add_health_sample", async (input) => {
         if (!permissions.profile) return { ok: false, message: "Permission Profil désactivée" };
         const { error } = await client.from("health_samples").insert({ user_id: userId, type: input.type, value: input.value, source: "coach_ai" });
         if (error) { await logAction(client, userId, conversationId, "coach", "add_health_sample", "Mesure de santé", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
         await logAction(client, userId, conversationId, "coach", "add_health_sample", `${input.type} enregistré`, input, "executed");
         return { ok: true, message: "Mesure enregistrée" };
-      },
+      }),
     }),
   };
 }
@@ -137,12 +167,12 @@ function buildTools(client: Client, userId: string, conversationId: string) {
     create_development_task: tool({
       description: "Créer un bug, une amélioration, une fonctionnalité ou une tâche dans le centre Développement de Pace.",
       inputSchema: z.object({ kind: z.enum(["bug", "improvement", "feature", "task"]), title: z.string(), description: z.string(), priority: z.enum(["low", "medium", "high", "critical"]) }),
-      execute: async (input) => {
+      execute: withToolLogging("create_development_task", async (input) => {
         const { error } = await client.from("development_tasks").insert({ ...input, user_id: userId, conversation_id: conversationId });
         if (error) { await logAction(client, userId, conversationId, "build", "create_development_task", "Création d’une tâche", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
         await logAction(client, userId, conversationId, "build", "create_development_task", `${input.kind} créé : ${input.title}`, input, "executed");
         return { ok: true, message: `${input.kind} créé dans Développement` };
-      },
+      }),
     }),
   };
 }
@@ -181,6 +211,38 @@ async function rollingSummary(client: Client, userId: string, conversationId: st
     console.error("[ai-chat] résumé impossible", error);
     return previous;
   }
+}
+
+/**
+ * "Tool result is missing for tool call ..." — l'API rejette toute la requête si un
+ * message envoyé au modèle contient un appel d'outil (tool-call) sans résultat
+ * terminal associé (ex: l'utilisateur a rechargé la page ou changé de conversation
+ * PENDANT une demande d'approbation, avant d'avoir cliqué Confirmer/Refuser).
+ *
+ * On garantit ici qu'aucun tool_call ne peut jamais partir sans réponse : tout
+ * appel resté dans un état non terminal (en attente d'approbation, en cours de
+ * saisie, etc.) reçoit un résultat synthétique avant d'être envoyé au modèle —
+ * jamais d'exception, jamais de conversation bloquée.
+ */
+function closeDanglingToolCalls(messages: UIMessage[]): UIMessage[] {
+  const TERMINAL_STATES = new Set(["output-available", "output-error"]);
+  return messages.map((message) => {
+    if (message.role !== "assistant") return message;
+    let mutated = false;
+    const parts = message.parts.map((part) => {
+      const p = part as unknown as Record<string, unknown>;
+      if (typeof p.type !== "string" || !p.type.startsWith("tool-")) return part;
+      const state = typeof p.state === "string" ? p.state : "";
+      if (TERMINAL_STATES.has(state)) return part;
+      mutated = true;
+      return {
+        ...p,
+        state: "output-error",
+        errorText: "Action annulée (conversation interrompue avant confirmation) — sans effet, aucune donnée modifiée.",
+      } as unknown as UIMessage["parts"][number];
+    });
+    return mutated ? { ...message, parts } : message;
+  });
 }
 
 export async function handleAiChat(request: Request) {
@@ -238,11 +300,12 @@ export async function handleAiChat(request: Request) {
 
     const windowed = messages.length > RECENT_WINDOW ? messages.slice(-RECENT_WINDOW) : messages;
     const toolApproval = Object.fromEntries(Object.keys(tools).map((name) => [name, preferences.confirm_actions ? "user-approval" : "not-applicable"]));
+    const safeWindowed = closeDanglingToolCalls(windowed);
 
     const result = streamText({
       model: lovable.responses("openai/gpt-5.6-sol"),
       system: instructions,
-      messages: await convertToModelMessages(windowed),
+      messages: await convertToModelMessages(safeWindowed),
       tools,
       toolApproval,
       stopWhen: stepCountIs(50),
