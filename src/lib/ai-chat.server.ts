@@ -321,7 +321,7 @@ export async function handleAiChat(request: Request) {
         const message = error instanceof Error ? error.message : String(error);
         console.error("[ai-chat] erreur de génération", message);
         if (/rate.?limit|429/i.test(message)) return "Trop de requêtes vers l’IA : réessayez dans quelques instants.";
-        if (/402|credit/i.test(message)) return "Crédits IA épuisés : rechargez votre espace pour continuer.";
+        if (/402|credit|payment required/i.test(message)) return "Crédits IA épuisés : rechargez ton espace Lovable pour continuer (Réglages → Facturation/Usage).";
         if (/timeout|aborted|network|fetch failed/i.test(message)) return "Connexion à l’IA interrompue : votre message est conservé, réessayez.";
         return `Erreur de l’IA : ${message}`;
       },
