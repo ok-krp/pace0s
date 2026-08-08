@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createOpenAI } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
 import { z } from "zod";
 import type { Database, Json } from "@/integrations/supabase/types";
@@ -41,8 +41,8 @@ function errorResponse(error: unknown, startedAt: number) {
 }
 
 function apiKey() {
-  const value = process.env.LOVABLE_API_KEY;
-  if (!value) fail(503, "ai_not_configured", "Lovable AI n’est pas configuré sur ce projet (clé manquante).");
+  const value = process.env.GEMINI_API_KEY;
+  if (!value) fail(503, "ai_not_configured", "L’IA n’est pas configurée sur ce projet (clé Gemini manquante — variable d’environnement GEMINI_API_KEY).");
   return value;
 }
 
@@ -177,7 +177,7 @@ function buildTools(client: Client, userId: string, conversationId: string) {
   };
 }
 
-type Gateway = ReturnType<typeof createOpenAI>;
+type Gateway = ReturnType<typeof createGoogleGenerativeAI>;
 
 /**
  * Résumé glissant : les messages anciens (au-delà de la fenêtre récente) sont condensés
@@ -199,9 +199,8 @@ async function rollingSummary(client: Client, userId: string, conversationId: st
 
   try {
     const result = streamText({
-      model: gateway.responses("openai/gpt-5.6-sol"),
+      model: gateway("gemini-2.5-flash"),
       messages: [{ role: "user", content: `Voici un résumé existant d'une conversation puis de nouveaux échanges à intégrer. Produis un résumé fusionné en français, factuel et dense (800 mots maximum), qui conserve : objectifs, décisions, préférences, chiffres, actions réalisées et informations personnelles utiles. Réponds uniquement par le résumé.\n\n[RÉSUMÉ EXISTANT]\n${previous || "(aucun)"}\n\n[NOUVEAUX ÉCHANGES]\n${transcript}` }],
-      providerOptions: { openai: { store: false } },
     });
     const summary = (await result.text).trim();
     if (!summary) return previous;
@@ -274,7 +273,7 @@ export async function handleAiChat(request: Request) {
     }
 
     const key = apiKey();
-    const lovable = createOpenAI({ baseURL: "https://ai.gateway.lovable.dev/v1", apiKey: key, headers: { "Lovable-API-Key": key, "X-Lovable-AIG-SDK": "vercel-ai-sdk" } });
+    const google = createGoogleGenerativeAI({ apiKey: key });
 
     const preferences = await getPreferencesServer(client, userId);
 
@@ -289,7 +288,7 @@ export async function handleAiChat(request: Request) {
 
     const [dataContext, summary] = await Promise.all([
       agentType === "coach" ? contextForCoach(client, userId, preferences.permissions) : Promise.resolve({}),
-      !ephemeral && preferences.memory_level !== "none" ? rollingSummary(client, userId, conversationId, lovable) : Promise.resolve(""),
+      !ephemeral && preferences.memory_level !== "none" ? rollingSummary(client, userId, conversationId, google) : Promise.resolve(""),
     ]);
 
     const tools = agentType === "coach" ? coachTools(client, userId, conversationId, preferences.permissions) : buildTools(client, userId, conversationId);
@@ -303,13 +302,12 @@ export async function handleAiChat(request: Request) {
     const safeWindowed = closeDanglingToolCalls(windowed);
 
     const result = streamText({
-      model: lovable.responses("openai/gpt-5.6-sol"),
+      model: google("gemini-2.5-flash"),
       system: instructions,
       messages: await convertToModelMessages(safeWindowed),
       tools,
       toolApproval,
       stopWhen: stepCountIs(50),
-      providerOptions: { openai: { forceReasoning: true, reasoningEffort: "medium", reasoningSummary: "auto", store: false, include: ["reasoning.encrypted_content"] } },
       onError: ({ error }) => console.error("[ai-chat] erreur de flux", error),
     });
 
@@ -321,7 +319,7 @@ export async function handleAiChat(request: Request) {
         const message = error instanceof Error ? error.message : String(error);
         console.error("[ai-chat] erreur de génération", message);
         if (/rate.?limit|429/i.test(message)) return "Trop de requêtes vers l’IA : réessayez dans quelques instants.";
-        if (/402|credit|payment required/i.test(message)) return "Crédits IA épuisés : rechargez ton espace Lovable pour continuer (Réglages → Facturation/Usage).";
+        if (/402|payment required/i.test(message)) return "Quota IA gratuit dépassé pour aujourd’hui : réessayez demain, ou passez sur un plan payant Gemini.";
         if (/timeout|aborted|network|fetch failed/i.test(message)) return "Connexion à l’IA interrompue : votre message est conservé, réessayez.";
         return `Erreur de l’IA : ${message}`;
       },
