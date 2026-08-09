@@ -147,7 +147,7 @@ type WeightEntry = { w?: number; muscle?: number; fat?: number };
 export function HealthSettings() {
   const insert = useServerFn(insertHealthSamples);
   const { data, refresh } = useHealthToday();
-  const [, setWeights] = useLocalState<Record<string, WeightEntry>>("lt.weight", {});
+  const [, setWeights] = useLocalState<Record<string, WeightEntry>>("pace.weight", {});
   const [bpm, setBpm] = useState<number | null>(null);
   const [connected, setConnected] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -197,7 +197,7 @@ export function HealthSettings() {
     try {
       await insert({ data: { samples: [{ ts: new Date().toISOString(), type: "heart_rate", value: bpm, source: "ble" }] } });
       toast.success(`BPM ${bpm} enregistré`);
-      window.dispatchEvent(new Event("lt.health.changed"));
+      window.dispatchEvent(new Event("pace.health.changed"));
     } catch (e) { toast.error((e as Error).message); }
   };
 
@@ -216,7 +216,7 @@ export function HealthSettings() {
         total += r.inserted;
       }
       toast.success(`${total} échantillons importés`);
-      window.dispatchEvent(new Event("lt.health.changed"));
+      window.dispatchEvent(new Event("pace.health.changed"));
       await refresh();
     } catch (err) {
       toast.error((err as Error).message);

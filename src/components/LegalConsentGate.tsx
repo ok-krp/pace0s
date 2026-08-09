@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { getGeoLegalContext, getLegalConsentStatus, saveLegalConsent } from "@/lib/legal.functions";
 import { DEFAULT_LEGAL_OPTS, regionLabel, writeLocalLegalConsent, type LegalConsentOptions, type LegalRegion } from "@/lib/legal";
 
-const OPEN_EVENT = "lt.legal.open";
+const OPEN_EVENT = "pace.legal.open";
 
 /** Ouvre la modale de consentement depuis n'importe où (ex: écran Paramètres). */
 export function openConsentSheet() {

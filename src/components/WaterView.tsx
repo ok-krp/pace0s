@@ -13,7 +13,7 @@ type Unit = "ml" | "cl" | "L";
 const TO_ML: Record<Unit, number> = { ml: 1, cl: 10, L: 1000 };
 
 export function WaterView() {
-  const [data, setData] = useLocalState<Record<string, number>>("lt.water", {});
+  const [data, setData] = useLocalState<Record<string, number>>("pace.water", {});
   const goals = useUserGoals();
   const goal = goals.waterMl;
   const today = todayKey();

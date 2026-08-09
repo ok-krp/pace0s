@@ -34,12 +34,12 @@ export function DashboardDialogs({ open, onOpenChange }: { open: DashDialog; onO
 // ---------------- Score details ----------------
 
 function ScoreDetails() {
-  const [sleep] = useLocalState<Record<string, SleepEntry>>("lt.sleep", {});
-  const [water] = useLocalState<Record<string, number>>("lt.water", {});
-  const [nutrition] = useLocalState<Record<string, Nutrition>>("lt.nutrition.totals", {});
-  const [routines] = useLocalState<Record<string, string[]>>("lt.routine.done", {});
-  const [allRoutines] = useLocalState<Array<{ id: string; name: string }>>("lt.routine.list", []);
-  const [work] = useLocalState<Record<string, number>>("lt.work.minutes", {});
+  const [sleep] = useLocalState<Record<string, SleepEntry>>("pace.sleep", {});
+  const [water] = useLocalState<Record<string, number>>("pace.water", {});
+  const [nutrition] = useLocalState<Record<string, Nutrition>>("pace.nutrition.totals", {});
+  const [routines] = useLocalState<Record<string, string[]>>("pace.routine.done", {});
+  const [allRoutines] = useLocalState<Array<{ id: string; name: string }>>("pace.routine.list", []);
+  const [work] = useLocalState<Record<string, number>>("pace.work.minutes", {});
   const goals = useUserGoals();
 
   const today = todayKey();
@@ -177,7 +177,7 @@ function ScoreDetails() {
 // ---------------- Quick actions ----------------
 
 function WaterQuickAdd({ onDone }: { onDone: () => void }) {
-  const [water, setWater] = useLocalState<Record<string, number>>("lt.water", {});
+  const [water, setWater] = useLocalState<Record<string, number>>("pace.water", {});
   const today = todayKey();
   const current = water[today] ?? 0;
   const goals = useUserGoals();
@@ -212,7 +212,7 @@ function WaterQuickAdd({ onDone }: { onDone: () => void }) {
 }
 
 function KcalQuickAdd({ onDone }: { onDone: () => void }) {
-  const [nutrition, setNutrition] = useLocalState<Record<string, Nutrition>>("lt.nutrition.totals", {});
+  const [nutrition, setNutrition] = useLocalState<Record<string, Nutrition>>("pace.nutrition.totals", {});
   const today = todayKey();
   const cur = nutrition[today] ?? { kcal: 0, p: 0, c: 0, f: 0 };
   const goals = useUserGoals();
@@ -255,7 +255,7 @@ function KcalQuickAdd({ onDone }: { onDone: () => void }) {
 }
 
 function SleepQuickForm({ onDone }: { onDone: () => void }) {
-  const [sleep, setSleep] = useLocalState<Record<string, SleepEntry>>("lt.sleep", {});
+  const [sleep, setSleep] = useLocalState<Record<string, SleepEntry>>("pace.sleep", {});
   const today = todayKey();
   const [h, setH] = useState(String(sleep[today]?.hours ?? ""));
   const save = () => {
@@ -290,7 +290,7 @@ function SleepQuickForm({ onDone }: { onDone: () => void }) {
 }
 
 function WeightQuickForm({ onDone }: { onDone: () => void }) {
-  const [weights, setWeights] = useLocalState<Record<string, { w: number }>>("lt.weight", {});
+  const [weights, setWeights] = useLocalState<Record<string, { w: number }>>("pace.weight", {});
   const today = todayKey();
   const [w, setW] = useState(String(weights[today]?.w ?? ""));
   const save = () => {

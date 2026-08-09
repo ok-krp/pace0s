@@ -56,7 +56,7 @@ type ActiveConnection = {
 export function BleDeviceManager() {
   const insert = useServerFn(insertHealthSamples);
   const { data: healthToday, refresh: refreshHealth } = useHealthToday();
-  const [, setWeights] = useLocalState<Record<string, { w?: number; muscle?: number; fat?: number }>>("lt.weight", {});
+  const [, setWeights] = useLocalState<Record<string, { w?: number; muscle?: number; fat?: number }>>("pace.weight", {});
 
   const [devices, setDevices] = useState<PairedDevice[]>([]);
   const [mapping, setMap] = useState<SensorMapping>({});
@@ -70,13 +70,13 @@ export function BleDeviceManager() {
   useEffect(() => {
     const sync = () => { setDevices(listPairedDevices()); setMap(getMapping()); setLog(readImportLog()); };
     sync();
-    window.addEventListener("lt.ble.devices.changed", sync);
-    window.addEventListener("lt.ble.mapping.changed", sync);
-    window.addEventListener("lt.import.log.changed", sync);
+    window.addEventListener("pace.ble.devices.changed", sync);
+    window.addEventListener("pace.ble.mapping.changed", sync);
+    window.addEventListener("pace.import.log.changed", sync);
     return () => {
-      window.removeEventListener("lt.ble.devices.changed", sync);
-      window.removeEventListener("lt.ble.mapping.changed", sync);
-      window.removeEventListener("lt.import.log.changed", sync);
+      window.removeEventListener("pace.ble.devices.changed", sync);
+      window.removeEventListener("pace.ble.mapping.changed", sync);
+      window.removeEventListener("pace.import.log.changed", sync);
     };
   }, []);
 
@@ -131,7 +131,7 @@ export function BleDeviceManager() {
     try {
       const r = await insert({ data: { samples: fresh } });
       logImport({ source: m.source, inserted: r.inserted, skipped });
-      window.dispatchEvent(new Event("lt.health.changed"));
+      window.dispatchEvent(new Event("pace.health.changed"));
     } catch (e) {
       logImport({ source: m.source, inserted: 0, skipped, error: (e as Error).message });
     }
@@ -204,7 +204,7 @@ export function BleDeviceManager() {
     // Perte de connexion → cleanup + tentative de reconnexion si activée
     device.addEventListener?.("gattserverdisconnected", () => {
       activeRef.current.delete(deviceId);
-      window.dispatchEvent(new Event("lt.ble.devices.changed"));
+      window.dispatchEvent(new Event("pace.ble.devices.changed"));
       const paired = listPairedDevices().find((d) => d.id === deviceId);
       if (paired?.autoReconnect) toast.message(`${deviceName} déconnecté — reconnexion manuelle depuis Réglages.`);
     });
@@ -308,7 +308,7 @@ export function BleDeviceManager() {
       }
       logImport({ source: f.name, inserted: total, skipped });
       toast.success(`${total} nouveaux échantillons · ${skipped} doublons ignorés`);
-      window.dispatchEvent(new Event("lt.health.changed"));
+      window.dispatchEvent(new Event("pace.health.changed"));
       await refreshHealth();
     } catch (err) { toast.error((err as Error).message); }
     finally { setImporting(false); e.target.value = ""; }

@@ -93,10 +93,10 @@ const NavLink = memo(function NavLink({ to, active, onNavigate, alert }: { to: N
 
 
 function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) {
-  const [openMap, setOpenMap] = useLocalState<Record<string, boolean>>("lt.sidebar.groups", {
+  const [openMap, setOpenMap] = useLocalState<Record<string, boolean>>("pace.sidebar.groups", {
     assistant: true, nutrition: true, activite: true, finance: true, autres: false,
   });
-  const [recallCount] = useLocalState<number>("lt.recalls.count", 0);
+  const [recallCount] = useLocalState<number>("pace.recalls.count", 0);
   return (
     <nav className="flex flex-col gap-0.5">
       <NavLink to="/" active={currentPath === "/"} onNavigate={onNavigate} />

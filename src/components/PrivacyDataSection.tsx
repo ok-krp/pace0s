@@ -50,7 +50,7 @@ export function PrivacyDataSection() {
     try {
       await runDelete();
       // Purge locale
-      Object.keys(localStorage).filter((k) => k.startsWith("lt.")).forEach((k) => localStorage.removeItem(k));
+      Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k));
       await supabase.auth.signOut();
       toast.success("Compte supprimé. À bientôt.");
       setTimeout(() => { window.location.href = "/login"; }, 400);

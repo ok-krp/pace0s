@@ -54,10 +54,10 @@ const emptyRecipe = (): Recipe => ({
 });
 
 export function RecipesView() {
-  const [favs, setFavs] = useLocalState<string[]>("lt.recipes.favs", []);
-  const [custom, setCustom] = useLocalState<Recipe[]>("lt.recipes.custom", []);
-  const [extraCats, setExtraCats] = useLocalState<string[]>("lt.recipes.cats", []);
-  const [hiddenSeeds, setHiddenSeeds] = useLocalState<string[]>("lt.recipes.hidden", []);
+  const [favs, setFavs] = useLocalState<string[]>("pace.recipes.favs", []);
+  const [custom, setCustom] = useLocalState<Recipe[]>("pace.recipes.custom", []);
+  const [extraCats, setExtraCats] = useLocalState<string[]>("pace.recipes.cats", []);
+  const [hiddenSeeds, setHiddenSeeds] = useLocalState<string[]>("pace.recipes.hidden", []);
   const [editing, setEditing] = useState<Recipe | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [viewing, setViewing] = useState<Recipe | null>(null);
