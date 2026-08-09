@@ -166,9 +166,9 @@ export function RecipesView() {
 
       {favList.length > 0 && !q && (
         <div className="mb-6">
-          <div className="font-display text-lg font-semibold mb-3 flex items-center gap-2">
+          <h2 className="font-display text-lg font-semibold mb-3 flex items-center gap-2">
             <Heart className="size-4 text-destructive fill-current" /> Favoris
-          </div>
+          </h2>
           <RecipeGrid list={favList} favs={favs} setFavs={setFavs} onEdit={openEdit} onView={setViewing} onRemove={remove} onAddToLog={addToLog} defaultMeals={DEFAULT_CATS} />
         </div>
       )}
@@ -178,10 +178,10 @@ export function RecipesView() {
         if (q && list.length === 0) return null;
         return (
           <div key={c} className="mb-6">
-            <div className="font-display text-lg font-semibold mb-3 flex items-center gap-2">
+            <h2 className="font-display text-lg font-semibold mb-3 flex items-center gap-2">
               <ChefHat className="size-4 text-muted-foreground" /> {c}
               <span className="text-xs text-muted-foreground font-normal">({list.length})</span>
-            </div>
+            </h2>
             {list.length === 0 ? (
               <div className="text-xs text-muted-foreground italic">Aucune recette.</div>
             ) : (
