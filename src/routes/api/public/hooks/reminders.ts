@@ -10,7 +10,7 @@ function safeEqual(a: string, b: string): boolean {
 
 type ReminderRow = {
   user_id: string;
-  type: "hydration" | "sleep" | "protein" | "daily_summary" | "inactivity";
+  type: "hydration" | "sleep" | "protein" | "daily_summary" | "inactivity" | "workout";
   enabled: boolean;
   time_local: string | null;
   timezone: string;
@@ -23,6 +23,7 @@ const DEFAULT_TIMES: Record<ReminderRow["type"], string | null> = {
   protein: "20:00",
   daily_summary: "21:00",
   inactivity: null, // checked any time
+  workout: "18:00",
 };
 
 const ANTI_DUP_HOURS: Record<ReminderRow["type"], number> = {
@@ -31,6 +32,7 @@ const ANTI_DUP_HOURS: Record<ReminderRow["type"], number> = {
   protein: 20,
   daily_summary: 20,
   inactivity: 24,
+  workout: 20,
 };
 
 function getLocalParts(tz: string): { hh: number; mm: number; date: string } {
@@ -200,9 +202,13 @@ async function buildMessage(
       if (hoursSince < 36) return null;
       return {
         title: "😴 On t'a perdu ?",
-        message: "Reviens logger un repas ou un verre d'eau pour garder ton streak.",
+        message: "Reviens loguer un repas ou un verre d'eau pour garder ton streak.",
       };
     }
+    case "workout":
+      // Les séances/programmes vivent côté appareil (pas en base), donc impossible de
+      // vérifier ici si l'entraînement du jour est déjà fait — rappel à heure fixe uniquement.
+      return { title: "🏋️ Entraînement", message: "C'est l'heure de ta séance — direction l'onglet Sport." };
   }
 }
 
