@@ -2,9 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-export type ReminderType = "hydration" | "sleep" | "protein" | "daily_summary" | "inactivity";
+export type ReminderType = "hydration" | "sleep" | "protein" | "daily_summary" | "inactivity" | "workout";
 
-const REMINDER_TYPES = ["hydration", "sleep", "protein", "daily_summary", "inactivity"] as const;
+const REMINDER_TYPES = ["hydration", "sleep", "protein", "daily_summary", "inactivity", "workout"] as const;
 
 const upsertSchema = z.object({
   type: z.enum(REMINDER_TYPES),
