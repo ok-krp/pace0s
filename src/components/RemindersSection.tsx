@@ -1,12 +1,13 @@
 import { useReminders, type ReminderRow } from "@/hooks/use-reminders";
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
-import { Droplet, Moon, Beef, BarChart3, AlarmClock } from "lucide-react";
+import { Droplet, Moon, Beef, BarChart3, AlarmClock, Dumbbell } from "lucide-react";
 import { toast } from "sonner";
 import type { ReactNode } from "react";
 
 const LABELS: Record<string, { icon: ReactNode; title: string; desc: string; hasTime: boolean }> = {
   hydration: { icon: <Droplet className="size-4" />, title: "Hydratation", desc: "Rappel de boire si tu n'as pas atteint ton objectif", hasTime: true },
+  workout: { icon: <Dumbbell className="size-4" />, title: "Entraînement", desc: "Rappel à heure fixe (ne vérifie pas si la séance est déjà faite)", hasTime: true },
   sleep: { icon: <Moon className="size-4" />, title: "Sommeil", desc: "Rappel avant ton heure de coucher", hasTime: true },
   protein: { icon: <Beef className="size-4" />, title: "Protéines", desc: "Alerte si <70% de ton objectif protéique", hasTime: true },
   daily_summary: { icon: <BarChart3 className="size-4" />, title: "Résumé quotidien", desc: "Total kcal + macros en fin de journée", hasTime: true },
