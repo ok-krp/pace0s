@@ -98,7 +98,7 @@ function FinancePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
         <div className="rounded-2xl glass-card p-5">
-          <div className="font-display text-lg font-semibold mb-3">Cashflow</div>
+          <h2 className="font-display text-lg font-semibold mb-3">Cashflow</h2>
           <ResponsiveContainer width="100%" height={220}>
             <BarChart data={last30}>
               <XAxis dataKey="d" fontSize={10} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
@@ -111,7 +111,7 @@ function FinancePage() {
           </ResponsiveContainer>
         </div>
         <div className="rounded-2xl glass-card p-5">
-          <div className="font-display text-lg font-semibold mb-3">Par catégorie</div>
+          <h2 className="font-display text-lg font-semibold mb-3">Par catégorie</h2>
           {byCat.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>

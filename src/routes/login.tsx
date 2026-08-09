@@ -96,7 +96,7 @@ function LoginPage() {
           <div className="size-14 mx-auto rounded-2xl stat-grad grid place-items-center text-primary-foreground shadow-[var(--shadow-glow)] mb-4">
             <Sparkles className="size-6" />
           </div>
-          <h1 className="font-display text-3xl font-semibold tracking-tight">Pace</h1>
+          <h1 className="font-display text-3xl font-semibold tracking-tight"><span className="sr-only">Connexion — </span>Pace</h1>
           <p className="text-sm text-muted-foreground mt-1">Votre centre de contrôle de vie</p>
         </div>
 

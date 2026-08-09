@@ -155,7 +155,7 @@ function SportPage() {
       ) : (
         <div className="rounded-2xl glass-card p-4 sm:p-5 mb-3">
           <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-            <div className="font-display text-base sm:text-lg font-semibold flex items-center gap-2"><CalIcon className="size-4 text-muted-foreground" /> Aujourd'hui ({DAYS_LABELS[todayDow]})</div>
+            <h2 className="font-display text-base sm:text-lg font-semibold flex items-center gap-2"><CalIcon className="size-4 text-muted-foreground" /> Aujourd'hui ({DAYS_LABELS[todayDow]})</h2>
           </div>
           {todayPrograms.length === 0 ? (
             <div className="text-sm text-muted-foreground">Aucun programme prévu aujourd'hui. Crée-en un dans l'onglet Programmes.</div>
@@ -237,7 +237,7 @@ function ActiveSession({ active, setActive, exs, onFinish, onCancel }: {
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div>
           <div className="text-xs text-primary font-medium uppercase tracking-wider">Séance en cours</div>
-          <div className="font-display text-xl font-semibold">{active.name}</div>
+          <h2 className="font-display text-xl font-semibold">{active.name}</h2>
         </div>
         <div className="flex gap-2">
           <Button variant="ghost" size="sm" onClick={onCancel}>Annuler</Button>
@@ -381,7 +381,7 @@ const ProgramsTab = memo(function ProgramsTab({ progs, setProgs, exs, onOpenExer
           <div className="flex items-center gap-2 mb-1">
             <span className="text-2xl">{opened.emoji}</span>
             <div>
-              <div className="font-display text-lg font-semibold">{opened.name}</div>
+              <h2 className="font-display text-lg font-semibold">{opened.name}</h2>
               <div className="text-xs text-muted-foreground">{opened.items.length} exercice{opened.items.length === 1 ? "" : "s"} · {opened.days.map((d) => DAYS_LABELS[d]).join(" · ") || "Aucun jour"}</div>
             </div>
           </div>

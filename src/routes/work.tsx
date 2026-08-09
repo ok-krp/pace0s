@@ -74,7 +74,7 @@ function WorkPage() {
       </div>
 
       <div className="rounded-2xl glass-card p-5 mb-4">
-        <div className="font-display text-lg font-semibold mb-3">Heures travaillées 14j</div>
+        <h2 className="font-display text-lg font-semibold mb-3">Heures travaillées 14j</h2>
         <ResponsiveContainer width="100%" height={200}>
           <BarChart data={series}>
             <XAxis dataKey="d" fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />

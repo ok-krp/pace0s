@@ -123,7 +123,7 @@ function ProfilePage() {
       </div>
 
       <div className="rounded-2xl glass-card p-6 mb-4">
-        <div className="font-display text-lg font-semibold mb-4">Objectifs quotidiens</div>
+        <h2 className="font-display text-lg font-semibold mb-4">Objectifs quotidiens</h2>
         <div className="grid sm:grid-cols-3 gap-4">
           <div>
             <Label className="text-xs">Calories (kcal)</Label>

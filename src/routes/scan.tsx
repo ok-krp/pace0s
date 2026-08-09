@@ -240,7 +240,7 @@ function ScanPage() {
           <div className="size-11 rounded-xl stat-grad grid place-items-center text-primary-foreground mb-3 shadow-[var(--shadow-glow)]">
             <ScanLine className="size-5" />
           </div>
-          <div className="font-display text-lg font-semibold">Scanner code-barres</div>
+          <h2 className="font-display text-lg font-semibold">Scanner code-barres</h2>
           <div className="text-xs text-muted-foreground mt-1">Base OpenFoodFacts · 3M+ produits</div>
         </motion.button>
 
@@ -252,7 +252,7 @@ function ScanPage() {
           <div className="size-11 rounded-xl bg-gradient-to-br from-fuchsia-500 to-purple-600 grid place-items-center text-white mb-3 shadow-[var(--shadow-glow)]">
             <Camera className="size-5" />
           </div>
-          <div className="font-display text-lg font-semibold">Photo IA</div>
+          <h2 className="font-display text-lg font-semibold">Photo IA</h2>
           <div className="text-xs text-muted-foreground mt-1">Analyse vision · macros estimées</div>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
         </motion.button>
@@ -284,7 +284,7 @@ function ScanPage() {
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="font-display text-lg font-semibold truncate">{product.name}</div>
+                  <h2 className="font-display text-lg font-semibold truncate">{product.name}</h2>
                   <div className="text-xs text-muted-foreground">{product.brand || "—"}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">
@@ -359,7 +359,7 @@ function ScanPage() {
                     <Sparkles className="size-3.5 text-primary" />
                     <span className="text-[10px] uppercase tracking-wider text-primary font-medium">Analyse IA</span>
                   </div>
-                  <div className="font-display text-lg font-semibold truncate">{aiResult.dish_name}</div>
+                  <h2 className="font-display text-lg font-semibold truncate">{aiResult.dish_name}</h2>
                   <div className="text-xs text-muted-foreground">~{Math.round(sumItems(aiItems).grams)}g · {aiItems.slice(0,3).map((i) => i.name).join(", ")}</div>
                 </div>
                 <div className="flex flex-col items-end gap-1">

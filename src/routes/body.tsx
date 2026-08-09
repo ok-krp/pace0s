@@ -73,7 +73,7 @@ function BodyPage() {
 
       <div className="rounded-2xl glass-card p-5">
         <div className="flex items-center justify-between mb-3">
-          <div className="font-display text-lg font-semibold">Évolution</div>
+          <h2 className="font-display text-lg font-semibold">Évolution</h2>
           <div className="flex gap-1">
             {[7, 30, 90, 180, 365].map((p) => (
               <button key={p} onClick={() => setPeriod(p)} className={`text-xs px-2.5 py-1 rounded-lg ${period === p ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>

@@ -60,7 +60,7 @@ function CalendarPage() {
 
       <div className="rounded-2xl glass-card p-5">
         <div className="flex items-center justify-between mb-4">
-          <div className="font-display text-xl font-semibold capitalize">{monthName}</div>
+          <h2 className="font-display text-xl font-semibold capitalize">{monthName}</h2>
           <div className="flex gap-1">
             <button onClick={() => setCursor(new Date(year, month - 1, 1))} className="size-9 rounded-lg hover:bg-muted grid place-items-center"><ChevronLeft className="size-4" /></button>
             <button onClick={() => setCursor(new Date())} className="px-3 rounded-lg hover:bg-muted text-sm">Aujourd'hui</button>
@@ -133,9 +133,9 @@ function DayDetails({ date, sleep, water, nutTotal, nutList, routineIds, habits,
 
   return (
     <div className="mt-4 rounded-2xl glass-card p-5">
-      <div className="font-display text-lg font-semibold mb-3">
+      <h2 className="font-display text-lg font-semibold mb-3">
         {new Date(date).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-      </div>
+      </h2>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-4">
         <Cell label="Sommeil" v={sleep?.hours ? `${sleep.hours.toFixed(1)} h` : "—"} />

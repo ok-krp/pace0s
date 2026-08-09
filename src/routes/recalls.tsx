@@ -79,7 +79,7 @@ function RecallsPage() {
             <div className="flex items-start gap-3">
               <div className="size-10 rounded-xl bg-rose-500/10 grid place-items-center text-rose-600 shrink-0"><AlertTriangle className="size-5" /></div>
               <div className="flex-1 min-w-0">
-                <div className="font-display text-lg font-semibold">{r.product_name ?? "Produit"} {r.brand && <span className="text-xs text-muted-foreground">· {r.brand}</span>}</div>
+                <h2 className="font-display text-lg font-semibold">{r.product_name ?? "Produit"} {r.brand && <span className="text-xs text-muted-foreground">· {r.brand}</span>}</h2>
                 <div className="text-[11px] text-muted-foreground">Code-barres {r.barcode}</div>
                 {r.recalls.map((rc, i) => (
                   <div key={i} className="mt-2 text-sm">

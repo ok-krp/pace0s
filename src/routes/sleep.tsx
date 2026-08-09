@@ -77,7 +77,7 @@ function SleepPage() {
       </div>
 
       <div className="rounded-2xl glass-card p-5">
-        <div className="font-display text-lg font-semibold mb-3">Tendance 30 jours</div>
+        <h2 className="font-display text-lg font-semibold mb-3">Tendance 30 jours</h2>
         <ResponsiveContainer width="100%" height={260}>
           <LineChart data={data}>
             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
