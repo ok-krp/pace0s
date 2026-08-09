@@ -156,7 +156,7 @@ export function RecipesView() {
               <button onClick={() => moveCat(idx, 1)} disabled={idx === extraCats.length - 1} className="text-muted-foreground hover:text-foreground disabled:opacity-30" aria-label="Déplacer à droite"><ArrowRight className="size-3" /></button>
               <span className="px-1">{c}</span>
               <button onClick={() => renameCat(c)} className="text-muted-foreground hover:text-foreground"><Pencil className="size-3" /></button>
-              <button onClick={() => deleteCat(c)} className="text-muted-foreground hover:text-destructive"><X className="size-3" /></button>
+              <button onClick={() => deleteCat(c)} aria-label={`Supprimer la catégorie ${c}`} className="text-muted-foreground hover:text-destructive"><X className="size-3" /></button>
             </span>
           ))}
           <Input value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="Nouvelle catégorie" className="h-7 w-44 text-xs" />
@@ -354,7 +354,7 @@ function RecipeForm({ recipe, cats, onSave, onCancel }: { recipe: Recipe; cats: 
           {r.photo ? (
             <div className="relative">
               <img src={r.photo} alt={`Photo de la recette ${r.name}`} className="size-20 rounded-xl object-cover aspect-square" />
-              <button onClick={() => update("photo", undefined)} className="absolute -top-1 -right-1 size-5 rounded-full bg-destructive text-destructive-foreground grid place-items-center"><X className="size-3" /></button>
+              <button onClick={() => update("photo", undefined)} aria-label="Retirer la photo" className="absolute -top-1 -right-1 size-5 rounded-full bg-destructive text-destructive-foreground grid place-items-center"><X className="size-3" /></button>
             </div>
           ) : (
             <button onClick={() => fileRef.current?.click()} className="size-20 rounded-xl border-2 border-dashed border-border grid place-items-center text-muted-foreground hover:bg-muted">
