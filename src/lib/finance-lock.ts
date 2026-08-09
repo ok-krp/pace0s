@@ -4,17 +4,17 @@
 // - Option "lockOnEnter" : exige re-saisie à chaque visite (ignore le cache de session)
 // - Biométrie (WebAuthn / Face ID / empreinte) — vérification locale via platform authenticator
 
-const KEY_HASH = "lt.privacy.pin.hash";
-const KEY_UNLOCKED = "lt.privacy.unlocked";
-const KEY_LOCK_ON_ENTER = "lt.privacy.lockOnEnter";
-const KEY_BIO_CREDENTIAL = "lt.privacy.bioCredentialId"; // base64url
+const KEY_HASH = "pace.privacy.pin.hash";
+const KEY_UNLOCKED = "pace.privacy.unlocked";
+const KEY_LOCK_ON_ENTER = "pace.privacy.lockOnEnter";
+const KEY_BIO_CREDENTIAL = "pace.privacy.bioCredentialId"; // base64url
 
 // Migration des anciennes clés (finance-only)
 function migrate() {
   try {
-    const old = localStorage.getItem("lt.finance.pin.hash");
+    const old = localStorage.getItem("pace.finance.pin.hash");
     if (old && !localStorage.getItem(KEY_HASH)) localStorage.setItem(KEY_HASH, old);
-    const oldUnlocked = sessionStorage.getItem("lt.finance.unlocked");
+    const oldUnlocked = sessionStorage.getItem("pace.finance.unlocked");
     if (oldUnlocked && !sessionStorage.getItem(KEY_UNLOCKED)) sessionStorage.setItem(KEY_UNLOCKED, oldUnlocked);
   } catch {
     /* ignore */

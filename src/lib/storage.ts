@@ -1,16 +1,47 @@
 import { useEffect, useState, useCallback } from "react";
 
+const OLD_PREFIX = "lt.";
+const NEW_PREFIX = "pace.";
+const MIGRATION_FLAG = "pace.__migrated_lt";
+
+/**
+ * Migration unique : le projet s'appelait auparavant "LifeTracker" et stockait
+ * toutes ses données sous des clés lt.*. Copie chaque ancienne clé vers son
+ * équivalent pace.* (sans écraser une valeur pace.* déjà présente), puis
+ * supprime l'ancienne. Exécutée une seule fois, avant toute lecture — aucune
+ * donnée existante n'est perdue lors du renommage.
+ */
+function migrateLegacyKeys() {
+  if (typeof window === "undefined") return;
+  try {
+    if (localStorage.getItem(MIGRATION_FLAG)) return;
+    const legacyKeys = Object.keys(localStorage).filter((k) => k.startsWith(OLD_PREFIX));
+    for (const oldKey of legacyKeys) {
+      const newKey = NEW_PREFIX + oldKey.slice(OLD_PREFIX.length);
+      const value = localStorage.getItem(oldKey);
+      if (value !== null && localStorage.getItem(newKey) === null) {
+        localStorage.setItem(newKey, value);
+      }
+      localStorage.removeItem(oldKey);
+    }
+    localStorage.setItem(MIGRATION_FLAG, "1");
+  } catch {
+    // Stockage indisponible (navigation privée, quota...) — on retentera au prochain chargement.
+  }
+}
+migrateLegacyKeys();
+
 /**
  * Événement émis à chaque écriture locale d'une clé lt.* — écouté par le moteur
  * de sync cloud pour pousser automatiquement (voir use-cloud-sync-engine.tsx).
  */
-const LOCAL_WRITE_EVENT = "lt.local.write";
+const LOCAL_WRITE_EVENT = "pace.local.write";
 /**
  * Événement émis quand une donnée arrive depuis le Cloud (autre appareil) —
  * toutes les instances de useLocalState sur cette clé se mettent à jour en
  * direct, sans rechargement de page.
  */
-const REMOTE_WRITE_EVENT = "lt.remote.write";
+const REMOTE_WRITE_EVENT = "pace.remote.write";
 
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);

@@ -19,8 +19,8 @@ export type NutritionItem = {
   qty: number;
 };
 
-const KEY_ITEMS = "lt.nutrition.items";
-const KEY_TOTALS = "lt.nutrition.totals";
+const KEY_ITEMS = "pace.nutrition.items";
+const KEY_TOTALS = "pace.nutrition.totals";
 
 export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }) {
   const today = todayKey();
@@ -39,5 +39,5 @@ export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty
   t[today] = totals;
   localStorage.setItem(KEY_TOTALS, JSON.stringify(t));
   // notify same-tab listeners
-  window.dispatchEvent(new Event("lt.nutrition.changed"));
+  window.dispatchEvent(new Event("pace.nutrition.changed"));
 }

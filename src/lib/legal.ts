@@ -20,7 +20,7 @@ export const DEFAULT_LEGAL_OPTS: LegalConsentOptions = {
   ai: false,
 };
 
-const STORAGE_KEY = "lt.legal.consent";
+const STORAGE_KEY = "pace.legal.consent";
 
 export function readLocalLegalConsent(): { opts: LegalConsentOptions } | null {
   if (typeof window === "undefined") return null;
@@ -38,7 +38,7 @@ export function writeLocalLegalConsent(opts: LegalConsentOptions) {
     STORAGE_KEY,
     JSON.stringify({ opts, eula: LEGAL_VERSIONS.eula, privacy: LEGAL_VERSIONS.privacy }),
   );
-  window.dispatchEvent(new Event("lt.legal.changed"));
+  window.dispatchEvent(new Event("pace.legal.changed"));
 }
 
 export function isLegalCategoryAllowed(category: keyof LegalConsentOptions): boolean {

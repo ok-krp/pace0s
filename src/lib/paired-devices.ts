@@ -5,8 +5,8 @@
 
 import type { MeasurementType } from "./ble";
 
-const KEY = "lt.ble.devices";
-const MAP_KEY = "lt.ble.mapping";
+const KEY = "pace.ble.devices";
+const MAP_KEY = "pace.ble.mapping";
 
 export type PairedDevice = {
   id: string;                 // navigator.bluetooth device.id (opaque, stable par origine)
@@ -55,11 +55,11 @@ export function savePairedDevice(dev: PairedDevice) {
   if (i >= 0) all[i] = { ...all[i], ...dev };
   else all.push(dev);
   safeWrite(KEY, all);
-  window.dispatchEvent(new Event("lt.ble.devices.changed"));
+  window.dispatchEvent(new Event("pace.ble.devices.changed"));
 }
 export function removePairedDevice(id: string) {
   safeWrite(KEY, listPairedDevices().filter((d) => d.id !== id));
-  window.dispatchEvent(new Event("lt.ble.devices.changed"));
+  window.dispatchEvent(new Event("pace.ble.devices.changed"));
 }
 export function updateDeviceMeasurement(id: string, type: MeasurementType, value: number, ts: string) {
   const all = listPairedDevices();
@@ -71,12 +71,12 @@ export function updateDeviceMeasurement(id: string, type: MeasurementType, value
   if (type === "battery") d.battery = value;
   all[i] = d;
   safeWrite(KEY, all);
-  window.dispatchEvent(new Event("lt.ble.devices.changed"));
+  window.dispatchEvent(new Event("pace.ble.devices.changed"));
 }
 export function getMapping(): SensorMapping {
   return { ...DEFAULT_MAPPING, ...safeRead<SensorMapping>(MAP_KEY, {}) };
 }
 export function setMapping(m: SensorMapping) {
   safeWrite(MAP_KEY, m);
-  window.dispatchEvent(new Event("lt.ble.mapping.changed"));
+  window.dispatchEvent(new Event("pace.ble.mapping.changed"));
 }

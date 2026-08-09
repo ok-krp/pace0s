@@ -4,8 +4,8 @@
  * - `lt.import.log`: historique horodaté (source, count, errors) affiché dans les réglages.
  */
 
-const SEEN_KEY = "lt.ble.seen";
-const LOG_KEY = "lt.import.log";
+const SEEN_KEY = "pace.ble.seen";
+const LOG_KEY = "pace.import.log";
 const SEEN_MAX = 5000;
 const LOG_MAX = 100;
 
@@ -52,7 +52,7 @@ export function logImport(entry: Omit<ImportEntry, "ts"> & { ts?: string }) {
   const arr = safeReadArr<ImportEntry>(LOG_KEY);
   arr.unshift({ ts: entry.ts ?? new Date().toISOString(), ...entry });
   safeWrite(LOG_KEY, arr.slice(0, LOG_MAX));
-  if (typeof window !== "undefined") window.dispatchEvent(new Event("lt.import.log.changed"));
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("pace.import.log.changed"));
 }
 
 export function readImportLog(): ImportEntry[] {
@@ -61,5 +61,5 @@ export function readImportLog(): ImportEntry[] {
 
 export function clearImportLog() {
   safeWrite(LOG_KEY, []);
-  if (typeof window !== "undefined") window.dispatchEvent(new Event("lt.import.log.changed"));
+  if (typeof window !== "undefined") window.dispatchEvent(new Event("pace.import.log.changed"));
 }
