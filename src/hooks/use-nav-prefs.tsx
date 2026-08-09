@@ -42,9 +42,9 @@ const clean = (arr: unknown): NavItemKey[] =>
   Array.isArray(arr) ? (arr.filter((x): x is NavItemKey => typeof x === "string" && ALLOWED.has(x as NavItemKey))) : [];
 
 export function useNavPrefs() {
-  const [order, setOrder] = useLocalState<NavItemKey[]>("lt.mobile.nav.order", NAV_DEFAULT_ORDER);
-  const [bottom, setBottom] = useLocalState<NavItemKey[]>("lt.mobile.nav.bottom", BOTTOM_DEFAULT);
-  const [visible, setVisible] = useLocalState<NavItemKey[]>("lt.mobile.nav.visible", NAV_DEFAULT_ORDER);
+  const [order, setOrder] = useLocalState<NavItemKey[]>("pace.mobile.nav.order", NAV_DEFAULT_ORDER);
+  const [bottom, setBottom] = useLocalState<NavItemKey[]>("pace.mobile.nav.bottom", BOTTOM_DEFAULT);
+  const [visible, setVisible] = useLocalState<NavItemKey[]>("pace.mobile.nav.visible", NAV_DEFAULT_ORDER);
 
   const cleanOrder = clean(order);
   const cleanBottom = clean(bottom);

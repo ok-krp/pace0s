@@ -3,10 +3,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 
-const LT_PREFIX = "lt.";
+const LT_PREFIX = "pace.";
 // Keys excluded from sync (volatile / device-specific)
 const EXCLUDED = new Set<string>([
-  "lt.sport.active", // ongoing workout — device-local
+  "pace.sport.active", // ongoing workout — device-local
 ]);
 
 export type SyncStatus = "idle" | "syncing" | "ok" | "error";
@@ -24,8 +24,8 @@ export function useCloudSync() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     const refresh = () => setConsentAllowed(isLegalCategoryAllowed("sync_cloud"));
-    window.addEventListener("lt.legal.changed", refresh);
-    return () => window.removeEventListener("lt.legal.changed", refresh);
+    window.addEventListener("pace.legal.changed", refresh);
+    return () => window.removeEventListener("pace.legal.changed", refresh);
   }, []);
 
   const pushAll = useCallback(async () => {
@@ -65,9 +65,13 @@ export function useCloudSync() {
       if (error) throw error;
       let n = 0;
       (data ?? []).forEach((row) => {
-        if (EXCLUDED.has(row.key)) return;
-        if (!overwrite && localStorage.getItem(row.key) !== null) return;
-        localStorage.setItem(row.key, JSON.stringify(row.value));
+        // Anciennes sauvegardes cloud faites avant le renommage lt.* → pace.* :
+        // on remappe la clé à la volée pour que la restauration retombe sur les
+        // bonnes clés, celles que useLocalState lit réellement aujourd'hui.
+        const key = row.key.startsWith("lt.") ? "pace." + row.key.slice(3) : row.key;
+        if (EXCLUDED.has(key)) return;
+        if (!overwrite && localStorage.getItem(key) !== null) return;
+        localStorage.setItem(key, JSON.stringify(row.value));
         n++;
       });
       setStatus("ok"); setLastMessage(`${n} clés restaurées.`);

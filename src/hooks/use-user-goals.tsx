@@ -15,7 +15,7 @@ const DEFAULT: UserGoals = { kcal: 2300, protein: 140, waterMl: 2500, weightKg: 
 
 export function useUserGoals(): UserGoals {
   const { user } = useAuth();
-  const [cached, setCached] = useLocalState<UserGoals>("lt.user.goals", DEFAULT);
+  const [cached, setCached] = useLocalState<UserGoals>("pace.user.goals", DEFAULT);
   const [goals, setGoals] = useState<UserGoals>(cached);
 
   useEffect(() => {

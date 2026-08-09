@@ -37,8 +37,8 @@ export function usePush() {
 
   useEffect(() => {
     const refresh = () => setConsentAllowed(isLegalCategoryAllowed("notifications"));
-    window.addEventListener("lt.legal.changed", refresh);
-    return () => window.removeEventListener("lt.legal.changed", refresh);
+    window.addEventListener("pace.legal.changed", refresh);
+    return () => window.removeEventListener("pace.legal.changed", refresh);
   }, []);
 
   // Keep permission state in sync (user may change it in browser settings without reload)

@@ -13,8 +13,8 @@ import { useLocalState } from "@/lib/storage";
  */
 export type GlassQuality = "high" | "balanced" | "low";
 
-export const GLASS_QUALITY_KEY = "lt.glassQuality";
-export const GLASS_AUTO_KEY = "lt.glassAuto";
+export const GLASS_QUALITY_KEY = "pace.glassQuality";
+export const GLASS_AUTO_KEY = "pace.glassAuto";
 
 export const GLASS_LEVELS: { id: GlassQuality; label: string; desc: string }[] = [
   { id: "high", label: "Haute", desc: "Flou complet, reflets dynamiques, Fresnel marqué" },

@@ -35,8 +35,8 @@ export function useHealthToday() {
   useEffect(() => { void refresh(); }, [refresh]);
   useEffect(() => {
     const handler = () => void refresh();
-    window.addEventListener("lt.health.changed", handler);
-    return () => window.removeEventListener("lt.health.changed", handler);
+    window.addEventListener("pace.health.changed", handler);
+    return () => window.removeEventListener("pace.health.changed", handler);
   }, [refresh]);
 
   return { data, loading, refresh };

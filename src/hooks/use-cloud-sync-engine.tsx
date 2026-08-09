@@ -4,11 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 
-const LT_PREFIX = "lt.";
-const EXCLUDED = new Set<string>(["lt.sport.active"]); // en cours, propre à l'appareil
+const LT_PREFIX = "pace.";
+const EXCLUDED = new Set<string>(["pace.sport.active"]); // en cours, propre à l'appareil
 const DEBOUNCE_MS = 1200;
 const POLL_MS = 15_000;
-const QUEUE_KEY = "lt.__sync_queue"; // clés en attente d'envoi (hors-ligne / échec)
+const QUEUE_KEY = "pace.__sync_queue"; // clés en attente d'envoi (hors-ligne / échec)
 // Identifiant de cet onglet/appareil : sert à ignorer nos propres écritures
 // quand elles reviennent via le canal temps réel (évite les boucles).
 const DEVICE_ID = typeof crypto !== "undefined" ? crypto.randomUUID() : String(Math.random());

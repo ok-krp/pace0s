@@ -115,7 +115,7 @@ export const WALLPAPERS: WallpaperPreset[] = [
 type CustomWallpaper = { kind: "custom"; dataUrl: string };
 type WallpaperChoice = { id: string } | CustomWallpaper;
 
-const KEY = "lt.wallpaper";
+const KEY = "pace.wallpaper";
 const DEFAULT: WallpaperChoice = { id: "graphite" };
 
 export function useWallpaper() {

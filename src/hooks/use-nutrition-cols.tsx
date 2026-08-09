@@ -20,5 +20,5 @@ export const NUT_COLS: { key: NutCol; label: string; unit: string }[] = [
 export const DEFAULT_NUT_COLS: NutCol[] = ["kcal", "protein", "carbs", "fat"];
 
 export function useNutritionCols() {
-  return useLocalState<NutCol[]>("lt.nutrition.columns", DEFAULT_NUT_COLS);
+  return useLocalState<NutCol[]>("pace.nutrition.columns", DEFAULT_NUT_COLS);
 }
