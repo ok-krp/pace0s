@@ -14,6 +14,40 @@ export const Route = createFileRoute("/body")({
 });
 
 type Entry = { w?: number; muscle?: number; fat?: number; waist?: number };
+type Point = { d: string; w?: number; muscle?: number; fat?: number };
+
+/** Lundi de la semaine contenant cette date (sert de clé de regroupement hebdomadaire). */
+function weekKey(dateStr: string): string {
+  const d = new Date(`${dateStr}T00:00:00`);
+  const day = (d.getDay() + 6) % 7; // 0 = lundi
+  d.setDate(d.getDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+
+function monthKey(dateStr: string): string {
+  return dateStr.slice(0, 7); // "YYYY-MM"
+}
+
+/** Moyenne les entrées par clé (jour/semaine/mois) — un point de graphique par bucket. */
+function aggregate(entries: { date: string; e: Entry }[], keyFn: (d: string) => string, labelFn: (key: string) => string): Point[] {
+  const buckets = new Map<string, { key: string; sumW: number; nW: number; sumM: number; nM: number; sumF: number; nF: number }>();
+  for (const { date, e } of entries) {
+    const k = keyFn(date);
+    if (!buckets.has(k)) buckets.set(k, { key: k, sumW: 0, nW: 0, sumM: 0, nM: 0, sumF: 0, nF: 0 });
+    const b = buckets.get(k)!;
+    if (e.w != null) { b.sumW += e.w; b.nW++; }
+    if (e.muscle != null) { b.sumM += e.muscle; b.nM++; }
+    if (e.fat != null) { b.sumF += e.fat; b.nF++; }
+  }
+  return [...buckets.values()]
+    .sort((a, b) => a.key.localeCompare(b.key))
+    .map((b) => ({
+      d: labelFn(b.key),
+      w: b.nW ? Math.round((b.sumW / b.nW) * 10) / 10 : undefined,
+      muscle: b.nM ? Math.round((b.sumM / b.nM) * 10) / 10 : undefined,
+      fat: b.nF ? Math.round((b.sumF / b.nF) * 10) / 10 : undefined,
+    }));
+}
 
 function BodyPage() {
   const [data, setData] = useLocalState<Record<string, Entry>>("lt.weight", {});
@@ -23,13 +57,21 @@ function BodyPage() {
   const [period, setPeriod] = useState(30);
 
   const days = lastNDays(period);
-  const series = days.map((d) => ({ d: d.slice(5), ...data[d] }));
-  const valid = series.filter((x) => x.w);
-  const min = valid.length ? Math.min(...valid.map((x) => x.w!)) : 0;
-  const max = valid.length ? Math.max(...valid.map((x) => x.w!)) : 0;
-  const avg = valid.length ? valid.reduce((s, x) => s + x.w!, 0) / valid.length : 0;
-  const first = valid[0]?.w;
-  const last = valid[valid.length - 1]?.w;
+  const entries = days.map((date) => ({ date, e: data[date] ?? {} }));
+  // Granularité adaptée à la période : 1 semaine → par jour, 1-3 mois → moyenne par
+  // semaine, 6 mois-1 an → moyenne par mois. Sinon un an de points quotidiens serait illisible.
+  const series: Point[] =
+    period <= 7
+      ? entries.map(({ date, e }) => ({ d: date.slice(5), ...e }))
+      : period <= 90
+        ? aggregate(entries, weekKey, (key) => new Date(`${key}T00:00:00`).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }))
+        : aggregate(entries, monthKey, (key) => new Date(`${key}-01T00:00:00`).toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }));
+  const validDaily = entries.filter((x) => x.e.w != null);
+  const min = validDaily.length ? Math.min(...validDaily.map((x) => x.e.w!)) : 0;
+  const max = validDaily.length ? Math.max(...validDaily.map((x) => x.e.w!)) : 0;
+  const avg = validDaily.length ? validDaily.reduce((s, x) => s + x.e.w!, 0) / validDaily.length : 0;
+  const first = validDaily[0]?.e.w;
+  const last = validDaily[validDaily.length - 1]?.e.w;
   const delta = first && last ? last - first : 0;
 
   const save = () => {
