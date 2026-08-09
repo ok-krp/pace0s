@@ -16,9 +16,10 @@ const DEFAULT_TIMES: Record<ReminderType, string | null> = {
   protein: "20:00",
   daily_summary: "21:00",
   inactivity: null,
+  workout: "18:00",
 };
 
-const ALL_TYPES: ReminderType[] = ["hydration", "sleep", "protein", "daily_summary", "inactivity"];
+const ALL_TYPES: ReminderType[] = ["hydration", "sleep", "protein", "daily_summary", "inactivity", "workout"];
 
 export function useReminders() {
   const list = useServerFn(listReminders);
