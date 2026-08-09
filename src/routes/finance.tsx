@@ -137,7 +137,7 @@ function FinancePage() {
                 <div className="text-xs text-muted-foreground">{x.date} · {x.cat}{x.shipping ? ` · livraison ${x.shipping}€` : ""}</div>
               </div>
               <div className={`text-sm font-semibold ${x.amount > 0 ? "text-[color:var(--success)]" : ""}`}>{x.amount > 0 ? "+" : ""}{x.amount.toFixed(2)}€</div>
-              <button onClick={() => remove(x.id)} className="text-muted-foreground opacity-60 group-hover:opacity-100 hover:text-destructive"><Trash2 className="size-4" /></button>
+              <button onClick={() => remove(x.id)} aria-label="Supprimer cette transaction" className="text-muted-foreground opacity-60 group-hover:opacity-100 hover:text-destructive"><Trash2 className="size-4" /></button>
             </li>
           ))}
           {tx.length === 0 && <li className="px-5 py-12 text-center text-muted-foreground text-sm">Aucune transaction</li>}
@@ -206,7 +206,7 @@ function InvestPage() {
                 <div className="font-semibold">{p >= 0 ? "+" : ""}{p.toFixed(0)}€</div>
                 <div className="text-xs">{r >= 0 ? "+" : ""}{r.toFixed(1)}%</div>
               </div>
-              <button onClick={() => remove(a.id)} className="text-muted-foreground opacity-60 group-hover:opacity-100 hover:text-destructive"><Trash2 className="size-4" /></button>
+              <button onClick={() => remove(a.id)} aria-label="Supprimer cet actif" className="text-muted-foreground opacity-60 group-hover:opacity-100 hover:text-destructive"><Trash2 className="size-4" /></button>
             </div>
           );
         })}

@@ -252,7 +252,7 @@ function ActiveSession({ active, setActive, exs, onFinish, onCancel }: {
             <div key={exIdx} className="rounded-xl glass-thin p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">{meta?.name ?? "Exercice"} <span className="text-xs text-muted-foreground">{meta?.muscle}</span></div>
-                <button onClick={() => removeExercise(exIdx)} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
+                <button onClick={() => removeExercise(exIdx)} aria-label="Retirer cet exercice" className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
               </div>
               <div className="space-y-1.5">
                 {e.sets.map((s, j) => (
@@ -313,7 +313,7 @@ const ExercisesTab = memo(function ExercisesTab({ exs, setExs }: { exs: Exercise
               </div>
               <div className="flex gap-1 shrink-0">
                 <button onClick={() => { setEditing(e); setOpen(true); }} className="text-muted-foreground hover:text-foreground"><Pencil className="size-3.5" /></button>
-                <button onClick={() => setExs((p) => p.filter((x) => x.id !== e.id))} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
+                <button onClick={() => setExs((p) => p.filter((x) => x.id !== e.id))} aria-label={`Supprimer l’exercice ${e.name}`} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
               </div>
             </div>
           ))}
@@ -439,7 +439,7 @@ const ProgramsTab = memo(function ProgramsTab({ progs, setProgs, exs, onOpenExer
                 </button>
                 <div className="flex gap-1 shrink-0">
                   <button onClick={() => { setEditing(p); setOpen(true); }} className="text-muted-foreground hover:text-foreground"><Pencil className="size-3.5" /></button>
-                  <button onClick={() => setProgs((prev) => prev.filter((x) => x.id !== p.id))} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
+                  <button onClick={() => setProgs((prev) => prev.filter((x) => x.id !== p.id))} aria-label={`Supprimer le programme ${p.name}`} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
                 </div>
               </div>
             </div>
@@ -488,7 +488,7 @@ function ProgramForm({ prog, exs, onSave, onCancel }: { prog: Program | null; ex
                   <span className="text-xs text-muted-foreground">×</span>
                   <Input type="number" value={it.reps} onChange={(e) => updateItem(i, { reps: +e.target.value || 1 })} className="h-8 w-14" />
                   <Input type="number" placeholder="kg" value={it.weight ?? ""} onChange={(e) => updateItem(i, { weight: +e.target.value || 0 })} className="h-8 w-16" />
-                  <button onClick={() => removeItem(i)} className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
+                  <button onClick={() => removeItem(i)} aria-label="Retirer cet exercice du programme" className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
                 </div>
               );
             })}
@@ -531,7 +531,7 @@ const HistoryTab = memo(function HistoryTab({ sessions, exs, onDelete }: { sessi
                       <div className="font-medium">{s.name}</div>
                       <div className="text-xs text-muted-foreground">{s.durationMin ?? 0} min · {Math.round(vol)} kg volume · {s.exercises.length} exercices</div>
                     </div>
-                    <button onClick={() => onDelete(s.id)} className="text-muted-foreground hover:text-destructive shrink-0"><Trash2 className="size-3.5" /></button>
+                    <button onClick={() => onDelete(s.id)} aria-label="Supprimer cette séance" className="text-muted-foreground hover:text-destructive shrink-0"><Trash2 className="size-3.5" /></button>
                   </div>
                   <div className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
                     {s.exercises.map((e) => {
@@ -764,7 +764,7 @@ const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, se
                             <div className="bg-card px-1 py-1"><Input type="number" value={r.reps || ""} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { reps: +e.target.value || 0 })} className="h-8 text-center" /></div>
                             <div className="bg-card px-1 py-1"><Input type="number" value={r.sets || ""} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { sets: +e.target.value || 0 })} className="h-8 text-center" /></div>
                             <div className="bg-card px-1 py-1"><Input value={r.note ?? ""} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { note: e.target.value })} placeholder="Ressenti…" className="h-8 text-xs" /></div>
-                            <button onClick={() => (locked ? guardSession(r) : removeRow(ex.id, r.id))} className="bg-card grid place-items-center text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
+                            <button onClick={() => (locked ? guardSession(r) : removeRow(ex.id, r.id))} aria-label="Supprimer cette ligne de surcharge" className="bg-card grid place-items-center text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button>
                           </div>
                         );
                       })}

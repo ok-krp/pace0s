@@ -372,7 +372,7 @@ function NutritionLogView() {
                     </div>
                     <div className="flex items-center gap-3 shrink-0">
                       <span className="text-sm font-medium">{x.kcal} kcal</span>
-                      <button onClick={() => remove(x.id)} className="text-muted-foreground hover:text-destructive opacity-60 group-hover:opacity-100 transition">
+                      <button onClick={() => remove(x.id)} aria-label={`Supprimer ${x.name}`} className="text-muted-foreground hover:text-destructive opacity-60 group-hover:opacity-100 transition">
                         <Trash2 className="size-4" />
                       </button>
                     </div>

@@ -117,6 +117,7 @@ function RoutinePage() {
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); removeHabit(h.id); }}
+                aria-label={`Supprimer l'habitude ${h.name}`}
                 className="text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition"
               >
                 <Trash2 className="size-4" />
