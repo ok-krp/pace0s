@@ -16,8 +16,8 @@ export const Route = createFileRoute("/work")({
 const CATS = ["École", "Business", "Sport", "Projets"];
 
 function WorkPage() {
-  const [data, setData] = useLocalState<Record<string, number>>("lt.work.minutes", {});
-  const [sessions, setSessions] = useLocalState<Array<{ id: string; date: string; cat: string; minutes: number }>>("lt.work.sessions", []);
+  const [data, setData] = useLocalState<Record<string, number>>("pace.work.minutes", {});
+  const [sessions, setSessions] = useLocalState<Array<{ id: string; date: string; cat: string; minutes: number }>>("pace.work.sessions", []);
   const [cat, setCat] = useState("Business");
   const [running, setRunning] = useState(false);
   const [seconds, setSeconds] = useState(0);

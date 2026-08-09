@@ -45,7 +45,7 @@ type Tx = { id: string; date: string; amount: number; cat: string; note?: string
 const CATS = ["Vêtements", "Alimentation", "Transport", "Loisirs", "Santé", "Logement", "Salaire", "Investissement", "Autre"];
 
 function FinancePage() {
-  const [tx, setTx] = useLocalState<Tx[]>("lt.tx", []);
+  const [tx, setTx] = useLocalState<Tx[]>("pace.tx", []);
   const [amount, setAmount] = useState("");
   const [cat, setCat] = useState("Alimentation");
   const [note, setNote] = useState("");
@@ -151,7 +151,7 @@ const TYPES = ["Crypto", "Action", "ETF", "Immobilier", "Business", "Épargne"];
 type Asset = { id: string; type: string; name: string; invested: number; current: number };
 
 function InvestPage() {
-  const [assets, setAssets] = useLocalState<Asset[]>("lt.assets", []);
+  const [assets, setAssets] = useLocalState<Asset[]>("pace.assets", []);
   const [type, setType] = useState("Crypto");
   const [name, setName] = useState("");
   const [invested, setInvested] = useState("");

@@ -23,7 +23,7 @@ function diffHours(start: string, end: string) {
 }
 
 function SleepPage() {
-  const [entries, setEntries] = useLocalState<Record<string, { start: string; end: string; hours: number; quality: number }>>("lt.sleep", {});
+  const [entries, setEntries] = useLocalState<Record<string, { start: string; end: string; hours: number; quality: number }>>("pace.sleep", {});
   const [start, setStart] = useState("23:30");
   const [end, setEnd] = useState("07:00");
   const [quality, setQuality] = useState(8);

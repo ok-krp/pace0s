@@ -58,7 +58,7 @@ function SettingsPage() {
   };
 
   useEffect(() => {
-    const stored = localStorage.getItem("lt.dark") === "1";
+    const stored = localStorage.getItem("pace.dark") === "1";
     setDark(stored);
     document.documentElement.classList.toggle("dark", stored);
   }, []);
@@ -66,12 +66,12 @@ function SettingsPage() {
   const toggleDark = (v: boolean) => {
     setDark(v);
     document.documentElement.classList.toggle("dark", v);
-    localStorage.setItem("lt.dark", v ? "1" : "0");
+    localStorage.setItem("pace.dark", v ? "1" : "0");
   };
 
   const exportData = () => {
     const data: Record<string, unknown> = {};
-    Object.keys(localStorage).filter((k) => k.startsWith("lt.")).forEach((k) => {
+    Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => {
       try { data[k] = JSON.parse(localStorage.getItem(k) ?? "null"); } catch {}
     });
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -84,7 +84,7 @@ function SettingsPage() {
 
   const reset = () => {
     if (!confirm("Réinitialiser TOUTES vos données ?")) return;
-    Object.keys(localStorage).filter((k) => k.startsWith("lt.")).forEach((k) => localStorage.removeItem(k));
+    Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k));
     toast.success("Données effacées");
     setTimeout(() => location.reload(), 600);
   };

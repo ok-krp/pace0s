@@ -50,16 +50,16 @@ function Dashboard() {
   const [todayLabel, setTodayLabel] = useState("");
   const [now, setNow] = useState<Date | null>(null);
   const { data: health } = useHealthToday();
-  const [sleep] = useLocalState<Day<SleepEntry>>("lt.sleep", {});
-  const [water, setWater] = useLocalState<Day<number>>("lt.water", {});
-  const [waterLog, setWaterLog] = useLocalState<Day<number[]>>("lt.water.log", {});
+  const [sleep] = useLocalState<Day<SleepEntry>>("pace.sleep", {});
+  const [water, setWater] = useLocalState<Day<number>>("pace.water", {});
+  const [waterLog, setWaterLog] = useLocalState<Day<number[]>>("pace.water.log", {});
   const goals = useUserGoals();
-  const [nutrition] = useLocalState<Day<{ kcal: number; p: number; c: number; f: number }>>("lt.nutrition.totals", {});
-  const [routines] = useLocalState<Day<string[]>>("lt.routine.done", {});
-  const [allRoutines] = useLocalState<Array<{ id: string; name: string }>>("lt.routine.list", []);
-  const [work] = useLocalState<Day<number>>("lt.work.minutes", {});
-  const [tx] = useLocalState<Array<{ date: string; amount: number; cat: string }>>("lt.tx", []);
-  const [weights] = useLocalState<Day<{ w: number }>>("lt.weight", {});
+  const [nutrition] = useLocalState<Day<{ kcal: number; p: number; c: number; f: number }>>("pace.nutrition.totals", {});
+  const [routines] = useLocalState<Day<string[]>>("pace.routine.done", {});
+  const [allRoutines] = useLocalState<Array<{ id: string; name: string }>>("pace.routine.list", []);
+  const [work] = useLocalState<Day<number>>("pace.work.minutes", {});
+  const [tx] = useLocalState<Array<{ date: string; amount: number; cat: string }>>("pace.tx", []);
+  const [weights] = useLocalState<Day<{ w: number }>>("pace.weight", {});
 
   const today = todayKey();
   const days = useMemo(() => lastNDays(7), []);

@@ -56,10 +56,10 @@ const MUSCLES = ["Pectoraux", "Dos", "Épaules", "Biceps", "Triceps", "Quadricep
 const DAYS_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
 function SportPage() {
-  const [exs, setExs] = useLocalState<Exercise[]>("lt.sport.exercises", []);
-  const [progs, setProgs] = useLocalState<Program[]>("lt.sport.programs", []);
-  const [sessions, setSessions] = useLocalState<WorkoutSession[]>("lt.sport.sessions", []);
-  const [active, setActive] = useLocalState<WorkoutSession | null>("lt.sport.active", null);
+  const [exs, setExs] = useLocalState<Exercise[]>("pace.sport.exercises", []);
+  const [progs, setProgs] = useLocalState<Program[]>("pace.sport.programs", []);
+  const [sessions, setSessions] = useLocalState<WorkoutSession[]>("pace.sport.sessions", []);
+  const [active, setActive] = useLocalState<WorkoutSession | null>("pace.sport.active", null);
   const [tab, setTab] = useState("programs");
   const [focusEx, setFocusEx] = useState<string | null>(null);
 
@@ -582,7 +582,7 @@ function deriveSessionRows(sessions: WorkoutSession[], exerciseId: string): Over
 
 
 const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, sessions, focusExerciseId }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void; progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; sessions: WorkoutSession[]; focusExerciseId?: string | null }) {
-  const [manualStore, setManualStore] = useLocalState<OverloadStore>("lt.sport.overload", {});
+  const [manualStore, setManualStore] = useLocalState<OverloadStore>("pace.sport.overload", {});
   /**
    * Fusion des deux sources en une seule liste cohérente : les lignes issues
    * de vraies séances (auto, non éditables ici — on modifie la séance dans

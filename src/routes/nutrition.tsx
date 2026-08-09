@@ -46,7 +46,7 @@ function NutritionPage() {
   const { tab } = Route.useSearch();
   const currentTab = tab ?? "nutrition";
   const [scanOpen, setScanOpen] = useState(false);
-  const [recallCount] = useLocalState<number>("lt.recalls.count", 0);
+  const [recallCount] = useLocalState<number>("pace.recalls.count", 0);
   const [pending, setPending] = useState<
     | { kind: "barcode"; product: OFFProduct; grams: number; meal: string }
     | { kind: "photo"; photo: string; result: FoodAnalysis; items: FoodItem[]; grams: number; meal: string }
@@ -247,8 +247,8 @@ function NutritionPage() {
 
 
 function NutritionLogView() {
-  const [items, setItems] = useLocalState<Record<string, Item[]>>("lt.nutrition.items", {});
-  const [totals, setTotals] = useLocalState<Record<string, { kcal: number; p: number; c: number; f: number }>>("lt.nutrition.totals", {});
+  const [items, setItems] = useLocalState<Record<string, Item[]>>("pace.nutrition.items", {});
+  const [totals, setTotals] = useLocalState<Record<string, { kcal: number; p: number; c: number; f: number }>>("pace.nutrition.totals", {});
   const [cols] = useNutritionCols();
   const goals = useUserGoals();
   const goal = goals.kcal;
@@ -258,14 +258,14 @@ function NutritionLogView() {
   useEffect(() => {
     const handler = () => {
       try {
-        const raw = localStorage.getItem("lt.nutrition.items");
+        const raw = localStorage.getItem("pace.nutrition.items");
         if (raw) setItems(JSON.parse(raw));
-        const tRaw = localStorage.getItem("lt.nutrition.totals");
+        const tRaw = localStorage.getItem("pace.nutrition.totals");
         if (tRaw) setTotals(JSON.parse(tRaw));
       } catch {}
     };
-    window.addEventListener("lt.nutrition.changed", handler);
-    return () => window.removeEventListener("lt.nutrition.changed", handler);
+    window.addEventListener("pace.nutrition.changed", handler);
+    return () => window.removeEventListener("pace.nutrition.changed", handler);
   }, [setItems, setTotals]);
 
   const [meal, setMeal] = useState("Petit déjeuner");

@@ -21,7 +21,7 @@ function RecallsPage() {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<RecallRow[]>([]);
   const [checked, setChecked] = useState(0);
-  const [, setRecallCount] = useLocalState<number>("lt.recalls.count", 0);
+  const [, setRecallCount] = useLocalState<number>("pace.recalls.count", 0);
 
   useEffect(() => {
     if (!user) return;

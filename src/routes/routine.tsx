@@ -14,13 +14,13 @@ export const Route = createFileRoute("/routine")({
 type Habit = { id: string; name: string; emoji: string };
 
 function RoutinePage() {
-  const [habits, setHabits] = useLocalState<Habit[]>("lt.routine.list", [
+  const [habits, setHabits] = useLocalState<Habit[]>("pace.routine.list", [
     { id: "h1", name: "Sport", emoji: "🏋️" },
     { id: "h2", name: "Lecture", emoji: "📖" },
     { id: "h3", name: "Méditation", emoji: "🧘" },
     { id: "h4", name: "Douche froide", emoji: "❄️" },
   ]);
-  const [done, setDone] = useLocalState<Record<string, string[]>>("lt.routine.done", {});
+  const [done, setDone] = useLocalState<Record<string, string[]>>("pace.routine.done", {});
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState("✨");
 

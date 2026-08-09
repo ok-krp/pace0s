@@ -24,13 +24,13 @@ function CalendarPage() {
   useEffect(() => {
     if (dParam) { setSelected(dParam); setCursor(new Date(dParam)); }
   }, [dParam]);
-  const [sleep] = useLocalState<Record<string, { hours?: number; quality?: number; start?: string; end?: string }>>("lt.sleep", {});
-  const [water] = useLocalState<Record<string, number>>("lt.water", {});
-  const [routines] = useLocalState<Record<string, string[]>>("lt.routine.done", {});
-  const [habits] = useLocalState<Habit[]>("lt.routine.list", []);
-  const [nutrition] = useLocalState<Record<string, { kcal?: number; p?: number; c?: number; f?: number }>>("lt.nutrition.totals", {});
-  const [nutItems] = useLocalState<Record<string, NutItem[]>>("lt.nutrition.items", {});
-  const [weights] = useLocalState<Record<string, { w?: number; muscle?: number; fat?: number }>>("lt.weight", {});
+  const [sleep] = useLocalState<Record<string, { hours?: number; quality?: number; start?: string; end?: string }>>("pace.sleep", {});
+  const [water] = useLocalState<Record<string, number>>("pace.water", {});
+  const [routines] = useLocalState<Record<string, string[]>>("pace.routine.done", {});
+  const [habits] = useLocalState<Habit[]>("pace.routine.list", []);
+  const [nutrition] = useLocalState<Record<string, { kcal?: number; p?: number; c?: number; f?: number }>>("pace.nutrition.totals", {});
+  const [nutItems] = useLocalState<Record<string, NutItem[]>>("pace.nutrition.items", {});
+  const [weights] = useLocalState<Record<string, { w?: number; muscle?: number; fat?: number }>>("pace.weight", {});
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();

@@ -50,7 +50,7 @@ function aggregate(entries: { date: string; e: Entry }[], keyFn: (d: string) => 
 }
 
 function BodyPage() {
-  const [data, setData] = useLocalState<Record<string, Entry>>("lt.weight", {});
+  const [data, setData] = useLocalState<Record<string, Entry>>("pace.weight", {});
   const [w, setW] = useState("");
   const [muscle, setMuscle] = useState("");
   const [fat, setFat] = useState("");
