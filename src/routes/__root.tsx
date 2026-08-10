@@ -16,6 +16,7 @@ import { AppSidebar, MobileTabBar, MobileTopBar } from "@/components/AppSidebar"
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { LegalConsentGate } from "@/components/LegalConsentGate";
+import { CommandPalette } from "@/components/CommandPalette";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { applyWallpaper, readWallpaperChoice } from "@/hooks/use-wallpaper";
 import { useGlassPointer } from "@/hooks/use-glass-pointer";
@@ -185,6 +186,7 @@ function AuthGate() {
       </main>
       <MobileTabBar />
       <LegalConsentGate />
+      <CommandPalette />
       <Toaster />
     </div>
   );

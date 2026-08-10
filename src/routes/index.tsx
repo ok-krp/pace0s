@@ -18,6 +18,9 @@ import { buildIntel, statusColor, type ModuleKey } from "@/lib/insights";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    quickAdd: (["water", "kcal", "sleep", "weight"] as const).includes(s.quickAdd as never) ? (s.quickAdd as "water" | "kcal" | "sleep" | "weight") : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Pace — votre centre de contrôle quotidien" },
@@ -46,7 +49,16 @@ const ICONS: Record<ModuleKey, React.ReactNode> = {
 
 function Dashboard() {
   const navigate = useNavigate();
+  const { quickAdd } = Route.useSearch();
   const [dialog, setDialog] = useState<DashDialog>(null);
+
+  // Arrivée depuis la palette de commandes (Ctrl+K) avec une action rapide demandée.
+  useEffect(() => {
+    if (!quickAdd) return;
+    setDialog(quickAdd);
+    navigate({ to: "/", search: {}, replace: true });
+  }, [quickAdd, navigate]);
+
   const [todayLabel, setTodayLabel] = useState("");
   const [now, setNow] = useState<Date | null>(null);
   const { data: health } = useHealthToday();
@@ -159,6 +171,24 @@ function Dashboard() {
         subtitle={todayLabel || "Aujourd’hui"}
         a11yLabel="Tableau de bord Pace"
       />
+
+      <div className="flex flex-wrap gap-2 mb-4">
+        {([
+          { icon: <Droplets className="size-3.5" />, label: "Eau", action: () => setDialog("water") },
+          { icon: <Flame className="size-3.5" />, label: "Repas", action: () => setDialog("kcal") },
+          { icon: <Moon className="size-3.5" />, label: "Sommeil", action: () => setDialog("sleep") },
+          { icon: <Scale className="size-3.5" />, label: "Pesée", action: () => setDialog("weight") },
+          { icon: <Dumbbell className="size-3.5" />, label: "Séance", action: () => navigate({ to: "/sport" }) },
+        ] as const).map((a) => (
+          <button
+            key={a.label}
+            onClick={a.action}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-thin text-xs font-medium hover:opacity-80 transition"
+          >
+            {a.icon} + {a.label}
+          </button>
+        ))}
+      </div>
 
       <DailyInsight intel={intel} />
 
