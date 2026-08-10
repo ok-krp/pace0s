@@ -4,7 +4,7 @@ import { generateText } from "ai";
 import { createLovableAiGatewayProvider } from "./ai-gateway";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { LEGAL_VERSIONS } from "./legal";
-import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema } from "./nutrition-ai.shared";
+import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema, validateImageBase64 } from "./nutrition-ai.shared";
 
 export const analyzeFoodPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -28,6 +28,8 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
       return { error: "Consentement Analyse IA requis", result: null };
     }
+    const imageCheck = validateImageBase64(data.imageBase64);
+    if (!imageCheck.ok) return { error: imageCheck.error, result: null };
     const key = process.env.LOVABLE_API_KEY;
     if (!key) return { error: "AI Gateway non configuré", result: null };
 

@@ -104,3 +104,32 @@ export function extractJson(text: string): unknown {
     throw new Error("JSON introuvable dans la réponse IA");
   }
 }
+
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024; // 8 Mo décodés
+
+/**
+ * Vérifie qu'une chaîne base64 (avec ou sans préfixe data URL) est réellement
+ * une image d'un type autorisé — en lisant la signature binaire du fichier
+ * (magic bytes), pas juste le type MIME déclaré par le client, qui peut être
+ * falsifié. Rejette aussi tout fichier dont la taille décodée dépasse la limite.
+ */
+export function validateImageBase64(input: string): { ok: true; bytes: Buffer } | { ok: false; error: string } {
+  const withoutPrefix = input.replace(/^data:[^;]+;base64,/, "");
+  let bytes: Buffer;
+  try {
+    bytes = Buffer.from(withoutPrefix, "base64");
+  } catch {
+    return { ok: false, error: "Fichier illisible (pas du base64 valide)." };
+  }
+  if (bytes.length === 0) return { ok: false, error: "Fichier vide." };
+  if (bytes.length > MAX_IMAGE_BYTES) {
+    return { ok: false, error: `Image trop lourde (${(bytes.length / 1024 / 1024).toFixed(1)} Mo, max 8 Mo).` };
+  }
+  const isJpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+  const isWebp = bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50;
+  if (!isJpeg && !isPng && !isWebp) {
+    return { ok: false, error: "Format non reconnu — seuls JPEG, PNG et WebP sont acceptés." };
+  }
+  return { ok: true, bytes };
+}
