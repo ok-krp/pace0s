@@ -20,6 +20,7 @@ import {
   Code2,
   History,
   Wrench,
+  Search,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -142,6 +143,14 @@ export function AppSidebar() {
           <div className="text-[11px] text-muted-foreground -mt-0.5">centre de contrôle</div>
         </div>
       </Link>
+      <button
+        onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))}
+        className="flex items-center gap-2 px-3 py-2 mb-3 rounded-xl glass-thin text-sm text-muted-foreground hover:text-foreground transition"
+      >
+        <Search className="size-3.5" />
+        <span className="flex-1 text-left">Rechercher…</span>
+        <kbd className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-mono">⌘K</kbd>
+      </button>
       <div className="flex-1 min-h-0 overflow-y-auto">
         <GroupedNav currentPath={path} />
       </div>
