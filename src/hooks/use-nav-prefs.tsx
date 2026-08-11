@@ -44,9 +44,11 @@ const clean = (arr: unknown): NavItemKey[] =>
 export function useNavPrefs() {
   const [order, setOrder] = useLocalState<NavItemKey[]>("pace.mobile.nav.order", NAV_DEFAULT_ORDER);
   const [bottom, setBottom] = useLocalState<NavItemKey[]>("pace.mobile.nav.bottom", BOTTOM_DEFAULT);
+  const [visible, setVisible] = useLocalState<NavItemKey[]>("pace.mobile.nav.visible", NAV_DEFAULT_ORDER);
 
   const cleanOrder = clean(order);
   const cleanBottom = clean(bottom);
+  const cleanVisible = clean(visible);
 
   const fullOrder = [
     ...cleanOrder,
@@ -70,6 +72,18 @@ export function useNavPrefs() {
     });
   };
 
-  // Tous les onglets sont toujours visibles — aucun réglage ne permet plus de les masquer.
-  return { order: fullOrder, setOrder, bottom: cleanBottom, toggleBottom, move };
+  const toggleVisible = (key: NavItemKey) => {
+    setVisible((prev) => {
+      const src = clean(prev);
+      // On ne permet jamais de tout masquer : au moins un onglet doit rester.
+      if (src.includes(key) && src.length <= 1) return src;
+      return src.includes(key) ? src.filter((x) => x !== key) : [...src, key];
+    });
+  };
+
+  const visibleSet = new Set(cleanVisible.length ? cleanVisible : NAV_DEFAULT_ORDER);
+  // "/" (Accueil) et "/settings" (pour pouvoir toujours réafficher un onglet masqué) restent toujours visibles.
+  const visibleOrder = fullOrder.filter((k) => k === "/" || k === "/settings" || visibleSet.has(k));
+
+  return { order: fullOrder, visibleOrder, setOrder, bottom: cleanBottom, toggleBottom, move, visible: cleanVisible, toggleVisible };
 }
