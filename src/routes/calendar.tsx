@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ChevronLeft, ChevronRight, Moon, Droplets, Apple, Repeat, Scale } from "lucide-react";
 import { PageHeader } from "@/components/Stat";
 import { useLocalState } from "@/lib/storage";
+import { formatSleepDuration } from "@/lib/sleep-format";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const searchSchema = z.object({ d: z.string().optional() });
@@ -138,7 +139,7 @@ function DayDetails({ date, sleep, water, nutTotal, nutList, routineIds, habits,
       </h2>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-4">
-        <Cell label="Sommeil" v={sleep?.hours ? `${sleep.hours.toFixed(1)} h` : "—"} />
+        <Cell label="Sommeil" v={sleep?.hours ? formatSleepDuration(sleep.hours) : "—"} />
         <Cell label="Eau" v={water ? `${(water / 1000).toFixed(2)} L` : "—"} />
         <Cell label="Calories" v={nutTotal?.kcal ? `${nutTotal.kcal} kcal` : "—"} />
         <Cell label="Habitudes" v={`${habitsDone.length}/${habits.length}`} />
@@ -182,7 +183,7 @@ function DayDetails({ date, sleep, water, nutTotal, nutList, routineIds, habits,
           <AccordionContent>
             {sleep?.hours ? (
               <div className="text-sm space-y-1">
-                <div>Durée : <b>{sleep.hours.toFixed(2)} h</b></div>
+                <div>Durée : <b>{formatSleepDuration(sleep.hours)}</b></div>
                 {sleep.start && sleep.end && <div className="text-muted-foreground">De {sleep.start} à {sleep.end}</div>}
                 {sleep.quality && <div className="text-muted-foreground">Qualité : {sleep.quality}/10</div>}
               </div>

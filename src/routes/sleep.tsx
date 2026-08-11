@@ -5,8 +5,10 @@ import { Moon, Plus } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
 import { PageHeader, StatCard } from "@/components/Stat";
 import { useLocalState, lastNDays, fmtDay, todayKey } from "@/lib/storage";
+import { formatSleepDuration } from "@/lib/sleep-format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberField } from "@/components/ui/number-field";
 
 export const Route = createFileRoute("/sleep")({
   head: () => ({ meta: [{ title: "Sommeil — Pace" }, { name: "description", content: "Suivi du sommeil intelligent : heures, dette, qualité, tendances." }] }),
@@ -58,22 +60,22 @@ function SleepPage() {
           </div>
           <div>
             <label className="text-xs text-muted-foreground">Qualité (1-10)</label>
-            <Input type="number" min={1} max={10} value={quality} onChange={(e) => setQuality(+e.target.value)} className="w-24" />
+            <NumberField allowDecimal={false} min={1} max={10} value={quality} onChange={(v) => { if (v != null) setQuality(v); }} className="w-24" />
           </div>
           <Button onClick={add} className="rounded-xl">
             <Plus className="size-4 mr-1" /> Enregistrer
           </Button>
           <div className="text-sm text-muted-foreground ml-auto">
-            <Moon className="inline size-4 mr-1" /> {diffHours(start, end).toFixed(1)} h
+            <Moon className="inline size-4 mr-1" /> {formatSleepDuration(diffHours(start, end))}
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-        <StatCard label="Moyenne" value={avg.toFixed(1)} unit="h" />
-        <StatCard label="Meilleur" value={best.toFixed(1)} unit="h" />
-        <StatCard label="Pire" value={worst === 24 ? "—" : worst.toFixed(1)} unit="h" />
-        <StatCard label="Dette" value={debt.toFixed(1)} unit="h" />
+        <StatCard label="Moyenne" value={formatSleepDuration(avg)} />
+        <StatCard label="Meilleur" value={formatSleepDuration(best)} />
+        <StatCard label="Pire" value={worst === 24 ? "—" : formatSleepDuration(worst)} />
+        <StatCard label="Dette" value={formatSleepDuration(debt)} />
       </div>
 
       <div className="rounded-2xl glass-card p-5">
@@ -83,7 +85,7 @@ function SleepPage() {
             <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
             <YAxis fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
-            <Tooltip contentStyle={liquidTooltipStyle} />
+            <Tooltip contentStyle={liquidTooltipStyle} formatter={(v: number) => [formatSleepDuration(v), "Sommeil"]} />
             <Line type="monotone" dataKey="h" stroke="var(--primary)" strokeWidth={2.5} dot={{ r: 3 }} />
           </LineChart>
         </ResponsiveContainer>
