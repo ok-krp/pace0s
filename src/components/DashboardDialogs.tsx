@@ -5,9 +5,11 @@ import { Droplets, Flame, Moon, Scale, Sparkles, TrendingUp, TrendingDown, Minus
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberField } from "@/components/ui/number-field";
 import { LineChart, Line, ResponsiveContainer, YAxis, Tooltip } from "recharts";
 import { Ring } from "@/components/Stat";
 import { lastNDays, fmtDay, todayKey, useLocalState } from "@/lib/storage";
+import { formatSleepDuration } from "@/lib/sleep-format";
 import { useUserGoals } from "@/hooks/use-user-goals";
 import { toast } from "sonner";
 
@@ -216,11 +218,11 @@ function KcalQuickAdd({ onDone }: { onDone: () => void }) {
   const today = todayKey();
   const cur = nutrition[today] ?? { kcal: 0, p: 0, c: 0, f: 0 };
   const goals = useUserGoals();
-  const [kcal, setKcal] = useState("");
-  const [p, setP] = useState("");
+  const [kcal, setKcal] = useState<number | null>(null);
+  const [p, setP] = useState<number | null>(null);
   const save = () => {
-    const k = Number(kcal) || 0;
-    const pr = Number(p) || 0;
+    const k = kcal ?? 0;
+    const pr = p ?? 0;
     if (k <= 0 && pr <= 0) return;
     setNutrition({ ...nutrition, [today]: { kcal: cur.kcal + k, p: cur.p + pr, c: cur.c, f: cur.f } });
     toast.success(`+${k} kcal · +${pr}g protéines`);
@@ -239,11 +241,11 @@ function KcalQuickAdd({ onDone }: { onDone: () => void }) {
       <div className="space-y-2 py-2">
         <div>
           <label className="text-xs text-muted-foreground">Calories</label>
-          <Input type="number" inputMode="numeric" placeholder="ex: 350" value={kcal} onChange={(e) => setKcal(e.target.value)} />
+          <NumberField allowDecimal={false} placeholder="ex: 350" value={kcal} onChange={setKcal} />
         </div>
         <div>
           <label className="text-xs text-muted-foreground">Protéines (g)</label>
-          <Input type="number" inputMode="numeric" placeholder="ex: 30" value={p} onChange={(e) => setP(e.target.value)} />
+          <NumberField allowDecimal={false} placeholder="ex: 30" value={p} onChange={setP} />
         </div>
       </div>
       <div className="flex gap-2 pt-2 border-t border-border">
@@ -257,12 +259,12 @@ function KcalQuickAdd({ onDone }: { onDone: () => void }) {
 function SleepQuickForm({ onDone }: { onDone: () => void }) {
   const [sleep, setSleep] = useLocalState<Record<string, SleepEntry>>("pace.sleep", {});
   const today = todayKey();
-  const [h, setH] = useState(String(sleep[today]?.hours ?? ""));
+  const [h, setH] = useState<number | null>(sleep[today]?.hours ?? null);
   const save = () => {
-    const v = Number(h);
+    const v = h;
     if (!v || v < 0 || v > 24) { toast.error("Heures invalides"); return; }
     setSleep({ ...sleep, [today]: { hours: v } });
-    toast.success(`Sommeil : ${v}h`);
+    toast.success(`Sommeil : ${formatSleepDuration(v)}`);
     onDone();
   };
   return (
@@ -274,10 +276,10 @@ function SleepQuickForm({ onDone }: { onDone: () => void }) {
         <DialogDescription>Combien d'heures cette nuit ?</DialogDescription>
       </DialogHeader>
       <div className="py-2">
-        <Input type="number" step="0.25" min="0" max="24" placeholder="ex: 7.5" value={h} onChange={(e) => setH(e.target.value)} />
+        <NumberField step="0.25" min="0" max="24" placeholder="ex: 7h30" value={h} onChange={setH} />
         <div className="flex gap-1.5 mt-2 flex-wrap">
           {[6, 6.5, 7, 7.5, 8, 8.5, 9].map((v) => (
-            <Button key={v} size="sm" variant="secondary" className="rounded-xl" onClick={() => setH(String(v))}>{v}h</Button>
+            <Button key={v} size="sm" variant="secondary" className="rounded-xl" onClick={() => setH(v)}>{formatSleepDuration(v)}</Button>
           ))}
         </div>
       </div>
@@ -292,9 +294,9 @@ function SleepQuickForm({ onDone }: { onDone: () => void }) {
 function WeightQuickForm({ onDone }: { onDone: () => void }) {
   const [weights, setWeights] = useLocalState<Record<string, { w: number }>>("pace.weight", {});
   const today = todayKey();
-  const [w, setW] = useState(String(weights[today]?.w ?? ""));
+  const [w, setW] = useState<number | null>(weights[today]?.w ?? null);
   const save = () => {
-    const v = Number(w);
+    const v = w;
     if (!v || v < 20 || v > 400) { toast.error("Poids invalide"); return; }
     setWeights({ ...weights, [today]: { w: v } });
     toast.success(`Poids : ${v} kg`);
@@ -309,7 +311,7 @@ function WeightQuickForm({ onDone }: { onDone: () => void }) {
         <DialogDescription>Enregistre ta pesée matinale.</DialogDescription>
       </DialogHeader>
       <div className="py-2">
-        <Input type="number" step="0.1" min="0" placeholder="ex: 72.4" value={w} onChange={(e) => setW(e.target.value)} />
+        <NumberField step="0.1" min="0" placeholder="ex: 72.4" value={w} onChange={setW} />
       </div>
       <div className="flex gap-2 pt-2 border-t border-border">
         <Button variant="ghost" size="sm" onClick={onDone}>Annuler</Button>
