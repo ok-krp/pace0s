@@ -5,13 +5,35 @@ import { Button } from "@/components/ui/button";
 import { ArrowUp, ArrowDown } from "lucide-react";
 
 export function MobileNavSettings() {
-  const { order, bottom, toggleBottom, move, setOrder } = useNavPrefs();
+  const { order, bottom, toggleBottom, move, setOrder, visible, toggleVisible } = useNavPrefs();
 
   return (
     <div className="rounded-2xl glass-card p-5">
       <div className="font-display text-lg font-semibold mb-1">Navigation mobile</div>
       <div className="text-xs text-muted-foreground mb-4">
-        Toutes les sections sont toujours accessibles. Choisissez vos raccourcis du bas (scrollables) et leur ordre.
+        Choisissez les sections visibles dans le volet, vos raccourcis du bas (scrollables) et l'ordre.
+      </div>
+
+      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
+        Sections visibles dans le volet ({visible.length}/{NAV_DEFAULT_ORDER.length})
+      </div>
+      <div className="grid grid-cols-2 gap-2 mb-5">
+        {NAV_DEFAULT_ORDER.map((key) => {
+          const it = NAV_REGISTRY[key];
+          const checked = visible.includes(key);
+          const locked = key === "/" || key === "/settings";
+          const Icon = it.icon;
+          return (
+            <label
+              key={key}
+              className={`flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm ${locked ? "opacity-60" : "hover:bg-muted/50 cursor-pointer"}`}
+            >
+              <Checkbox checked={checked || locked} disabled={locked} onCheckedChange={() => toggleVisible(key)} />
+              <Icon className="size-4 text-muted-foreground" />
+              <span className="truncate">{it.label}</span>
+            </label>
+          );
+        })}
       </div>
 
       <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">

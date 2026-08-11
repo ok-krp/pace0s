@@ -98,11 +98,15 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
     assistant: true, nutrition: true, activite: true, finance: true, autres: false,
   });
   const [recallCount] = useLocalState<number>("pace.recalls.count", 0);
+  const { visibleOrder } = useNavPrefs();
+  const visibleSet = new Set(visibleOrder);
   return (
     <nav className="flex flex-col gap-0.5">
       <NavLink to="/" active={currentPath === "/"} onNavigate={onNavigate} />
       {GROUPS.map((g) => {
-        const hasActive = g.items.includes(currentPath as NavItemKey);
+        const items = g.items.filter((to) => visibleSet.has(to));
+        if (items.length === 0) return null;
+        const hasActive = items.includes(currentPath as NavItemKey);
         const open = openMap[g.id] ?? hasActive;
         return (
           <Collapsible
@@ -119,7 +123,7 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
               </motion.span>
             </CollapsibleTrigger>
             <CollapsibleContent className="flex flex-col gap-0.5 mt-0.5">
-              {g.items.map((to) => (
+              {items.map((to) => (
                 <NavLink key={to} to={to} active={currentPath === to} onNavigate={onNavigate} alert={to === "/nutrition" ? recallCount : 0} />
               ))}
             </CollapsibleContent>
@@ -192,6 +196,13 @@ export function MobileTopBar() {
         </SheetContent>
       </Sheet>
       <div className="flex-1 font-display font-semibold truncate">{current}</div>
+      <button
+        onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))}
+        aria-label="Rechercher"
+        className={`glass-icon size-10 will-change-transform ${interactiveRing}`}
+      >
+        <Search className="size-4" />
+      </button>
     </header>
   );
 }

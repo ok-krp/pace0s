@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
+import { useLocalState } from "@/lib/storage";
 import {
   Command,
   CommandDialog,
@@ -28,6 +29,7 @@ import {
   Wrench,
   Droplet,
   Utensils,
+  ChefHat,
 } from "lucide-react";
 
 type Entry = { icon: React.ReactNode; label: string; action: () => void; keywords?: string };
@@ -40,6 +42,8 @@ type Entry = { icon: React.ReactNode; label: string; action: () => void; keyword
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
+  const [recipes] = useLocalState<{ id: string; name: string }[]>("pace.recipes.custom", []);
+  const [habits] = useLocalState<{ id: string; name: string }[]>("pace.routine.list", []);
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -89,6 +93,15 @@ export function CommandPalette() {
     { icon: <Settings className="size-4" />, label: "Réglages", action: go("/settings") },
   ];
 
+  const recipeEntries: Entry[] = useMemo(
+    () => recipes.map((r) => ({ icon: <ChefHat className="size-4" />, label: r.name, action: go("/nutrition") })),
+    [recipes],
+  );
+  const habitEntries: Entry[] = useMemo(
+    () => habits.map((h) => ({ icon: <ListChecks className="size-4" />, label: h.name, action: go("/routine") })),
+    [habits],
+  );
+
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
       <Command>
@@ -112,6 +125,32 @@ export function CommandPalette() {
               </CommandItem>
             ))}
           </CommandGroup>
+          {recipeEntries.length > 0 && (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading="Recettes">
+                {recipeEntries.map((r) => (
+                  <CommandItem key={`recipe-${r.label}`} value={`recette ${r.label}`} onSelect={r.action}>
+                    {r.icon}
+                    <span className="ml-2">{r.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
+          {habitEntries.length > 0 && (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading="Habitudes">
+                {habitEntries.map((h) => (
+                  <CommandItem key={`habit-${h.label}`} value={`habitude ${h.label}`} onSelect={h.action}>
+                    {h.icon}
+                    <span className="ml-2">{h.label}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </>
+          )}
         </CommandList>
       </Command>
     </CommandDialog>
