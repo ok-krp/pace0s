@@ -21,6 +21,7 @@ import {
   History,
   Wrench,
   Search,
+  StickyNote,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -42,6 +43,7 @@ export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof Layo
   "/body": { label: "Poids & Corps", icon: Scale },
   "/work": { label: "Travail", icon: Briefcase },
   "/calendar": { label: "Calendrier", icon: Calendar },
+  "/notes": { label: "Notes", icon: StickyNote },
   "/recalls": { label: "Rappels conso", icon: AlertTriangle },
   "/finance": { label: "Finance & Invest.", icon: Wallet },
   "/profile": { label: "Profil", icon: UserIcon },
@@ -54,7 +56,7 @@ const GROUPS: Group[] = [
   { id: "assistant", label: "Intelligence Artificielle", items: ["/assistant", "/development", "/ai-activity"] },
   // Nutrition et Rappels conso sont fusionnés en une seule carte de navigation.
   { id: "nutrition", label: "Nutrition", items: ["/nutrition"] },
-  { id: "activite", label: "Activité", items: ["/body", "/sport", "/sleep", "/calendar", "/routine", "/work"] },
+  { id: "activite", label: "Activité", items: ["/body", "/sport", "/sleep", "/calendar", "/routine", "/work", "/notes"] },
   { id: "finance", label: "Finance", items: ["/finance"] },
   { id: "autres", label: "Autres", items: ["/profile", "/settings"] },
 ];

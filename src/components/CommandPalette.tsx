@@ -30,6 +30,7 @@ import {
   Droplet,
   Utensils,
   ChefHat,
+  StickyNote,
 } from "lucide-react";
 
 type Entry = { icon: React.ReactNode; label: string; action: () => void; keywords?: string };
@@ -86,6 +87,7 @@ export function CommandPalette() {
     { icon: <Wallet className="size-4" />, label: "Finance", action: go("/finance") },
     { icon: <Briefcase className="size-4" />, label: "Travail", action: go("/work") },
     { icon: <CalendarDays className="size-4" />, label: "Calendrier", action: go("/calendar") },
+    { icon: <StickyNote className="size-4" />, label: "Notes", action: go("/notes") },
     { icon: <ScanLine className="size-4" />, label: "Scanner", action: go("/scan") },
     { icon: <Bell className="size-4" />, label: "Rappels produits", action: go("/recalls") },
     { icon: <Wrench className="size-4" />, label: "Développement", action: go("/development") },
