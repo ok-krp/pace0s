@@ -12,6 +12,7 @@ export type NavItemKey =
   | "/body"
   | "/work"
   | "/calendar"
+  | "/notes"
   | "/recalls"
   | "/finance"
   | "/profile"
@@ -29,6 +30,7 @@ export const NAV_DEFAULT_ORDER: NavItemKey[] = [
   "/body",
   "/work",
   "/calendar",
+  "/notes",
   "/recalls",
   "/finance",
   "/profile",
