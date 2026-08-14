@@ -53,7 +53,7 @@ const inputSchema = z.object({
 
 export const assistantChat = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => inputSchema.parse(d))
+  .validator((d: unknown) => inputSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: consent, error: consentError } = await context.supabase
       .from("legal_consent")
@@ -61,7 +61,10 @@ export const assistantChat = createServerFn({ method: "POST" })
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
       .maybeSingle();
-    if (consentError) throw new Error(consentError.message);
+    if (consentError) {
+      console.error("assistant consent lookup failed", consentError);
+      return { error: "Impossible de vérifier le consentement IA.", result: null as AssistantReply | null };
+    }
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
       return { error: "Consentement Analyse IA requis", result: null as AssistantReply | null };
     }
@@ -120,7 +123,7 @@ Réponds UNIQUEMENT avec un JSON valide (aucun markdown) :
     } catch (e) {
       console.error("assistantChat error", e);
       return {
-        error: e instanceof Error ? e.message : "Erreur IA",
+        error: "Le service IA est momentanément indisponible.",
         result: null as AssistantReply | null,
       };
     }
