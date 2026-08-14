@@ -38,6 +38,7 @@ class HealthConnectReader(context: Context) {
             HealthPermission.getReadPermission(ExerciseSessionRecord::class),
             HealthPermission.getReadPermission(WeightRecord::class),
         )
+        val BACKGROUND_READ_PERMISSION = HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
     }
 
     suspend fun read(days: Long = 7): JSONObject {
@@ -50,17 +51,15 @@ class HealthConnectReader(context: Context) {
             val dayEnd = if (offset == 0L) now else dayStart.plusDays(1)
             val range = TimeRangeFilter.between(dayStart.toInstant(), dayEnd.toInstant())
             val dayKey = dayStart.toLocalDate().toString()
-            val aggregate = client.aggregate(
-                AggregateRequest(
-                    metrics = setOf(
-                        StepsRecord.COUNT_TOTAL,
-                        ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL,
-                        TotalCaloriesBurnedRecord.ENERGY_TOTAL,
-                        DistanceRecord.DISTANCE_TOTAL,
-                    ),
-                    timeRangeFilter = range,
-                )
-            )
+            val aggregate = client.aggregate(AggregateRequest(
+                metrics = setOf(
+                    StepsRecord.COUNT_TOTAL,
+                    ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL,
+                    TotalCaloriesBurnedRecord.ENERGY_TOTAL,
+                    DistanceRecord.DISTANCE_TOTAL,
+                ),
+                timeRangeFilter = range,
+            ))
             aggregate[StepsRecord.COUNT_TOTAL]?.let { add(out, dayEnd.toInstant(), "steps", it.toDouble(), "health_connect", "daily:steps:$dayKey") }
             aggregate[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.let { add(out, dayEnd.toInstant(), "kcal_active", it.inKilocalories, "health_connect", "daily:kcal_active:$dayKey") }
             aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.let { add(out, dayEnd.toInstant(), "kcal_total", it.inKilocalories, "health_connect", "daily:kcal_total:$dayKey") }
