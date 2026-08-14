@@ -15,14 +15,13 @@ import appCss from "../styles.css?url";
 import { AppSidebar, MobileTabBar, MobileTopBar } from "@/components/AppSidebar";
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
+import { CloudSyncProvider } from "@/hooks/use-cloud-sync-engine";
 import { LegalConsentGate } from "@/components/LegalConsentGate";
 import { CommandPalette } from "@/components/CommandPalette";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { applyWallpaper, readWallpaperChoice } from "@/hooks/use-wallpaper";
 import { useGlassPointer } from "@/hooks/use-glass-pointer";
 import { applyGlassQuality } from "@/hooks/use-glass-quality";
-// import { CloudSyncProvider } from "@/hooks/use-cloud-sync-engine"; // désactivé — crash en production non résolu, cause non identifiée
-
 
 function NotFoundComponent() {
   return (
@@ -46,12 +45,7 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
       <div className="max-w-md text-center">
         <h1 className="font-display text-xl font-semibold">Une erreur est survenue</h1>
         <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
-        <button
-          onClick={() => { router.invalidate(); reset(); }}
-          className="mt-6 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
-          Réessayer
-        </button>
+        <button onClick={() => { router.invalidate(); reset(); }} className="mt-6 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Réessayer</button>
       </div>
     </div>
   );
@@ -95,21 +89,7 @@ function RootShell({ children }: { children: React.ReactNode }) {
     <html lang="fr">
       <head>
         <HeadContent />
-        <script
-          type="application/ld+json"
-          // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "SoftwareApplication",
-              name: "Pace",
-              applicationCategory: "HealthApplication",
-              operatingSystem: "Web",
-              description: "Suivi quotidien santé, sport, nutrition, sommeil et finances personnelles.",
-              offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" },
-            }),
-          }}
-        />
+        <script dangerouslySetInnerHTML={{ __html: JSON.stringify({ "@context": "https://schema.org", "@type": "SoftwareApplication", name: "Pace", applicationCategory: "HealthApplication", operatingSystem: "Web", description: "Suivi quotidien santé, sport, nutrition, sommeil et finances personnelles.", offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" } }) }} />
       </head>
       <body>{children}<Scripts /></body>
     </html>
@@ -122,13 +102,14 @@ function RootComponent() {
     <GlobalErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <AuthGate />
+          <CloudSyncProvider>
+            <AuthGate />
+          </CloudSyncProvider>
         </AuthProvider>
       </QueryClientProvider>
     </GlobalErrorBoundary>
   );
 }
-
 
 const PUBLIC_ROUTES = ["/login"];
 
@@ -138,11 +119,9 @@ function AuthGate() {
   const navigate = useNavigate();
   const isPublic = PUBLIC_ROUTES.includes(path);
 
-  // Single rAF-throttled pointer loop powering every glass specular highlight.
   useGlassPointer();
 
   useEffect(() => {
-    // Apply wallpaper + adaptive glass tint on mount and when dark mode toggles.
     applyGlassQuality("balanced");
     applyWallpaper(readWallpaperChoice());
     const obs = new MutationObserver(() => applyWallpaper(readWallpaperChoice()));
@@ -158,31 +137,15 @@ function AuthGate() {
     }
   }, [user, loading, isPublic, navigate, path]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen grid place-items-center bg-background">
-        <div className="size-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" />
-      </div>
-    );
-  }
-
-  if (isPublic || !user) {
-    return (
-      <>
-        <Outlet />
-        <Toaster />
-      </>
-    );
-  }
+  if (loading) return <div className="min-h-screen grid place-items-center bg-background"><div className="size-8 rounded-full border-2 border-primary/30 border-t-primary animate-spin" /></div>;
+  if (isPublic || !user) return <><Outlet /><Toaster /></>;
 
   return (
     <div className="min-h-screen flex pace-bg">
       <AppSidebar />
       <main className="flex-1 min-w-0 pb-24 md:pb-8 flex flex-col">
         <MobileTopBar />
-        <div className="max-w-6xl w-full mx-auto px-4 md:px-8 pt-4 md:pt-10">
-          <Outlet />
-        </div>
+        <div className="max-w-6xl w-full mx-auto px-4 md:px-8 pt-4 md:pt-10"><Outlet /></div>
       </main>
       <MobileTabBar />
       <LegalConsentGate />
