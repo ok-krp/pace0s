@@ -4,147 +4,200 @@ import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 
-const LT_PREFIX = "pace.";
-const EXCLUDED = new Set<string>(["pace.sport.active"]); // en cours, propre à l'appareil
-const DEBOUNCE_MS = 1200;
-const POLL_MS = 15_000;
-const QUEUE_KEY = "pace.__sync_queue"; // clés en attente d'envoi (hors-ligne / échec)
-// Identifiant de cet onglet/appareil : sert à ignorer nos propres écritures
-// quand elles reviennent via le canal temps réel (évite les boucles).
-const DEVICE_ID = typeof crypto !== "undefined" ? crypto.randomUUID() : String(Math.random());
+const PACE_PREFIX = "pace.";
+const EXCLUDED = new Set<string>(["pace.sport.active"]);
+const DEBOUNCE_MS = 1000;
+const POLL_MS = 15000;
+const QUEUE_KEY = "pace.__sync_queue";
+const META_KEY = "pace.__sync_meta";
+const DEVICE_KEY = "pace.__sync_device_id";
+const DEVICE_ID = getDeviceId();
 
+type SyncMeta = Record<string, string>;
 export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
+
+function getDeviceId() {
+  if (typeof window === "undefined") return "server";
+  try {
+    const existing = localStorage.getItem(DEVICE_KEY);
+    if (existing) return existing;
+    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    localStorage.setItem(DEVICE_KEY, id);
+    return id;
+  } catch {
+    return `${Date.now()}-${Math.random()}`;
+  }
+}
 
 function readQueue(): string[] {
   try { return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]"); } catch { return []; }
 }
 function writeQueue(keys: string[]) {
-  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(keys)); } catch {}
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify([...new Set(keys)])); } catch {}
+}
+function queueKey(key: string) {
+  if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return;
+  writeQueue([...readQueue(), key]);
+}
+function unqueueKey(key: string) {
+  writeQueue(readQueue().filter((k) => k !== key));
+}
+function readMeta(): SyncMeta {
+  try { return JSON.parse(localStorage.getItem(META_KEY) ?? "{}"); } catch { return {}; }
+}
+function writeMeta(meta: SyncMeta) {
+  try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch {}
+}
+function markLocal(key: string, timestamp: string) {
+  const meta = readMeta();
+  meta[key] = timestamp;
+  writeMeta(meta);
 }
 
 /**
- * Sync Cloud automatique, sans bouton. Aucune action manuelle requise :
- * - chaque écriture locale (via useLocalState) est poussée vers Supabase après un
- *   court debounce, taguée avec l'appareil d'origine et un timestamp ;
- * - les changements des autres appareils sont récupérés par sondage périodique
- *   (toutes les 15s) et appliqués en local sans recharger la page ;
- * - hors-ligne : les clés modifiées sont mises en file d'attente locale et
- *   renvoyées automatiquement dès le retour de la connexion.
+ * Automatic cloud sync.
+ *
+ * Local writes are persisted immediately and queued while offline. When the
+ * connection returns, queued keys are retried automatically. Remote state wins
+ * only when its server timestamp is newer than the local sync timestamp, which
+ * prevents an older device from overwriting a newer device during polling.
  */
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const running = useRef(false);
 
   useEffect(() => {
-    // Ceinture et bretelles : ce hook ne doit jamais faire planter le rendu,
-    // même en cas de config Supabase absente, de Realtime désactivé, ou
-    // d'erreur réseau. Tout est protégé, silencieusement en cas d'échec.
-    if (typeof window === "undefined") return;
-    if (!user) return;
-    let allowed = false;
-    try { allowed = isLegalCategoryAllowed("sync_cloud"); } catch { allowed = false; }
-    if (!allowed) return;
+    if (typeof window === "undefined" || !user) return;
+    try { if (!isLegalCategoryAllowed("sync_cloud")) return; } catch { return; }
 
     let cancelled = false;
 
     const pushKey = async (key: string) => {
+      if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
+      if (!navigator.onLine) { queueKey(key); setStatus("offline"); return; }
+
+      let value: unknown;
+      try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { return; }
+      const updatedAt = new Date().toISOString();
+      markLocal(key, updatedAt);
+      setStatus("syncing");
+
       try {
-        if (EXCLUDED.has(key) || !key.startsWith(LT_PREFIX)) return;
-        if (!navigator.onLine) { queueKey(key); setStatus("offline"); return; }
-        let value: unknown;
-        try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { return; }
-        setStatus("syncing");
         const { error } = await supabase.from("user_state").upsert(
-          { user_id: user.id, key, value, updated_by: DEVICE_ID, updated_at: new Date().toISOString() } as never,
+          { user_id: user.id, key, value, updated_by: DEVICE_ID, updated_at: updatedAt } as never,
           { onConflict: "user_id,key" },
         );
         if (cancelled) return;
-        if (error) { queueKey(key); setStatus("error"); return; }
+        if (error) {
+          queueKey(key);
+          setStatus("error");
+          return;
+        }
         unqueueKey(key);
         setStatus("ok");
       } catch {
-        if (!cancelled) { queueKey(key); setStatus("error"); }
+        queueKey(key);
+        if (!cancelled) setStatus("error");
       }
     };
 
-    const queueKey = (key: string) => {
+    const flushQueue = async () => {
+      if (cancelled || !navigator.onLine || running.current) return;
+      const queue = readQueue();
+      if (!queue.length) return;
+      running.current = true;
       try {
-        const q = readQueue();
-        if (!q.includes(key)) writeQueue([...q, key]);
-      } catch {}
-    };
-    const unqueueKey = (key: string) => {
-      try {
-        const q = readQueue();
-        if (q.includes(key)) writeQueue(q.filter((k) => k !== key));
-      } catch {}
+        for (const key of queue) await pushKey(key);
+      } finally {
+        running.current = false;
+      }
     };
 
-    // Récupération périodique : pas de WebSocket temps réel (retiré — trop de risque
-    // en environnement edge de production), un sondage léger toutes les 15s suffit
-    // largement pour un usage personnel et reste "automatique, sans bouton". Appelé
-    // une première fois immédiatement (nouvel appareil / app réinstallée), puis en
-    // boucle.
     const pull = async () => {
+      if (cancelled || !navigator.onLine || running.current) return;
       try {
-        if (!navigator.onLine) return;
-        const { data, error } = await supabase.from("user_state").select("key,value,updated_by").eq("user_id", user.id);
+        const { data, error } = await supabase
+          .from("user_state")
+          .select("key,value,updated_at,updated_by")
+          .eq("user_id", user.id);
         if (error || !data || cancelled) return;
-        data.forEach((row) => {
-          try {
-            if (!row.key || EXCLUDED.has(row.key)) return;
-            if (row.updated_by === DEVICE_ID) return;
-            applyRemoteWrite(row.key, row.value);
-          } catch {}
-        });
+
+        const queue = new Set(readQueue());
+        const meta = readMeta();
+        let applied = 0;
+        let newest = "";
+
+        for (const row of data) {
+          const rawKey = row.key as string;
+          const key = rawKey.startsWith("lt.") ? `${PACE_PREFIX}${rawKey.slice(3)}` : rawKey;
+          if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key) || queue.has(key)) continue;
+          if (row.updated_by === DEVICE_ID) {
+            meta[key] = row.updated_at as string;
+            continue;
+          }
+
+          const remoteTime = Date.parse(row.updated_at as string);
+          const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
+          if (!Number.isFinite(remoteTime) || remoteTime <= localTime) continue;
+
+          applyRemoteWrite(key, row.value);
+          meta[key] = row.updated_at as string;
+          newest = row.updated_at as string;
+          applied++;
+        }
+
+        writeMeta(meta);
+        if (applied > 0) setStatus("ok");
+        if (newest) localStorage.setItem("pace.__last_sync_at", newest);
       } catch {
-        // Colonne manquante, réseau indisponible, etc. — échec silencieux, on retentera au prochain sondage.
+        if (!cancelled && !navigator.onLine) setStatus("offline");
       }
     };
-    pull();
 
-    // Écriture locale → push debouncé (regroupe les saisies rapides, ex: un slider).
+    const syncNow = async () => {
+      if (!navigator.onLine) { setStatus("offline"); return; }
+      await flushQueue();
+      await pull();
+    };
+
     const offLocal = onLocalWrite((key) => {
-      try {
-        if (EXCLUDED.has(key) || !key.startsWith(LT_PREFIX)) return;
-        clearTimeout(timers.current[key]);
-        timers.current[key] = setTimeout(() => pushKey(key), DEBOUNCE_MS);
-      } catch {}
+      if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
+      const timestamp = new Date().toISOString();
+      markLocal(key, timestamp);
+      clearTimeout(timers.current[key]);
+      timers.current[key] = setTimeout(() => pushKey(key), DEBOUNCE_MS);
     });
 
-    // Retour de connexion → on vide la file d'attente hors-ligne.
-    const flushQueue = () => { try { readQueue().forEach((k) => pushKey(k)); } catch {} };
-    window.addEventListener("online", flushQueue);
-    try { if (navigator.onLine) flushQueue(); else setStatus("offline"); } catch {}
+    const onOnline = () => { void syncNow(); };
+    const onOffline = () => setStatus("offline");
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
 
-    const pollInterval = setInterval(pull, POLL_MS);
+    void syncNow();
+    const interval = window.setInterval(() => void syncNow(), POLL_MS);
 
     return () => {
       cancelled = true;
-      try { offLocal(); } catch {}
-      window.removeEventListener("online", flushQueue);
-      Object.keys(timers.current).forEach((k) => clearTimeout(timers.current[k]));
-      clearInterval(pollInterval);
+      offLocal();
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      Object.values(timers.current).forEach(clearTimeout);
+      window.clearInterval(interval);
     };
   }, [user]);
 
-  return { status };
+  return { status, queuedCount: readQueue().length };
 }
 
 const SyncStatusContext = createContext<SyncStatus>("idle");
 
-/**
- * À monter UNE SEULE FOIS, à la racine de l'app (voir __root.tsx). Fait tourner
- * le moteur de sync réel ; expose le statut à tous les composants enfants via
- * le contexte, sans dupliquer les abonnements Realtime.
- */
 export function CloudSyncProvider({ children }: { children: ReactNode }) {
   const { status } = useCloudSyncEngineInternal();
   return <SyncStatusContext.Provider value={status}>{children}</SyncStatusContext.Provider>;
 }
 
-/** À utiliser dans n'importe quel composant (ex: l'écran Réglages) pour juste lire le statut courant. */
 export function useCloudSyncStatus(): SyncStatus {
   return useContext(SyncStatusContext);
 }
