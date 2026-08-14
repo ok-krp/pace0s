@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useAuth } from "@/hooks/use-auth";
 import { getOneSignalConfig } from "@/lib/push.functions";
+import { registerPushSubscription, unregisterPushSubscription } from "@/lib/push-subscriptions.functions";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 
 let initPromise: Promise<void> | null = null;
@@ -29,6 +30,8 @@ function readPermission(): NotificationPermission | "default" | "unsupported" {
 export function usePush() {
   const { user } = useAuth();
   const fetchConfig = useServerFn(getOneSignalConfig);
+  const saveSubscription = useServerFn(registerPushSubscription);
+  const removeSubscription = useServerFn(unregisterPushSubscription);
   const [ready, setReady] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [permission, setPermission] = useState<NotificationPermission | "default" | "unsupported">(readPermission);
@@ -41,7 +44,6 @@ export function usePush() {
     return () => window.removeEventListener("pace.legal.changed", refresh);
   }, []);
 
-  // Keep permission state in sync (user may change it in browser settings without reload)
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!consentAllowed) {
@@ -52,9 +54,7 @@ export function usePush() {
     }
     let permStatus: PermissionStatus | null = null;
     let cancelled = false;
-
     const refresh = () => setPermission(readPermission());
-
     (async () => {
       try {
         if (navigator.permissions?.query) {
@@ -63,74 +63,73 @@ export function usePush() {
           refresh();
           permStatus.addEventListener("change", refresh);
         }
-      } catch {
-        /* ignore */
-      }
+      } catch { /* ignore */ }
     })();
-
     const onVisible = () => refresh();
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
-
     return () => {
       cancelled = true;
       permStatus?.removeEventListener("change", refresh);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
     };
-  }, []);
+  }, [consentAllowed]);
 
   useEffect(() => {
     let cancelled = false;
-    if (typeof window === "undefined") return;
+    if (typeof window === "undefined" || !user?.id || !consentAllowed) return;
     (async () => {
       try {
         setError(null);
         const cfg = await fetchConfig();
         if (!cfg.appId) { setError("Notifications non configurées"); return; }
         await initOneSignal(cfg.appId);
-
         if (cancelled) return;
         const OneSignal = (await import("react-onesignal")).default;
         setReady(true);
         setSubscribed(OneSignal.User.PushSubscription.optedIn ?? false);
         setPermission(readPermission());
-        OneSignal.User.PushSubscription.addEventListener("change", (e: { current: { optedIn: boolean } }) => {
-          setSubscribed(e.current.optedIn);
+
+        const registerCurrentSubscription = async () => {
+          const subscriptionId = OneSignal.User.PushSubscription.id;
+          const optedIn = OneSignal.User.PushSubscription.optedIn ?? false;
+          setSubscribed(optedIn);
+          if (subscriptionId && optedIn) {
+            try {
+              await saveSubscription({ data: { subscriptionId, platform: "web" } });
+            } catch (e) {
+              console.error("Push subscription registration failed", e);
+              if (!cancelled) setError("Impossible d'enregistrer cet appareil pour les notifications.");
+            }
+          }
+        };
+
+        OneSignal.User.PushSubscription.addEventListener("change", () => {
+          void registerCurrentSubscription();
         });
-        if (user?.id) {
-          try { await OneSignal.login(user.id); } catch (e) { console.error(e); }
-        }
+        await registerCurrentSubscription();
       } catch (e) {
         console.error("OneSignal init failed", e);
-        if (!cancelled) {
-          const message = e instanceof Error ? e.message : String(e);
-          setError(
-            message.includes("AppID") || message.includes("app")
-              ? "Configuration OneSignal invalide : l'App ID ne correspond à aucune app Web Push active."
-              : `Initialisation OneSignal impossible : ${message}`,
-          );
-        }
+        if (!cancelled) setError("Initialisation des notifications impossible.");
       }
     })();
     return () => { cancelled = true; };
-  }, [consentAllowed, fetchConfig, user?.id]);
+  }, [consentAllowed, fetchConfig, saveSubscription, user?.id]);
 
   const enable = useCallback(async () => {
     if (!isLegalCategoryAllowed("notifications")) {
       throw new Error("Activez d'abord le consentement Notifications dans la fenêtre confidentialité.");
     }
     const OneSignal = (await import("react-onesignal")).default;
-    try {
-      await OneSignal.Notifications.requestPermission();
-    } catch (e) {
-      console.error("requestPermission failed", e);
-    }
+    try { await OneSignal.Notifications.requestPermission(); } catch (e) { console.error("requestPermission failed", e); }
     const perm = readPermission();
     setPermission(perm);
     if (perm === "granted") {
       await OneSignal.User.PushSubscription.optIn();
       setSubscribed(true);
+      const subscriptionId = OneSignal.User.PushSubscription.id;
+      if (subscriptionId) await saveSubscription({ data: { subscriptionId, platform: "web" } });
     } else {
       throw new Error(
         perm === "denied"
@@ -138,13 +137,15 @@ export function usePush() {
           : "Permission refusée.",
       );
     }
-  }, []);
+  }, [saveSubscription]);
 
   const disable = useCallback(async () => {
     const OneSignal = (await import("react-onesignal")).default;
+    const subscriptionId = OneSignal.User.PushSubscription.id;
     await OneSignal.User.PushSubscription.optOut();
+    if (subscriptionId) await removeSubscription({ data: { subscriptionId } });
     setSubscribed(false);
-  }, []);
+  }, [removeSubscription]);
 
   return { ready, subscribed, permission, error, enable, disable };
 }
