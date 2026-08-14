@@ -1,0 +1,52 @@
+name: Apply calendar event refresh fix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'calendar.tsx'
+      - '.github/workflows/fix-calendar-event-refresh.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-calendar:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fix selected-day details remount
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('calendar.tsx')
+          s = p.read_text(encoding='utf-8')
+          old = '{selected && <DayDetails date={selected}'
+          new = '{selected && <DayDetails key={selected} date={selected}'
+          if old in s and new not in s:
+              s = s.replace(old, new, 1)
+              p.write_text(s, encoding='utf-8')
+              print('Calendar remount fix applied.')
+          else:
+              print('Calendar fix already present or target not found.')
+          PY
+
+      - name: Commit fix if changed
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if git diff --quiet -- calendar.tsx; then
+            echo 'No changes to commit.'
+            exit 0
+          fi
+          git add calendar.tsx
+          git commit -m 'fix(calendar): refresh day details when switching dates'
+          git push origin main
