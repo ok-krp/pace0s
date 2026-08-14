@@ -27,11 +27,14 @@ class MainActivity : ComponentActivity() {
             try {
                 val client = HealthConnectClient.getOrCreate(this@MainActivity)
                 val granted = client.permissionController.getGrantedPermissions()
-                if (!granted.containsAll(HealthConnectReader.READ_PERMISSIONS)) {
+                val missing = HealthConnectReader.READ_PERMISSIONS - granted
+                if (missing.isNotEmpty()) {
                     sendToWeb(JSONObject().put("ok", false).put("error", "Health Connect permissions are missing or were denied").put("status", "permission_missing").toString())
-                } else if (pendingSync) syncHealthConnect()
+                } else if (pendingSync) {
+                    syncHealthConnect()
+                }
             } catch (e: Exception) {
-                sendToWeb(JSONObject().put("ok", false).put("error", e.message ?: "Unable to verify Health Connect permissions").put("status", "error").toString())
+                sendToWeb(JSONObject().put("ok", false).put("error", "Unable to verify Health Connect permissions").put("status", "error").toString())
             } finally { pendingSync = false }
         }
     }
@@ -47,12 +50,33 @@ class MainActivity : ComponentActivity() {
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             webViewClient = object : WebViewClient() {
-                override fun onPageFinished(view: WebView?, url: String?) { super.onPageFinished(view, url); deliverPendingQueue() }
+                override fun onPageFinished(view: WebView?, url: String?) {
+                    super.onPageFinished(view, url)
+                    deliverPendingQueue()
+                }
             }
             addJavascriptInterface(HealthBridge(), "PaceHealthConnect")
             loadUrl(BuildConfig.PACE_URL)
         }
         setContentView(webView)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Foreground sync does not depend on the background permission and keeps
+        // the watch/Health Connect data fresh whenever Pace is reopened.
+        if (::reader.isInitialized) {
+            lifecycleScope.launch {
+                try {
+                    if (HealthConnectClient.getSdkStatus(this@MainActivity) == HealthConnectClient.SDK_AVAILABLE) {
+                        val client = HealthConnectClient.getOrCreate(this@MainActivity)
+                        if (client.permissionController.getGrantedPermissions().containsAll(HealthConnectReader.READ_PERMISSIONS)) {
+                            syncHealthConnect()
+                        }
+                    }
+                } catch (_: Exception) { /* diagnostics are surfaced by explicit sync */ }
+            }
+        }
     }
 
     private fun scheduleBackgroundSync() {
@@ -67,17 +91,21 @@ class MainActivity : ComponentActivity() {
                 lifecycleScope.launch {
                     try {
                         if (HealthConnectClient.getSdkStatus(this@MainActivity) != HealthConnectClient.SDK_AVAILABLE) {
-                            sendToWeb(JSONObject().put("ok", false).put("error", "Health Connect is unavailable on this device").put("status", "unavailable").toString()); pendingSync = false; return@launch
+                            sendToWeb(JSONObject().put("ok", false).put("error", "Health Connect is unavailable on this device").put("status", "unavailable").toString())
+                            pendingSync = false
+                            return@launch
                         }
                         val client = HealthConnectClient.getOrCreate(this@MainActivity)
                         val granted = client.permissionController.getGrantedPermissions()
                         if (!granted.containsAll(HealthConnectReader.READ_PERMISSIONS)) {
                             sendToWeb(JSONObject().put("ok", false).put("error", "Health Connect permissions are required").put("status", "permission_missing").toString())
-                            permissionLauncher.launch(HealthConnectReader.READ_PERMISSIONS)
-                        } else syncHealthConnect()
-                    } catch (e: Exception) {
+                            permissionLauncher.launch(HealthConnectReader.READ_PERMISSIONS + HealthConnectReader.BACKGROUND_READ_PERMISSION)
+                        } else {
+                            syncHealthConnect()
+                        }
+                    } catch (_: Exception) {
                         pendingSync = false
-                        sendToWeb(JSONObject().put("ok", false).put("error", e.message ?: "Health Connect error").put("status", "error").toString())
+                        sendToWeb(JSONObject().put("ok", false).put("error", "Health Connect synchronization failed").put("status", "error").toString())
                     }
                 }
             }
@@ -98,8 +126,8 @@ class MainActivity : ComponentActivity() {
                 val payload = reader.read(7)
                 if ((payload.optJSONArray("samples")?.length() ?: 0) > 0) PendingHealthQueue.enqueue(this@MainActivity, payload)
                 deliverPendingQueue()
-            } catch (e: Exception) {
-                sendToWeb(JSONObject().put("ok", false).put("error", e.message ?: "Health Connect read failed").put("status", "read_error").toString())
+            } catch (_: Exception) {
+                sendToWeb(JSONObject().put("ok", false).put("error", "Unable to read Health Connect data").put("status", "read_error").toString())
             } finally { pendingSync = false }
         }
     }
