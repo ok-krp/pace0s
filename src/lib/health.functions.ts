@@ -2,22 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const SampleType = z.enum([
-  "steps", "kcal_active", "kcal_total", "heart_rate", "resting_heart_rate",
-  "distance_m", "sleep_min", "exercise_duration_min", "weight_kg",
-  "oxygen_saturation", "temperature_c", "cadence_rpm", "power_w",
-]);
-
-const insertSchema = z.object({
-  samples: z.array(z.object({
-    ts: z.string(), type: SampleType, value: z.number().finite(), source: z.string().max(128).default("manual"),
-    source_id: z.string().max(128).optional(), external_id: z.string().max(256).optional(), metadata: z.record(z.unknown()).optional(),
-  })).min(1).max(5000),
-});
+const SampleType = z.enum(["steps", "kcal_active", "kcal_total", "heart_rate", "resting_heart_rate", "distance_m", "sleep_min", "exercise_duration_min", "weight_kg", "oxygen_saturation", "temperature_c", "cadence_rpm", "power_w"]);
+const insertSchema = z.object({ samples: z.array(z.object({ ts: z.string(), type: SampleType, value: z.number().finite(), source: z.string().max(128).default("manual"), source_id: z.string().max(128).optional(), external_id: z.string().max(256).optional(), metadata: z.record(z.unknown()).optional() })).min(1).max(5000) });
 
 function isMissingProvenanceColumn(error: { message?: string } | null | undefined) {
-  const message = error?.message ?? "";
-  return /column .*?(source_id|external_id|metadata).* does not exist/i.test(message);
+  return /column .*?(source_id|external_id|metadata).* does not exist/i.test(error?.message ?? "");
 }
 
 export const insertHealthSamples = createServerFn({ method: "POST" })
@@ -33,16 +22,15 @@ export const insertHealthSamples = createServerFn({ method: "POST" })
     if (externalIds.length) {
       const existing = await healthTable.select("external_id").eq("user_id", context.userId).in("external_id", externalIds);
       if (existing.error) {
-        if (!isMissingProvenanceColumn(existing.error)) throw new Error(existing.error.message);
+        if (!isMissingProvenanceColumn(existing.error)) {
+          console.error("health provenance lookup failed", existing.error);
+          throw new Error("Impossible de vérifier les données de santé existantes.");
+        }
         provenanceSupported = false;
-      } else {
-        known = new Set((existing.data ?? []).map((r: { external_id: string }) => r.external_id));
-      }
+      } else known = new Set((existing.data ?? []).map((r: { external_id: string }) => r.external_id));
     }
 
-    const fresh = provenanceSupported
-      ? rows.filter((r) => !r.external_id || !known.has(r.external_id))
-      : rows;
+    const fresh = provenanceSupported ? rows.filter((r) => !r.external_id || !known.has(r.external_id)) : rows;
     if (!fresh.length) return { inserted: 0, deduped: rows.length };
 
     let result = await healthTable.insert(fresh, { count: "exact" });
@@ -50,7 +38,10 @@ export const insertHealthSamples = createServerFn({ method: "POST" })
       const legacyRows = fresh.map(({ source_id: _sourceId, external_id: _externalId, metadata: _metadata, ...row }) => row);
       result = await healthTable.insert(legacyRows, { count: "exact" });
     }
-    if (result.error) throw new Error(result.error.message);
+    if (result.error) {
+      console.error("health sample insert failed", result.error);
+      throw new Error("Impossible d'enregistrer les données de santé.");
+    }
     return { inserted: result.count ?? fresh.length, deduped: rows.length - fresh.length };
   });
 
@@ -76,19 +67,11 @@ export const listHealthToday = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const range = localDayRange(data.timeZone);
     const healthTable = context.supabase.from("health_samples") as any;
-
-    // Deliberately read only columns guaranteed by the base schema. Optional
-    // provenance columns must never be part of this query: the Watch/Dashboard
-    // read path must remain functional before the additive migration is applied.
-    const result = await healthTable
-      .select(["type", "value", "ts", "source"].join(", "))
-      .gte("ts", range.start.toISOString())
-      .lt("ts", range.end.toISOString())
-      .order("ts", { ascending: false })
-      .limit(10000);
-
-    if (result.error) throw new Error(result.error.message);
-
+    const result = await healthTable.select("type, value, ts, source").gte("ts", range.start.toISOString()).lt("ts", range.end.toISOString()).order("ts", { ascending: false }).limit(10000);
+    if (result.error) {
+      console.error("health sample read failed", result.error);
+      throw new Error("Impossible de charger les données de santé.");
+    }
     const values = result.data ?? [];
     const sum = (t: string) => values.filter((r: any) => r.type === t).reduce((s: number, r: any) => s + Number(r.value), 0);
     const latest = (t: string) => values.find((r: any) => r.type === t)?.value ?? null;
