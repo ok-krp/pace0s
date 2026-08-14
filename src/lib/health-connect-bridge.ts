@@ -8,33 +8,21 @@ export type HealthConnectPayload = {
     type: string;
     value: number;
     source: string;
+    source_id?: string;
+    external_id?: string;
     start?: string;
     end?: string;
     exerciseType?: number;
   }>;
 };
 
-type NativeHealthConnect = {
-  requestSync: () => void;
-  _receive?: (json: string) => void;
-};
-
-declare global {
-  interface Window {
-    PaceHealthConnect?: NativeHealthConnect;
-  }
-}
+type NativeHealthConnect = { requestSync: () => void; _receive?: (json: string) => void };
+declare global { interface Window { PaceHealthConnect?: NativeHealthConnect } }
 
 const SUPPORTED = new Set([
-  "steps",
-  "kcal_active",
-  "kcal_total",
-  "heart_rate",
-  "resting_heart_rate",
-  "distance_m",
-  "sleep_min",
-  "exercise_duration_min",
-  "weight_kg",
+  "steps", "kcal_active", "kcal_total", "heart_rate", "resting_heart_rate",
+  "distance_m", "sleep_min", "exercise_duration_min", "weight_kg",
+  "oxygen_saturation", "temperature_c", "cadence_rpm", "power_w",
 ]);
 
 let initialized = false;
@@ -52,18 +40,16 @@ export function initHealthConnectBridge(onSync?: (result: { inserted: number; so
   native._receive = async (json: string) => {
     try {
       const envelope = JSON.parse(json) as { ok: boolean; payload?: HealthConnectPayload; error?: string };
-      if (!envelope.ok || !envelope.payload) {
-        onSync?.({ error: envelope.error ?? "Health Connect indisponible" });
-        return;
-      }
-      const samples = envelope.payload.samples
-        .filter((s) => SUPPORTED.has(s.type) && Number.isFinite(s.value) && !!s.ts)
-        .map((s) => ({
-          ts: s.ts,
-          type: s.type as "steps" | "kcal_active" | "heart_rate" | "distance_m" | "sleep_min" | "oxygen_saturation" | "temperature_c" | "cadence_rpm" | "power_w",
-          value: s.value,
-          source: s.source || "health_connect",
-        }));
+      if (!envelope.ok || !envelope.payload) { onSync?.({ error: envelope.error ?? "Health Connect indisponible" }); return; }
+      const samples = envelope.payload.samples.filter((s) => SUPPORTED.has(s.type) && Number.isFinite(s.value) && !!s.ts).map((s) => ({
+        ts: s.ts,
+        type: s.type as "steps" | "kcal_active" | "kcal_total" | "heart_rate" | "resting_heart_rate" | "distance_m" | "sleep_min" | "exercise_duration_min" | "weight_kg" | "oxygen_saturation" | "temperature_c" | "cadence_rpm" | "power_w",
+        value: s.value,
+        source: s.source || "health_connect",
+        source_id: s.source,
+        external_id: s.external_id,
+        metadata: { timezone: envelope.payload?.timezone, start: s.start, end: s.end, exerciseType: s.exerciseType },
+      }));
 
       let inserted = 0;
       for (let i = 0; i < samples.length; i += 500) {
@@ -74,15 +60,9 @@ export function initHealthConnectBridge(onSync?: (result: { inserted: number; so
       }
       window.dispatchEvent(new CustomEvent("pace.health.changed", { detail: { source: "health_connect", inserted } }));
       onSync?.({ inserted, source: "health_connect" });
-    } catch (error) {
-      onSync?.({ error: error instanceof Error ? error.message : String(error) });
-    }
+    } catch (error) { onSync?.({ error: error instanceof Error ? error.message : String(error) }); }
   };
-
-  return () => {
-    if (window.PaceHealthConnect) window.PaceHealthConnect._receive = undefined;
-    initialized = false;
-  };
+  return () => { if (window.PaceHealthConnect) window.PaceHealthConnect._receive = undefined; initialized = false; };
 }
 
 export function requestHealthConnectSync() {
