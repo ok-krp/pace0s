@@ -77,11 +77,11 @@ export const listHealthToday = createServerFn({ method: "GET" })
     const range = localDayRange(data.timeZone);
     const healthTable = context.supabase.from("health_samples") as any;
 
-    // Read only columns guaranteed by the current schema. Provenance columns are optional
-    // and must never be allowed to make the Watch/Dashboard endpoint crash when a migration
-    // has not yet been applied in Supabase.
+    // Deliberately read only columns guaranteed by the base schema. Optional
+    // provenance columns must never be part of this query: the Watch/Dashboard
+    // read path must remain functional before the additive migration is applied.
     const result = await healthTable
-      .select("type, value, ts, source")
+      .select(["type", "value", "ts", "source"].join(", "))
       .gte("ts", range.start.toISOString())
       .lt("ts", range.end.toISOString())
       .order("ts", { ascending: false })
