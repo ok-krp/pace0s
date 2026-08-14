@@ -11,7 +11,7 @@ function isMissingProvenanceColumn(error: { message?: string } | null | undefine
 
 export const insertHealthSamples = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => insertSchema.parse(d))
+  .validator((d: unknown) => insertSchema.parse(d))
   .handler(async ({ data, context }) => {
     const healthTable = context.supabase.from("health_samples") as any;
     const rows = data.samples.map((s) => ({ ...s, user_id: context.userId, metadata: s.metadata ?? {} }));
@@ -47,8 +47,7 @@ export const insertHealthSamples = createServerFn({ method: "POST" })
 
 function localDayRange(timeZone: string | undefined) {
   const zone = timeZone || "UTC";
-  const now = new Date();
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now).filter((p) => p.type !== "literal").map((p) => [p.type, p.value]));
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()).filter((p) => p.type !== "literal").map((p) => [p.type, p.value]));
   const localMidnight = `${parts.year}-${parts.month}-${parts.day}T00:00:00`;
   const guess = new Date(`${localMidnight}Z`);
   const offset = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" }).formatToParts(guess).find((p) => p.type === "timeZoneName")?.value?.replace("GMT", "") || "+00:00";
@@ -63,7 +62,7 @@ function localDayRange(timeZone: string | undefined) {
 
 export const listHealthToday = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({ timeZone: z.string().optional() }).parse(d ?? {}))
+  .validator((d: unknown) => z.object({ timeZone: z.string().optional() }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
     const range = localDayRange(data.timeZone);
     const healthTable = context.supabase.from("health_samples") as any;
