@@ -16,6 +16,8 @@ const DEVICE_ID = getDeviceId();
 type SyncMeta = Record<string, string>;
 export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
 
+type SyncRow = { key: string; value: unknown; updated_at: string; updated_by: string | null };
+
 function getDeviceId() {
   if (typeof window === "undefined") return "server";
   try {
@@ -55,12 +57,10 @@ function markLocal(key: string, timestamp: string) {
 }
 
 /**
- * Automatic cloud sync.
- *
- * Local writes are persisted immediately and queued while offline. When the
- * connection returns, queued keys are retried automatically. Remote state wins
- * only when its server timestamp is newer than the local sync timestamp, which
- * prevents an older device from overwriting a newer device during polling.
+ * Automatic cross-device sync with an offline mutation queue.
+ * Local writes stay immediately usable. Queued keys are retried after reconnect.
+ * A remote value is applied only when its server timestamp is newer than the
+ * last known local sync timestamp, preventing stale devices from overwriting data.
  */
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
@@ -96,6 +96,7 @@ export function useCloudSyncEngineInternal() {
           return;
         }
         unqueueKey(key);
+        localStorage.setItem("pace.__last_sync_at", updatedAt);
         setStatus("ok");
       } catch {
         queueKey(key);
@@ -129,28 +130,29 @@ export function useCloudSyncEngineInternal() {
         let applied = 0;
         let newest = "";
 
-        for (const row of data) {
-          const rawKey = row.key as string;
+        for (const rawRow of data) {
+          const row = rawRow as unknown as SyncRow;
+          const rawKey = row.key;
           const key = rawKey.startsWith("lt.") ? `${PACE_PREFIX}${rawKey.slice(3)}` : rawKey;
           if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key) || queue.has(key)) continue;
           if (row.updated_by === DEVICE_ID) {
-            meta[key] = row.updated_at as string;
+            meta[key] = row.updated_at;
             continue;
           }
 
-          const remoteTime = Date.parse(row.updated_at as string);
+          const remoteTime = Date.parse(row.updated_at);
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           if (!Number.isFinite(remoteTime) || remoteTime <= localTime) continue;
 
           applyRemoteWrite(key, row.value);
-          meta[key] = row.updated_at as string;
-          newest = row.updated_at as string;
+          meta[key] = row.updated_at;
+          newest = row.updated_at;
           applied++;
         }
 
         writeMeta(meta);
-        if (applied > 0) setStatus("ok");
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
+        if (applied > 0) setStatus("ok");
       } catch {
         if (!cancelled && !navigator.onLine) setStatus("offline");
       }
@@ -164,8 +166,7 @@ export function useCloudSyncEngineInternal() {
 
     const offLocal = onLocalWrite((key) => {
       if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
-      const timestamp = new Date().toISOString();
-      markLocal(key, timestamp);
+      markLocal(key, new Date().toISOString());
       clearTimeout(timers.current[key]);
       timers.current[key] = setTimeout(() => pushKey(key), DEBOUNCE_MS);
     });
