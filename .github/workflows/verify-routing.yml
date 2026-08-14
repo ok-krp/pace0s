@@ -25,7 +25,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Build production bundle and generate TanStack route tree
         run: npm run build
@@ -34,11 +34,11 @@ jobs:
         shell: bash
         run: |
           test -f src/routeTree.gen.ts
-          for route in "/" "/assistant" "/development" "/ai-activity" "/nutrition" "/sport" "/watch" "/sleep" "/routine" "/body" "/work" "/calendar" "/notes" "/recalls" "/finance" "/profile" "/settings" "/scan" "/recipes" "/investments" "/login"; do
+          for route in "/" "/assistant" "/development" "/ai-activity" "/nutrition" "/sport" "/watch" "/sleep" "/routine" "/body" "/work" "/calendar" "/notes" "/recalls" "/finance" "/profile" "/settings" "/scan" "/recipes" "/investments" "/water" "/login"; do
             if [ "$route" = "/" ]; then
-              grep -q 'id: "/"' src/routeTree.gen.ts || { echo "Missing route: /"; exit 1; }
+              grep -q 'path: "/"' src/routeTree.gen.ts || { echo "Missing route: /"; exit 1; }
             else
-              grep -q "path: \"$route\"\|path: '$route'\|path: '$route'" src/routeTree.gen.ts || { echo "Missing route: $route"; exit 1; }
+              grep -q "path: \"$route\"\|path: '$route'" src/routeTree.gen.ts || { echo "Missing route: $route"; exit 1; }
             fi
           done
 
