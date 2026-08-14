@@ -16,7 +16,12 @@ export type HealthConnectPayload = {
   }>;
 };
 
-type NativeHealthConnect = { requestSync: () => void; _receive?: (json: string) => void };
+type NativeHealthConnect = {
+  requestSync: () => void;
+  acknowledgeSync?: (queueId: string) => void;
+  getPendingCount?: () => number;
+  _receive?: (json: string) => void;
+};
 declare global { interface Window { PaceHealthConnect?: NativeHealthConnect } }
 
 const SUPPORTED = new Set([
@@ -39,7 +44,7 @@ export function initHealthConnectBridge(onSync?: (result: { inserted: number; so
 
   native._receive = async (json: string) => {
     try {
-      const envelope = JSON.parse(json) as { ok: boolean; payload?: HealthConnectPayload; error?: string };
+      const envelope = JSON.parse(json) as { ok: boolean; queueId?: string; payload?: HealthConnectPayload; error?: string };
       if (!envelope.ok || !envelope.payload) { onSync?.({ error: envelope.error ?? "Health Connect indisponible" }); return; }
       const samples = envelope.payload.samples.filter((s) => SUPPORTED.has(s.type) && Number.isFinite(s.value) && !!s.ts).map((s) => ({
         ts: s.ts,
@@ -58,6 +63,9 @@ export function initHealthConnectBridge(onSync?: (result: { inserted: number; so
         const result = await insertHealthSamples({ data: { samples: chunk } });
         inserted += result.inserted;
       }
+
+      // ACK only after the authenticated backend accepted the complete queue item.
+      if (envelope.queueId && native.acknowledgeSync) native.acknowledgeSync(envelope.queueId);
       window.dispatchEvent(new CustomEvent("pace.health.changed", { detail: { source: "health_connect", inserted } }));
       onSync?.({ inserted, source: "health_connect" });
     } catch (error) { onSync?.({ error: error instanceof Error ? error.message : String(error) }); }
@@ -69,4 +77,8 @@ export function requestHealthConnectSync() {
   if (!isNativeHealthConnectAvailable()) return false;
   window.PaceHealthConnect!.requestSync();
   return true;
+}
+
+export function getPendingHealthConnectCount() {
+  return window.PaceHealthConnect?.getPendingCount?.() ?? 0;
 }
