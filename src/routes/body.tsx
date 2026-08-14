@@ -68,18 +68,9 @@ function BodyPage() {
     const hasValue = w.trim() !== "" || muscle.trim() !== "" || fat.trim() !== "";
     if (!hasValue) return;
     const values: Entry = {};
-    if (w.trim() !== "") {
-      const n = Number(w);
-      if (Number.isFinite(n)) values.w = n;
-    }
-    if (muscle.trim() !== "") {
-      const n = Number(muscle);
-      if (Number.isFinite(n)) values.muscle = n;
-    }
-    if (fat.trim() !== "") {
-      const n = Number(fat);
-      if (Number.isFinite(n)) values.fat = n;
-    }
+    if (w.trim() !== "") { const n = Number(w); if (Number.isFinite(n)) values.w = n; }
+    if (muscle.trim() !== "") { const n = Number(muscle); if (Number.isFinite(n)) values.muscle = n; }
+    if (fat.trim() !== "") { const n = Number(fat); if (Number.isFinite(n)) values.fat = n; }
     if (!Object.keys(values).length) return;
     const timer = window.setTimeout(() => {
       const day = todayKey();
@@ -91,42 +82,24 @@ function BodyPage() {
   return (
     <div>
       <PageHeader title="Poids & Corps" subtitle="Le corps évolue, mesurez la trajectoire." />
-
       <div className="rounded-2xl glass-card p-5 mb-4">
         <div className="flex flex-wrap gap-3 items-end">
-          <div>
-            <label className="text-xs text-muted-foreground">Poids (kg)</label>
-            <Input type="number" step="0.1" value={w} onChange={(e) => setW(e.target.value)} placeholder="72.5" className="w-28" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Muscle (%)</label>
-            <Input type="number" step="0.1" value={muscle} onChange={(e) => setMuscle(e.target.value)} placeholder="42" className="w-28" />
-          </div>
-          <div>
-            <label className="text-xs text-muted-foreground">Gras (%)</label>
-            <Input type="number" step="0.1" value={fat} onChange={(e) => setFat(e.target.value)} placeholder="18" className="w-28" />
-          </div>
+          <div><label className="text-xs text-muted-foreground">Poids (kg)</label><Input type="number" step="0.1" value={w} onChange={(e) => setW(e.target.value)} placeholder="72.5" className="w-28" /></div>
+          <div><label className="text-xs text-muted-foreground">Muscle (%)</label><Input type="number" step="0.1" value={muscle} onChange={(e) => setMuscle(e.target.value)} placeholder="42" className="w-28" /></div>
+          <div><label className="text-xs text-muted-foreground">Gras (%)</label><Input type="number" step="0.1" value={fat} onChange={(e) => setFat(e.target.value)} placeholder="18" className="w-28" /></div>
           <div className="text-xs text-muted-foreground ml-auto" aria-live="polite">Sauvegarde automatique</div>
         </div>
       </div>
-
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         <StatCard label="Min" value={min ? min.toFixed(1) : "—"} unit="kg" />
         <StatCard label="Moyenne" value={avg ? avg.toFixed(1) : "—"} unit="kg" icon={<Scale className="size-4" />} />
         <StatCard label="Max" value={max ? max.toFixed(1) : "—"} unit="kg" />
         <StatCard label="Variation" value={delta ? (delta > 0 ? `+${delta.toFixed(1)}` : delta.toFixed(1)) : "—"} unit="kg" delta={delta && first ? (delta / first) * 100 : undefined} />
       </div>
-
       <div className="rounded-2xl glass-card p-5">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-display text-lg font-semibold">Évolution</h2>
-          <div className="flex gap-1">
-            {[7, 30, 90, 180, 365].map((p) => (
-              <button key={p} onClick={() => setPeriod(p)} className={`text-xs px-2.5 py-1 rounded-lg ${period === p ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-                {p === 7 ? "1S" : p === 30 ? "1M" : p === 90 ? "3M" : p === 180 ? "6M" : "1A"}
-              </button>
-            ))}
-          </div>
+          <div className="flex gap-1">{[7, 30, 90, 180, 365].map((p) => <button key={p} onClick={() => setPeriod(p)} className={`text-xs px-2.5 py-1 rounded-lg ${period === p ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>{p === 7 ? "1S" : p === 30 ? "1M" : p === 90 ? "3M" : p === 180 ? "6M" : "1A"}</button>)}</div>
         </div>
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={series}>
@@ -136,7 +109,7 @@ function BodyPage() {
             <Tooltip contentStyle={liquidTooltipStyle} />
             <Line type="monotone" dataKey="w" name="Poids" stroke="var(--primary)" strokeWidth={2.5} dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} />
             <Line type="monotone" dataKey="muscle" name="Muscle %" stroke="var(--chart-2)" strokeWidth={2} dot={liquidDot("var(--chart-2)")} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="fat" name="Gras %" stroke="var(--chart-4)" strokeWidth={2} dot={liquidDot("var(--chart-4")} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="fat" name="Gras %" stroke="var(--chart-4)" strokeWidth={2} dot={liquidDot("var(--chart-4)")} activeDot={{ r: 5 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
