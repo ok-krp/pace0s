@@ -3,11 +3,12 @@ import { useEffect, useState, useCallback } from "react";
 const OLD_PREFIX = "lt.";
 const NEW_PREFIX = "pace.";
 const MIGRATION_FLAG = "pace.__migrated_lt";
-const WATER_RECOVERY_FLAG = "pace.__water_recovery_v2";
+const WATER_RECOVERY_FLAG = "pace.__water_recovery_v3";
 
 /**
- * Migration idempotente des anciennes clés LifeTracker (lt.*) vers PaceOS (pace.*).
- * Les clés legacy ne sont supprimées qu'après écriture réussie de la nouvelle clé.
+ * Legacy data is copied forward but never deleted automatically.
+ * This is intentional: old keys are a recovery source if a later migration
+ * produced an empty or incomplete Pace value.
  */
 function migrateLegacyKeys() {
   if (typeof window === "undefined") return;
@@ -20,32 +21,24 @@ function migrateLegacyKeys() {
       if (localStorage.getItem(newKey) === null) {
         try { localStorage.setItem(newKey, value); } catch { continue; }
       }
-      localStorage.removeItem(oldKey);
     }
     localStorage.setItem(MIGRATION_FLAG, "1");
   } catch {
-    // Stockage indisponible/quota atteint : retenter au prochain chargement.
+    // Retry on the next load if storage is unavailable/quota-limited.
   }
 }
 
-/**
- * Hydration avait historiquement plusieurs noms de stockage selon les versions.
- * On fusionne uniquement des données valides et on ne remplace jamais une valeur
- * Pace existante. Cette récupération est locale : aucune donnée n'est inventée.
- */
 function recoverLegacyWaterKeys() {
   if (typeof window === "undefined") return;
   try {
-    if (localStorage.getItem(WATER_RECOVERY_FLAG)) return;
     const targetKey = "pace.water";
-    const candidates = ["lt.water", "lt.water_consumed", "lt.hydration", "pace.water_consumed", "pace.hydration"];
     let target: Record<string, number> = {};
     try {
       const raw = localStorage.getItem(targetKey);
       if (raw) target = JSON.parse(raw);
     } catch {}
 
-    let changed = false;
+    const candidates = ["lt.water", "lt.water_consumed", "lt.hydration", "pace.water_consumed", "pace.hydration"];
     for (const key of candidates) {
       let candidate: unknown;
       try { candidate = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { continue; }
@@ -54,18 +47,17 @@ function recoverLegacyWaterKeys() {
         const n = typeof value === "number" ? value : Number(value);
         if (/^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(n) && n >= 0 && target[day] == null) {
           target[day] = n;
-          changed = true;
         }
       }
     }
-
-    if (changed) localStorage.setItem(targetKey, JSON.stringify(target));
+    localStorage.setItem(targetKey, JSON.stringify(target));
     localStorage.setItem(WATER_RECOVERY_FLAG, "1");
   } catch {}
 }
 
-migrateLegacyKeys();
+// Recover first, then copy legacy keys. Legacy keys remain available for future recovery.
 recoverLegacyWaterKeys();
+migrateLegacyKeys();
 
 const LOCAL_WRITE_EVENT = "pace.local.write";
 const REMOTE_WRITE_EVENT = "pace.remote.write";
