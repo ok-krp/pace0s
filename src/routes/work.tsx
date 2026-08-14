@@ -24,9 +24,7 @@ function WorkPage() {
   const ref = useRef<number | null>(null);
 
   useEffect(() => {
-    if (running) {
-      ref.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
-    }
+    if (running) ref.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => { if (ref.current) clearInterval(ref.current); };
   }, [running]);
 
@@ -35,6 +33,7 @@ function WorkPage() {
     if (seconds > 0) {
       const m = Math.round(seconds / 60);
       const today = todayKey();
+      // L'arrêt déclenche l'enregistrement automatiquement : il n'y a plus de bouton "Enregistrer" séparé.
       setData((p) => ({ ...p, [today]: (p[today] ?? 0) + m }));
       setSessions((p) => [{ id: crypto.randomUUID(), date: today, cat, minutes: m }, ...p].slice(0, 100));
     }
@@ -46,19 +45,16 @@ function WorkPage() {
   const totalMin = series.reduce((s, x) => s + x.min, 0);
   const avg = totalMin / 14;
   const today = data[todayKey()] ?? 0;
-
   const fmt = (s: number) => `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   return (
     <div>
       <PageHeader title="Travail & Productivité" subtitle="Concentration et progression." />
-
       <div className="grid grid-cols-3 gap-4 mb-4">
         <StatCard label="Aujourd'hui" value={`${Math.floor(today / 60)}h${today % 60}`} icon={<Briefcase className="size-4" />} />
         <StatCard label="Moyenne 14j" value={`${Math.floor(avg / 60)}h${Math.round(avg % 60)}`} />
         <StatCard label="Total 14j" value={`${Math.floor(totalMin / 60)}h`} />
       </div>
-
       <div className="rounded-2xl glass-card p-6 mb-4 flex flex-col items-center gap-4">
         <div className="font-display text-6xl font-semibold tabular-nums tracking-tight">{fmt(seconds)}</div>
         <Select value={cat} onValueChange={setCat}>
@@ -69,10 +65,10 @@ function WorkPage() {
           <Button onClick={() => setRunning(!running)} className="rounded-xl px-6">
             {running ? <><Pause className="size-4 mr-1" />Pause</> : <><Play className="size-4 mr-1" />Démarrer</>}
           </Button>
-          <Button onClick={stop} variant="secondary" className="rounded-xl"><RotateCcw className="size-4 mr-1" />Stop & enregistrer</Button>
+          <Button onClick={stop} variant="secondary" className="rounded-xl"><RotateCcw className="size-4 mr-1" />Arrêter</Button>
         </div>
+        <span className="text-xs text-muted-foreground" aria-live="polite">Les sessions sont enregistrées automatiquement à l'arrêt.</span>
       </div>
-
       <div className="rounded-2xl glass-card p-5 mb-4">
         <h2 className="font-display text-lg font-semibold mb-3">Heures travaillées 14j</h2>
         <ResponsiveContainer width="100%" height={200}>
@@ -84,7 +80,6 @@ function WorkPage() {
           </BarChart>
         </ResponsiveContainer>
       </div>
-
       {sessions.length > 0 && (
         <div className="rounded-2xl glass-card overflow-hidden">
           <div className="px-5 py-3 border-b border-border bg-muted/30 font-display text-sm font-semibold">Sessions récentes</div>
@@ -94,20 +89,7 @@ function WorkPage() {
                 <span className="truncate"><span className="font-medium">{s.cat}</span> · {s.date}</span>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="text-muted-foreground">{Math.floor(s.minutes / 60)}h {s.minutes % 60}m</span>
-                  <button
-                    onClick={() => {
-                      if (!confirm("Supprimer cette session ?")) return;
-                      setSessions((p) => p.filter((x) => x.id !== s.id));
-                      setData((p) => {
-                        const cur = p[s.date] ?? 0;
-                        return { ...p, [s.date]: Math.max(0, cur - s.minutes) };
-                      });
-                    }}
-                    className="text-muted-foreground hover:text-destructive opacity-60 group-hover:opacity-100 transition"
-                    aria-label="Supprimer"
-                  >
-                    <Trash2 className="size-4" />
-                  </button>
+                  <button onClick={() => { if (!confirm("Supprimer cette session ?")) return; setSessions((p) => p.filter((x) => x.id !== s.id)); setData((p) => { const cur = p[s.date] ?? 0; return { ...p, [s.date]: Math.max(0, cur - s.minutes) }; }); }} className="text-muted-foreground hover:text-destructive opacity-60 group-hover:opacity-100 transition" aria-label="Supprimer"><Trash2 className="size-4" /></button>
                 </div>
               </li>
             ))}
