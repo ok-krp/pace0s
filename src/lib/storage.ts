@@ -3,42 +3,71 @@ import { useEffect, useState, useCallback } from "react";
 const OLD_PREFIX = "lt.";
 const NEW_PREFIX = "pace.";
 const MIGRATION_FLAG = "pace.__migrated_lt";
+const WATER_RECOVERY_FLAG = "pace.__water_recovery_v2";
 
 /**
  * Migration idempotente des anciennes clés LifeTracker (lt.*) vers PaceOS (pace.*).
- *
- * La migration copie d'abord la valeur vers la nouvelle clé sans jamais écraser une
- * valeur pace.* déjà existante, puis retire l'ancienne clé. Un vrai 0 est conservé
- * comme 0 et n'est jamais converti en null/valeur vide.
+ * Les clés legacy ne sont supprimées qu'après écriture réussie de la nouvelle clé.
  */
 function migrateLegacyKeys() {
   if (typeof window === "undefined") return;
   try {
-    if (localStorage.getItem(MIGRATION_FLAG)) return;
-
     const legacyKeys = Object.keys(localStorage).filter((key) => key.startsWith(OLD_PREFIX));
     for (const oldKey of legacyKeys) {
       const newKey = NEW_PREFIX + oldKey.slice(OLD_PREFIX.length);
       const value = localStorage.getItem(oldKey);
-
-      // Une donnée PaceOS déjà présente est prioritaire : aucune écriture destructive.
-      if (value !== null && localStorage.getItem(newKey) === null) {
-        localStorage.setItem(newKey, value);
+      if (value === null) continue;
+      if (localStorage.getItem(newKey) === null) {
+        try { localStorage.setItem(newKey, value); } catch { continue; }
       }
-
       localStorage.removeItem(oldKey);
     }
-
     localStorage.setItem(MIGRATION_FLAG, "1");
   } catch {
-    // Stockage indisponible/quota atteint : la migration sera retentée au prochain chargement.
+    // Stockage indisponible/quota atteint : retenter au prochain chargement.
   }
 }
-migrateLegacyKeys();
 
-/** Émis après chaque écriture locale afin que le moteur de synchronisation puisse réagir. */
+/**
+ * Hydration avait historiquement plusieurs noms de stockage selon les versions.
+ * On fusionne uniquement des données valides et on ne remplace jamais une valeur
+ * Pace existante. Cette récupération est locale : aucune donnée n'est inventée.
+ */
+function recoverLegacyWaterKeys() {
+  if (typeof window === "undefined") return;
+  try {
+    if (localStorage.getItem(WATER_RECOVERY_FLAG)) return;
+    const targetKey = "pace.water";
+    const candidates = ["lt.water", "lt.water_consumed", "lt.hydration", "pace.water_consumed", "pace.hydration"];
+    let target: Record<string, number> = {};
+    try {
+      const raw = localStorage.getItem(targetKey);
+      if (raw) target = JSON.parse(raw);
+    } catch {}
+
+    let changed = false;
+    for (const key of candidates) {
+      let candidate: unknown;
+      try { candidate = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { continue; }
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+      for (const [day, value] of Object.entries(candidate as Record<string, unknown>)) {
+        const n = typeof value === "number" ? value : Number(value);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(n) && n >= 0 && target[day] == null) {
+          target[day] = n;
+          changed = true;
+        }
+      }
+    }
+
+    if (changed) localStorage.setItem(targetKey, JSON.stringify(target));
+    localStorage.setItem(WATER_RECOVERY_FLAG, "1");
+  } catch {}
+}
+
+migrateLegacyKeys();
+recoverLegacyWaterKeys();
+
 const LOCAL_WRITE_EVENT = "pace.local.write";
-/** Émis lorsqu'une valeur distante est appliquée au stockage local. */
 const REMOTE_WRITE_EVENT = "pace.remote.write";
 
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
@@ -78,11 +107,8 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   return [value, set];
 }
 
-/** Utilisé par le moteur de synchronisation cloud pour appliquer une valeur distante. */
 export function applyRemoteWrite(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {}
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
   window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value } }));
 }
 
