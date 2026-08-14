@@ -1,11 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { liquidTooltipStyle, liquidDot } from "@/lib/chart-style";
-import { useState } from "react";
-import { Scale, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Scale } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
 import { PageHeader, StatCard } from "@/components/Stat";
 import { useLocalState, lastNDays, todayKey } from "@/lib/storage";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/body")({
@@ -16,19 +15,15 @@ export const Route = createFileRoute("/body")({
 type Entry = { w?: number; muscle?: number; fat?: number; waist?: number };
 type Point = { d: string; w?: number; muscle?: number; fat?: number };
 
-/** Lundi de la semaine contenant cette date (sert de clé de regroupement hebdomadaire). */
 function weekKey(dateStr: string): string {
   const d = new Date(`${dateStr}T00:00:00`);
-  const day = (d.getDay() + 6) % 7; // 0 = lundi
+  const day = (d.getDay() + 6) % 7;
   d.setDate(d.getDate() - day);
   return d.toISOString().slice(0, 10);
 }
 
-function monthKey(dateStr: string): string {
-  return dateStr.slice(0, 7); // "YYYY-MM"
-}
+function monthKey(dateStr: string): string { return dateStr.slice(0, 7); }
 
-/** Moyenne les entrées par clé (jour/semaine/mois) — un point de graphique par bucket. */
 function aggregate(entries: { date: string; e: Entry }[], keyFn: (d: string) => string, labelFn: (key: string) => string): Point[] {
   const buckets = new Map<string, { key: string; sumW: number; nW: number; sumM: number; nM: number; sumF: number; nF: number }>();
   for (const { date, e } of entries) {
@@ -39,14 +34,12 @@ function aggregate(entries: { date: string; e: Entry }[], keyFn: (d: string) => 
     if (e.muscle != null) { b.sumM += e.muscle; b.nM++; }
     if (e.fat != null) { b.sumF += e.fat; b.nF++; }
   }
-  return [...buckets.values()]
-    .sort((a, b) => a.key.localeCompare(b.key))
-    .map((b) => ({
-      d: labelFn(b.key),
-      w: b.nW ? Math.round((b.sumW / b.nW) * 10) / 10 : undefined,
-      muscle: b.nM ? Math.round((b.sumM / b.nM) * 10) / 10 : undefined,
-      fat: b.nF ? Math.round((b.sumF / b.nF) * 10) / 10 : undefined,
-    }));
+  return [...buckets.values()].sort((a, b) => a.key.localeCompare(b.key)).map((b) => ({
+    d: labelFn(b.key),
+    w: b.nW ? Math.round((b.sumW / b.nW) * 10) / 10 : undefined,
+    muscle: b.nM ? Math.round((b.sumM / b.nM) * 10) / 10 : undefined,
+    fat: b.nF ? Math.round((b.sumF / b.nF) * 10) / 10 : undefined,
+  }));
 }
 
 function BodyPage() {
@@ -58,14 +51,11 @@ function BodyPage() {
 
   const days = lastNDays(period);
   const entries = days.map((date) => ({ date, e: data[date] ?? {} }));
-  // Granularité adaptée à la période : 1 semaine → par jour, 1-3 mois → moyenne par
-  // semaine, 6 mois-1 an → moyenne par mois. Sinon un an de points quotidiens serait illisible.
-  const series: Point[] =
-    period <= 7
-      ? entries.map(({ date, e }) => ({ d: date.slice(5), ...e }))
-      : period <= 90
-        ? aggregate(entries, weekKey, (key) => new Date(`${key}T00:00:00`).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }))
-        : aggregate(entries, monthKey, (key) => new Date(`${key}-01T00:00:00`).toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }));
+  const series: Point[] = period <= 7
+    ? entries.map(({ date, e }) => ({ d: date.slice(5), ...e }))
+    : period <= 90
+      ? aggregate(entries, weekKey, (key) => new Date(`${key}T00:00:00`).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }))
+      : aggregate(entries, monthKey, (key) => new Date(`${key}-01T00:00:00`).toLocaleDateString("fr-FR", { month: "short", year: "2-digit" }));
   const validDaily = entries.filter((x) => x.e.w != null);
   const min = validDaily.length ? Math.min(...validDaily.map((x) => x.e.w!)) : 0;
   const max = validDaily.length ? Math.max(...validDaily.map((x) => x.e.w!)) : 0;
@@ -74,15 +64,29 @@ function BodyPage() {
   const last = validDaily[validDaily.length - 1]?.e.w;
   const delta = first && last ? last - first : 0;
 
-  const save = () => {
-    const e: Entry = {};
-    if (w) e.w = parseFloat(w);
-    if (muscle) e.muscle = parseFloat(muscle);
-    if (fat) e.fat = parseFloat(fat);
-    if (Object.keys(e).length === 0) return;
-    setData((p) => ({ ...p, [todayKey()]: { ...p[todayKey()], ...e } }));
-    setW(""); setMuscle(""); setFat("");
-  };
+  useEffect(() => {
+    const hasValue = w.trim() !== "" || muscle.trim() !== "" || fat.trim() !== "";
+    if (!hasValue) return;
+    const values: Entry = {};
+    if (w.trim() !== "") {
+      const n = Number(w);
+      if (Number.isFinite(n)) values.w = n;
+    }
+    if (muscle.trim() !== "") {
+      const n = Number(muscle);
+      if (Number.isFinite(n)) values.muscle = n;
+    }
+    if (fat.trim() !== "") {
+      const n = Number(fat);
+      if (Number.isFinite(n)) values.fat = n;
+    }
+    if (!Object.keys(values).length) return;
+    const timer = window.setTimeout(() => {
+      const day = todayKey();
+      setData((p) => ({ ...p, [day]: { ...p[day], ...values } }));
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [w, muscle, fat, setData]);
 
   return (
     <div>
@@ -102,7 +106,7 @@ function BodyPage() {
             <label className="text-xs text-muted-foreground">Gras (%)</label>
             <Input type="number" step="0.1" value={fat} onChange={(e) => setFat(e.target.value)} placeholder="18" className="w-28" />
           </div>
-          <Button onClick={save} className="rounded-xl"><Plus className="size-4 mr-1" />Enregistrer</Button>
+          <div className="text-xs text-muted-foreground ml-auto" aria-live="polite">Sauvegarde automatique</div>
         </div>
       </div>
 
@@ -132,7 +136,7 @@ function BodyPage() {
             <Tooltip contentStyle={liquidTooltipStyle} />
             <Line type="monotone" dataKey="w" name="Poids" stroke="var(--primary)" strokeWidth={2.5} dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} />
             <Line type="monotone" dataKey="muscle" name="Muscle %" stroke="var(--chart-2)" strokeWidth={2} dot={liquidDot("var(--chart-2)")} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="fat" name="Gras %" stroke="var(--chart-4)" strokeWidth={2} dot={liquidDot("var(--chart-4)")} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="fat" name="Gras %" stroke="var(--chart-4)" strokeWidth={2} dot={liquidDot("var(--chart-4")} activeDot={{ r: 5 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
