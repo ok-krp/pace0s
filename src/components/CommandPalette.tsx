@@ -37,8 +37,7 @@ type Entry = { icon: React.ReactNode; label: string; action: () => void; keyword
 
 /**
  * Palette de commandes globale (Ctrl+K / Cmd+K) — navigation instantanée vers
- * n'importe quelle page, et actions rapides (ajouter poids/eau/repas/sommeil)
- * sans passer par le menu. Monté une seule fois à la racine de l'app.
+ * n'importe quelle page, et actions rapides directement depuis le dashboard.
  */
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
@@ -63,17 +62,17 @@ export function CommandPalette() {
   }, []);
 
   const go = (to: string) => () => { setOpen(false); navigate({ to }); };
-  const quickAdd = (kind: "water" | "kcal" | "sleep" | "weight") => () => {
+  const quickAdd = (kind: "water" | "kcal" | "sleep" | "weight" | "workout") => () => {
     setOpen(false);
     navigate({ to: "/", search: (prev: Record<string, unknown>) => ({ ...prev, quickAdd: kind }) });
   };
 
   const actions: Entry[] = [
     { icon: <Droplet className="size-4" />, label: "Ajouter de l'eau", action: quickAdd("water"), keywords: "eau hydratation boire" },
-    { icon: <Utensils className="size-4" />, label: "Ajouter un repas", action: quickAdd("kcal"), keywords: "repas manger nutrition calories" },
+    { icon: <Utensils className="size-4" />, label: "Ajouter un repas", action: quickAdd("kcal"), keywords: "repas manger nutrition calories protéines glucides lipides" },
     { icon: <Moon className="size-4" />, label: "Enregistrer le sommeil", action: quickAdd("sleep"), keywords: "sommeil nuit dormir" },
     { icon: <Scale className="size-4" />, label: "Ajouter une pesée", action: quickAdd("weight"), keywords: "poids pesée balance" },
-    { icon: <Dumbbell className="size-4" />, label: "Démarrer une séance", action: go("/sport"), keywords: "sport entraînement musculation" },
+    { icon: <Dumbbell className="size-4" />, label: "Ajouter une séance", action: quickAdd("workout"), keywords: "sport entraînement musculation exercice séries répétitions charge durée" },
     { icon: <Sparkles className="size-4" />, label: "Demander à Coach IA", action: go("/assistant"), keywords: "ia coach chat assistant" },
   ];
 
