@@ -113,7 +113,15 @@ export function onLocalWrite(handler: (key: string, value: unknown) => void): ()
   return () => window.removeEventListener(LOCAL_WRITE_EVENT, listener);
 }
 
-export const todayKey = () => new Date().toISOString().slice(0, 10);
+/**
+ * Return the current calendar date in the user's local timezone.
+ * Do not use toISOString() here: that converts to UTC and can shift a user's
+ * local day around midnight, which corrupts daily health/nutrition/calendar keys.
+ */
+export const todayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
 
 export function lastNDays(n: number): string[] {
   const out: string[] = [];
@@ -121,12 +129,18 @@ export function lastNDays(n: number): string[] {
   for (let i = n - 1; i >= 0; i--) {
     const x = new Date(d);
     x.setDate(d.getDate() - i);
-    out.push(x.toISOString().slice(0, 10));
+    out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`);
   }
   return out;
 }
 
+function parseLocalDate(iso: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!match) return new Date(iso);
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+}
+
 export function fmtDay(iso: string) {
-  const d = new Date(iso);
+  const d = parseLocalDate(iso);
   return d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" });
 }
