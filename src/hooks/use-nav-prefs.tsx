@@ -39,29 +39,64 @@ export const NAV_DEFAULT_ORDER: NavItemKey[] = [
 
 export const BOTTOM_DEFAULT: NavItemKey[] = ["/", "/nutrition", "/sport", "/routine", "/finance"];
 
-/**
- * La navigation PaceOS est désormais fixe : tous les onglets sont disponibles
- * par défaut et l'utilisateur ne peut plus les masquer, les ajouter ou les retirer.
- * Les anciennes préférences sont volontairement ignorées pour éviter qu'une
- * ancienne configuration ne fasse disparaître des onglets après la mise à jour.
- */
+const ALLOWED = new Set<NavItemKey>(NAV_DEFAULT_ORDER);
+const clean = (arr: unknown): NavItemKey[] =>
+  Array.isArray(arr)
+    ? arr.filter((x): x is NavItemKey => typeof x === "string" && ALLOWED.has(x as NavItemKey))
+    : [];
+
 export function useNavPrefs() {
-  // Conserve les anciennes clés uniquement pour compatibilité de stockage ; elles
-  // ne contrôlent plus l'interface. Cela évite une migration destructive inutile.
-  useLocalState<NavItemKey[]>("pace.mobile.nav.order", NAV_DEFAULT_ORDER);
-  useLocalState<NavItemKey[]>("pace.mobile.nav.bottom", BOTTOM_DEFAULT);
-  useLocalState<NavItemKey[]>("pace.mobile.nav.visible", NAV_DEFAULT_ORDER);
+  const [order, setOrder] = useLocalState<NavItemKey[]>("pace.mobile.nav.order", NAV_DEFAULT_ORDER);
+  const [bottom, setBottom] = useLocalState<NavItemKey[]>("pace.mobile.nav.bottom", BOTTOM_DEFAULT);
+  const [visible, setVisible] = useLocalState<NavItemKey[]>("pace.mobile.nav.visible", NAV_DEFAULT_ORDER);
+
+  const cleanOrder = clean(order);
+  const cleanBottom = clean(bottom);
+  const cleanVisible = clean(visible);
+
+  const fullOrder = [
+    ...cleanOrder,
+    ...NAV_DEFAULT_ORDER.filter((x) => !cleanOrder.includes(x)),
+  ];
+
+  const move = (from: number, to: number) => {
+    setOrder((prev) => {
+      const src = clean(prev);
+      const next = [...src];
+      const [item] = next.splice(from, 1);
+      if (item !== undefined) next.splice(to, 0, item);
+      return next;
+    });
+  };
+
+  const toggleBottom = (key: NavItemKey) => {
+    setBottom((prev) => {
+      const src = clean(prev);
+      return src.includes(key) ? src.filter((x) => x !== key) : [...src, key];
+    });
+  };
+
+  const toggleVisible = (key: NavItemKey) => {
+    setVisible((prev) => {
+      const src = clean(prev);
+      if (src.includes(key) && src.length <= 1) return src;
+      return src.includes(key) ? src.filter((x) => x !== key) : [...src, key];
+    });
+  };
+
+  const visibleSet = new Set(cleanVisible.length ? cleanVisible : NAV_DEFAULT_ORDER);
+  const visibleOrder = fullOrder.filter(
+    (k) => k === "/" || k === "/settings" || visibleSet.has(k),
+  );
 
   return {
-    order: NAV_DEFAULT_ORDER,
-    visibleOrder: NAV_DEFAULT_ORDER,
-    bottom: BOTTOM_DEFAULT,
-    visible: NAV_DEFAULT_ORDER,
-    // API de compatibilité : les anciens appels ne cassent pas, mais aucune
-    // préférence utilisateur ne peut modifier la navigation.
-    setOrder: () => undefined,
-    toggleBottom: () => undefined,
-    move: () => undefined,
-    toggleVisible: () => undefined,
+    order: fullOrder,
+    visibleOrder,
+    setOrder,
+    bottom: cleanBottom,
+    toggleBottom,
+    move,
+    visible: cleanVisible,
+    toggleVisible,
   };
 }
