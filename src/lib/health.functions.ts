@@ -2,7 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const SampleType = z.enum(["steps", "kcal_active", "heart_rate", "distance_m", "sleep_min"]);
+const SampleType = z.enum([
+  "steps", "kcal_active", "heart_rate", "distance_m", "sleep_min",
+  "oxygen_saturation", "temperature_c", "cadence_rpm", "power_w",
+]);
 
 const insertSchema = z.object({
   samples: z.array(z.object({
@@ -36,11 +39,17 @@ export const listHealthToday = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     const rows = data ?? [];
     const sum = (t: string) => rows.filter((r) => r.type === t).reduce((s, r) => s + Number(r.value), 0);
+    const latest = (t: string) => rows.find((r) => r.type === t)?.value ?? null;
     return {
       steps: Math.round(sum("steps")),
       kcalActive: Math.round(sum("kcal_active")),
       distanceM: Math.round(sum("distance_m")),
       sleepMin: Math.round(sum("sleep_min")),
+      heartRate: latest("heart_rate"),
+      oxygenSaturation: latest("oxygen_saturation"),
+      temperatureC: latest("temperature_c"),
+      cadenceRpm: latest("cadence_rpm"),
+      powerW: latest("power_w"),
       lastSource: rows[0]?.source ?? null,
       lastTs: rows[0]?.ts ?? null,
       count: rows.length,
