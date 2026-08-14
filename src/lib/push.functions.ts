@@ -15,7 +15,7 @@ export const getOneSignalConfig = createServerFn({ method: "GET" }).handler(asyn
 
 export const sendTestNotification = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => testNotificationSchema.parse(data ?? {}))
+  .validator((data: unknown) => testNotificationSchema.parse(data ?? {}))
   .handler(async ({ data, context }) => {
     const { data: consent, error: consentError } = await context.supabase
       .from("legal_consent")
