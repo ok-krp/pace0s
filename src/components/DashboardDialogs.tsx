@@ -11,8 +11,9 @@ import { lastNDays, fmtDay, todayKey, useLocalState } from "@/lib/storage";
 import { formatSleepDuration } from "@/lib/sleep-format";
 import { useUserGoals } from "@/hooks/use-user-goals";
 import { toast } from "sonner";
+import { DashboardQuickRoutine, DashboardQuickWork, DashboardQuickWorkout } from "@/components/DashboardQuickActions";
 
-export type DashDialog = null | "score" | "water" | "kcal" | "sleep" | "weight";
+export type DashDialog = null | "score" | "water" | "kcal" | "sleep" | "weight" | "routine" | "work" | "workout";
 
 type SleepEntry = { start?: string; end?: string; hours: number; quality?: number };
 type Nutrition = { kcal: number; p: number; c: number; f: number };
@@ -28,6 +29,9 @@ export function DashboardDialogs({ open, onOpenChange }: { open: DashDialog; onO
         {open === "kcal" && <KcalQuickAdd onDone={close} />}
         {open === "sleep" && <SleepQuickForm onDone={close} />}
         {open === "weight" && <WeightQuickForm onDone={close} />}
+        {open === "routine" && <DashboardQuickRoutine onDone={close} />}
+        {open === "work" && <DashboardQuickWork onDone={close} />}
+        {open === "workout" && <DashboardQuickWorkout onDone={close} />}
       </DialogContent>
     </Dialog>
   );
