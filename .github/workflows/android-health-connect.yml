@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - "android/**"
+      - "src/lib/health-connect-bridge.ts"
+      - "src/components/HealthConnectDiagnostics.tsx"
       - ".github/workflows/android-health-connect.yml"
   workflow_dispatch:
 
@@ -25,7 +27,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: "8.9"
-      - name: Build debug APK
+      - name: Android lint/compile check
         run: gradle -p android :app:assembleDebug --no-daemon
       - name: Upload APK
         uses: actions/upload-artifact@v4
