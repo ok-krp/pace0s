@@ -3,6 +3,7 @@ package com.paceos.app
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.aggregate.AggregateRequest
+import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
@@ -26,17 +27,16 @@ class HealthConnectReader(context: Context) {
 
     companion object {
         val READ_PERMISSIONS = setOf(
-            HealthConnectClient.getHealthConnectManagementPermissions().firstOrNull() ?: androidx.health.connect.client.permission.HealthPermission.getReadPermission(StepsRecord::class),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(StepsRecord::class),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(DistanceRecord::class),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(HeartRateRecord::class),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(RestingHeartRateRecord::class),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(SleepSessionRecord::class),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(ExerciseSessionRecord::class),
-            androidx.health.connect.client.permission.HealthPermission.getReadPermission(WeightRecord::class),
-        ).filter { it.startsWith("android.permission.health.READ_") }.toSet()
+            HealthPermission.getReadPermission(StepsRecord::class),
+            HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+            HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+            HealthPermission.getReadPermission(DistanceRecord::class),
+            HealthPermission.getReadPermission(HeartRateRecord::class),
+            HealthPermission.getReadPermission(RestingHeartRateRecord::class),
+            HealthPermission.getReadPermission(SleepSessionRecord::class),
+            HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+            HealthPermission.getReadPermission(WeightRecord::class),
+        )
     }
 
     suspend fun read(days: Long = 7): JSONObject {
@@ -58,8 +58,7 @@ class HealthConnectReader(context: Context) {
                 timeRangeFilter = range,
             )
         )
-
-        aggregate[StepsRecord.COUNT_TOTAL]?.let { add(out, end, "steps", it.toString().toDouble(), "health_connect") }
+        aggregate[StepsRecord.COUNT_TOTAL]?.let { add(out, end, "steps", it.toDouble(), "health_connect") }
         aggregate[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.let { add(out, end, "kcal_active", it.inKilocalories, "health_connect") }
         aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.let { add(out, end, "kcal_total", it.inKilocalories, "health_connect") }
         aggregate[DistanceRecord.DISTANCE_TOTAL]?.let { add(out, end, "distance_m", it.inMeters, "health_connect") }
@@ -75,13 +74,11 @@ class HealthConnectReader(context: Context) {
         }
         client.readRecords(ReadRecordsRequest(SleepSessionRecord::class, range)).records.forEach { record ->
             val duration = ChronoUnit.SECONDS.between(record.startTime, record.endTime).toDouble() / 60.0
-            val obj = JSONObject().put("ts", record.endTime.toString()).put("type", "sleep_min").put("value", duration).put("source", origin(record)).put("start", record.startTime.toString()).put("end", record.endTime.toString())
-            out.put(obj)
+            out.put(JSONObject().put("ts", record.endTime.toString()).put("type", "sleep_min").put("value", duration).put("source", origin(record)).put("start", record.startTime.toString()).put("end", record.endTime.toString()))
         }
         client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, range)).records.forEach { record ->
             val duration = ChronoUnit.SECONDS.between(record.startTime, record.endTime).toDouble() / 60.0
-            val obj = JSONObject().put("ts", record.endTime.toString()).put("type", "exercise_duration_min").put("value", duration).put("source", origin(record)).put("start", record.startTime.toString()).put("end", record.endTime.toString()).put("exerciseType", record.exerciseType)
-            out.put(obj)
+            out.put(JSONObject().put("ts", record.endTime.toString()).put("type", "exercise_duration_min").put("value", duration).put("source", origin(record)).put("start", record.startTime.toString()).put("end", record.endTime.toString()).put("exerciseType", record.exerciseType))
         }
 
         return JSONObject().put("source", "health_connect").put("timezone", zone.id).put("from", start.toString()).put("to", end.toString()).put("samples", out)
