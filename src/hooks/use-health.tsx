@@ -4,40 +4,24 @@ import { listHealthToday } from "@/lib/health.functions";
 import { useAuth } from "@/hooks/use-auth";
 
 export type HealthToday = {
-  steps: number;
-  kcalActive: number;
-  distanceM: number;
-  sleepMin: number;
-  lastSource: string | null;
-  lastTs: string | null;
-  count: number;
+  steps: number; kcalActive: number; kcalTotal: number; distanceM: number; sleepMin: number; exerciseMin: number;
+  heartRate: number | null; restingHeartRate: number | null; weightKg: number | null; oxygenSaturation: number | null;
+  temperatureC: number | null; cadenceRpm: number | null; powerW: number | null; sources: Record<string, string | null>;
+  lastSource: string | null; lastTs: string | null; count: number;
 };
 
-const EMPTY: HealthToday = { steps: 0, kcalActive: 0, distanceM: 0, sleepMin: 0, lastSource: null, lastTs: null, count: 0 };
+const EMPTY: HealthToday = { steps: 0, kcalActive: 0, kcalTotal: 0, distanceM: 0, sleepMin: 0, exerciseMin: 0, heartRate: null, restingHeartRate: null, weightKg: null, oxygenSaturation: null, temperatureC: null, cadenceRpm: null, powerW: null, sources: {}, lastSource: null, lastTs: null, count: 0 };
 
 export function useHealthToday() {
-  const { user } = useAuth();
-  const fetchToday = useServerFn(listHealthToday);
-  const [data, setData] = useState<HealthToday>(EMPTY);
-  const [loading, setLoading] = useState(false);
-
+  const { user } = useAuth(); const fetchToday = useServerFn(listHealthToday); const [data, setData] = useState<HealthToday>(EMPTY); const [loading, setLoading] = useState(false);
   const refresh = useCallback(async () => {
     if (!user) { setData(EMPTY); return; }
     setLoading(true);
-    try {
-      const res = await fetchToday();
-      setData(res);
-    } catch (e) {
-      console.error("health refresh", e);
-    } finally { setLoading(false); }
+    try { const res = await fetchToday({ data: { timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone } }); setData(res); }
+    catch (e) { console.error("health refresh", e); }
+    finally { setLoading(false); }
   }, [user, fetchToday]);
-
   useEffect(() => { void refresh(); }, [refresh]);
-  useEffect(() => {
-    const handler = () => void refresh();
-    window.addEventListener("pace.health.changed", handler);
-    return () => window.removeEventListener("pace.health.changed", handler);
-  }, [refresh]);
-
+  useEffect(() => { const handler = () => void refresh(); window.addEventListener("pace.health.changed", handler); return () => window.removeEventListener("pace.health.changed", handler); }, [refresh]);
   return { data, loading, refresh };
 }
