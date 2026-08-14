@@ -1,0 +1,99 @@
+package com.paceos.app
+
+import android.content.Context
+import androidx.health.connect.client.HealthConnectClient
+import androidx.health.connect.client.aggregate.AggregateRequest
+import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
+import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.HeartRateRecord
+import androidx.health.connect.client.records.RestingHeartRateRecord
+import androidx.health.connect.client.records.SleepSessionRecord
+import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
+import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.request.ReadRecordsRequest
+import androidx.health.connect.client.time.TimeRangeFilter
+import java.time.Instant
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.temporal.ChronoUnit
+import org.json.JSONArray
+import org.json.JSONObject
+
+class HealthConnectReader(context: Context) {
+    private val client = HealthConnectClient.getOrCreate(context)
+
+    companion object {
+        val READ_PERMISSIONS = setOf(
+            HealthConnectClient.getHealthConnectManagementPermissions().firstOrNull() ?: androidx.health.connect.client.permission.HealthPermission.getReadPermission(StepsRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(StepsRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(DistanceRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(HeartRateRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(RestingHeartRateRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(SleepSessionRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(ExerciseSessionRecord::class),
+            androidx.health.connect.client.permission.HealthPermission.getReadPermission(WeightRecord::class),
+        ).filter { it.startsWith("android.permission.health.READ_") }.toSet()
+    }
+
+    suspend fun read(days: Long = 7): JSONObject {
+        val zone = ZoneId.systemDefault()
+        val now = ZonedDateTime.now(zone)
+        val start = now.minusDays(days).toInstant()
+        val end = now.toInstant()
+        val range = TimeRangeFilter.between(start, end)
+        val out = JSONArray()
+
+        val aggregate = client.aggregate(
+            AggregateRequest(
+                metrics = setOf(
+                    StepsRecord.COUNT_TOTAL,
+                    ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL,
+                    TotalCaloriesBurnedRecord.ENERGY_TOTAL,
+                    DistanceRecord.DISTANCE_TOTAL,
+                ),
+                timeRangeFilter = range,
+            )
+        )
+
+        aggregate[StepsRecord.COUNT_TOTAL]?.let { add(out, end, "steps", it.toString().toDouble(), "health_connect") }
+        aggregate[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.let { add(out, end, "kcal_active", it.inKilocalories, "health_connect") }
+        aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.let { add(out, end, "kcal_total", it.inKilocalories, "health_connect") }
+        aggregate[DistanceRecord.DISTANCE_TOTAL]?.let { add(out, end, "distance_m", it.inMeters, "health_connect") }
+
+        client.readRecords(ReadRecordsRequest(HeartRateRecord::class, range)).records.forEach { record ->
+            record.samples.forEach { sample -> add(out, sample.time, "heart_rate", sample.beatsPerMinute.toDouble(), origin(record)) }
+        }
+        client.readRecords(ReadRecordsRequest(RestingHeartRateRecord::class, range)).records.forEach { record ->
+            add(out, record.time, "resting_heart_rate", record.beatsPerMinute.toDouble(), origin(record))
+        }
+        client.readRecords(ReadRecordsRequest(WeightRecord::class, range)).records.forEach { record ->
+            add(out, record.time, "weight_kg", record.weight.inKilograms, origin(record))
+        }
+        client.readRecords(ReadRecordsRequest(SleepSessionRecord::class, range)).records.forEach { record ->
+            val duration = ChronoUnit.SECONDS.between(record.startTime, record.endTime).toDouble() / 60.0
+            val obj = JSONObject().put("ts", record.endTime.toString()).put("type", "sleep_min").put("value", duration).put("source", origin(record)).put("start", record.startTime.toString()).put("end", record.endTime.toString())
+            out.put(obj)
+        }
+        client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, range)).records.forEach { record ->
+            val duration = ChronoUnit.SECONDS.between(record.startTime, record.endTime).toDouble() / 60.0
+            val obj = JSONObject().put("ts", record.endTime.toString()).put("type", "exercise_duration_min").put("value", duration).put("source", origin(record)).put("start", record.startTime.toString()).put("end", record.endTime.toString()).put("exerciseType", record.exerciseType)
+            out.put(obj)
+        }
+
+        return JSONObject().put("source", "health_connect").put("timezone", zone.id).put("from", start.toString()).put("to", end.toString()).put("samples", out)
+    }
+
+    private fun add(out: JSONArray, ts: Instant, type: String, value: Double, source: String) {
+        if (value.isFinite()) out.put(JSONObject().put("ts", ts.toString()).put("type", type).put("value", value).put("source", source))
+    }
+
+    private fun origin(record: Any): String = try {
+        val metadata = record.javaClass.getMethod("getMetadata").invoke(record)
+        val dataOrigin = metadata.javaClass.getMethod("getDataOrigin").invoke(metadata)
+        dataOrigin.javaClass.getMethod("getPackageName").invoke(dataOrigin) as String
+    } catch (_: Exception) { "health_connect" }
+}
