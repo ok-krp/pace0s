@@ -3,6 +3,7 @@ package com.paceos.app
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.permission.HealthPermission.Companion.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import java.util.UUID
@@ -16,7 +17,7 @@ class HealthSyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
             val client = HealthConnectClient.getOrCreate(applicationContext)
             val granted = client.permissionController.getGrantedPermissions()
             if (!granted.containsAll(HealthConnectReader.READ_PERMISSIONS)) return Result.success()
-            if (!granted.contains(HealthPermission.READ_HEALTH_DATA_IN_BACKGROUND)) return Result.success()
+            if (!granted.contains(PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)) return Result.success()
 
             val payload = HealthConnectReader(applicationContext).read(7)
             val sampleCount = payload.optJSONArray("samples")?.length() ?: 0
