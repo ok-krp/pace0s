@@ -9,7 +9,7 @@ const subscriptionSchema = z.object({
 
 export const registerPushSubscription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => subscriptionSchema.parse(data))
+  .validator((data: unknown) => subscriptionSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("push_subscriptions").upsert(
       {
@@ -29,7 +29,7 @@ export const registerPushSubscription = createServerFn({ method: "POST" })
 
 export const unregisterPushSubscription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => subscriptionSchema.pick({ subscriptionId: true }).parse(data))
+  .validator((data: unknown) => subscriptionSchema.pick({ subscriptionId: true }).parse(data))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase
       .from("push_subscriptions")
