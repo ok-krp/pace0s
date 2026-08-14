@@ -19,6 +19,7 @@ import { CloudSyncProvider } from "@/hooks/use-cloud-sync-engine";
 import { LegalConsentGate } from "@/components/LegalConsentGate";
 import { CommandPalette } from "@/components/CommandPalette";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
+import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { applyWallpaper, readWallpaperChoice } from "@/hooks/use-wallpaper";
 import { useGlassPointer } from "@/hooks/use-glass-pointer";
 import { applyGlassQuality } from "@/hooks/use-glass-quality";
@@ -142,6 +143,13 @@ function AuthGate() {
 
   return (
     <div className="min-h-screen flex pace-bg">
+      {/*
+       * La connexion BLE est volontairement montée au niveau racine et non dans
+       * la page Montre. Elle reste donc active lors des changements de route.
+       * Le composant est masqué ici : son interface complète reste disponible
+       * dans la page Réglages/Montre.
+       */}
+      <div className="hidden" aria-hidden="true"><BleDeviceManager /></div>
       <AppSidebar />
       <main className="flex-1 min-w-0 pb-24 md:pb-8 flex flex-col">
         <MobileTopBar />
