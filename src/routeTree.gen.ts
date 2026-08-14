@@ -1,7 +1,7 @@
 /* eslint-disable */
 // @ts-nocheck
 // noinspection JSUnusedGlobalSymbols
-// This file is regenerated from the file-based routes. Do not edit manually.
+// This file is generated from Pace's file-based TanStack routes.
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
@@ -36,40 +36,71 @@ import { Route as LovableOAuthConsentRouteImport } from './routes/[.]lovable.oau
 import { Route as AiConversationRouteImport } from './routes/ai.$agentType.$conversationId'
 
 const rootRoute = rootRouteImport
+const child = (route: any, id: string, path: string) =>
+  route.update({ id, path, getParentRoute: () => rootRoute } as any)
 
-const routes = [
-  IndexRouteImport,
-  AiActivityRouteImport,
-  AssistantRouteImport,
-  BodyRouteImport,
-  CalendarRouteImport,
-  DevelopmentRouteImport,
-  FinanceRouteImport,
-  InvestmentsRouteImport,
-  LoginRouteImport,
-  McpRouteImport,
-  NutritionRouteImport,
-  NotesRouteImport,
-  ProfileRouteImport,
-  RecallsRouteImport,
-  RecipesRouteImport,
-  RoutineRouteImport,
-  ScanRouteImport,
-  SettingsRouteImport,
-  SleepRouteImport,
-  SportRouteImport,
-  WatchRouteImport,
-  WaterRouteImport,
-  WorkRouteImport,
-  ApiAiChatRouteImport,
-  ApiPublicHooksRemindersRouteImport,
-  OAuthProtectedResourceRouteImport,
-  McpListToolsRouteImport,
-  McpInvokeToolRouteImport,
-  LovableOAuthConsentRouteImport,
-  AiConversationRouteImport,
-]
+const IndexRoute = child(IndexRouteImport, '/', '/')
+const AiActivityRoute = child(AiActivityRouteImport, '/ai-activity', '/ai-activity')
+const AssistantRoute = child(AssistantRouteImport, '/assistant', '/assistant')
+const BodyRoute = child(BodyRouteImport, '/body', '/body')
+const CalendarRoute = child(CalendarRouteImport, '/calendar', '/calendar')
+const DevelopmentRoute = child(DevelopmentRouteImport, '/development', '/development')
+const FinanceRoute = child(FinanceRouteImport, '/finance', '/finance')
+const InvestmentsRoute = child(InvestmentsRouteImport, '/investments', '/investments')
+const LoginRoute = child(LoginRouteImport, '/login', '/login')
+const McpRoute = child(McpRouteImport, '/mcp', '/mcp')
+const NutritionRoute = child(NutritionRouteImport, '/nutrition', '/nutrition')
+const NotesRoute = child(NotesRouteImport, '/notes', '/notes')
+const ProfileRoute = child(ProfileRouteImport, '/profile', '/profile')
+const RecallsRoute = child(RecallsRouteImport, '/recalls', '/recalls')
+const RecipesRoute = child(RecipesRouteImport, '/recipes', '/recipes')
+const RoutineRoute = child(RoutineRouteImport, '/routine', '/routine')
+const ScanRoute = child(ScanRouteImport, '/scan', '/scan')
+const SettingsRoute = child(SettingsRouteImport, '/settings', '/settings')
+const SleepRoute = child(SleepRouteImport, '/sleep', '/sleep')
+const SportRoute = child(SportRouteImport, '/sport', '/sport')
+const WatchRoute = child(WatchRouteImport, '/watch', '/watch')
+const WaterRoute = child(WaterRouteImport, '/water', '/water')
+const WorkRoute = child(WorkRouteImport, '/work', '/work')
+const ApiAiChatRoute = child(ApiAiChatRouteImport, '/api/ai-chat', '/api/ai-chat')
+const ApiPublicHooksRemindersRoute = child(ApiPublicHooksRemindersRouteImport, '/api/public/hooks/reminders', '/api/public/hooks/reminders')
+const OAuthProtectedResourceRoute = child(OAuthProtectedResourceRouteImport, '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource')
+const McpListToolsRoute = child(McpListToolsRouteImport, '/.mcp/list-tools', '/.mcp/list-tools')
+const McpInvokeToolRoute = child(McpInvokeToolRouteImport, '/.mcp/invoke-tool/$tool', '/.mcp/invoke-tool/$tool')
+const LovableOAuthConsentRoute = child(LovableOAuthConsentRouteImport, '/.lovable/oauth/consent', '/.lovable/oauth/consent')
+const AiConversationRoute = child(AiConversationRouteImport, '/ai/$agentType/$conversationId', '/ai/$agentType/$conversationId')
 
-export const routeTree = rootRoute.addChildren(routes.map((route: any) => route.update({ getParentRoute: () => rootRoute } as any)) as any)
+export const routeTree = rootRoute.addChildren({
+  IndexRoute,
+  AiActivityRoute,
+  AssistantRoute,
+  BodyRoute,
+  CalendarRoute,
+  DevelopmentRoute,
+  FinanceRoute,
+  InvestmentsRoute,
+  LoginRoute,
+  McpRoute,
+  NutritionRoute,
+  NotesRoute,
+  ProfileRoute,
+  RecallsRoute,
+  RecipesRoute,
+  RoutineRoute,
+  ScanRoute,
+  SettingsRoute,
+  SleepRoute,
+  SportRoute,
+  WatchRoute,
+  WaterRoute,
+  WorkRoute,
+  ApiAiChatRoute,
+  ApiPublicHooksRemindersRoute,
+  OAuthProtectedResourceRoute,
+  McpListToolsRoute,
+  McpInvokeToolRoute,
+  LovableOAuthConsentRoute,
+  AiConversationRoute,
+} as any)
 
 export { rootRoute }
