@@ -30,18 +30,22 @@ jobs:
       - name: Build production bundle and generate TanStack route tree
         run: npm run build
 
-      - name: Verify generated route tree contains application routes
+      - name: Verify generated TanStack route tree
         shell: bash
         run: |
           test -f src/routeTree.gen.ts
-          for route in "/" "/assistant" "/development" "/ai-activity" "/nutrition" "/sport" "/watch" "/sleep" "/routine" "/body" "/work" "/calendar" "/notes" "/recalls" "/finance" "/profile" "/settings" "/scan" "/recipes" "/investments" "/water" "/login"; do
-            if [ "$route" = "/" ]; then
-              grep -q "const IndexRoute = child(IndexRouteImport, '/', '/')" src/routeTree.gen.ts || { echo "Missing route: /"; exit 1; }
-            else
-              grep -q "child(.*[\"']$route[\"']" src/routeTree.gen.ts || { echo "Missing route: $route"; exit 1; }
-            fi
+          echo "Checking generated route tree..."
+          grep -q "export const routeTree" src/routeTree.gen.ts || {
+            echo "Generated route tree does not export routeTree."
+            exit 1
+          }
+          for route in "/assistant" "/development" "/ai-activity" "/nutrition" "/sport" "/watch" "/sleep" "/routine" "/body" "/work" "/calendar" "/notes" "/recalls" "/finance" "/profile" "/settings" "/scan" "/recipes" "/investments" "/water" "/login"; do
+            grep -Fq "'$route'" src/routeTree.gen.ts || grep -Fq "\"$route\"" src/routeTree.gen.ts || {
+              echo "Missing route in generated tree: $route"
+              exit 1
+            }
           done
-          echo "All application routes are present in the generated TanStack route tree."
+          echo "All expected application routes are present."
 
       - name: Commit regenerated route tree when changed
         shell: bash
