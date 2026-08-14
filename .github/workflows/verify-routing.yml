@@ -36,11 +36,12 @@ jobs:
           test -f src/routeTree.gen.ts
           for route in "/" "/assistant" "/development" "/ai-activity" "/nutrition" "/sport" "/watch" "/sleep" "/routine" "/body" "/work" "/calendar" "/notes" "/recalls" "/finance" "/profile" "/settings" "/scan" "/recipes" "/investments" "/water" "/login"; do
             if [ "$route" = "/" ]; then
-              grep -q 'path: "/"' src/routeTree.gen.ts || { echo "Missing route: /"; exit 1; }
+              grep -q "const IndexRoute = child(IndexRouteImport, '/', '/')" src/routeTree.gen.ts || { echo "Missing route: /"; exit 1; }
             else
-              grep -q "path: \"$route\"\|path: '$route'" src/routeTree.gen.ts || { echo "Missing route: $route"; exit 1; }
+              grep -q "child(.*[\"']$route[\"']" src/routeTree.gen.ts || { echo "Missing route: $route"; exit 1; }
             fi
           done
+          echo "All application routes are present in the generated TanStack route tree."
 
       - name: Commit regenerated route tree when changed
         shell: bash
