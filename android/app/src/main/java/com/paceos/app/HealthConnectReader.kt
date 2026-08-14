@@ -47,45 +47,38 @@ class HealthConnectReader(context: Context) {
         val range = TimeRangeFilter.between(start, end)
         val out = JSONArray()
 
-        val aggregate = client.aggregate(
-            AggregateRequest(
-                metrics = setOf(
-                    StepsRecord.COUNT_TOTAL,
-                    ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL,
-                    TotalCaloriesBurnedRecord.ENERGY_TOTAL,
-                    DistanceRecord.DISTANCE_TOTAL,
-                ),
-                timeRangeFilter = range,
-            )
-        )
-        aggregate[StepsRecord.COUNT_TOTAL]?.let { add(out, end, "steps", it.toDouble(), "health_connect") }
-        aggregate[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.let { add(out, end, "kcal_active", it.inKilocalories, "health_connect") }
-        aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.let { add(out, end, "kcal_total", it.inKilocalories, "health_connect") }
-        aggregate[DistanceRecord.DISTANCE_TOTAL]?.let { add(out, end, "distance_m", it.inMeters, "health_connect") }
+        val aggregate = client.aggregate(AggregateRequest(
+            metrics = setOf(StepsRecord.COUNT_TOTAL, ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL, TotalCaloriesBurnedRecord.ENERGY_TOTAL, DistanceRecord.DISTANCE_TOTAL),
+            timeRangeFilter = range,
+        ))
+        aggregate[StepsRecord.COUNT_TOTAL]?.let { add(out, end, "steps", it.toDouble(), "health_connect", "aggregate:steps:${start.toEpochMilli()}") }
+        aggregate[ActiveCaloriesBurnedRecord.ACTIVE_CALORIES_TOTAL]?.let { add(out, end, "kcal_active", it.inKilocalories, "health_connect", "aggregate:kcal_active:${start.toEpochMilli()}") }
+        aggregate[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.let { add(out, end, "kcal_total", it.inKilocalories, "health_connect", "aggregate:kcal_total:${start.toEpochMilli()}") }
+        aggregate[DistanceRecord.DISTANCE_TOTAL]?.let { add(out, end, "distance_m", it.inMeters, "health_connect", "aggregate:distance_m:${start.toEpochMilli()}") }
 
         client.readRecords(ReadRecordsRequest(HeartRateRecord::class, range)).records.forEach { record ->
-            record.samples.forEach { sample -> add(out, sample.time, "heart_rate", sample.beatsPerMinute.toDouble(), origin(record)) }
+            record.samples.forEach { sample -> add(out, sample.time, "heart_rate", sample.beatsPerMinute.toDouble(), origin(record), "heart_rate:${recordId(record)}:${sample.time.toEpochMilli()}") }
         }
         client.readRecords(ReadRecordsRequest(RestingHeartRateRecord::class, range)).records.forEach { record ->
-            add(out, record.time, "resting_heart_rate", record.beatsPerMinute.toDouble(), origin(record))
+            add(out, record.time, "resting_heart_rate", record.beatsPerMinute.toDouble(), origin(record), "resting_hr:${recordId(record)}")
         }
         client.readRecords(ReadRecordsRequest(WeightRecord::class, range)).records.forEach { record ->
-            add(out, record.time, "weight_kg", record.weight.inKilograms, origin(record))
+            add(out, record.time, "weight_kg", record.weight.inKilograms, origin(record), "weight:${recordId(record)}")
         }
         client.readRecords(ReadRecordsRequest(SleepSessionRecord::class, range)).records.forEach { record ->
             val duration = ChronoUnit.SECONDS.between(record.startTime, record.endTime).toDouble() / 60.0
-            out.put(JSONObject().put("ts", record.endTime.toString()).put("type", "sleep_min").put("value", duration).put("source", origin(record)).put("start", record.startTime.toString()).put("end", record.endTime.toString()))
+            out.put(JSONObject().put("ts", record.endTime.toString()).put("type", "sleep_min").put("value", duration).put("source", origin(record)).put("external_id", "sleep:${recordId(record)}").put("start", record.startTime.toString()).put("end", record.endTime.toString()))
         }
         client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, range)).records.forEach { record ->
             val duration = ChronoUnit.SECONDS.between(record.startTime, record.endTime).toDouble() / 60.0
-            out.put(JSONObject().put("ts", record.endTime.toString()).put("type", "exercise_duration_min").put("value", duration).put("source", origin(record)).put("start", record.startTime.toString()).put("end", record.endTime.toString()).put("exerciseType", record.exerciseType))
+            out.put(JSONObject().put("ts", record.endTime.toString()).put("type", "exercise_duration_min").put("value", duration).put("source", origin(record)).put("external_id", "exercise:${recordId(record)}").put("start", record.startTime.toString()).put("end", record.endTime.toString()).put("exerciseType", record.exerciseType))
         }
 
         return JSONObject().put("source", "health_connect").put("timezone", zone.id).put("from", start.toString()).put("to", end.toString()).put("samples", out)
     }
 
-    private fun add(out: JSONArray, ts: Instant, type: String, value: Double, source: String) {
-        if (value.isFinite()) out.put(JSONObject().put("ts", ts.toString()).put("type", type).put("value", value).put("source", source))
+    private fun add(out: JSONArray, ts: Instant, type: String, value: Double, source: String, externalId: String) {
+        if (value.isFinite()) out.put(JSONObject().put("ts", ts.toString()).put("type", type).put("value", value).put("source", source).put("source_id", source).put("external_id", externalId))
     }
 
     private fun origin(record: Any): String = try {
@@ -93,4 +86,11 @@ class HealthConnectReader(context: Context) {
         val dataOrigin = metadata.javaClass.getMethod("getDataOrigin").invoke(metadata)
         dataOrigin.javaClass.getMethod("getPackageName").invoke(dataOrigin) as String
     } catch (_: Exception) { "health_connect" }
+
+    private fun recordId(record: Any): String = try {
+        val metadata = record.javaClass.getMethod("getMetadata").invoke(record)
+        metadata.javaClass.getMethod("getId").invoke(metadata) as String
+    } catch (_: Exception) {
+        "${record.javaClass.simpleName}:${record.hashCode()}"
+    }
 }
