@@ -15,24 +15,49 @@ const insertSchema = z.object({
   })).min(1).max(5000),
 });
 
+function isMissingProvenanceColumn(error: { message?: string } | null | undefined) {
+  const message = error?.message ?? "";
+  return /column .*?(source_id|external_id|metadata).* does not exist/i.test(message);
+}
+
 export const insertHealthSamples = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => insertSchema.parse(d))
   .handler(async ({ data, context }) => {
-    // The generated Supabase types predate the additive health-source columns; keep this cast local until types are regenerated.
+    // The generated Supabase types can lag behind additive migrations, so keep the table access local.
     const healthTable = context.supabase.from("health_samples") as any;
     const rows = data.samples.map((s) => ({ ...s, user_id: context.userId, metadata: s.metadata ?? {} }));
+
+    // New databases use external_id for idempotent Health Connect imports.
+    // If a deployment has not applied the additive migration yet, fall back to the legacy schema
+    // instead of taking down the whole Watch page. The migration remains required for full dedup/provenance.
     const externalIds = rows.map((r) => r.external_id).filter((v): v is string => !!v);
-    const existing = externalIds.length
-      ? await healthTable.select("external_id").eq("user_id", context.userId).in("external_id", externalIds)
-      : { data: [] as Array<{ external_id: string }> };
-    if (existing.error) throw new Error(existing.error.message);
-    const known = new Set((existing.data ?? []).map((r: { external_id: string }) => r.external_id));
-    const fresh = rows.filter((r) => !r.external_id || !known.has(r.external_id));
+    let provenanceSupported = true;
+    let known = new Set<string>();
+
+    if (externalIds.length) {
+      const existing = await healthTable.select("external_id").eq("user_id", context.userId).in("external_id", externalIds);
+      if (existing.error) {
+        if (!isMissingProvenanceColumn(existing.error)) throw new Error(existing.error.message);
+        provenanceSupported = false;
+      } else {
+        known = new Set((existing.data ?? []).map((r: { external_id: string }) => r.external_id));
+      }
+    }
+
+    const fresh = provenanceSupported
+      ? rows.filter((r) => !r.external_id || !known.has(r.external_id))
+      : rows;
     if (!fresh.length) return { inserted: 0, deduped: rows.length };
-    const { error, count } = await healthTable.insert(fresh, { count: "exact" });
-    if (error) throw new Error(error.message);
-    return { inserted: count ?? fresh.length, deduped: rows.length - fresh.length };
+
+    let result = await healthTable.insert(fresh, { count: "exact" });
+    if (result.error && isMissingProvenanceColumn(result.error)) {
+      const legacyRows = fresh.map(({ source_id: _sourceId, external_id: _externalId, metadata: _metadata, ...row }) => row);
+      provenanceSupported = false;
+      result = await healthTable.insert(legacyRows, { count: "exact" });
+    }
+    if (result.error) throw new Error(result.error.message);
+    return { inserted: result.count ?? fresh.length, deduped: rows.length - fresh.length };
   });
 
 function localDayRange(timeZone: string | undefined) {
@@ -57,9 +82,24 @@ export const listHealthToday = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const range = localDayRange(data.timeZone);
     const healthTable = context.supabase.from("health_samples") as any;
-    const { data: rows, error } = await healthTable.select("type, value, ts, source, source_id, external_id").gte("ts", range.start.toISOString()).lt("ts", range.end.toISOString()).order("ts", { ascending: false }).limit(10000);
-    if (error) throw new Error(error.message);
-    const values = rows ?? [];
+    let result = await healthTable
+      .select("type, value, ts, source, source_id, external_id")
+      .gte("ts", range.start.toISOString())
+      .lt("ts", range.end.toISOString())
+      .order("ts", { ascending: false })
+      .limit(10000);
+
+    if (result.error && isMissingProvenanceColumn(result.error)) {
+      result = await healthTable
+        .select("type, value, ts, source")
+        .gte("ts", range.start.toISOString())
+        .lt("ts", range.end.toISOString())
+        .order("ts", { ascending: false })
+        .limit(10000);
+    }
+    if (result.error) throw new Error(result.error.message);
+
+    const values = result.data ?? [];
     const sum = (t: string) => values.filter((r: any) => r.type === t).reduce((s: number, r: any) => s + Number(r.value), 0);
     const latest = (t: string) => values.find((r: any) => r.type === t)?.value ?? null;
     const latestSource = (t: string) => values.find((r: any) => r.type === t)?.source ?? null;
