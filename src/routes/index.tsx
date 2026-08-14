@@ -12,14 +12,15 @@ import { DashboardDialogs, type DashDialog } from "@/components/DashboardDialogs
 import { DailyRhythmRing, type RhythmMetric } from "@/components/DailyRhythmRing";
 import { DailyInsight } from "@/components/DailyInsight";
 import { WeeklyHabits } from "@/components/WeeklyHabits";
-
 import { SmartCard } from "@/components/SmartCard";
 import { buildIntel, statusColor, type ModuleKey } from "@/lib/insights";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
   validateSearch: (s: Record<string, unknown>) => ({
-    quickAdd: (["water", "kcal", "sleep", "weight"] as const).includes(s.quickAdd as never) ? (s.quickAdd as "water" | "kcal" | "sleep" | "weight") : undefined,
+    quickAdd: (["water", "kcal", "sleep", "weight", "workout"] as const).includes(s.quickAdd as never)
+      ? (s.quickAdd as "water" | "kcal" | "sleep" | "weight" | "workout")
+      : undefined,
   }),
   head: () => ({
     meta: [
@@ -52,7 +53,6 @@ function Dashboard() {
   const { quickAdd } = Route.useSearch();
   const [dialog, setDialog] = useState<DashDialog>(null);
 
-  // Arrivée depuis la palette de commandes (Ctrl+K) avec une action rapide demandée.
   useEffect(() => {
     if (!quickAdd) return;
     setDialog(quickAdd);
@@ -76,8 +76,6 @@ function Dashboard() {
   const today = todayKey();
   const days = useMemo(() => lastNDays(7), []);
 
-  // Horloge basse fréquence : le dashboard évolue au fil de la journée sans
-  // provoquer de re-render pendant les interactions (tick de 60 s).
   useEffect(() => {
     setNow(new Date());
     setTodayLabel(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }));
@@ -166,11 +164,7 @@ function Dashboard() {
 
   return (
     <div>
-      <PageHeader
-        title={`${intel.greeting} 👋`}
-        subtitle={todayLabel || "Aujourd’hui"}
-        a11yLabel="Tableau de bord Pace"
-      />
+      <PageHeader title={`${intel.greeting} 👋`} subtitle={todayLabel || "Aujourd’hui"} a11yLabel="Tableau de bord Pace" />
 
       <div className="flex flex-wrap gap-2 mb-4">
         {([
@@ -178,13 +172,9 @@ function Dashboard() {
           { icon: <Flame className="size-3.5" />, label: "Repas", action: () => setDialog("kcal") },
           { icon: <Moon className="size-3.5" />, label: "Sommeil", action: () => setDialog("sleep") },
           { icon: <Scale className="size-3.5" />, label: "Pesée", action: () => setDialog("weight") },
-          { icon: <Dumbbell className="size-3.5" />, label: "Séance", action: () => navigate({ to: "/sport" }) },
+          { icon: <Dumbbell className="size-3.5" />, label: "Séance", action: () => setDialog("workout") },
         ] as const).map((a) => (
-          <button
-            key={a.label}
-            onClick={a.action}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-thin text-xs font-medium hover:opacity-80 transition"
-          >
+          <button key={a.label} onClick={a.action} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-thin text-xs font-medium hover:opacity-80 transition">
             {a.icon} + {a.label}
           </button>
         ))}
@@ -193,81 +183,30 @@ function Dashboard() {
       <DailyInsight intel={intel} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <motion.button
-          type="button"
-          onClick={() => setDialog("score")}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          whileTap={{ scale: 0.995 }}
-          aria-label="Voir le détail du Daily Rhythm"
-          className="text-left lg:col-span-2 glass-card p-6 md:p-8 relative overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
-        >
-          <div className="pointer-events-none absolute -top-24 -left-16 size-72 rounded-full blur-3xl opacity-60"
-               style={{ background: "radial-gradient(closest-side, oklch(0.82 0.16 55 / 0.35), transparent)" }} />
-          <div className="pointer-events-none absolute -bottom-24 -right-16 size-72 rounded-full blur-3xl opacity-60"
-               style={{ background: "radial-gradient(closest-side, oklch(0.6 0.18 255 / 0.32), transparent)" }} />
-
+        <motion.button type="button" onClick={() => setDialog("score")} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }} whileTap={{ scale: 0.995 }} aria-label="Voir le détail du Daily Rhythm" className="text-left lg:col-span-2 glass-card p-6 md:p-8 relative overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+          <div className="pointer-events-none absolute -top-24 -left-16 size-72 rounded-full blur-3xl opacity-60" style={{ background: "radial-gradient(closest-side, oklch(0.82 0.16 55 / 0.35), transparent)" }} />
+          <div className="pointer-events-none absolute -bottom-24 -right-16 size-72 rounded-full blur-3xl opacity-60" style={{ background: "radial-gradient(closest-side, oklch(0.6 0.18 255 / 0.32), transparent)" }} />
           <div className="flex items-center justify-between relative">
             <div>
               <div className="text-[10px] font-medium uppercase tracking-[0.22em] text-muted-foreground">Aujourd'hui</div>
               <div className="font-display text-lg md:text-xl font-semibold mt-1">Ton rythme quotidien</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                {intel.rhythmSummary}
-                {intel.scoreAvg > 0 && (
-                  <> · {intel.scoreDelta >= 0 ? "↑ +" : "↓ −"}{Math.abs(intel.scoreDelta)} pts vs ta moyenne</>
-                )}
-              </div>
+              <div className="text-xs text-muted-foreground mt-1">{intel.rhythmSummary}{intel.scoreAvg > 0 && <> · {intel.scoreDelta >= 0 ? "↑ +" : "↓ −"}{Math.abs(intel.scoreDelta)} pts vs ta moyenne</>}</div>
             </div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 flex items-center gap-1">
-              <Sparkles className="size-3" /> Détail →
-            </div>
+            <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 flex items-center gap-1"><Sparkles className="size-3" /> Détail →</div>
           </div>
-
           <div className="mt-6 grid grid-cols-1 md:grid-cols-[auto_1fr] items-center gap-6 md:gap-10 relative">
-            <div className="justify-self-center">
-              <DailyRhythmRing metrics={rhythmMetrics} score={intel.score} size={244} stroke={12} gap={8} />
-            </div>
-            <ul className="w-full max-w-sm space-y-2">
-              {intel.rhythmLines.map((l) => (
-                <li key={l.label} className="flex items-start gap-2.5">
-                  <span className="mt-1.5 size-1.5 rounded-full shrink-0" style={{ background: statusColor[l.status] }} />
-                  <div className="min-w-0">
-                    <div className="text-[13px] font-medium leading-tight">{l.label}</div>
-                    <div className="text-[11px] text-muted-foreground leading-snug">{l.text}</div>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <div className="justify-self-center"><DailyRhythmRing metrics={rhythmMetrics} score={intel.score} size={244} stroke={12} gap={8} /></div>
+            <ul className="w-full max-w-sm space-y-2">{intel.rhythmLines.map((l) => <li key={l.label} className="flex items-start gap-2.5"><span className="mt-1.5 size-1.5 rounded-full shrink-0" style={{ background: statusColor[l.status] }} /><div className="min-w-0"><div className="text-[13px] font-medium leading-tight">{l.label}</div><div className="text-[11px] text-muted-foreground leading-snug">{l.text}</div></div></li>)}</ul>
           </div>
         </motion.button>
-
-        <SmartCard
-          metric={intel.metrics.find((m) => m.key === "kcal")!}
-          icon={ICONS.kcal}
-          onOpen={() => setDialog("kcal")}
-          onQuickAdd={() => setDialog("kcal")}
-          quickLabel="Repas"
-        />
+        <SmartCard metric={intel.metrics.find((m) => m.key === "kcal")!} icon={ICONS.kcal} onOpen={() => setDialog("kcal")} onQuickAdd={() => setDialog("kcal")} quickLabel="Repas" />
       </div>
 
-      {/* Cartes intelligentes, triées par priorité contextuelle (urgent en premier). */}
       <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-        {intel.metrics
-          .filter((m) => m.key !== "kcal")
-          .map((m) => {
-            const q = quickFor(m.key);
-            return (
-              <SmartCard
-                key={m.key}
-                metric={m}
-                icon={ICONS[m.key]}
-                onOpen={q.open}
-                onQuickAdd={q.add}
-                quickLabel={q.label}
-              />
-            );
-          })}
+        {intel.metrics.filter((m) => m.key !== "kcal").map((m) => {
+          const q = quickFor(m.key);
+          return <SmartCard key={m.key} metric={m} icon={ICONS[m.key]} onOpen={q.open} onQuickAdd={q.add} quickLabel={q.label} />;
+        })}
       </motion.div>
 
       {(health.steps > 0 || health.kcalActive > 0) && (
@@ -280,84 +219,33 @@ function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="lg:col-span-2 rounded-2xl glass-card p-5">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tendance 7 jours</div>
-              <div className="font-display text-lg font-semibold mt-0.5">Sommeil & hydratation</div>
-            </div>
-          </div>
+          <div className="flex items-center justify-between mb-3"><div><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tendance 7 jours</div><div className="font-display text-lg font-semibold mt-0.5">Sommeil & hydratation</div></div></div>
           <ResponsiveContainer width="100%" height={200}>
             <AreaChart data={trend}>
               <defs>
-                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} />
-                </linearGradient>
+                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} /><stop offset="100%" stopColor="var(--primary)" stopOpacity={0} /></linearGradient>
+                <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.3} /><stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} /></linearGradient>
               </defs>
-              <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} />
-              <YAxis hide />
-              <Tooltip contentStyle={liquidTooltipStyle} />
+              <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} /><YAxis hide /><Tooltip contentStyle={liquidTooltipStyle} />
               <Area type="monotone" dataKey="sommeil" stroke="var(--primary)" strokeWidth={2} fill="url(#g1)" dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} connectNulls={false} />
-              <Area type="monotone" dataKey="eau" stroke="var(--chart-2)" strokeWidth={2} fill="url(#g2)" dot={liquidDot("var(--chart-2)")} activeDot={{ r: 5 }} connectNulls={false} />
+              <Area type="monotone" dataKey="eau" stroke="var(--chart-2)" strokeWidth={2} fill="url(#g2)" dot={liquidDot("var(--chart-2")} activeDot={{ r: 5 }} connectNulls={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
-
-        <button
-          type="button"
-          onClick={() => navigate({ to: "/finance" })}
-          className="text-left rounded-2xl glass-card p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Finances du jour</div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Ouvrir →</div>
-          </div>
-          <div className="flex items-center gap-2 text-[color:var(--success)]">
-            <TrendingUp className="size-4" />
-            <span className="font-display text-2xl font-semibold">+{todayIncome.toFixed(0)}€</span>
-          </div>
-          <div className="flex items-center gap-2 text-destructive mt-2">
-            <Wallet className="size-4" />
-            <span className="font-display text-2xl font-semibold">-{todaySpend.toFixed(0)}€</span>
-          </div>
-          <div className="border-t border-border mt-4 pt-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Net</span>
-              <span className={`font-medium ${todayIncome - todaySpend >= 0 ? "text-[color:var(--success)]" : "text-destructive"}`}>
-                {(todayIncome - todaySpend).toFixed(2)}€
-              </span>
-            </div>
-          </div>
+        <button type="button" onClick={() => navigate({ to: "/finance" })} className="text-left rounded-2xl glass-card p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+          <div className="flex items-center justify-between mb-3"><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Finances du jour</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Ouvrir →</div></div>
+          <div className="flex items-center gap-2 text-[color:var(--success)]"><TrendingUp className="size-4" /><span className="font-display text-2xl font-semibold">+{todayIncome.toFixed(0)}€</span></div>
+          <div className="flex items-center gap-2 text-destructive mt-2"><Wallet className="size-4" /><span className="font-display text-2xl font-semibold">-{todaySpend.toFixed(0)}€</span></div>
+          <div className="border-t border-border mt-4 pt-3 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">Net</span><span className={`font-medium ${todayIncome - todaySpend >= 0 ? "text-[color:var(--success)]" : "text-destructive"}`}>{(todayIncome - todaySpend).toFixed(2)}€</span></div></div>
         </button>
       </div>
 
       <WeeklyHabits routines={routines} total={allRoutines.length} />
 
-
       {weightSeries.length > 1 && (
-        <button
-          type="button"
-          onClick={() => setDialog("weight")}
-          className="w-full text-left rounded-2xl glass-card p-5 hover:shadow-[var(--shadow-card)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-        >
-          <div className="flex items-center justify-between mb-3">
-            <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-              <Dumbbell className="size-3 inline mr-1" /> Évolution du poids
-            </div>
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Peser →</div>
-          </div>
-          <ResponsiveContainer width="100%" height={140}>
-            <LineChart data={weightSeries}>
-              <XAxis dataKey="d" hide />
-              <YAxis hide domain={["dataMin - 1", "dataMax + 1"]} />
-              <Tooltip contentStyle={liquidTooltipStyle} />
-              <Line type="monotone" dataKey="w" stroke="var(--primary)" strokeWidth={2.5} dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} connectNulls={false} />
-            </LineChart>
-          </ResponsiveContainer>
+        <button type="button" onClick={() => setDialog("weight")} className="w-full text-left rounded-2xl glass-card p-5 hover:shadow-[var(--shadow-card)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+          <div className="flex items-center justify-between mb-3"><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider"><Dumbbell className="size-3 inline mr-1" /> Évolution du poids</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Peser →</div></div>
+          <ResponsiveContainer width="100%" height={140}><LineChart data={weightSeries}><XAxis dataKey="d" hide /><YAxis hide domain={["dataMin - 1", "dataMax + 1"]} /><Tooltip contentStyle={liquidTooltipStyle} /><Line type="monotone" dataKey="w" stroke="var(--primary)" strokeWidth={2.5} dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} connectNulls={false} /></LineChart></ResponsiveContainer>
         </button>
       )}
 
