@@ -3,10 +3,7 @@ import { useLocalState } from "@/lib/storage";
 export type NavItemKey =
   | "/" | "/assistant" | "/development" | "/ai-activity" | "/nutrition" | "/sport" | "/watch"
   | "/sleep" | "/routine" | "/body" | "/work" | "/calendar" | "/notes" | "/recalls" | "/finance" | "/profile" | "/settings";
-
-export const NAV_DEFAULT_ORDER: NavItemKey[] = [
-  "/", "/assistant", "/development", "/ai-activity", "/nutrition", "/sport", "/watch", "/sleep", "/routine", "/body", "/work", "/calendar", "/notes", "/recalls", "/finance", "/profile", "/settings",
-];
+export const NAV_DEFAULT_ORDER: NavItemKey[] = ["/", "/assistant", "/development", "/ai-activity", "/nutrition", "/sport", "/watch", "/sleep", "/routine", "/body", "/work", "/calendar", "/notes", "/recalls", "/finance", "/profile", "/settings"];
 export const BOTTOM_DEFAULT: NavItemKey[] = ["/", "/nutrition", "/sport", "/watch", "/routine"];
 const ALLOWED = new Set<NavItemKey>(NAV_DEFAULT_ORDER);
 const clean = (arr: unknown): NavItemKey[] => Array.isArray(arr) ? arr.filter((x): x is NavItemKey => typeof x === "string" && ALLOWED.has(x as NavItemKey)) : [];
@@ -19,7 +16,10 @@ export function useNavPrefs() {
   const move = (from: number, to: number) => setOrder((prev) => { const src = clean(prev); const next = [...src]; const [item] = next.splice(from, 1); if (item !== undefined) next.splice(to, 0, item); return next; });
   const toggleBottom = (key: NavItemKey) => setBottom((prev) => { const src = clean(prev); return src.includes(key) ? src.filter((x) => x !== key) : [...src, key]; });
   const toggleVisible = (key: NavItemKey) => setVisible((prev) => { const src = clean(prev); if (src.includes(key) && src.length <= 1) return src; return src.includes(key) ? src.filter((x) => x !== key) : [...src, key]; });
-  const visibleSet = new Set(cleanVisible.length ? cleanVisible : NAV_DEFAULT_ORDER);
+  // Migration douce : un ancien profil de navigation ne connaissait pas /watch.
+  // On ajoute uniquement ce nouvel onglet ; les choix de visibilité des autres onglets restent inchangés.
+  const migratedVisible = cleanVisible.includes("/watch") ? cleanVisible : [...cleanVisible, "/watch"];
+  const visibleSet = new Set(migratedVisible.length ? migratedVisible : NAV_DEFAULT_ORDER);
   const visibleOrder = fullOrder.filter((k) => k === "/" || k === "/settings" || visibleSet.has(k));
-  return { order: fullOrder, visibleOrder, setOrder, bottom: cleanBottom, toggleBottom, move, visible: cleanVisible, toggleVisible };
+  return { order: fullOrder, visibleOrder, setOrder, bottom: cleanBottom, toggleBottom, move, visible: migratedVisible, toggleVisible };
 }
