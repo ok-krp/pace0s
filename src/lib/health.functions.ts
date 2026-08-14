@@ -24,13 +24,8 @@ export const insertHealthSamples = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => insertSchema.parse(d))
   .handler(async ({ data, context }) => {
-    // The generated Supabase types can lag behind additive migrations, so keep the table access local.
     const healthTable = context.supabase.from("health_samples") as any;
     const rows = data.samples.map((s) => ({ ...s, user_id: context.userId, metadata: s.metadata ?? {} }));
-
-    // New databases use external_id for idempotent Health Connect imports.
-    // If a deployment has not applied the additive migration yet, fall back to the legacy schema
-    // instead of taking down the whole Watch page. The migration remains required for full dedup/provenance.
     const externalIds = rows.map((r) => r.external_id).filter((v): v is string => !!v);
     let provenanceSupported = true;
     let known = new Set<string>();
@@ -53,7 +48,6 @@ export const insertHealthSamples = createServerFn({ method: "POST" })
     let result = await healthTable.insert(fresh, { count: "exact" });
     if (result.error && isMissingProvenanceColumn(result.error)) {
       const legacyRows = fresh.map(({ source_id: _sourceId, external_id: _externalId, metadata: _metadata, ...row }) => row);
-      provenanceSupported = false;
       result = await healthTable.insert(legacyRows, { count: "exact" });
     }
     if (result.error) throw new Error(result.error.message);
@@ -82,21 +76,17 @@ export const listHealthToday = createServerFn({ method: "GET" })
   .handler(async ({ data, context }) => {
     const range = localDayRange(data.timeZone);
     const healthTable = context.supabase.from("health_samples") as any;
-    let result = await healthTable
-      .select("type, value, ts, source, source_id, external_id")
+
+    // Read only columns guaranteed by the current schema. Provenance columns are optional
+    // and must never be allowed to make the Watch/Dashboard endpoint crash when a migration
+    // has not yet been applied in Supabase.
+    const result = await healthTable
+      .select("type, value, ts, source")
       .gte("ts", range.start.toISOString())
       .lt("ts", range.end.toISOString())
       .order("ts", { ascending: false })
       .limit(10000);
 
-    if (result.error && isMissingProvenanceColumn(result.error)) {
-      result = await healthTable
-        .select("type, value, ts, source")
-        .gte("ts", range.start.toISOString())
-        .lt("ts", range.end.toISOString())
-        .order("ts", { ascending: false })
-        .limit(10000);
-    }
     if (result.error) throw new Error(result.error.message);
 
     const values = result.data ?? [];
