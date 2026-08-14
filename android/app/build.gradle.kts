@@ -5,7 +5,7 @@ plugins {
 
 android {
     namespace = "com.paceos.app"
-    compileSdk = 35
+    compileSdk = 36
     defaultConfig {
         applicationId = "com.paceos.app"
         minSdk = 28
