@@ -22,23 +22,17 @@ class MainActivity : ComponentActivity() {
     private lateinit var reader: HealthConnectReader
     private var pendingSync = false
 
-    private val permissionLauncher = registerForActivityResult(
-        PermissionController.createRequestPermissionResultContract()
-    ) {
+    private val permissionLauncher = registerForActivityResult(PermissionController.createRequestPermissionResultContract()) {
         lifecycleScope.launch {
             try {
                 val client = HealthConnectClient.getOrCreate(this@MainActivity)
                 val granted = client.permissionController.getGrantedPermissions()
                 if (!granted.containsAll(HealthConnectReader.READ_PERMISSIONS)) {
                     sendToWeb(JSONObject().put("ok", false).put("error", "Health Connect permissions are missing or were denied").put("status", "permission_missing").toString())
-                } else if (pendingSync) {
-                    syncHealthConnect()
-                }
+                } else if (pendingSync) syncHealthConnect()
             } catch (e: Exception) {
                 sendToWeb(JSONObject().put("ok", false).put("error", e.message ?: "Unable to verify Health Connect permissions").put("status", "error").toString())
-            } finally {
-                pendingSync = false
-            }
+            } finally { pendingSync = false }
         }
     }
 
@@ -52,7 +46,9 @@ class MainActivity : ComponentActivity() {
             settings.domStorageEnabled = true
             settings.allowFileAccess = false
             settings.allowContentAccess = false
-            webViewClient = WebViewClient()
+            webViewClient = object : WebViewClient() {
+                override fun onPageFinished(view: WebView?, url: String?) { super.onPageFinished(view, url); deliverPendingQueue() }
+            }
             addJavascriptInterface(HealthBridge(), "PaceHealthConnect")
             loadUrl(BuildConfig.PACE_URL)
         }
@@ -65,26 +61,20 @@ class MainActivity : ComponentActivity() {
     }
 
     inner class HealthBridge {
-        @JavascriptInterface
-        fun requestSync() {
+        @JavascriptInterface fun requestSync() {
             runOnUiThread {
                 pendingSync = true
                 lifecycleScope.launch {
                     try {
-                        val status = HealthConnectClient.getSdkStatus(this@MainActivity)
-                        if (status != HealthConnectClient.SDK_AVAILABLE) {
-                            sendToWeb(JSONObject().put("ok", false).put("error", "Health Connect is unavailable on this device").put("status", "unavailable").toString())
-                            pendingSync = false
-                            return@launch
+                        if (HealthConnectClient.getSdkStatus(this@MainActivity) != HealthConnectClient.SDK_AVAILABLE) {
+                            sendToWeb(JSONObject().put("ok", false).put("error", "Health Connect is unavailable on this device").put("status", "unavailable").toString()); pendingSync = false; return@launch
                         }
                         val client = HealthConnectClient.getOrCreate(this@MainActivity)
                         val granted = client.permissionController.getGrantedPermissions()
                         if (!granted.containsAll(HealthConnectReader.READ_PERMISSIONS)) {
                             sendToWeb(JSONObject().put("ok", false).put("error", "Health Connect permissions are required").put("status", "permission_missing").toString())
                             permissionLauncher.launch(HealthConnectReader.READ_PERMISSIONS)
-                        } else {
-                            syncHealthConnect()
-                        }
+                        } else syncHealthConnect()
                     } catch (e: Exception) {
                         pendingSync = false
                         sendToWeb(JSONObject().put("ok", false).put("error", e.message ?: "Health Connect error").put("status", "error").toString())
@@ -92,25 +82,34 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        @JavascriptInterface fun acknowledgeSync(id: String) {
+            if (id.isBlank()) return
+            PendingHealthQueue.acknowledge(this@MainActivity, id)
+            deliverPendingQueue()
+        }
+
+        @JavascriptInterface fun getPendingCount(): Int = PendingHealthQueue.peek(this@MainActivity).length()
     }
 
     private fun syncHealthConnect() {
         lifecycleScope.launch {
             try {
                 val payload = reader.read(7)
-                val sampleCount = payload.optJSONArray("samples")?.length() ?: 0
-                // Keep the latest complete window locally until the authenticated Pace WebView
-                // confirms/consumes it. The deterministic external IDs make replay idempotent.
-                getSharedPreferences("pace_health", MODE_PRIVATE).edit()
-                    .putString("pending_payload", payload.toString())
-                    .putLong("pending_at", System.currentTimeMillis())
-                    .apply()
-                sendToWeb(JSONObject().put("ok", true).put("payload", payload).put("status", "synced_from_health_connect").put("sampleCount", sampleCount).toString())
+                if ((payload.optJSONArray("samples")?.length() ?: 0) > 0) PendingHealthQueue.enqueue(this@MainActivity, payload)
+                deliverPendingQueue()
             } catch (e: Exception) {
                 sendToWeb(JSONObject().put("ok", false).put("error", e.message ?: "Health Connect read failed").put("status", "read_error").toString())
-            } finally {
-                pendingSync = false
-            }
+            } finally { pendingSync = false }
+        }
+    }
+
+    private fun deliverPendingQueue() {
+        if (!::webView.isInitialized) return
+        val queue = PendingHealthQueue.peek(this)
+        for (i in 0 until queue.length()) {
+            val item = queue.optJSONObject(i) ?: continue
+            sendToWeb(JSONObject().put("ok", true).put("queueId", item.optString("id")).put("payload", item.optJSONObject("payload")).put("status", "queued_health_connect").toString())
         }
     }
 
