@@ -1,12 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { liquidTooltipStyle } from "@/lib/chart-style";
-import { useState } from "react";
-import { Moon, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Moon } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
 import { PageHeader, StatCard } from "@/components/Stat";
 import { useLocalState, lastNDays, fmtDay, todayKey } from "@/lib/storage";
 import { formatSleepDuration } from "@/lib/sleep-format";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberField } from "@/components/ui/number-field";
 
@@ -18,6 +17,7 @@ export const Route = createFileRoute("/sleep")({
 function diffHours(start: string, end: string) {
   const [sh, sm] = start.split(":").map(Number);
   const [eh, em] = end.split(":").map(Number);
+  if (![sh, sm, eh, em].every(Number.isFinite)) return 0;
   let s = sh + sm / 60;
   let e = eh + em / 60;
   if (e < s) e += 24;
@@ -39,10 +39,16 @@ function SleepPage() {
   const worst = valid.length ? valid.reduce((w, x) => (x.h < w ? x.h : w), 24) : 0;
   const debt = Math.max(0, valid.length * 8 - valid.reduce((s, x) => s + x.h, 0));
 
-  const add = () => {
+  // Les champs sont sauvegardés automatiquement dès qu'ils changent.
+  // Un debounce évite d'écrire plusieurs fois pendant une saisie rapide.
+  useEffect(() => {
     const h = diffHours(start, end);
-    setEntries((p) => ({ ...p, [todayKey()]: { start, end, hours: h, quality } }));
-  };
+    if (h <= 0 || quality < 1 || quality > 10) return;
+    const timer = window.setTimeout(() => {
+      setEntries((p) => ({ ...p, [todayKey()]: { start, end, hours: h, quality } }));
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [start, end, quality, setEntries]);
 
   return (
     <div>
@@ -62,11 +68,8 @@ function SleepPage() {
             <label className="text-xs text-muted-foreground">Qualité (1-10)</label>
             <NumberField allowDecimal={false} min={1} max={10} value={quality} onChange={(v) => { if (v != null) setQuality(v); }} className="w-24" />
           </div>
-          <Button onClick={add} className="rounded-xl">
-            <Plus className="size-4 mr-1" /> Enregistrer
-          </Button>
-          <div className="text-sm text-muted-foreground ml-auto">
-            <Moon className="inline size-4 mr-1" /> {formatSleepDuration(diffHours(start, end))}
+          <div className="text-sm text-muted-foreground ml-auto" aria-live="polite">
+            <Moon className="inline size-4 mr-1" /> {formatSleepDuration(diffHours(start, end))} · sauvegardé automatiquement
           </div>
         </div>
       </div>
