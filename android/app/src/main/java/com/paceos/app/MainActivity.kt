@@ -1,11 +1,12 @@
 package com.paceos.app
 
 import android.annotation.SuppressLint
-import android.app.Activity
 import android.os.Bundle
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.lifecycleScope
@@ -16,7 +17,7 @@ import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private lateinit var reader: HealthConnectReader
     private var pendingSync = false
