@@ -20,19 +20,18 @@ import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
 import { AiSettings } from "@/components/AiSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
+import { getPwaInstallPrompt, initPwaInstallPrompt } from "@/lib/pwa-install";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Paramètres — Pace" }, { name: "description", content: "Personnalisez Pace, la confidentialité et les assistants IA." }, { property: "og:title", content: "Paramètres — Pace" }, { property: "og:description", content: "Personnalisez Pace, la confidentialité et les assistants IA." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
   component: SettingsPage,
 });
 
-type BeforeInstallPromptEvent = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: "accepted" | "dismissed" }> };
-
 function SettingsPage() {
   const [dark, setDark] = useState(false);
   const push = usePush();
   const [sending, setSending] = useState(false);
-  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [installAvailable, setInstallAvailable] = useState(false);
   const [installed, setInstalled] = useState(false);
   const sendTest = useServerFn(sendTestNotification);
 
@@ -58,16 +57,19 @@ function SettingsPage() {
   }, []);
 
   useEffect(() => {
-    const media = window.matchMedia("(display-mode: standalone)");
-    const updateInstalled = () => setInstalled(media.matches || ("standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone)));
-    const handleBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event as BeforeInstallPromptEvent);
-    };
+    initPwaInstallPrompt();
+    const standalone = window.matchMedia("(display-mode: standalone)");
+    const updateInstalled = () => setInstalled(standalone.matches || ("standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone)));
+    const updateAvailable = () => setInstallAvailable(Boolean(getPwaInstallPrompt()));
     updateInstalled();
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    window.addEventListener("appinstalled", () => { setInstallPrompt(null); setInstalled(true); });
-    return () => window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    updateAvailable();
+    window.addEventListener("pace:pwa-install-available", updateAvailable);
+    window.addEventListener("pace:pwa-installed", () => { setInstallAvailable(false); setInstalled(true); });
+    standalone.addEventListener?.("change", updateInstalled);
+    return () => {
+      window.removeEventListener("pace:pwa-install-available", updateAvailable);
+      standalone.removeEventListener?.("change", updateInstalled);
+    };
   }, []);
 
   const handleInstall = async () => {
@@ -75,14 +77,16 @@ function SettingsPage() {
       toast.info("Pace est déjà installé sur cet appareil.");
       return;
     }
+    const installPrompt = getPwaInstallPrompt();
     if (!installPrompt) {
-      toast.info("L’installation de Pace n’est pas disponible dans ce navigateur.");
+      toast.info("L’installation directe n’est pas disponible dans ce navigateur. Utilisez l’option « Installer Pace » du menu du navigateur si elle est proposée.");
       return;
     }
     try {
       await installPrompt.prompt();
       const choice = await installPrompt.userChoice;
-      setInstallPrompt(null);
+      window.__pacePwaInstallPrompt = null;
+      setInstallAvailable(false);
       if (choice.outcome === "accepted") setInstalled(true);
     } catch (e) {
       console.error(e);
@@ -136,7 +140,7 @@ function SettingsPage() {
         <div className="rounded-2xl glass-card p-4 flex items-center gap-4">
           <div className="size-10 rounded-xl bg-muted grid place-items-center text-foreground"><Download className="size-4" /></div>
           <div className="flex-1 min-w-0"><div className="font-medium">Application</div><div className="text-xs text-muted-foreground">Installez Pace sur cet appareil comme application.</div></div>
-          <Button variant="secondary" size="sm" onClick={handleInstall} className="rounded-xl">Télécharger l’application</Button>
+          <Button variant="secondary" size="sm" onClick={handleInstall} className="rounded-xl">{installed ? "Installée" : installAvailable ? "Télécharger l’application" : "Télécharger l’application"}</Button>
         </div>
         <Row icon={<Download className="size-4" />} label="Exporter les données locales" desc="JSON des préférences stockées sur cet appareil"><Button variant="secondary" size="sm" onClick={exportData} className="rounded-xl">Exporter</Button></Row>
         <Row icon={<Trash2 className="size-4" />} label="Réinitialiser cet appareil" desc="Efface uniquement les données locales"><Button variant="destructive" size="sm" onClick={reset} className="rounded-xl">Effacer</Button></Row>
