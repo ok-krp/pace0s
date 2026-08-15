@@ -26,9 +26,25 @@ function diffHours(start: string, end: string) {
 
 function SleepPage() {
   const [entries, setEntries] = useLocalState<Record<string, { start: string; end: string; hours: number; quality: number }>>("pace.sleep", {});
-  const [start, setStart] = useState("23:30");
-  const [end, setEnd] = useState("07:00");
-  const [quality, setQuality] = useState(8);
+  const today = todayKey();
+  const existingToday = entries[today];
+
+  // IMPORTANT: initialize the editor from the value already stored for today.
+  // Previously the hard-coded 23:30/07:00 defaults were loaded every time and
+  // the autosave effect then overwrote an edited value back to 7h30.
+  const [start, setStart] = useState(() => existingToday?.start ?? "23:30");
+  const [end, setEnd] = useState(() => existingToday?.end ?? "07:00");
+  const [quality, setQuality] = useState(() => existingToday?.quality ?? 8);
+
+  // If the stored value is changed elsewhere (e.g. Calendar pencil), update the
+  // editor without replacing an active user edit with the defaults.
+  useEffect(() => {
+    const stored = entries[today];
+    if (!stored) return;
+    setStart(stored.start);
+    setEnd(stored.end);
+    setQuality(stored.quality);
+  }, [entries, today]);
 
   const range = "30";
   const days = lastNDays(Number(range));
@@ -39,16 +55,16 @@ function SleepPage() {
   const worst = valid.length ? valid.reduce((w, x) => (x.h < w ? x.h : w), 24) : 0;
   const debt = Math.max(0, valid.length * 8 - valid.reduce((s, x) => s + x.h, 0));
 
-  // Les champs sont sauvegardés automatiquement dès qu'ils changent.
-  // Un debounce évite d'écrire plusieurs fois pendant une saisie rapide.
+  // Autosave remains enabled, but it now saves the actual editor values rather
+  // than replacing stored values with the default 7h30 duration.
   useEffect(() => {
     const h = diffHours(start, end);
     if (h <= 0 || quality < 1 || quality > 10) return;
     const timer = window.setTimeout(() => {
-      setEntries((p) => ({ ...p, [todayKey()]: { start, end, hours: h, quality } }));
+      setEntries((p) => ({ ...p, [today]: { start, end, hours: h, quality } }));
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [start, end, quality, setEntries]);
+  }, [start, end, quality, today, setEntries]);
 
   return (
     <div>
