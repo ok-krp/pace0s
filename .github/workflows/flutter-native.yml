@@ -22,7 +22,7 @@ jobs:
       - name: Generate Flutter Android host
         working-directory: pace_flutter
         run: flutter create --platforms=android --org com.paceos --project-name pace .
-      - name: Configure Health Connect permissions
+      - name: Configure Android native services
         working-directory: pace_flutter
         shell: bash
         run: |
@@ -33,10 +33,17 @@ jobs:
           permissions = '''\n    <uses-permission android:name="android.permission.health.READ_STEPS" />\n    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />\n    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />\n    <uses-permission android:name="android.permission.health.READ_SLEEP" />\n    <uses-permission android:name="android.permission.health.READ_WEIGHT" />\n    <uses-permission android:name="android.permission.health.READ_EXERCISE" />\n    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />\n'''
           if 'android.permission.health.READ_STEPS' not in text:
               text = text.replace('<application', permissions + '    <application', 1)
-          queries = '''\n    <queries><package android:name="com.google.android.apps.healthdata" /></queries>\n'''
+          queries = '\n    <queries><package android:name="com.google.android.apps.healthdata" /></queries>\n'
           if '<queries>' not in text:
               text = text.replace('</manifest>', queries + '</manifest>')
           p.write_text(text)
+          gradle = Path('android/app/build.gradle.kts')
+          text = gradle.read_text()
+          if 'isCoreLibraryDesugaringEnabled = true' not in text:
+              text = text.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:' not in text:
+              text = text.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")', 1)
+          gradle.write_text(text)
           PY
       - name: Get dependencies
         working-directory: pace_flutter
