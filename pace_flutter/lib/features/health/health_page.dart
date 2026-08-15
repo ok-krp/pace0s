@@ -62,7 +62,13 @@ class _HealthPageState extends State<HealthPage> {
             const SizedBox(height: 12),
             FilledButton.icon(onPressed: _busy ? null : () => _checkAndRead(request: true), icon: const Icon(Icons.security), label: const Text('Autoriser et synchroniser')),
             const SizedBox(height: 16),
-            if (_samples.isEmpty) const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('Aucune donnée accessible sur cette période, ou les permissions n’ont pas été accordées.')),
+            if (_samples.isEmpty)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Aucune donnée accessible sur cette période, ou les permissions n’ont pas été accordées.'),
+                ),
+              ),
             if (_samples.isNotEmpty) ...[
               Text('${_samples.length} mesure(s) accessibles sur 7 jours', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
