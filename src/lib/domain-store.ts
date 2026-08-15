@@ -26,15 +26,23 @@ export function readDomain<T>(domain: string, fallback: T): DomainRecord<T> {
 
   try {
     const raw = localStorage.getItem(storageKey(domain));
-    if (!raw) return { version: 1, updatedAt: new Date(0).toISOString(), mutationId: "empty", value: fallback };
-    const parsed = JSON.parse(raw) as Partial<DomainRecord<T>>;
-    if (parsed.version !== 1 || typeof parsed.updatedAt !== "string" || typeof parsed.mutationId !== "string" || !("value" in parsed)) {
-      return { version: 1, updatedAt: new Date(0).toISOString(), mutationId: "invalid", value: fallback };
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<DomainRecord<T>>;
+      if (parsed.version === 1 && typeof parsed.updatedAt === "string" && typeof parsed.mutationId === "string" && "value" in parsed) {
+        return parsed as DomainRecord<T>;
+      }
     }
-    return parsed as DomainRecord<T>;
-  } catch {
-    return { version: 1, updatedAt: new Date(0).toISOString(), mutationId: "unreadable", value: fallback };
-  }
+
+    // Progressive migration: preserve the existing Pace key and promote it on first write.
+    const legacyRaw = localStorage.getItem(`pace.${domain}`);
+    if (legacyRaw !== null) {
+      try {
+        return { version: 1, updatedAt: new Date(0).toISOString(), mutationId: "legacy-import", value: JSON.parse(legacyRaw) as T };
+      } catch {}
+    }
+  } catch {}
+
+  return { version: 1, updatedAt: new Date(0).toISOString(), mutationId: "empty", value: fallback };
 }
 
 export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
@@ -48,9 +56,11 @@ export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem(storageKey(domain), JSON.stringify(record));
+      // Keep the old key during the progressive migration as a recovery copy.
+      localStorage.setItem(`pace.${domain}`, JSON.stringify(value));
       window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record } }));
     } catch {
-      // The caller keeps the in-memory value. A future sync layer can retry.
+      // The in-memory state remains usable; the sync layer can retry later.
     }
   }
 
