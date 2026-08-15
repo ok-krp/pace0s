@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/storage/local_store.dart';
 import '../ui/pace_theme.dart';
 import '../features/dashboard/dashboard_page.dart';
 import '../features/nutrition/nutrition_page.dart';
@@ -7,7 +8,9 @@ import '../features/sleep/sleep_page.dart';
 import '../features/settings/settings_page.dart';
 
 class PaceApp extends StatelessWidget {
-  const PaceApp({super.key});
+  const PaceApp({super.key, required this.localStore});
+
+  final LocalStore localStore;
 
   @override
   Widget build(BuildContext context) {
@@ -17,13 +20,15 @@ class PaceApp extends StatelessWidget {
       theme: PaceTheme.light(),
       darkTheme: PaceTheme.dark(),
       themeMode: ThemeMode.system,
-      home: const PaceShell(),
+      home: PaceShell(localStore: localStore),
     );
   }
 }
 
 class PaceShell extends StatefulWidget {
-  const PaceShell({super.key});
+  const PaceShell({super.key, required this.localStore});
+
+  final LocalStore localStore;
 
   @override
   State<PaceShell> createState() => _PaceShellState();
@@ -32,17 +37,17 @@ class PaceShell extends StatefulWidget {
 class _PaceShellState extends State<PaceShell> {
   int _index = 0;
 
-  static const _pages = <Widget>[
-    DashboardPage(),
-    NutritionPage(),
-    SleepPage(),
-    SettingsPage(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final pages = <Widget>[
+      DashboardPage(localStore: widget.localStore),
+      const NutritionPage(),
+      const SleepPage(),
+      const SettingsPage(),
+    ];
+
     return Scaffold(
-      body: SafeArea(child: IndexedStack(index: _index, children: _pages)),
+      body: SafeArea(child: IndexedStack(index: _index, children: pages)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (value) => setState(() => _index = value),
