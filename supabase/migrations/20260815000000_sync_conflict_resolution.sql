@@ -1,6 +1,6 @@
 -- PaceOS conflict-safe sync write.
--- The timestamp check happens inside PostgreSQL so concurrent devices cannot
--- overwrite a newer row merely because both clients used upsert at once.
+-- The timestamp comparison is enforced by PostgreSQL itself so concurrent
+-- devices cannot replace a newer row with an older mutation.
 
 CREATE OR REPLACE FUNCTION public.upsert_user_state_if_newer(
   p_user_id uuid,
@@ -15,19 +15,10 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  current_updated_at timestamptz;
+  written boolean;
 BEGIN
   IF auth.uid() IS NULL OR auth.uid() <> p_user_id THEN
     RAISE EXCEPTION 'not authorized';
-  END IF;
-
-  SELECT updated_at INTO current_updated_at
-    FROM public.user_state
-   WHERE user_id = p_user_id AND key = p_key
-   FOR UPDATE;
-
-  IF current_updated_at IS NOT NULL AND current_updated_at >= p_updated_at THEN
-    RETURN false;
   END IF;
 
   INSERT INTO public.user_state (user_id, key, value, updated_at, updated_by)
@@ -35,9 +26,11 @@ BEGIN
   ON CONFLICT (user_id, key) DO UPDATE
     SET value = EXCLUDED.value,
         updated_at = EXCLUDED.updated_at,
-        updated_by = EXCLUDED.updated_by;
+        updated_by = EXCLUDED.updated_by
+  WHERE public.user_state.updated_at < EXCLUDED.updated_at;
 
-  RETURN true;
+  GET DIAGNOSTICS written = ROW_COUNT;
+  RETURN written;
 END;
 $$;
 
