@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { liquidTooltipStyle } from "@/lib/chart-style";
 import { motion } from "framer-motion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -9,20 +10,40 @@ import { formatSleepDuration } from "@/lib/sleep-format";
 import { useUserGoals } from "@/hooks/use-user-goals";
 import { Sparkles, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
-export type DashDialog = null | "score";
+export type DashDialog = null | "score" | "water" | "kcal" | "sleep" | "weight" | "routine" | "work" | "workout";
 
 type SleepEntry = { hours: number };
 type Nutrition = { kcal: number; p: number; c: number; f: number };
 
 /**
- * Dashboard is an aggregate/read-only surface.
- * Domain mutations belong to their owning pages (Sleep, Nutrition, Water, Sport, etc.).
- * This prevents duplicate editors from overwriting newer values with stale local state.
+ * The dashboard is an aggregate/read-only surface.
+ * A dashboard shortcut may navigate to the owning module, but it must never
+ * mutate that module's data. This gives every domain one authoritative editor.
  */
 export function DashboardDialogs({ open, onOpenChange }: { open: DashDialog; onOpenChange: (v: DashDialog) => void }) {
+  const navigate = useNavigate();
   const close = () => onOpenChange(null);
+
+  useEffect(() => {
+    if (!open || open === "score") return;
+
+    const destinations: Record<Exclude<DashDialog, null | "score">, string> = {
+      water: "/water",
+      kcal: "/nutrition",
+      sleep: "/sleep",
+      weight: "/body",
+      routine: "/routine",
+      work: "/work",
+      workout: "/sport",
+    };
+
+    const destination = destinations[open];
+    close();
+    void navigate({ to: destination });
+  }, [open, navigate]);
+
   return (
-    <Dialog open={open !== null} onOpenChange={(v) => !v && close()}>
+    <Dialog open={open === "score"} onOpenChange={(v) => !v && close()}>
       <DialogContent className="max-w-md">
         {open === "score" && <ScoreDetails />}
       </DialogContent>
