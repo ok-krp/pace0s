@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Scale } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
 import { PageHeader, StatCard } from "@/components/Stat";
-import { useLocalState, lastNDays, todayKey } from "@/lib/storage";
+import { lastNDays, todayKey } from "@/lib/storage";
 import { useDomainState } from "@/lib/domain-store";
 import { Input } from "@/components/ui/input";
 
@@ -109,8 +109,8 @@ function BodyPage() {
             <YAxis fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} domain={["dataMin - 1", "dataMax + 1"]} />
             <Tooltip contentStyle={liquidTooltipStyle} />
             <Line type="monotone" dataKey="w" name="Poids" stroke="var(--primary)" strokeWidth={2.5} dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="muscle" name="Muscle %" stroke="var(--chart-2)" strokeWidth={2} dot={liquidDot("var(--chart-2")} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="fat" name="Gras %" stroke="var(--chart-4)" strokeWidth={2} dot={liquidDot("var(--chart-4")} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="muscle" name="Muscle %" stroke="var(--chart-2)" strokeWidth={2} dot={liquidDot("var(--chart-2)")} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="fat" name="Gras %" stroke="var(--chart-4)" strokeWidth={2} dot={liquidDot("var(--chart-4)")} activeDot={{ r: 5 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
