@@ -1,18 +1,22 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 
 import '../storage/local_store.dart';
+import '../supabase/pace_supabase.dart';
+import 'sync_contract.dart';
 
-/// Replays local mutations through Pace's existing user_state RPC and pulls
-/// newer remote state. Local writes remain durable while offline.
 class SyncService {
-  SyncService({required this.localStore, required this.client});
+  SyncService({required this.localStore, required this.auth});
 
   final LocalStore localStore;
-  final SupabaseClient? client;
+  final PaceAuthService auth;
   bool _running = false;
 
   Future<void> syncNow() async {
-    if (_running || client == null || client!.auth.currentUser == null) return;
+    if (_running) return;
+    final client = auth.client;
+    final user = auth.currentUser;
+    if (client == null || user == null) return;
+
     _running = true;
     try {
       await _pushPending();
@@ -23,17 +27,14 @@ class SyncService {
   }
 
   Future<void> _pushPending() async {
-    for (final operation in List<Map<String, dynamic>>.from(localStore.pendingOperations())) {
+    final client = auth.client;
+    final user = auth.currentUser;
+    if (client == null || user == null) return;
+
+    for (final operation in localStore.pendingOperations()) {
       try {
         final result = await _push(operation);
-        if (result.accepted) {
-          await localStore.acknowledgeOperation(operation);
-          continue;
-        }
-
-        // A newer server value won. Apply it locally before acknowledging the
-        // stale mutation so it can never be retried over the newer state.
-        if (result.remoteValue != null && result.remoteUpdatedAt != null) {
+        if (!result.accepted && result.remoteValue != null && result.remoteUpdatedAt != null) {
           await localStore.applyRemote(
             operation['key'] as String,
             result.remoteValue,
@@ -49,12 +50,13 @@ class SyncService {
   }
 
   Future<_PushResult> _push(Map<String, dynamic> operation) async {
-    final userId = client!.auth.currentUser!.id;
+    final client = auth.client!;
+    final userId = client.auth.currentUser!.id;
     final key = operation['key'] as String;
     final updatedAt = (operation['queuedAt'] as String?) ?? DateTime.now().toUtc().toIso8601String();
     final value = operation['operation'] == 'delete' ? null : operation['value'];
 
-    final response = await client!.rpc('upsert_user_state_if_newer', params: {
+    final response = await client.rpc('upsert_user_state_if_newer', params: {
       'p_user_id': userId,
       'p_key': key,
       'p_value': value,
@@ -64,7 +66,7 @@ class SyncService {
 
     if (response == true) return const _PushResult.accepted();
 
-    final rows = await client!
+    final rows = await client
         .from('user_state')
         .select('key,value,updated_at')
         .eq('user_id', userId)
@@ -72,15 +74,16 @@ class SyncService {
         .limit(1);
     if (rows.isEmpty) return const _PushResult.rejected();
     final row = Map<String, dynamic>.from(rows.first);
-    return _PushResult.rejected(
+    return _PushResult.rejectedWithRemote(
       remoteValue: row['value'],
       remoteUpdatedAt: row['updated_at'] as String?,
     );
   }
 
   Future<void> _pullRemote() async {
-    final userId = client!.auth.currentUser!.id;
-    final rows = await client!
+    final client = auth.client!;
+    final userId = client.auth.currentUser!.id;
+    final rows = await client
         .from('user_state')
         .select('key,value,updated_at')
         .eq('user_id', userId);
@@ -105,7 +108,8 @@ class SyncService {
 class _PushResult {
   const _PushResult({required this.accepted, this.remoteValue, this.remoteUpdatedAt});
   const _PushResult.accepted() : this(accepted: true);
-  const _PushResult.rejected({Object? remoteValue, String? remoteUpdatedAt})
+  const _PushResult.rejected() : this(accepted: false);
+  const _PushResult.rejectedWithRemote({required dynamic remoteValue, required String? remoteUpdatedAt})
       : this(accepted: false, remoteValue: remoteValue, remoteUpdatedAt: remoteUpdatedAt);
 
   final bool accepted;
