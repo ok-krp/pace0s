@@ -1,20 +1,33 @@
-import 'package:flutter/services.dart';
+import 'package:health/health.dart';
 
 import 'health_adapter.dart';
 
-/// Common Flutter-facing health adapter. Platform code is responsible for the
-/// actual Health Connect / HealthKit calls; unsupported platforms report an
-/// explicit unavailable state rather than returning synthetic samples.
+/// Real cross-platform health implementation backed by Health Connect on
+/// Android and HealthKit on iOS/iPadOS. Unsupported desktop platforms return
+/// an explicit unavailable state and never fabricate samples.
 class NativeHealthAdapter implements HealthAdapter {
-  const NativeHealthAdapter();
+  NativeHealthAdapter() : _health = Health();
 
-  static const MethodChannel _channel = MethodChannel('pace/health');
+  final Health _health;
+  static const _types = <HealthDataType>[
+    HealthDataType.STEPS,
+    HealthDataType.ACTIVE_ENERGY_BURNED,
+    HealthDataType.HEART_RATE,
+    HealthDataType.SLEEP_ASLEEP,
+    HealthDataType.WEIGHT,
+    HealthDataType.WORKOUT,
+  ];
+
+  Future<void> _configure() => _health.configure();
 
   @override
   Future<bool> isAvailable() async {
     try {
-      return await _channel.invokeMethod<bool>('isAvailable') ?? false;
-    } on PlatformException {
+      await _configure();
+      final status = await _health.getHealthConnectSdkStatus();
+      if (status != null) return status == HealthConnectSdkStatus.sdkAvailable;
+      return _health.platformType == HealthPlatformType.appleHealth;
+    } catch (_) {
       return false;
     }
   }
@@ -22,8 +35,12 @@ class NativeHealthAdapter implements HealthAdapter {
   @override
   Future<bool> requestPermissions() async {
     try {
-      return await _channel.invokeMethod<bool>('requestPermissions') ?? false;
-    } on PlatformException {
+      await _configure();
+      return await _health.requestAuthorization(
+        _types,
+        permissions: List<HealthDataAccess>.filled(_types.length, HealthDataAccess.READ),
+      );
+    } catch (_) {
       return false;
     }
   }
@@ -31,18 +48,26 @@ class NativeHealthAdapter implements HealthAdapter {
   @override
   Future<List<PaceHealthSample>> readRecent({Duration window = const Duration(days: 7)}) async {
     try {
-      final raw = await _channel.invokeMethod<List<dynamic>>('readRecent', {'days': window.inDays});
-      return (raw ?? const <dynamic>[]).whereType<Map>().map((item) {
-        final value = Map<String, dynamic>.from(item);
+      await _configure();
+      final end = DateTime.now();
+      final start = end.subtract(window);
+      final points = await _health.getHealthDataFromTypes(
+        types: _types,
+        startTime: start,
+        endTime: end,
+      );
+      final unique = _health.removeDuplicates(points);
+      return unique.where((point) => point.value is NumericHealthValue).map((point) {
+        final numeric = (point.value as NumericHealthValue).numericValue.toDouble();
         return PaceHealthSample(
-          type: value['type']?.toString() ?? 'unknown',
-          value: value['value'] is num ? (value['value'] as num).toDouble() : 0,
-          timestamp: DateTime.tryParse(value['timestamp']?.toString() ?? '') ?? DateTime.now(),
-          unit: value['unit']?.toString(),
-          source: value['source']?.toString(),
+          type: point.typeString.toLowerCase(),
+          value: numeric,
+          timestamp: point.dateTo.toLocal(),
+          unit: point.unitString,
+          source: point.sourceName,
         );
       }).toList();
-    } on PlatformException {
+    } catch (_) {
       return const <PaceHealthSample>[];
     }
   }
