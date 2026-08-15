@@ -3,8 +3,8 @@
  *
  * Each mutable domain has one canonical UI owner. Other surfaces may read the
  * domain or navigate to its owner, but must not maintain a second editor with
- * its own persistence logic. This is the architectural rule that prevents
- * stale shortcuts from overwriting newer values.
+ * its own persistence logic. This prevents stale shortcuts from overwriting
+ * newer values.
  */
 export const DOMAIN_OWNER = {
   sleep: "/sleep",
@@ -17,7 +17,6 @@ export const DOMAIN_OWNER = {
   finance: "/finance",
   calendar: "/calendar",
   notes: "/notes",
-  groceries: "/shopping",
   health: "/watch",
   settings: "/settings",
 } as const;
