@@ -1,0 +1,50 @@
+name: PaceOS Native Android Application
+
+on:
+  push:
+    branches: [application]
+    paths:
+      - "android/**"
+      - ".github/workflows/android-application.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: "8.11.1"
+
+      - name: Build native Android APK
+        run: gradle -p android :app:assembleDebug --no-daemon
+
+      - name: Verify APK
+        run: |
+          test -s android/app/build/outputs/apk/debug/app-debug.apk
+          file android/app/build/outputs/apk/debug/app-debug.apk
+          unzip -t android/app/build/outputs/apk/debug/app-debug.apk >/dev/null
+
+      - name: Publish latest native APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-application-latest --yes --cleanup-tag || true
+          gh release create android-application-latest \
+            android/app/build/outputs/apk/debug/app-debug.apk#PaceOS-Android.apk \
+            --title "PaceOS Android — latest" \
+            --notes "Latest native Android build from the application branch. This is the real PaceOS Android application, not the website/PWA." \
+            --target "${GITHUB_SHA}"
