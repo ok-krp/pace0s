@@ -56,13 +56,7 @@ function SettingsPage() {
   }, []);
 
   const downloadNativeAndroidApp = () => {
-    const a = document.createElement("a");
-    a.href = NATIVE_ANDROID_APK_URL;
-    a.download = "PaceOS-Android.apk";
-    a.rel = "noopener";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    window.open(NATIVE_ANDROID_APK_URL, "_blank", "noopener,noreferrer");
     toast.success("Téléchargement de l'application Android Pace lancé.");
   };
 
