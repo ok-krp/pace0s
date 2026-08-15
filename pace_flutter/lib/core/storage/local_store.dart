@@ -4,8 +4,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// Small transactional JSON store used only as the first migration primitive.
-/// It deliberately has no dependency on the web application or a remote URL.
+/// Durable local state used by the native app. It is independent from the web
+/// application and is safe to use while completely offline.
 class LocalStore {
   LocalStore._(this._file);
 
@@ -21,7 +21,6 @@ class LocalStore {
         final decoded = jsonDecode(await file.readAsString());
         if (decoded is Map<String, dynamic>) store._data = decoded;
       } catch (_) {
-        // Corrupt local state must never prevent the native UI from starting.
         store._data = <String, dynamic>{};
       }
     }
@@ -30,20 +29,57 @@ class LocalStore {
 
   dynamic read(String key) => _data[key];
 
-  Future<void> write(String key, dynamic value) async {
+  Future<void> write(String key, dynamic value, {bool enqueueSync = true}) async {
     _data[key] = value;
+    if (enqueueSync) {
+      final outbox = _outbox;
+      outbox.add({
+        'key': key,
+        'value': value,
+        'operation': 'upsert',
+        'queuedAt': DateTime.now().toUtc().toIso8601String(),
+      });
+      _data['__outbox'] = outbox;
+    }
     await _flush();
   }
 
-  Future<void> remove(String key) async {
+  Future<void> remove(String key, {bool enqueueSync = true}) async {
     _data.remove(key);
+    if (enqueueSync) {
+      final outbox = _outbox;
+      outbox.add({
+        'key': key,
+        'operation': 'delete',
+        'queuedAt': DateTime.now().toUtc().toIso8601String(),
+      });
+      _data['__outbox'] = outbox;
+    }
     await _flush();
+  }
+
+  List<Map<String, dynamic>> get _outbox => ((_data['__outbox'] as List?) ?? const [])
+      .whereType<Map>()
+      .map((entry) => Map<String, dynamic>.from(entry))
+      .toList();
+
+  List<Map<String, dynamic>> pendingOperations() => List.unmodifiable(_outbox);
+
+  Future<void> acknowledgeOperation(Map<String, dynamic> operation) async {
+    final outbox = _outbox;
+    final index = outbox.indexOf(operation);
+    if (index >= 0) {
+      outbox.removeAt(index);
+      _data['__outbox'] = outbox;
+      await _flush();
+    }
   }
 
   Future<void> _flush() async {
     await _file.parent.create(recursive: true);
     final temporary = File('${_file.path}.tmp');
     await temporary.writeAsString(jsonEncode(_data), flush: true);
+    if (await _file.exists()) await _file.delete();
     await temporary.rename(_file.path);
   }
 }
