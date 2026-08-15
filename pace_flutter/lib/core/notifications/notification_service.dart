@@ -22,7 +22,7 @@ class PaceNotificationService {
       guid: '7d3f7f6d-2f0f-4db5-9d66-0f7dbe4a9d12',
     );
     await _plugin.initialize(
-      settings: const InitializationSettings(
+      settings: InitializationSettings(
         android: android,
         iOS: darwin,
         macOS: darwin,
