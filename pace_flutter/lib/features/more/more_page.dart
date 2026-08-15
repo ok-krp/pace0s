@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/notifications/notification_service.dart';
 import '../../core/storage/local_store.dart';
 import '../../core/supabase/pace_supabase.dart';
 import '../../core/sync/sync_service.dart';
@@ -120,6 +121,15 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   }
 
   Future<void> _setNotification(bool value) async {
+    if (value) {
+      final granted = await PaceNotificationService.instance.requestPermissions();
+      if (!granted) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Autorisation de notifications refusée.')));
+        return;
+      }
+    } else {
+      await PaceNotificationService.instance.cancelAll();
+    }
     setState(() => _notifications = value);
     await widget.localStore.write('pace.settings.notifications', value);
     await widget.sync.syncNow();
