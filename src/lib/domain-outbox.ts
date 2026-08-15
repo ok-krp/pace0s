@@ -34,14 +34,15 @@ function write<T>(entries: DomainOutboxEntry<T>[]) {
 
 export function enqueueDomainWrite<T>(domain: string, value: T) {
   const entries = read<T>();
-  const entry: DomainOutboxEntry<T> = {
-    id: id(),
-    domain,
-    value,
-    createdAt: new Date().toISOString(),
-    attempts: 0,
-  };
-  write([...entries, entry]);
+  const now = new Date().toISOString();
+  const pending = entries.find((entry) => entry.domain === domain);
+  const entry: DomainOutboxEntry<T> = pending
+    ? { ...pending, value, createdAt: now, attempts: 0 }
+    : { id: id(), domain, value, createdAt: now, attempts: 0 };
+  const next = pending
+    ? entries.map((item) => item.id === pending.id ? entry : item)
+    : [...entries, entry];
+  write(next);
   return entry;
 }
 
