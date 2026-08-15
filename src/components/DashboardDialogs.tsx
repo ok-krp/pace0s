@@ -135,11 +135,12 @@ function SleepQuickForm({ onDone }: { onDone: () => void }) {
   const current = sleep[today];
   const [start, setStart] = useState(current?.start ?? "23:30");
   const [end, setEnd] = useState(current?.end ?? "07:00");
-  const [h, setH] = useState<number | null>(current?.hours ?? null);
+  const [h, setH] = useState<number | null>(null);
   const [quality, setQuality] = useState<number | null>(current?.quality ?? null);
   const diffHours = (a: string, b: string) => { const [ah, am] = a.split(":").map(Number); const [bh, bm] = b.split(":").map(Number); let from = ah + am / 60; let to = bh + bm / 60; if (to < from) to += 24; return Math.max(0, to - from); };
   const save = () => {
-    const calculated = diffHours(start, end); const v = h ?? calculated;
+    const calculated = diffHours(start, end);
+    const v = h === null ? calculated : h;
     if (v < 0 || v > 24) { toast.error("Heures invalides"); return; }
     if (quality !== null && (quality < 1 || quality > 10)) { toast.error("Qualité invalide"); return; }
     setSleep((p) => ({ ...p, [today]: { ...p[today], start, end, hours: v, ...(quality !== null ? { quality } : {}) } }));
