@@ -1,12 +1,10 @@
-import 'dart:async';
-
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../storage/local_store.dart';
 
-/// Replays local mutations when a Supabase session is available. The local
-/// store remains authoritative while offline; acknowledged mutations are
-/// removed from the outbox only after the remote write succeeds.
+/// Replays local mutations through Pace's existing user_state RPC. The local
+/// store remains authoritative while offline; queued mutations are removed
+/// only after the remote operation is accepted.
 class SyncService {
   SyncService({required this.localStore, required this.client});
 
@@ -20,10 +18,13 @@ class SyncService {
     try {
       for (final operation in List<Map<String, dynamic>>.from(localStore.pendingOperations())) {
         try {
-          await _push(operation);
-          await localStore.acknowledgeOperation(operation);
+          final accepted = await _push(operation);
+          if (accepted) {
+            await localStore.acknowledgeOperation(operation);
+          } else {
+            break;
+          }
         } catch (_) {
-          // Keep the operation queued. A later reconnect/retry will replay it.
           break;
         }
       }
@@ -32,22 +33,22 @@ class SyncService {
     }
   }
 
-  Future<void> _push(Map<String, dynamic> operation) async {
+  Future<bool> _push(Map<String, dynamic> operation) async {
     final userId = client!.auth.currentUser!.id;
     final key = operation['key'] as String;
-    final payload = <String, dynamic>{
-      'user_id': userId,
-      'key': key,
-      'value': operation['value'],
-      'operation': operation['operation'],
-      'queued_at': operation['queuedAt'],
-    };
+    final updatedAt = (operation['queuedAt'] as String?) ?? DateTime.now().toUtc().toIso8601String();
+    final value = operation['operation'] == 'delete' ? null : operation['value'];
 
-    // The native migration writes through the same generic synchronization
-    // contract used by Pace's existing cloud sync layer.
-    await client!.from('pace_sync_queue').upsert(
-      payload,
-      onConflict: 'user_id,key',
-    );
+    final response = await client!.rpc('upsert_user_state_if_newer', params: {
+      'p_user_id': userId,
+      'p_key': key,
+      'p_value': value,
+      'p_updated_at': updatedAt,
+      'p_updated_by': 'flutter-native',
+    });
+
+    // The existing web sync contract returns true when this mutation wins and
+    // false when the server already contains a newer version.
+    return response == true;
   }
 }
