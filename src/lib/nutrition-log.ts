@@ -1,4 +1,5 @@
 import { todayKey } from "@/lib/storage";
+import { readDomain, writeDomain } from "@/lib/domain-store";
 
 export type NutritionItem = {
   id: string;
@@ -21,9 +22,14 @@ export type NutritionItem = {
 
 const KEY_ITEMS = "pace.nutrition.items";
 const KEY_TOTALS = "pace.nutrition.totals";
+const DOMAIN_ITEMS = "nutrition.items";
+const DOMAIN_TOTALS = "nutrition.totals";
 
-export function recomputeNutritionTotals(items: Record<string, NutritionItem[]>): Record<string, { kcal: number; p: number; c: number; f: number }> {
-  const totals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
+type NutritionTotals = Record<string, { kcal: number; p: number; c: number; f: number }>;
+type NutritionMap = Record<string, NutritionItem[]>;
+
+export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
+  const totals: NutritionTotals = {};
   for (const [day, list] of Object.entries(items)) {
     totals[day] = list.reduce((a, x) => ({
       kcal: a.kcal + Number(x.kcal || 0),
@@ -35,19 +41,27 @@ export function recomputeNutritionTotals(items: Record<string, NutritionItem[]>)
   return totals;
 }
 
-/** Repair stale derived totals without touching the source nutrition items. */
-export function repairNutritionTotals(): void {
-  if (typeof window === "undefined") return;
+function readNutritionItems(): NutritionMap {
+  const record = readDomain<NutritionMap>(DOMAIN_ITEMS, {});
+  if (Object.keys(record.value).length > 0) return record.value;
   try {
     const raw = localStorage.getItem(KEY_ITEMS);
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return;
-    const totals = recomputeNutritionTotals(parsed as Record<string, NutritionItem[]>);
-    localStorage.setItem(KEY_TOTALS, JSON.stringify(totals));
-  } catch {
-    // Source items remain untouched if the cache is malformed.
-  }
+    return raw ? JSON.parse(raw) as NutritionMap : {};
+  } catch { return {}; }
+}
+
+/** Repair derived totals without changing the source nutrition items. */
+export function repairNutritionTotals(): void {
+  if (typeof window === "undefined") return;
+  const items = readNutritionItems();
+  if (!Object.keys(items).length) return;
+  writeDomain(DOMAIN_ITEMS, items);
+  writeDomain(DOMAIN_TOTALS, recomputeNutritionTotals(items));
+  // Keep the legacy keys during the migration for old screens and recovery.
+  try {
+    localStorage.setItem(KEY_ITEMS, JSON.stringify(items));
+    localStorage.setItem(KEY_TOTALS, JSON.stringify(recomputeNutritionTotals(items)));
+  } catch {}
 }
 
 repairNutritionTotals();
@@ -55,11 +69,16 @@ repairNutritionTotals();
 export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }) {
   const today = todayKey();
   const it: NutritionItem = { id: crypto.randomUUID(), qty: 1, ...item };
-  const itemsRaw = localStorage.getItem(KEY_ITEMS);
-  const items = itemsRaw ? JSON.parse(itemsRaw) : {};
+  const items = readNutritionItems();
   const list: NutritionItem[] = [...(items[today] ?? []), it];
-  items[today] = list;
-  localStorage.setItem(KEY_ITEMS, JSON.stringify(items));
-  localStorage.setItem(KEY_TOTALS, JSON.stringify(recomputeNutritionTotals(items)));
+  const nextItems = { ...items, [today]: list };
+  const totals = recomputeNutritionTotals(nextItems);
+
+  writeDomain(DOMAIN_ITEMS, nextItems);
+  writeDomain(DOMAIN_TOTALS, totals);
+  try {
+    localStorage.setItem(KEY_ITEMS, JSON.stringify(nextItems));
+    localStorage.setItem(KEY_TOTALS, JSON.stringify(totals));
+  } catch {}
   window.dispatchEvent(new Event("pace.nutrition.changed"));
 }
