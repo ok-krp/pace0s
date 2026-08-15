@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import 'app/pace_app.dart';
+import 'core/storage/local_store.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const PaceApp());
+  final localStore = await LocalStore.open();
+  runApp(PaceApp(localStore: localStore));
 }
