@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../core/storage/local_store.dart';
 import '../../ui/pace_theme.dart';
 
 class DashboardPage extends StatelessWidget {
-  const DashboardPage({super.key});
+  const DashboardPage({super.key, required this.localStore});
+
+  final LocalStore localStore;
 
   @override
   Widget build(BuildContext context) {
@@ -21,6 +24,8 @@ class DashboardPage extends StatelessWidget {
         const PaceGlassCard(child: _MetricRow(label: 'Calories', value: '—')),
         const SizedBox(height: 12),
         const PaceGlassCard(child: _MetricRow(label: 'Habitudes', value: '0/0')),
+        const SizedBox(height: 20),
+        Text('Mode hors connexion actif', style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }
