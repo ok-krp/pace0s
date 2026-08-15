@@ -29,10 +29,13 @@ class LocalStore {
 
   dynamic read(String key) => _data[key];
 
+  String? lastSyncedAt(String key) => (_syncMeta[key] as Map?)?[key] as String?;
+
   Future<void> write(String key, dynamic value, {bool enqueueSync = true}) async {
     _data[key] = value;
     if (enqueueSync) {
       final outbox = _outbox;
+      outbox.removeWhere((entry) => entry['key'] == key);
       outbox.add({
         'key': key,
         'value': value,
@@ -48,6 +51,7 @@ class LocalStore {
     _data.remove(key);
     if (enqueueSync) {
       final outbox = _outbox;
+      outbox.removeWhere((entry) => entry['key'] == key);
       outbox.add({
         'key': key,
         'operation': 'delete',
@@ -56,6 +60,26 @@ class LocalStore {
       _data['__outbox'] = outbox;
     }
     await _flush();
+  }
+
+  Future<void> applyRemote(String key, dynamic value, String updatedAt) async {
+    _data[key] = value;
+    _setSyncedAt(key, updatedAt);
+    await _flush();
+  }
+
+  Map<String, String> syncedMetadata() => Map<String, String>.from(_syncMeta);
+
+  Map<String, dynamic> get _syncMeta {
+    final raw = _data['__sync_meta'];
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return <String, dynamic>{};
+  }
+
+  void _setSyncedAt(String key, String timestamp) {
+    final meta = _syncMeta;
+    meta[key] = timestamp;
+    _data['__sync_meta'] = meta;
   }
 
   List<Map<String, dynamic>> get _outbox => ((_data['__outbox'] as List?) ?? const [])
@@ -67,12 +91,9 @@ class LocalStore {
 
   Future<void> acknowledgeOperation(Map<String, dynamic> operation) async {
     final outbox = _outbox;
-    final index = outbox.indexOf(operation);
-    if (index >= 0) {
-      outbox.removeAt(index);
-      _data['__outbox'] = outbox;
-      await _flush();
-    }
+    outbox.removeWhere((entry) => entry['key'] == operation['key']);
+    _data['__outbox'] = outbox;
+    await _flush();
   }
 
   Future<void> _flush() async {
