@@ -14,6 +14,7 @@ import { applyWallpaper, readWallpaperChoice } from "@/hooks/use-wallpaper";
 import { useGlassPointer } from "@/hooks/use-glass-pointer";
 import { applyGlassQuality } from "@/hooks/use-glass-quality";
 import { initHealthConnectBridge, requestHealthConnectSync } from "@/lib/health-connect-bridge";
+import { initPwaInstallPrompt } from "@/lib/pwa-install";
 
 function NotFoundComponent() {
   return <div className="flex min-h-screen items-center justify-center bg-background px-4"><div className="max-w-md text-center"><h1 className="font-display text-7xl font-semibold tracking-tight">404</h1><p className="mt-2 text-muted-foreground">Cette page n'existe pas.</p><Link to="/" className="mt-6 inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Retour au dashboard</Link></div></div>;
@@ -61,6 +62,10 @@ function AuthGate() {
 
   useEffect(() => {
     applyGlassQuality("balanced"); applyWallpaper(readWallpaperChoice());
+    initPwaInstallPrompt();
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error) => console.warn("Pace PWA service worker registration failed", error));
+    }
     const obs = new MutationObserver(() => applyWallpaper(readWallpaperChoice())); obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => obs.disconnect();
   }, []);
