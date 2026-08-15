@@ -94,6 +94,6 @@ class AiMemoryItem {
         id: json['id']?.toString() ?? '',
         text: json['text']?.toString() ?? '',
         createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
-        updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
+        updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toLocal(),
       );
 }
