@@ -5,6 +5,7 @@ import '../../core/supabase/pace_supabase.dart';
 import '../calendar/calendar_page.dart';
 import '../notes/notes_page.dart';
 import '../routine/routine_page.dart';
+import '../shopping/shopping_page.dart';
 
 class MorePage extends StatelessWidget {
   const MorePage({super.key, required this.localStore, required this.auth});
@@ -17,6 +18,7 @@ class MorePage extends StatelessWidget {
       _Entry('Habitudes', Icons.check_circle_outline, () => Navigator.push(context, MaterialPageRoute(builder: (_) => RoutinePage(localStore: localStore)))),
       _Entry('Calendrier', Icons.calendar_month_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => CalendarPage(localStore: localStore)))),
       _Entry('Notes', Icons.note_alt_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => NotesPage(localStore: localStore)))),
+      _Entry('Courses', Icons.shopping_cart_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => ShoppingPage(localStore: localStore)))),
       _Entry('Watch & Santé', Icons.watch_outlined, () => _showNativeStatus(context, 'Les adaptateurs natifs sont conservés séparément pour chaque plateforme.')),
       _Entry('IA', Icons.auto_awesome_outlined, () => _showNativeStatus(context, 'Le service IA utilisera les données locales et Supabase, sans WebView.')),
       _Entry('Paramètres', Icons.settings_outlined, () => _showSettings(context)),
