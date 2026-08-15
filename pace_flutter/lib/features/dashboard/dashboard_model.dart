@@ -1,9 +1,5 @@
 class DashboardGoals {
-  const DashboardGoals({
-    required this.kcal,
-    required this.waterMl,
-    this.weightGoalKg,
-  });
+  const DashboardGoals({required this.kcal, required this.waterMl, this.weightGoalKg});
 
   final double kcal;
   final double waterMl;
@@ -41,6 +37,8 @@ class DashboardSnapshot {
     required this.sleepByDay,
     required this.waterByDay,
     required this.kcalByDay,
+    required this.focusByDay,
+    required this.routineDoneByDay,
     required this.weightByDay,
   });
 
@@ -61,18 +59,19 @@ class DashboardSnapshot {
   final Map<String, double> sleepByDay;
   final Map<String, double> waterByDay;
   final Map<String, double> kcalByDay;
+  final Map<String, double> focusByDay;
+  final Map<String, int> routineDoneByDay;
   final Map<String, double> weightByDay;
 
-  double get routineRatio => routineTotal == 0 ? 0 : routineDone / routineTotal;
+  double _ratio(double value, double target) => target <= 0 ? 0 : (value / target).clamp(0, 1);
 
   int scoreFor(String day) {
-    final sleepValue = sleepByDay[day] ?? 0;
-    final waterValue = waterByDay[day] ?? 0;
-    final kcalValue = kcalByDay[day] ?? 0;
-    return ((sleepValue / 8).clamp(0, 1) * 20 +
-            (waterValue / goals.waterMl).clamp(0, 1) * 15 +
-            (kcalValue / goals.kcal).clamp(0, 1) * 15 +
-            (day == today ? routineRatio : 0) * 30)
+    final routineTotalSafe = routineTotal == 0 ? 1 : routineTotal;
+    return (_ratio(sleepByDay[day] ?? 0, 8) * 20 +
+            _ratio(waterByDay[day] ?? 0, goals.waterMl) * 15 +
+            _ratio(kcalByDay[day] ?? 0, goals.kcal) * 15 +
+            ((routineDoneByDay[day] ?? 0) / routineTotalSafe) * 30 +
+            _ratio(focusByDay[day] ?? 0, 240) * 20)
         .round();
   }
 }
@@ -98,4 +97,9 @@ String frenchDateLabel(DateTime date) {
 Map<String, double> numberDayMap(dynamic value) {
   if (value is! Map) return <String, double>{};
   return value.map<String, double>((key, item) => MapEntry(key.toString(), item is num ? item.toDouble() : 0));
+}
+
+Map<String, int> integerListLengthMap(dynamic value) {
+  if (value is! Map) return <String, int>{};
+  return value.map<String, int>((key, item) => MapEntry(key.toString(), item is List ? item.length : item is num ? item.toInt() : 0));
 }
