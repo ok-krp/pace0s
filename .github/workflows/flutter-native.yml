@@ -21,7 +21,23 @@ jobs:
           cache: true
       - name: Generate Flutter Android host
         working-directory: pace_flutter
-        run: flutter create --platforms=android --project-name pace .
+        run: flutter create --platforms=android --org com.paceos --project-name pace .
+      - name: Configure Health Connect permissions
+        working-directory: pace_flutter
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          text = p.read_text()
+          permissions = '''\n    <uses-permission android:name="android.permission.health.READ_STEPS" />\n    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />\n    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />\n    <uses-permission android:name="android.permission.health.READ_SLEEP" />\n    <uses-permission android:name="android.permission.health.READ_WEIGHT" />\n    <uses-permission android:name="android.permission.health.READ_EXERCISE" />\n    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />\n'''
+          if 'android.permission.health.READ_STEPS' not in text:
+              text = text.replace('<application', permissions + '    <application', 1)
+          queries = '''\n    <queries><package android:name="com.google.android.apps.healthdata" /></queries>\n'''
+          if '<queries>' not in text:
+              text = text.replace('</manifest>', queries + '</manifest>')
+          p.write_text(text)
+          PY
       - name: Get dependencies
         working-directory: pace_flutter
         run: flutter pub get
@@ -53,7 +69,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
       - name: Generate Flutter Linux host
         working-directory: pace_flutter
-        run: flutter create --platforms=linux --project-name pace .
+        run: flutter create --platforms=linux --org com.paceos --project-name pace .
       - name: Get dependencies
         working-directory: pace_flutter
         run: flutter pub get
@@ -83,7 +99,7 @@ jobs:
           cache: true
       - name: Generate Flutter Windows host
         working-directory: pace_flutter
-        run: flutter create --platforms=windows --project-name pace .
+        run: flutter create --platforms=windows --org com.paceos --project-name pace .
       - name: Get dependencies
         working-directory: pace_flutter
         run: flutter pub get
@@ -113,7 +129,17 @@ jobs:
           cache: true
       - name: Generate Flutter Apple hosts
         working-directory: pace_flutter
-        run: flutter create --platforms=ios,macos --project-name pace .
+        run: flutter create --platforms=ios,macos --org com.paceos --project-name pace .
+      - name: Configure HealthKit usage descriptions
+        working-directory: pace_flutter
+        run: |
+          /usr/libexec/PlistBuddy -c "Add :NSHealthShareUsageDescription string Pace utilise vos données de santé pour afficher vos tendances." ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthShareUsageDescription Pace utilise vos données de santé pour afficher vos tendances." ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSHealthUpdateUsageDescription string Pace utilise vos données de santé pour synchroniser les données autorisées." ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthUpdateUsageDescription Pace utilise vos données de santé pour synchroniser les données autorisées." ios/Runner/Info.plist
+          cat > ios/Runner/Runner.entitlements <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict><key>com.apple.developer.healthkit</key><true/></dict></plist>
+          EOF
       - name: Get dependencies
         working-directory: pace_flutter
         run: flutter pub get
