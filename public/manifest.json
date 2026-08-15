@@ -1,8 +1,11 @@
 {
+  "id": "/",
   "name": "Pace",
   "short_name": "Pace",
   "description": "Pace — votre rythme de vie premium : nutrition, sport, sommeil, finances.",
+  "lang": "fr-FR",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#fff7ed",
   "theme_color": "#f8fafc",
