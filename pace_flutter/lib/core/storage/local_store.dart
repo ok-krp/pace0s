@@ -29,7 +29,7 @@ class LocalStore {
 
   dynamic read(String key) => _data[key];
 
-  String? lastSyncedAt(String key) => (_syncMeta[key] as Map?)?[key] as String?;
+  String? lastSyncedAt(String key) => _syncMeta[key] as String?;
 
   Future<void> write(String key, dynamic value, {bool enqueueSync = true}) async {
     _data[key] = value;
