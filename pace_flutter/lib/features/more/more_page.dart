@@ -4,6 +4,7 @@ import '../../core/storage/local_store.dart';
 import '../../core/supabase/pace_supabase.dart';
 import '../../core/sync/sync_service.dart';
 import '../ai/ai_page.dart';
+import '../ai/ai_service.dart';
 import '../calendar/calendar_page.dart';
 import '../health/health_page.dart';
 import '../notes/notes_page.dart';
@@ -76,6 +77,7 @@ class MorePage extends StatelessWidget {
         MaterialPageRoute(
           builder: (_) => SettingsPageBridge(
             auth: auth,
+            sync: sync,
             localStore: localStore,
             themeMode: themeMode,
             onThemeChanged: onThemeChanged,
@@ -88,11 +90,13 @@ class SettingsPageBridge extends StatefulWidget {
   const SettingsPageBridge({
     super.key,
     required this.auth,
+    required this.sync,
     required this.localStore,
     required this.themeMode,
     required this.onThemeChanged,
   });
   final PaceAuthService auth;
+  final SyncService sync;
   final LocalStore localStore;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeChanged;
@@ -102,6 +106,7 @@ class SettingsPageBridge extends StatefulWidget {
 }
 
 class _SettingsPageBridgeState extends State<SettingsPageBridge> {
+  late final PaceAiService _ai = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
   late bool _aiConfirmations;
   late bool _notifications;
   late bool _memory;
@@ -109,14 +114,15 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   @override
   void initState() {
     super.initState();
-    _aiConfirmations = widget.localStore.read('pace.settings.ai.confirm_actions') as bool? ?? true;
+    _aiConfirmations = _ai.confirmActions;
     _notifications = widget.localStore.read('pace.settings.notifications') as bool? ?? true;
-    _memory = widget.localStore.read('pace.settings.ai.memory') as bool? ?? true;
+    _memory = _ai.memoryEnabled;
   }
 
-  Future<void> _setBool(String key, bool value, void Function() update) async {
-    update();
-    await widget.localStore.write(key, value);
+  Future<void> _setNotification(bool value) async {
+    setState(() => _notifications = value);
+    await widget.localStore.write('pace.settings.notifications', value);
+    await widget.sync.syncNow();
   }
 
   String _themeLabel(ThemeMode mode) {
@@ -167,20 +173,26 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 title: const Text('Confirmation des actions IA'),
                 subtitle: const Text('Demander une confirmation avant une action importante ou destructive.'),
                 value: _aiConfirmations,
-                onChanged: (value) => _setBool('pace.settings.ai.confirm_actions', value, () => setState(() => _aiConfirmations = value)),
+                onChanged: (value) async {
+                  setState(() => _aiConfirmations = value);
+                  await _ai.setConfirmActions(value);
+                },
               ),
               SwitchListTile.adaptive(
                 title: const Text('Mémoire IA'),
                 subtitle: const Text('Autoriser la mémoire persistante contrôlable par l’utilisateur.'),
                 value: _memory,
-                onChanged: (value) => _setBool('pace.settings.ai.memory', value, () => setState(() => _memory = value)),
+                onChanged: (value) async {
+                  await _ai.setMemoryEnabled(value);
+                  setState(() => _memory = value);
+                },
               ),
             ]),
             _section('Notifications', [
               SwitchListTile.adaptive(
                 title: const Text('Notifications Pace'),
                 value: _notifications,
-                onChanged: (value) => _setBool('pace.settings.notifications', value, () => setState(() => _notifications = value)),
+                onChanged: _setNotification,
               ),
             ]),
             _section('Données & synchronisation', [
