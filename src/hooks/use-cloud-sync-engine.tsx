@@ -6,7 +6,6 @@ import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 
 const PACE_PREFIX = "pace.";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
-const DEBOUNCE_MS = 1000;
 const POLL_MS = 15000;
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
@@ -43,37 +42,69 @@ function isEmptyValue(value: unknown) {
   return false;
 }
 
-/** Automatic cross-device sync with an offline mutation queue plus legacy-key recovery. */
+/**
+ * Automatic cross-device sync with a durable offline mutation queue.
+ *
+ * Important: local writes are queued SYNCHRONOUSLY before any network request.
+ * A successful write is attempted immediately (no debounce), so changes are
+ * persisted as soon as they happen. If the request fails/offline, the durable
+ * queue remains and is flushed when connectivity returns.
+ */
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
-  const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const running = useRef(false);
+  const keyWrites = useRef<Record<string, Promise<void>>>({});
 
   useEffect(() => {
     if (typeof window === "undefined" || !user) return;
     try { if (!isLegalCategoryAllowed("sync_cloud")) return; } catch { return; }
     let cancelled = false;
 
-    const pushKey = async (key: string) => {
+    const pushKeyNow = async (key: string) => {
       if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
-      if (!navigator.onLine) { queueKey(key); setStatus("offline"); return; }
-      let value: unknown;
-      try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { return; }
-      const updatedAt = new Date().toISOString();
-      markLocal(key, updatedAt);
-      setStatus("syncing");
-      try {
-        const { error } = await supabase.from("user_state").upsert(
-          { user_id: user.id, key, value, updated_by: DEVICE_ID, updated_at: updatedAt } as never,
-          { onConflict: "user_id,key" },
-        );
+
+      // The queue is written BEFORE touching the network. A crash, tab close,
+      // process kill, or offline transition can therefore never silently lose
+      // the pending mutation.
+      queueKey(key);
+
+      const previous = keyWrites.current[key] ?? Promise.resolve();
+      const current = previous.then(async () => {
         if (cancelled) return;
-        if (error) { queueKey(key); setStatus("error"); return; }
-        unqueueKey(key);
-        localStorage.setItem("pace.__last_sync_at", updatedAt);
-        setStatus("ok");
-      } catch { queueKey(key); if (!cancelled) setStatus("error"); }
+        if (!navigator.onLine) { setStatus("offline"); return; }
+
+        let value: unknown;
+        try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch {
+          return;
+        }
+
+        const updatedAt = new Date().toISOString();
+        markLocal(key, updatedAt);
+        setStatus("syncing");
+
+        try {
+          const { error } = await supabase.from("user_state").upsert(
+            { user_id: user.id, key, value, updated_by: DEVICE_ID, updated_at: updatedAt } as never,
+            { onConflict: "user_id,key" },
+          );
+          if (cancelled) return;
+          if (error) {
+            // Keep the queue. Nothing is considered saved until Supabase ACKs.
+            setStatus("error");
+            return;
+          }
+          unqueueKey(key);
+          localStorage.setItem("pace.__last_sync_at", updatedAt);
+          setStatus("ok");
+        } catch {
+          // Keep the queue for retry after reconnect/startup.
+          if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
+        }
+      });
+
+      keyWrites.current[key] = current.catch(() => undefined);
+      await current;
     };
 
     const flushQueue = async () => {
@@ -81,7 +112,11 @@ export function useCloudSyncEngineInternal() {
       const queue = readQueue();
       if (!queue.length) return;
       running.current = true;
-      try { for (const key of queue) await pushKey(key); } finally { running.current = false; }
+      try {
+        for (const key of queue) await pushKeyNow(key);
+      } finally {
+        running.current = false;
+      }
     };
 
     const pull = async () => {
@@ -101,9 +136,6 @@ export function useCloudSyncEngineInternal() {
           const key = isLegacy ? `${PACE_PREFIX}${rawKey.slice(3)}` : rawKey;
           if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key) || queue.has(key)) continue;
 
-          // If the new key is absent/empty, recover the old cloud value even when its timestamp
-          // predates the current sync metadata. This specifically protects data from migrations
-          // that renamed keys before the old value had been copied correctly.
           const localRaw = localStorage.getItem(key);
           let localValue: unknown = null;
           try { if (localRaw !== null) localValue = JSON.parse(localRaw); } catch {}
@@ -140,9 +172,15 @@ export function useCloudSyncEngineInternal() {
 
     const offLocal = onLocalWrite((key) => {
       if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
+
+      // Critical durability rule: enqueue immediately, before any asynchronous
+      // operation. This makes every local edit recoverable even if the page dies.
+      queueKey(key);
       markLocal(key, new Date().toISOString());
-      clearTimeout(timers.current[key]);
-      timers.current[key] = setTimeout(() => pushKey(key), DEBOUNCE_MS);
+
+      // No debounce: changes are sent immediately. Per-key serialization prevents
+      // concurrent writes from arriving out of order.
+      void pushKeyNow(key);
     });
 
     const onOnline = () => { void syncNow(); };
@@ -157,7 +195,6 @@ export function useCloudSyncEngineInternal() {
       offLocal();
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
-      Object.values(timers.current).forEach(clearTimeout);
       window.clearInterval(interval);
     };
   }, [user]);
