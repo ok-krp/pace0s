@@ -1,0 +1,101 @@
+class DashboardGoals {
+  const DashboardGoals({
+    required this.kcal,
+    required this.waterMl,
+    this.weightGoalKg,
+  });
+
+  final double kcal;
+  final double waterMl;
+  final double? weightGoalKg;
+
+  factory DashboardGoals.fromDynamic(dynamic value) {
+    if (value is Map) {
+      double number(dynamic v, double fallback) => v is num ? v.toDouble() : fallback;
+      return DashboardGoals(
+        kcal: number(value['kcal'], 2300),
+        waterMl: number(value['waterMl'], 2500),
+        weightGoalKg: value['weightGoalKg'] is num ? (value['weightGoalKg'] as num).toDouble() : null,
+      );
+    }
+    return const DashboardGoals(kcal: 2300, waterMl: 2500);
+  }
+}
+
+class DashboardSnapshot {
+  const DashboardSnapshot({
+    required this.today,
+    required this.sleep,
+    required this.waterMl,
+    required this.kcal,
+    required this.protein,
+    required this.carbs,
+    required this.fat,
+    required this.routineDone,
+    required this.routineTotal,
+    required this.focusMinutes,
+    required this.weight,
+    required this.income,
+    required this.spend,
+    required this.goals,
+    required this.sleepByDay,
+    required this.waterByDay,
+    required this.kcalByDay,
+    required this.weightByDay,
+  });
+
+  final String today;
+  final double sleep;
+  final double waterMl;
+  final double kcal;
+  final double protein;
+  final double carbs;
+  final double fat;
+  final int routineDone;
+  final int routineTotal;
+  final double focusMinutes;
+  final double? weight;
+  final double income;
+  final double spend;
+  final DashboardGoals goals;
+  final Map<String, double> sleepByDay;
+  final Map<String, double> waterByDay;
+  final Map<String, double> kcalByDay;
+  final Map<String, double> weightByDay;
+
+  double get routineRatio => routineTotal == 0 ? 0 : routineDone / routineTotal;
+
+  int scoreFor(String day) {
+    final sleepValue = sleepByDay[day] ?? 0;
+    final waterValue = waterByDay[day] ?? 0;
+    final kcalValue = kcalByDay[day] ?? 0;
+    return ((sleepValue / 8).clamp(0, 1) * 20 +
+            (waterValue / goals.waterMl).clamp(0, 1) * 15 +
+            (kcalValue / goals.kcal).clamp(0, 1) * 15 +
+            (day == today ? routineRatio : 0) * 30)
+        .round();
+  }
+}
+
+String dateKey(DateTime date) {
+  final y = date.year.toString().padLeft(4, '0');
+  final m = date.month.toString().padLeft(2, '0');
+  final d = date.day.toString().padLeft(2, '0');
+  return '$y-$m-$d';
+}
+
+List<String> lastSevenDays([DateTime? from]) {
+  final today = from ?? DateTime.now();
+  return List.generate(7, (index) => dateKey(DateTime(today.year, today.month, today.day - (6 - index))));
+}
+
+String frenchDateLabel(DateTime date) {
+  const weekdays = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
+  const months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+  return '${weekdays[date.weekday - 1]} ${date.day} ${months[date.month - 1]}';
+}
+
+Map<String, double> numberDayMap(dynamic value) {
+  if (value is! Map) return <String, double>{};
+  return value.map<String, double>((key, item) => MapEntry(key.toString(), item is num ? item.toDouble() : 0));
+}
