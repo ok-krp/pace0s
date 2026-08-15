@@ -22,6 +22,9 @@ jobs:
       - name: Generate Flutter Android host
         working-directory: pace_flutter
         run: flutter create --platforms=android --org com.paceos --project-name pace .
+      - name: Remove generated Flutter sample test
+        working-directory: pace_flutter
+        run: rm -f test/widget_test.dart
       - name: Configure Android native services
         working-directory: pace_flutter
         shell: bash
@@ -63,6 +66,15 @@ jobs:
           name: pace-android-apk
           path: pace_flutter/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+      - name: Build AAB
+        working-directory: pace_flutter
+        run: flutter build appbundle --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-android-aab
+          path: pace_flutter/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
 
   linux:
     runs-on: ubuntu-latest
@@ -77,6 +89,9 @@ jobs:
       - name: Generate Flutter Linux host
         working-directory: pace_flutter
         run: flutter create --platforms=linux --org com.paceos --project-name pace .
+      - name: Remove generated Flutter sample test
+        working-directory: pace_flutter
+        run: rm -f test/widget_test.dart
       - name: Get dependencies
         working-directory: pace_flutter
         run: flutter pub get
@@ -107,6 +122,9 @@ jobs:
       - name: Generate Flutter Windows host
         working-directory: pace_flutter
         run: flutter create --platforms=windows --org com.paceos --project-name pace .
+      - name: Remove generated Flutter sample test
+        working-directory: pace_flutter
+        run: Remove-Item -Force test/widget_test.dart -ErrorAction SilentlyContinue
       - name: Get dependencies
         working-directory: pace_flutter
         run: flutter pub get
@@ -137,6 +155,9 @@ jobs:
       - name: Generate Flutter Apple hosts
         working-directory: pace_flutter
         run: flutter create --platforms=ios,macos --org com.paceos --project-name pace .
+      - name: Remove generated Flutter sample test
+        working-directory: pace_flutter
+        run: rm -f test/widget_test.dart
       - name: Configure HealthKit usage descriptions
         working-directory: pace_flutter
         run: |
