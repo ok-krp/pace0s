@@ -6,6 +6,7 @@ class NativeWatchAdapter implements WatchAdapter {
   const NativeWatchAdapter();
 
   static const MethodChannel _channel = MethodChannel('pace/watch');
+  static const EventChannel _events = EventChannel('pace/watch/events');
 
   @override
   Future<bool> isAvailable() async {
@@ -16,13 +17,40 @@ class NativeWatchAdapter implements WatchAdapter {
     }
   }
 
-  @override
   Future<bool> requestPermissions() async {
     try {
       return await _channel.invokeMethod<bool>('requestPermissions') ?? false;
     } on PlatformException {
       return false;
     }
+  }
+
+  @override
+  Future<void> startScan() async {
+    try {
+      await _channel.invokeMethod<void>('startScan');
+    } on PlatformException {}
+  }
+
+  @override
+  Future<void> stopScan() async {
+    try {
+      await _channel.invokeMethod<void>('stopScan');
+    } on PlatformException {}
+  }
+
+  @override
+  Future<void> connect(String deviceId) async {
+    try {
+      await _channel.invokeMethod<void>('connect', {'identifier': deviceId});
+    } on PlatformException {}
+  }
+
+  @override
+  Future<void> disconnect() async {
+    try {
+      await _channel.invokeMethod<void>('disconnect');
+    } on PlatformException {}
   }
 
   Future<List<Map<String, dynamic>>> scan() async {
@@ -34,14 +62,6 @@ class NativeWatchAdapter implements WatchAdapter {
     }
   }
 
-  Future<bool> connect(String identifier) async {
-    try {
-      return await _channel.invokeMethod<bool>('connect', {'identifier': identifier}) ?? false;
-    } on PlatformException {
-      return false;
-    }
-  }
-
   Future<Map<String, dynamic>?> status() async {
     try {
       final result = await _channel.invokeMethod<Map<dynamic, dynamic>>('status');
@@ -50,4 +70,15 @@ class NativeWatchAdapter implements WatchAdapter {
       return null;
     }
   }
+
+  @override
+  Stream<PaceWatchSample> get samples => _events.receiveBroadcastStream().where((value) => value is Map).map((value) {
+        final item = Map<String, dynamic>.from(value as Map);
+        return PaceWatchSample(
+          type: item['type']?.toString() ?? 'unknown',
+          value: item['value'] is num ? (item['value'] as num).toDouble() : 0,
+          timestamp: DateTime.tryParse(item['timestamp']?.toString() ?? '') ?? DateTime.now(),
+          unit: item['unit']?.toString(),
+        );
+      });
 }
