@@ -43,12 +43,9 @@ function isEmptyValue(value: unknown) {
 }
 
 /**
- * Automatic cross-device sync with a durable offline mutation queue.
- *
- * Important: local writes are queued SYNCHRONOUSLY before any network request.
- * A successful write is attempted immediately (no debounce), so changes are
- * persisted as soon as they happen. If the request fails/offline, the durable
- * queue remains and is flushed when connectivity returns.
+ * Cross-device sync with a durable key queue and server-side last-write-wins.
+ * The queue is populated synchronously before network I/O. Server writes use
+ * an atomic PostgreSQL function so a stale device cannot overwrite a newer row.
  */
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
@@ -63,10 +60,6 @@ export function useCloudSyncEngineInternal() {
 
     const pushKeyNow = async (key: string) => {
       if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
-
-      // The queue is written BEFORE touching the network. A crash, tab close,
-      // process kill, or offline transition can therefore never silently lose
-      // the pending mutation.
       queueKey(key);
 
       const previous = keyWrites.current[key] ?? Promise.resolve();
@@ -75,30 +68,42 @@ export function useCloudSyncEngineInternal() {
         if (!navigator.onLine) { setStatus("offline"); return; }
 
         let value: unknown;
-        try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch {
-          return;
-        }
-
+        try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { return; }
         const updatedAt = new Date().toISOString();
-        markLocal(key, updatedAt);
         setStatus("syncing");
 
         try {
-          const { error } = await supabase.from("user_state").upsert(
-            { user_id: user.id, key, value, updated_by: DEVICE_ID, updated_at: updatedAt } as never,
-            { onConflict: "user_id,key" },
-          );
+          const { data, error } = await (supabase.rpc as never)("upsert_user_state_if_newer", {
+            p_user_id: user.id,
+            p_key: key,
+            p_value: value,
+            p_updated_at: updatedAt,
+            p_updated_by: DEVICE_ID,
+          });
           if (cancelled) return;
           if (error) {
-            // Keep the queue. Nothing is considered saved until Supabase ACKs.
             setStatus("error");
             return;
           }
+
+          // true = our mutation won; false = the server already had a newer row.
+          // In the latter case, immediately pull the authoritative value instead
+          // of allowing this stale local state to remain marked as current.
+          if (data === false) {
+            const { data: rows } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", key).limit(1);
+            const row = rows?.[0] as SyncRow | undefined;
+            if (row) {
+              applyRemoteWrite(key, row.value);
+              markLocal(key, row.updated_at);
+            }
+          } else {
+            markLocal(key, updatedAt);
+            localStorage.setItem("pace.__last_sync_at", updatedAt);
+          }
+
           unqueueKey(key);
-          localStorage.setItem("pace.__last_sync_at", updatedAt);
           setStatus("ok");
         } catch {
-          // Keep the queue for retry after reconnect/startup.
           if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
         }
       });
@@ -112,11 +117,8 @@ export function useCloudSyncEngineInternal() {
       const queue = readQueue();
       if (!queue.length) return;
       running.current = true;
-      try {
-        for (const key of queue) await pushKeyNow(key);
-      } finally {
-        running.current = false;
-      }
+      try { for (const key of queue) await pushKeyNow(key); }
+      finally { running.current = false; }
     };
 
     const pull = async () => {
@@ -140,11 +142,6 @@ export function useCloudSyncEngineInternal() {
           let localValue: unknown = null;
           try { if (localRaw !== null) localValue = JSON.parse(localRaw); } catch {}
           const shouldRecoverLegacy = isLegacy && isEmptyValue(localValue) && !isEmptyValue(row.value);
-
-          if (row.updated_by === DEVICE_ID && !shouldRecoverLegacy) {
-            meta[key] = row.updated_at;
-            continue;
-          }
 
           const remoteTime = Date.parse(row.updated_at);
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
@@ -172,14 +169,7 @@ export function useCloudSyncEngineInternal() {
 
     const offLocal = onLocalWrite((key) => {
       if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
-
-      // Critical durability rule: enqueue immediately, before any asynchronous
-      // operation. This makes every local edit recoverable even if the page dies.
       queueKey(key);
-      markLocal(key, new Date().toISOString());
-
-      // No debounce: changes are sent immediately. Per-key serialization prevents
-      // concurrent writes from arriving out of order.
       void pushKeyNow(key);
     });
 
