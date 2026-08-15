@@ -171,6 +171,7 @@ class _PaceShellState extends State<PaceShell> {
       SleepPage(localStore: widget.localStore),
       MorePage(
         localStore: widget.localStore,
+        sync: widget.sync,
         auth: widget.auth,
         themeMode: widget.themeMode,
         onThemeChanged: widget.onThemeChanged,
