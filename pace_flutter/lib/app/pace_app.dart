@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/storage/local_store.dart';
 import '../core/supabase/pace_supabase.dart';
@@ -71,8 +72,6 @@ class _AuthGateState extends State<_AuthGate> {
 
   @override
   Widget build(BuildContext context) {
-    // If cloud configuration is unavailable, keep the native app usable
-    // offline. If it is configured, require the existing Pace account.
     if (!_configured || _signedIn) {
       return PaceShell(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
     }
