@@ -1,8 +1,5 @@
-import 'dart:async';
-
 import '../storage/local_store.dart';
 import '../supabase/pace_supabase.dart';
-import 'sync_contract.dart';
 
 class SyncService {
   SyncService({required this.localStore, required this.auth});
