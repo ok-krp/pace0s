@@ -11,6 +11,7 @@ import '../features/dashboard/dashboard_page.dart';
 import '../features/more/more_page.dart';
 import '../features/nutrition/nutrition_page.dart';
 import '../features/sleep/sleep_page.dart';
+import '../features/sport/sport_page.dart';
 import '../ui/pace_theme.dart';
 
 class PaceApp extends StatelessWidget {
@@ -67,9 +68,7 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   @override
-  Widget build(BuildContext context) => !_configured || _signedIn
-      ? PaceShell(localStore: widget.localStore, sync: widget.sync, auth: widget.auth)
-      : AuthPage(auth: widget.auth);
+  Widget build(BuildContext context) => !_configured || _signedIn ? PaceShell(localStore: widget.localStore, sync: widget.sync, auth: widget.auth) : AuthPage(auth: widget.auth);
 }
 
 class PaceShell extends StatefulWidget {
@@ -103,6 +102,7 @@ class _PaceShellState extends State<PaceShell> {
     final pages = <Widget>[
       DashboardPage(localStore: widget.localStore),
       NutritionPage(localStore: widget.localStore),
+      SportPage(localStore: widget.localStore),
       SleepPage(localStore: widget.localStore),
       MorePage(localStore: widget.localStore, auth: widget.auth),
     ];
@@ -114,6 +114,7 @@ class _PaceShellState extends State<PaceShell> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Accueil'),
           NavigationDestination(icon: Icon(Icons.restaurant_outlined), selectedIcon: Icon(Icons.restaurant), label: 'Nutrition'),
+          NavigationDestination(icon: Icon(Icons.fitness_center_outlined), selectedIcon: Icon(Icons.fitness_center), label: 'Sport'),
           NavigationDestination(icon: Icon(Icons.bedtime_outlined), selectedIcon: Icon(Icons.bedtime), label: 'Sommeil'),
           NavigationDestination(icon: Icon(Icons.apps_outlined), selectedIcon: Icon(Icons.apps), label: 'Plus'),
         ],
