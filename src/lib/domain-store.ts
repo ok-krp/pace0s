@@ -8,6 +8,7 @@ export type DomainRecord<T> = {
 };
 
 const WRITE_EVENT = "pace.domain.write";
+const LOCAL_WRITE_EVENT = "pace.local.write";
 const STORAGE_PREFIX = "pace.domain.";
 
 function storageKey(domain: string) {
@@ -59,6 +60,9 @@ export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
       // Keep the old key during the progressive migration as a recovery copy.
       localStorage.setItem(`pace.${domain}`, JSON.stringify(value));
       window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record } }));
+      // Reuse the existing cloud-sync event contract so domain writes are queued
+      // by the current sync engine instead of creating a second sync mechanism.
+      window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key: `pace.${domain}`, value } }));
     } catch {
       // The in-memory state remains usable; the sync layer can retry later.
     }
