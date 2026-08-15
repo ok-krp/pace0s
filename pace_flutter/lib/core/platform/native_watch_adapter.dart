@@ -29,28 +29,36 @@ class NativeWatchAdapter implements WatchAdapter {
   Future<void> startScan() async {
     try {
       await _channel.invokeMethod<void>('startScan');
-    } on PlatformException {}
+    } on PlatformException {
+      // Unsupported platforms/providers expose an unavailable scan operation.
+    }
   }
 
   @override
   Future<void> stopScan() async {
     try {
       await _channel.invokeMethod<void>('stopScan');
-    } on PlatformException {}
+    } on PlatformException {
+      // Unsupported platforms/providers expose an unavailable scan operation.
+    }
   }
 
   @override
   Future<void> connect(String deviceId) async {
     try {
       await _channel.invokeMethod<void>('connect', {'identifier': deviceId});
-    } on PlatformException {}
+    } on PlatformException {
+      // The platform adapter reports connection state when supported.
+    }
   }
 
   @override
   Future<void> disconnect() async {
     try {
       await _channel.invokeMethod<void>('disconnect');
-    } on PlatformException {}
+    } on PlatformException {
+      // No native watch provider is available.
+    }
   }
 
   Future<List<Map<String, dynamic>>> scan() async {
