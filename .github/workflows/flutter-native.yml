@@ -1,0 +1,87 @@
+name: Pace Native Flutter
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'pace_flutter/**'
+      - '.github/workflows/flutter-native.yml'
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Flutter Android host
+        working-directory: pace_flutter
+        run: flutter create --platforms=android --project-name pace .
+      - run: flutter pub get
+        working-directory: pace_flutter
+      - run: flutter analyze
+        working-directory: pace_flutter
+      - run: flutter test
+        working-directory: pace_flutter
+      - run: flutter build apk --debug
+        working-directory: pace_flutter
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - name: Generate Flutter Linux host
+        working-directory: pace_flutter
+        run: flutter create --platforms=linux --project-name pace .
+      - run: flutter pub get
+        working-directory: pace_flutter
+      - run: flutter analyze
+        working-directory: pace_flutter
+      - run: flutter build linux
+        working-directory: pace_flutter
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Flutter Windows host
+        working-directory: pace_flutter
+        run: flutter create --platforms=windows --project-name pace .
+      - run: flutter pub get
+        working-directory: pace_flutter
+      - run: flutter analyze
+        working-directory: pace_flutter
+      - run: flutter build windows
+        working-directory: pace_flutter
+
+  apple:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Flutter Apple hosts
+        working-directory: pace_flutter
+        run: flutter create --platforms=ios,macos --project-name pace .
+      - run: flutter pub get
+        working-directory: pace_flutter
+      - run: flutter analyze
+        working-directory: pace_flutter
+      - run: flutter build ios --no-codesign
+        working-directory: pace_flutter
+      - run: flutter build macos
+        working-directory: pace_flutter
