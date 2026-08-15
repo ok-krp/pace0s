@@ -7,6 +7,9 @@ on:
       - 'pace_flutter/**'
       - '.github/workflows/flutter-native.yml'
 
+permissions:
+  contents: read
+
 jobs:
   android:
     runs-on: ubuntu-latest
@@ -19,14 +22,24 @@ jobs:
       - name: Generate Flutter Android host
         working-directory: pace_flutter
         run: flutter create --platforms=android --project-name pace .
-      - run: flutter pub get
+      - name: Get dependencies
         working-directory: pace_flutter
-      - run: flutter analyze
+        run: flutter pub get
+      - name: Analyze
         working-directory: pace_flutter
-      - run: flutter test
+        run: flutter analyze
+      - name: Test
         working-directory: pace_flutter
-      - run: flutter build apk --debug --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter test
+      - name: Build APK
         working-directory: pace_flutter
+        run: flutter build apk --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-android-apk
+          path: pace_flutter/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
 
   linux:
     runs-on: ubuntu-latest
@@ -41,12 +54,24 @@ jobs:
       - name: Generate Flutter Linux host
         working-directory: pace_flutter
         run: flutter create --platforms=linux --project-name pace .
-      - run: flutter pub get
+      - name: Get dependencies
         working-directory: pace_flutter
-      - run: flutter analyze
+        run: flutter pub get
+      - name: Analyze
         working-directory: pace_flutter
-      - run: flutter build linux --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter analyze
+      - name: Test
         working-directory: pace_flutter
+        run: flutter test
+      - name: Build Linux
+        working-directory: pace_flutter
+        run: flutter build linux --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish Linux build
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-linux
+          path: pace_flutter/build/linux/x64/release/bundle
+          if-no-files-found: error
 
   windows:
     runs-on: windows-latest
@@ -59,12 +84,24 @@ jobs:
       - name: Generate Flutter Windows host
         working-directory: pace_flutter
         run: flutter create --platforms=windows --project-name pace .
-      - run: flutter pub get
+      - name: Get dependencies
         working-directory: pace_flutter
-      - run: flutter analyze
+        run: flutter pub get
+      - name: Analyze
         working-directory: pace_flutter
-      - run: flutter build windows --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter analyze
+      - name: Test
         working-directory: pace_flutter
+        run: flutter test
+      - name: Build Windows
+        working-directory: pace_flutter
+        run: flutter build windows --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-windows
+          path: pace_flutter/build/windows/x64/runner/Release
+          if-no-files-found: error
 
   apple:
     runs-on: macos-latest
@@ -77,11 +114,30 @@ jobs:
       - name: Generate Flutter Apple hosts
         working-directory: pace_flutter
         run: flutter create --platforms=ios,macos --project-name pace .
-      - run: flutter pub get
+      - name: Get dependencies
         working-directory: pace_flutter
-      - run: flutter analyze
+        run: flutter pub get
+      - name: Analyze
         working-directory: pace_flutter
-      - run: flutter build ios --no-codesign --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter analyze
+      - name: Test
         working-directory: pace_flutter
-      - run: flutter build macos --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter test
+      - name: Build iOS
         working-directory: pace_flutter
+        run: flutter build ios --release --no-codesign --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish iOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-ios
+          path: pace_flutter/build/ios/iphoneos/Runner.app
+          if-no-files-found: error
+      - name: Build macOS
+        working-directory: pace_flutter
+        run: flutter build macos --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-macos
+          path: pace_flutter/build/macos/Build/Products/Release/pace.app
+          if-no-files-found: error
