@@ -20,6 +20,7 @@ import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
 import { AiSettings } from "@/components/AiSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
+import { getPwaInstallPrompt, initPwaInstallPrompt } from "@/lib/pwa-install";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Paramètres — Pace" }, { name: "description", content: "Personnalisez Pace, la confidentialité et les assistants IA." }, { property: "og:title", content: "Paramètres — Pace" }, { property: "og:description", content: "Personnalisez Pace, la confidentialité et les assistants IA." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
@@ -30,6 +31,8 @@ function SettingsPage() {
   const [dark, setDark] = useState(false);
   const push = usePush();
   const [sending, setSending] = useState(false);
+  const [installAvailable, setInstallAvailable] = useState(false);
+  const [installed, setInstalled] = useState(false);
   const sendTest = useServerFn(sendTestNotification);
 
   const handleTogglePush = async (v: boolean) => {
@@ -52,6 +55,47 @@ function SettingsPage() {
     setDark(stored);
     document.documentElement.classList.toggle("dark", stored);
   }, []);
+
+  useEffect(() => {
+    initPwaInstallPrompt();
+    const standalone = window.matchMedia("(display-mode: standalone)");
+    const updateInstalled = () => setInstalled(standalone.matches || ("standalone" in navigator && Boolean((navigator as Navigator & { standalone?: boolean }).standalone)));
+    const updateAvailable = () => setInstallAvailable(Boolean(getPwaInstallPrompt()));
+    updateInstalled();
+    updateAvailable();
+    const onAvailable = () => updateAvailable();
+    const onInstalled = () => { setInstallAvailable(false); setInstalled(true); };
+    window.addEventListener("pace:pwa-install-available", onAvailable);
+    window.addEventListener("pace:pwa-installed", onInstalled);
+    standalone.addEventListener?.("change", updateInstalled);
+    return () => {
+      window.removeEventListener("pace:pwa-install-available", onAvailable);
+      window.removeEventListener("pace:pwa-installed", onInstalled);
+      standalone.removeEventListener?.("change", updateInstalled);
+    };
+  }, []);
+
+  const handleInstall = async () => {
+    if (installed) {
+      toast.info("Pace est déjà installé sur cet appareil.");
+      return;
+    }
+    const installPrompt = getPwaInstallPrompt();
+    if (!installPrompt) {
+      toast.info("L’installation directe n’est pas disponible dans ce navigateur. Utilisez l’option « Installer Pace » du menu du navigateur si elle est proposée.");
+      return;
+    }
+    try {
+      await installPrompt.prompt();
+      const choice = await installPrompt.userChoice;
+      window.__pacePwaInstallPrompt = null;
+      setInstallAvailable(false);
+      if (choice.outcome === "accepted") setInstalled(true);
+    } catch (e) {
+      console.error(e);
+      toast.error("Impossible de lancer l’installation de Pace.");
+    }
+  };
 
   const toggleDark = (v: boolean) => {
     setDark(v);
@@ -96,6 +140,11 @@ function SettingsPage() {
           <AccordionItem value="cloud" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Synchronisation Cloud</AccordionTrigger><AccordionContent className="pt-2"><CloudSyncSettings /></AccordionContent></AccordionItem>
           <AccordionItem value="privacy" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Confidentialité & Données</AccordionTrigger><AccordionContent className="pt-2"><PrivacyDataSection /></AccordionContent></AccordionItem>
         </Accordion>
+        <div className="rounded-2xl glass-card p-4 flex items-center gap-4">
+          <div className="size-10 rounded-xl bg-muted grid place-items-center text-foreground"><Download className="size-4" /></div>
+          <div className="flex-1 min-w-0"><div className="font-medium">Application</div><div className="text-xs text-muted-foreground">Installez Pace sur cet appareil comme application.</div></div>
+          <Button variant="secondary" size="sm" onClick={handleInstall} className="rounded-xl">{installed ? "Installée" : "Télécharger l’application"}</Button>
+        </div>
         <Row icon={<Download className="size-4" />} label="Exporter les données locales" desc="JSON des préférences stockées sur cet appareil"><Button variant="secondary" size="sm" onClick={exportData} className="rounded-xl">Exporter</Button></Row>
         <Row icon={<Trash2 className="size-4" />} label="Réinitialiser cet appareil" desc="Efface uniquement les données locales"><Button variant="destructive" size="sm" onClick={reset} className="rounded-xl">Effacer</Button></Row>
       </div>
