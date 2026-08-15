@@ -18,7 +18,7 @@ class MorePage extends StatelessWidget {
       _Entry('Calendrier', Icons.calendar_month_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => CalendarPage(localStore: localStore)))),
       _Entry('Notes', Icons.note_alt_outlined, () => Navigator.push(context, MaterialPageRoute(builder: (_) => NotesPage(localStore: localStore)))),
       _Entry('Watch & Santé', Icons.watch_outlined, () => _showNativeStatus(context, 'Les adaptateurs natifs sont conservés séparément pour chaque plateforme.')),
-      _Entry('IA', Icons.auto_awesome_outlined, () => _showNativeStatus(context, 'Le service IA sera connecté aux mêmes données locales et Supabase, sans WebView.')),
+      _Entry('IA', Icons.auto_awesome_outlined, () => _showNativeStatus(context, 'Le service IA utilisera les données locales et Supabase, sans WebView.')),
       _Entry('Paramètres', Icons.settings_outlined, () => _showSettings(context)),
     ];
     return ListView(padding: const EdgeInsets.all(20), children: [
@@ -39,8 +39,20 @@ class MorePage extends StatelessWidget {
 class SettingsPageBridge extends StatelessWidget {
   const SettingsPageBridge({super.key, required this.auth});
   final PaceAuthService auth;
+
   @override
-  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Paramètres')), body: ListView(padding: const EdgeInsets.all(20), children: [ListTile(title: Text(auth.currentUser?.email ?? 'Compte local'), trailing: TextButton(onPressed: auth.currentUser == null ? null : auth.signOut, child: const Text('Déconnexion')))]));
+  Widget build(BuildContext context) => Scaffold(
+        appBar: AppBar(title: const Text('Paramètres')),
+        body: ListView(padding: const EdgeInsets.all(20), children: [
+          ListTile(
+            title: Text(auth.currentUser?.email ?? 'Compte local'),
+            trailing: TextButton(
+              onPressed: auth.currentUser == null ? null : () => auth.signOut(),
+              child: const Text('Déconnexion'),
+            ),
+          ),
+        ]),
+      );
 }
 
 class _Entry {
