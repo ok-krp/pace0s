@@ -26,20 +26,16 @@ export function DashboardDialogs({ open, onOpenChange }: { open: DashDialog; onO
 
   useEffect(() => {
     if (!open || open === "score") return;
-
-    const destinations: Record<Exclude<DashDialog, null | "score">, string> = {
-      water: "/water",
-      kcal: "/nutrition",
-      sleep: "/sleep",
-      weight: "/body",
-      routine: "/routine",
-      work: "/work",
-      workout: "/sport",
-    };
-
-    const destination = destinations[open];
     close();
-    void navigate({ to: destination });
+    switch (open) {
+      case "water": void navigate({ to: "/water" }); break;
+      case "kcal": void navigate({ to: "/nutrition" }); break;
+      case "sleep": void navigate({ to: "/sleep" }); break;
+      case "weight": void navigate({ to: "/body" }); break;
+      case "routine": void navigate({ to: "/routine" }); break;
+      case "work": void navigate({ to: "/work" }); break;
+      case "workout": void navigate({ to: "/sport" }); break;
+    }
   }, [open, navigate]);
 
   return (
