@@ -1,10 +1,10 @@
-name: PaceOS Native Android Application
+name: Pace Native Android Application
 
 on:
   push:
     branches: [application]
     paths:
-      - "android/**"
+      - "pace_flutter/**"
       - ".github/workflows/android-application.yml"
   workflow_dispatch:
 
@@ -16,35 +16,48 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Setup Java 17
-        uses: actions/setup-java@v5
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
-          distribution: temurin
-          java-version: "17"
+          channel: stable
+          cache: true
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: "8.11.1"
+      - name: Generate Flutter Android host
+        working-directory: pace_flutter
+        run: flutter create --platforms=android --org com.paceos --project-name pace .
 
-      - name: Build native Android APK
-        run: gradle -p android :app:assembleDebug --no-daemon
+      - name: Install dependencies
+        working-directory: pace_flutter
+        run: flutter pub get
 
-      - name: Verify APK
+      - name: Analyze Dart
+        working-directory: pace_flutter
+        run: flutter analyze
+
+      - name: Run Dart tests
+        working-directory: pace_flutter
+        run: flutter test
+
+      - name: Build native Flutter Android APK
+        working-directory: pace_flutter
+        run: flutter build apk --debug
+
+      - name: Verify APK is a valid Android package
+        working-directory: pace_flutter
         run: |
-          test -s android/app/build/outputs/apk/debug/app-debug.apk
-          file android/app/build/outputs/apk/debug/app-debug.apk
-          unzip -t android/app/build/outputs/apk/debug/app-debug.apk >/dev/null
+          test -s build/app/outputs/flutter-apk/app-debug.apk
+          file build/app/outputs/flutter-apk/app-debug.apk
+          unzip -t build/app/outputs/flutter-apk/app-debug.apk >/dev/null
 
-      - name: Publish latest native APK
+      - name: Publish latest Flutter native APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete android-application-latest --yes --cleanup-tag || true
           gh release create android-application-latest \
-            android/app/build/outputs/apk/debug/app-debug.apk#PaceOS-Android.apk \
-            --title "PaceOS Android — latest" \
-            --notes "Latest native Android build from the application branch. This is the real PaceOS Android application, not the website/PWA." \
+            pace_flutter/build/app/outputs/flutter-apk/app-debug.apk#Pace-Android.apk \
+            --title "Pace Android — native Flutter latest" \
+            --notes "Native Flutter Android build. The interface is compiled into the application and does not load pace0s.lovable.app or use a WebView as its frontend." \
             --target "${GITHUB_SHA}"
