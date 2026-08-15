@@ -28,6 +28,23 @@ jobs:
         working-directory: pace_flutter
         run: flutter create --platforms=android --org com.paceos --project-name pace .
 
+      - name: Configure Health Connect permissions
+        working-directory: pace_flutter
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          text = p.read_text()
+          permissions = '''\n    <uses-permission android:name="android.permission.health.READ_STEPS" />\n    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />\n    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />\n    <uses-permission android:name="android.permission.health.READ_SLEEP" />\n    <uses-permission android:name="android.permission.health.READ_WEIGHT" />\n    <uses-permission android:name="android.permission.health.READ_EXERCISE" />\n    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />\n'''
+          if 'android.permission.health.READ_STEPS' not in text:
+              text = text.replace('<application', permissions + '    <application', 1)
+          queries = '''\n    <queries>\n        <package android:name="com.google.android.apps.healthdata" />\n    </queries>\n'''
+          if '<queries>' not in text:
+              text = text.replace('</manifest>', queries + '</manifest>')
+          p.write_text(text)
+          PY
+
       - name: Install dependencies
         working-directory: pace_flutter
         run: flutter pub get
@@ -42,22 +59,28 @@ jobs:
 
       - name: Build native Flutter Android APK
         working-directory: pace_flutter
-        run: flutter build apk --debug
+        run: flutter build apk --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
 
-      - name: Verify APK is a valid Android package
+      - name: Build native Flutter Android AAB
+        working-directory: pace_flutter
+        run: flutter build appbundle --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+
+      - name: Verify APK and AAB are valid packages
         working-directory: pace_flutter
         run: |
-          test -s build/app/outputs/flutter-apk/app-debug.apk
-          file build/app/outputs/flutter-apk/app-debug.apk
-          unzip -t build/app/outputs/flutter-apk/app-debug.apk >/dev/null
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          test -s build/app/outputs/bundle/release/app-release.aab
+          file build/app/outputs/flutter-apk/app-release.apk
+          unzip -t build/app/outputs/flutter-apk/app-release.apk >/dev/null
 
-      - name: Publish latest Flutter native APK
+      - name: Publish latest Flutter native Android artifacts
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release delete android-application-latest --yes --cleanup-tag || true
           gh release create android-application-latest \
-            pace_flutter/build/app/outputs/flutter-apk/app-debug.apk#Pace-Android.apk \
+            pace_flutter/build/app/outputs/flutter-apk/app-release.apk#Pace-Android.apk \
+            pace_flutter/build/app/outputs/bundle/release/app-release.aab#Pace-Android.aab \
             --title "Pace Android — native Flutter latest" \
-            --notes "Native Flutter Android build. The interface is compiled into the application and does not load pace0s.lovable.app or use a WebView as its frontend." \
+            --notes "Native Flutter Android release build. The interface is compiled into the application and does not load pace0s.lovable.app or use a WebView as its frontend." \
             --target "${GITHUB_SHA}"
