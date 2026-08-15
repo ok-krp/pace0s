@@ -271,7 +271,13 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
           children: [
             SwitchListTile.adaptive(title: const Text('Mémoire IA'), subtitle: const Text('Autoriser Pace IA à conserver des souvenirs persistants.'), value: _enabled, onChanged: (value) async { await widget.service.setMemoryEnabled(value); setState(() { _enabled = value; _items = widget.service.loadMemory(); }); }),
             const SizedBox(height: 8),
-            if (!_enabled) const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('La mémoire est désactivée. Les souvenirs existants sont supprimés du stockage local.')),
+            if (!_enabled)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('La mémoire est désactivée. Les souvenirs existants sont supprimés du stockage local.'),
+                ),
+              ),
             if (_enabled) ...[
               FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('Ajouter un souvenir')),
               const SizedBox(height: 12),
