@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { enqueueDomainWrite } from "@/lib/domain-outbox";
 
 export type DomainRecord<T> = {
   version: 1;
@@ -18,6 +19,12 @@ function storageKey(domain: string) {
 function mutationId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function compareRecords<T>(a: DomainRecord<T>, b: DomainRecord<T>) {
+  const time = a.updatedAt.localeCompare(b.updatedAt);
+  if (time !== 0) return time;
+  return a.mutationId.localeCompare(b.mutationId);
 }
 
 export function readDomain<T>(domain: string, fallback: T): DomainRecord<T> {
@@ -59,12 +66,14 @@ export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
       localStorage.setItem(storageKey(domain), JSON.stringify(record));
       // Keep the old key during the progressive migration as a recovery copy.
       localStorage.setItem(`pace.${domain}`, JSON.stringify(value));
+      // Persist the mutation before asking the cloud-sync layer to process it.
+      enqueueDomainWrite(domain, value);
       window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record } }));
       // Reuse the existing cloud-sync event contract so domain writes are queued
       // by the current sync engine instead of creating a second sync mechanism.
       window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key: `pace.${domain}`, value } }));
     } catch {
-      // The in-memory state remains usable; the sync layer can retry later.
+      // The in-memory state remains usable; the outbox can retry later.
     }
   }
 
@@ -83,8 +92,7 @@ export function useDomainState<T>(domain: string, fallback: T): [T, (next: T | (
       const detail = (event as CustomEvent<{ domain: string; record: DomainRecord<T> }>).detail;
       if (!detail || detail.domain !== domain) return;
       setRecord((current) => {
-        if (detail.record.updatedAt < current.updatedAt) return current;
-        if (detail.record.mutationId === current.mutationId) return current;
+        if (compareRecords(detail.record, current) <= 0) return current;
         return detail.record;
       });
     };
