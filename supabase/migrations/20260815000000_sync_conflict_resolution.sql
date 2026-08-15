@@ -15,7 +15,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  written boolean;
+  affected_rows bigint;
 BEGIN
   IF auth.uid() IS NULL OR auth.uid() <> p_user_id THEN
     RAISE EXCEPTION 'not authorized';
@@ -29,8 +29,8 @@ BEGIN
         updated_by = EXCLUDED.updated_by
   WHERE public.user_state.updated_at < EXCLUDED.updated_at;
 
-  GET DIAGNOSTICS written = ROW_COUNT;
-  RETURN written;
+  GET DIAGNOSTICS affected_rows = ROW_COUNT;
+  RETURN affected_rows > 0;
 END;
 $$;
 
