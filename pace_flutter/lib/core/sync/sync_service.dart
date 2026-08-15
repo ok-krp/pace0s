@@ -2,9 +2,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../storage/local_store.dart';
 
-/// Replays local mutations through Pace's existing user_state RPC. The local
-/// store remains authoritative while offline; queued mutations are removed
-/// only after the remote operation is accepted.
+/// Replays local mutations through Pace's existing user_state RPC and pulls
+/// newer remote state. Local writes remain durable while offline.
 class SyncService {
   SyncService({required this.localStore, required this.client});
 
@@ -16,24 +15,40 @@ class SyncService {
     if (_running || client == null || client!.auth.currentUser == null) return;
     _running = true;
     try {
-      for (final operation in List<Map<String, dynamic>>.from(localStore.pendingOperations())) {
-        try {
-          final accepted = await _push(operation);
-          if (accepted) {
-            await localStore.acknowledgeOperation(operation);
-          } else {
-            break;
-          }
-        } catch (_) {
-          break;
-        }
-      }
+      await _pushPending();
+      await _pullRemote();
     } finally {
       _running = false;
     }
   }
 
-  Future<bool> _push(Map<String, dynamic> operation) async {
+  Future<void> _pushPending() async {
+    for (final operation in List<Map<String, dynamic>>.from(localStore.pendingOperations())) {
+      try {
+        final result = await _push(operation);
+        if (result.accepted) {
+          await localStore.acknowledgeOperation(operation);
+          continue;
+        }
+
+        // A newer server value won. Apply it locally before acknowledging the
+        // stale mutation so it can never be retried over the newer state.
+        if (result.remoteValue != null && result.remoteUpdatedAt != null) {
+          await localStore.applyRemote(
+            operation['key'] as String,
+            result.remoteValue,
+            result.remoteUpdatedAt!,
+          );
+        }
+        await localStore.acknowledgeOperation(operation);
+      } catch (_) {
+        // Preserve the operation for the next reconnect/retry.
+        break;
+      }
+    }
+  }
+
+  Future<_PushResult> _push(Map<String, dynamic> operation) async {
     final userId = client!.auth.currentUser!.id;
     final key = operation['key'] as String;
     final updatedAt = (operation['queuedAt'] as String?) ?? DateTime.now().toUtc().toIso8601String();
@@ -47,8 +62,53 @@ class SyncService {
       'p_updated_by': 'flutter-native',
     });
 
-    // The existing web sync contract returns true when this mutation wins and
-    // false when the server already contains a newer version.
-    return response == true;
+    if (response == true) return const _PushResult.accepted();
+
+    final rows = await client!
+        .from('user_state')
+        .select('key,value,updated_at')
+        .eq('user_id', userId)
+        .eq('key', key)
+        .limit(1);
+    if (rows.isEmpty) return const _PushResult.rejected();
+    final row = Map<String, dynamic>.from(rows.first);
+    return _PushResult.rejected(
+      remoteValue: row['value'],
+      remoteUpdatedAt: row['updated_at'] as String?,
+    );
   }
+
+  Future<void> _pullRemote() async {
+    final userId = client!.auth.currentUser!.id;
+    final rows = await client!
+        .from('user_state')
+        .select('key,value,updated_at')
+        .eq('user_id', userId);
+
+    for (final raw in rows) {
+      final row = Map<String, dynamic>.from(raw);
+      final key = row['key'] as String;
+      final remoteUpdatedAt = row['updated_at'] as String?;
+      if (remoteUpdatedAt == null || localStore.pendingOperations().any((op) => op['key'] == key)) continue;
+
+      final localUpdatedAt = localStore.lastSyncedAt(key);
+      if (localUpdatedAt != null) {
+        final remoteTime = DateTime.tryParse(remoteUpdatedAt);
+        final localTime = DateTime.tryParse(localUpdatedAt);
+        if (remoteTime != null && localTime != null && !remoteTime.isAfter(localTime)) continue;
+      }
+      await localStore.applyRemote(key, row['value'], remoteUpdatedAt);
+    }
+  }
+}
+
+class _PushResult {
+  const _PushResult({required this.accepted, this.remoteValue, this.remoteUpdatedAt});
+  const _PushResult.accepted() : this(accepted: true);
+  const _PushResult.rejected({Object? remoteValue, String? remoteUpdatedAt})
+      : this(accepted: false, remoteValue: remoteValue, remoteUpdatedAt: remoteUpdatedAt);
+
+  final bool accepted;
+  final dynamic remoteValue;
+  final String? remoteUpdatedAt;
 }
