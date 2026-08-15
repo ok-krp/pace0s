@@ -88,7 +88,9 @@ class PaceAiService {
         );
       }).toList();
       final merged = <String, AiConversation>{for (final item in local) item.id: item};
-      for (final item in remote) merged[item.id] = (merged[item.id] ?? item).copyWith(title: item.title, updatedAt: item.updatedAt);
+      for (final item in remote) {
+        merged[item.id] = (merged[item.id] ?? item).copyWith(title: item.title, updatedAt: item.updatedAt);
+      }
       final result = merged.values.where((item) => item.agent == agent).toList()..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       await _saveLocalConversations(result);
       return result;
@@ -129,17 +131,18 @@ class PaceAiService {
   }
 
   Future<void> renameConversation(String id, String title) async {
-    final clean = title.trim().replaceAll(RegExp(r'\s+'), ' ').substring(0, min(80, title.trim().replaceAll(RegExp(r'\s+'), ' ').length));
+    final normalized = title.trim().replaceAll(RegExp(r'\s+'), ' ');
+    final clean = normalized.isEmpty ? 'Nouvelle conversation' : normalized.substring(0, min(80, normalized.length));
     final conversations = loadLocalConversations();
     final index = conversations.indexWhere((item) => item.id == id);
     if (index >= 0) {
-      conversations[index] = conversations[index].copyWith(title: clean.isEmpty ? 'Nouvelle conversation' : clean, updatedAt: DateTime.now());
+      conversations[index] = conversations[index].copyWith(title: clean, updatedAt: DateTime.now());
       await _saveLocalConversations(conversations);
     }
     final client = _client;
     final user = auth.currentUser;
     if (client != null && user != null) {
-      await client.from('ai_conversations').update({'title': clean.isEmpty ? 'Nouvelle conversation' : clean}).eq('id', id).eq('user_id', user.id);
+      await client.from('ai_conversations').update({'title': clean}).eq('id', id).eq('user_id', user.id);
     }
   }
 
@@ -156,7 +159,7 @@ class PaceAiService {
   Future<List<AiMessage>> loadMessages(String id) async {
     final local = loadLocalConversations().firstWhere(
       (item) => item.id == id,
-      orElse: () => const AiConversation(id: '', agent: PaceAiAgent.coach, title: '', updatedAt: DateTime.fromMillisecondsSinceEpoch(0)),
+      orElse: () => AiConversation(id: '', agent: PaceAiAgent.coach, title: '', updatedAt: DateTime.fromMillisecondsSinceEpoch(0)),
     );
     if (local.id.isNotEmpty && local.messages.isNotEmpty) return local.messages;
     final client = _client;
@@ -250,7 +253,9 @@ class PaceAiService {
         try {
           final value = jsonDecode(line.substring(2));
           if (value is String) output.write(value);
-        } catch (_) {}
+        } catch (_) {
+          // Ignore malformed stream frames; the final response is handled below.
+        }
       }
     }
     final result = output.toString().trim();
