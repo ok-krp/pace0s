@@ -7,14 +7,12 @@ class PaceSupabase {
 
   static Future<SupabaseClient?> initialize() async {
     final url = const String.fromEnvironment('SUPABASE_URL');
-    final key = const String.fromEnvironment('SUPABASE_ANON_KEY');
+    final key = const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY', defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'));
     if (url.isEmpty || key.isEmpty) return null;
     await Supabase.initialize(
       url: url,
-      anonKey: key,
-      authOptions: const FlutterAuthClientOptions(
-        autoRefreshToken: true,
-      ),
+      publishableKey: key,
+      authOptions: const FlutterAuthClientOptions(autoRefreshToken: true),
     );
     _client = Supabase.instance.client;
     return _client;
@@ -25,13 +23,11 @@ class PaceSupabase {
 
 class PaceAuthService {
   const PaceAuthService(this.client);
-
   final SupabaseClient? client;
 
   User? get currentUser => client?.auth.currentUser;
 
-  Stream<AuthState> get authStateChanges =>
-      client?.auth.onAuthStateChange ?? const Stream<AuthState>.empty();
+  Stream<AuthState> get authStateChanges => client?.auth.onAuthStateChange ?? const Stream<AuthState>.empty();
 
   Future<AuthResponse> signInWithPassword({required String email, required String password}) async {
     final value = client;
