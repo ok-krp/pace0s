@@ -103,11 +103,22 @@ class SyncService {
 }
 
 class _PushResult {
-  const _PushResult({required this.accepted, this.remoteValue, this.remoteUpdatedAt});
-  const _PushResult.accepted() : this(accepted: true);
-  const _PushResult.rejected() : this(accepted: false);
-  const _PushResult.rejectedWithRemote({required dynamic remoteValue, required String? remoteUpdatedAt})
-      : this(accepted: false, remoteValue: remoteValue, remoteUpdatedAt: remoteUpdatedAt);
+  const _PushResult.accepted()
+      : accepted = true,
+        remoteValue = null,
+        remoteUpdatedAt = null;
+
+  const _PushResult.rejected()
+      : accepted = false,
+        remoteValue = null,
+        remoteUpdatedAt = null;
+
+  const _PushResult.rejectedWithRemote({
+    required dynamic remoteValue,
+    required String? remoteUpdatedAt,
+  })  : accepted = false,
+        remoteValue = remoteValue,
+        remoteUpdatedAt = remoteUpdatedAt;
 
   final bool accepted;
   final dynamic remoteValue;
