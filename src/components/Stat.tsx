@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
-import { memo, type ReactNode } from "react";
+import { memo, type ReactNode, useEffect, useState } from "react";
 import { springSoft, springSnap, interactiveRing } from "@/lib/motion";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
 
 function StatCardBase({
   label,
@@ -25,16 +27,36 @@ function StatCardBase({
 }) {
   const positive = delta !== undefined && delta >= 0;
   const interactive = !!onClick;
+  const isTrainingGoalStat = label === "Jours actifs (sur 7)";
+  const { user } = useAuth();
+  const [trainingGoal, setTrainingGoal] = useState(3);
+
+  useEffect(() => {
+    if (!isTrainingGoalStat || !user) return;
+    let cancelled = false;
+    supabase.from("profiles").select("training_sessions_goal").eq("user_id", user.id).maybeSingle().then(({ data }) => {
+      if (cancelled) return;
+      const goal = Number((data as { training_sessions_goal?: number | null } | null)?.training_sessions_goal ?? 3);
+      setTrainingGoal(Math.min(7, Math.max(1, Number.isFinite(goal) ? goal : 3)));
+    });
+    return () => { cancelled = true; };
+  }, [isTrainingGoalStat, user]);
+
   const className =
     "text-left w-full glass-card p-5 will-change-transform " +
     (interactive
       ? `cursor-pointer ${interactiveRing}`
       : "");
 
+  const displayLabel = isTrainingGoalStat ? "Entraînements cette semaine" : label;
+  const displayValue = isTrainingGoalStat && typeof value === "string"
+    ? `${String(value).split(" /")[0]} / ${trainingGoal}`
+    : value;
+
   const inner = (
     <>
       <div className="flex items-start justify-between">
-        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{label}</div>
+        <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{displayLabel}</div>
         {icon && (
           <div
             className="glass-icon size-8 rounded-xl text-primary shrink-0"
@@ -45,7 +67,7 @@ function StatCardBase({
         )}
       </div>
       <div className="mt-3 flex items-baseline gap-1.5">
-        <div className="font-display text-3xl font-semibold tracking-tight">{value}</div>
+        <div className="font-display text-3xl font-semibold tracking-tight">{displayValue}</div>
         {unit && <div className="text-sm text-muted-foreground">{unit}</div>}
       </div>
       {delta !== undefined && (
@@ -71,7 +93,7 @@ function StatCardBase({
         whileFocus={{ y: -2, scale: 1.01 }}
         whileTap={{ scale: 0.97 }}
         transition={springSnap}
-        aria-label={`${label} — ${hint ?? "ouvrir"}`}
+        aria-label={`${displayLabel} — ${hint ?? "ouvrir"}`}
         className={className}
       >
         {inner}
