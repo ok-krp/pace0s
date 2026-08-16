@@ -48,8 +48,12 @@ jobs:
           text = gradle.read_text()
           if 'isCoreLibraryDesugaringEnabled = true' not in text:
               text = text.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
-          if 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:' not in text:
-              text = text.replace('dependencies {', 'dependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")', 1)
+          dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+          if dependency not in text:
+              if 'dependencies {' in text:
+                  text = text.replace('dependencies {', 'dependencies {\n    ' + dependency, 1)
+              else:
+                  text += '\n\ndependencies {\n    ' + dependency + '\n}\n'
           gradle.write_text(text)
           PY
 
