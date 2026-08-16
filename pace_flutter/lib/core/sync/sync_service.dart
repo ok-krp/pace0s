@@ -73,8 +73,8 @@ class SyncService {
     if (rows.isEmpty) return const _PushResult.rejected();
     final row = Map<String, dynamic>.from(rows.first);
     return _PushResult.rejectedWithRemote(
-      remoteValue: row['value'],
-      remoteUpdatedAt: row['updated_at'] as String?,
+      row['value'],
+      row['updated_at'] as String?,
     );
   }
 
@@ -113,12 +113,8 @@ class _PushResult {
         remoteValue = null,
         remoteUpdatedAt = null;
 
-  const _PushResult.rejectedWithRemote({
-    required dynamic remoteValue,
-    required String? remoteUpdatedAt,
-  })  : accepted = false,
-        remoteValue = remoteValue,
-        remoteUpdatedAt = remoteUpdatedAt;
+  const _PushResult.rejectedWithRemote(this.remoteValue, this.remoteUpdatedAt)
+      : accepted = false;
 
   final bool accepted;
   final dynamic remoteValue;
