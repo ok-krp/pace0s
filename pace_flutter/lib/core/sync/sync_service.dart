@@ -16,6 +16,7 @@ class SyncService {
     _running = true;
     try {
       await _pushPending();
+      await _syncAiPreferences();
       await _pullRemote();
     } finally {
       _running = false;
@@ -78,6 +79,26 @@ class SyncService {
     );
   }
 
+  Future<void> _syncAiPreferences() async {
+    final user = client!.auth.currentUser;
+    if (user == null) return;
+
+    final localConfirm = localStore.read('pace.settings.ai.confirm_actions');
+    final localMemory = localStore.read('pace.settings.ai.memory');
+    final patch = <String, dynamic>{
+      'user_id': user.id,
+      if (localConfirm is bool) 'confirm_actions': localConfirm,
+      if (localMemory is bool) 'memory_level': localMemory ? 'limited' : 'none',
+    };
+    if (patch.length == 1) return;
+
+    try {
+      await client!.from('ai_preferences').upsert(patch);
+    } catch (_) {
+      // The local settings remain authoritative until the next successful sync.
+    }
+  }
+
   Future<void> _pullRemote() async {
     final userId = client!.auth.currentUser!.id;
     final rows = await client!
@@ -114,9 +135,11 @@ class _PushResult {
         remoteUpdatedAt = null;
 
   const _PushResult.rejectedWithRemote({
-    required this.remoteValue,
-    required this.remoteUpdatedAt,
-  }) : accepted = false;
+    required dynamic remoteValue,
+    required String? remoteUpdatedAt,
+  })  : accepted = false,
+        remoteValue = remoteValue,
+        remoteUpdatedAt = remoteUpdatedAt;
 
   final bool accepted;
   final dynamic remoteValue;
