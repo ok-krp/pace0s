@@ -155,11 +155,9 @@ class _PushResult {
         remoteUpdatedAt = null;
 
   const _PushResult.rejectedWithRemote({
-    required dynamic remoteValue,
-    required String? remoteUpdatedAt,
-  })  : accepted = false,
-        remoteValue = remoteValue,
-        remoteUpdatedAt = remoteUpdatedAt;
+    required this.remoteValue,
+    required this.remoteUpdatedAt,
+  }) : accepted = false;
 
   final bool accepted;
   final dynamic remoteValue;
