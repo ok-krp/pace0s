@@ -63,7 +63,9 @@ function AuthGate() {
   useEffect(() => {
     applyGlassQuality("balanced"); applyWallpaper(readWallpaperChoice());
     initPwaInstallPrompt();
-    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error) => console.warn("Pace PWA service worker registration failed", error));
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error) => console.warn("Pace PWA service worker registration failed", error));
+    }
     const obs = new MutationObserver(() => applyWallpaper(readWallpaperChoice())); obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     return () => obs.disconnect();
   }, []);

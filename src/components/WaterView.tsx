@@ -4,6 +4,7 @@ import { Droplets, Plus, Minus } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { Ring, StatCard } from "@/components/Stat";
 import { useLocalState, lastNDays, fmtDay, todayKey } from "@/lib/storage";
+import { useDomainState } from "@/lib/domain-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,8 +13,12 @@ import { useUserGoals } from "@/hooks/use-user-goals";
 type Unit = "ml" | "cl" | "L";
 const TO_ML: Record<Unit, number> = { ml: 1, cl: 10, L: 1000 };
 
+type WaterData = Record<string, number>;
+
 export function WaterView() {
-  const [data, setData] = useLocalState<Record<string, number>>("pace.water", {});
+  // Domain ownership: water is written through one durable store. The legacy
+  // key is still mirrored by domain-store for progressive migration/recovery.
+  const [data, setData] = useDomainState<WaterData>("water", {});
   const goals = useUserGoals();
   const goal = goals.waterMl;
   const today = todayKey();

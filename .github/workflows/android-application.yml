@@ -1,0 +1,98 @@
+name: Pace Native Android Application
+
+on:
+  push:
+    branches: [application]
+    paths:
+      - "pace_flutter/**"
+      - ".github/workflows/android-application.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Flutter Android host
+        working-directory: pace_flutter
+        run: flutter create --platforms=android --org com.paceos --project-name pace .
+
+      - name: Configure Android native services
+        working-directory: pace_flutter
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          permissions = '''\n    <uses-permission android:name="android.permission.health.READ_STEPS" />\n    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />\n    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />\n    <uses-permission android:name="android.permission.health.READ_SLEEP" />\n    <uses-permission android:name="android.permission.health.READ_WEIGHT" />\n    <uses-permission android:name="android.permission.health.READ_EXERCISE" />\n    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />\n'''
+          if 'android.permission.health.READ_STEPS' not in text:
+              text = text.replace('<application', permissions + '    <application', 1)
+          queries = '\n    <queries><package android:name="com.google.android.apps.healthdata" /></queries>\n'
+          if '<queries>' not in text:
+              text = text.replace('</manifest>', queries + '</manifest>')
+          manifest.write_text(text)
+
+          gradle = Path('android/app/build.gradle.kts')
+          text = gradle.read_text()
+          if 'isCoreLibraryDesugaringEnabled = true' not in text:
+              text = text.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+          dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+          if dependency not in text:
+              if 'dependencies {' in text:
+                  text = text.replace('dependencies {', 'dependencies {\n    ' + dependency, 1)
+              else:
+                  text += '\n\ndependencies {\n    ' + dependency + '\n}\n'
+          gradle.write_text(text)
+          PY
+
+      - name: Install dependencies
+        working-directory: pace_flutter
+        run: flutter pub get
+
+      - name: Analyze Dart
+        working-directory: pace_flutter
+        run: flutter analyze
+
+      - name: Run Dart tests
+        working-directory: pace_flutter
+        run: flutter test
+
+      - name: Build native Flutter Android APK
+        working-directory: pace_flutter
+        run: flutter build apk --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+
+      - name: Build native Flutter Android AAB
+        working-directory: pace_flutter
+        run: flutter build appbundle --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+
+      - name: Verify APK and AAB are valid packages
+        working-directory: pace_flutter
+        run: |
+          test -s build/app/outputs/flutter-apk/app-release.apk
+          test -s build/app/outputs/bundle/release/app-release.aab
+          file build/app/outputs/flutter-apk/app-release.apk
+          unzip -t build/app/outputs/flutter-apk/app-release.apk >/dev/null
+
+      - name: Publish latest Flutter native Android artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-application-latest --yes --cleanup-tag || true
+          gh release create android-application-latest \
+            pace_flutter/build/app/outputs/flutter-apk/app-release.apk#Pace-Android.apk \
+            pace_flutter/build/app/outputs/bundle/release/app-release.aab#Pace-Android.aab \
+            --title "Pace Android — native Flutter latest" \
+            --notes "Native Flutter Android release build. The interface is compiled into the application and does not load pace0s.lovable.app or use a WebView as its frontend." \
+            --target "${GITHUB_SHA}"

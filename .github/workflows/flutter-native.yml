@@ -1,0 +1,207 @@
+name: Pace Native Flutter
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'pace_flutter/**'
+      - '.github/workflows/flutter-native.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Flutter Android host
+        working-directory: pace_flutter
+        run: flutter create --platforms=android --org com.paceos --project-name pace .
+      - name: Remove generated Flutter sample test
+        working-directory: pace_flutter
+        run: rm -f test/widget_test.dart
+      - name: Configure Android native services
+        working-directory: pace_flutter
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('android/app/src/main/AndroidManifest.xml')
+          text = p.read_text()
+          permissions = '''\n    <uses-permission android:name="android.permission.health.READ_STEPS" />\n    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />\n    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />\n    <uses-permission android:name="android.permission.health.READ_SLEEP" />\n    <uses-permission android:name="android.permission.health.READ_WEIGHT" />\n    <uses-permission android:name="android.permission.health.READ_EXERCISE" />\n    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />\n'''
+          if 'android.permission.health.READ_STEPS' not in text:
+              text = text.replace('<application', permissions + '    <application', 1)
+          queries = '\n    <queries><package android:name="com.google.android.apps.healthdata" /></queries>\n'
+          if '<queries>' not in text:
+              text = text.replace('</manifest>', queries + '</manifest>')
+          p.write_text(text)
+
+          gradle = Path('android/app/build.gradle.kts')
+          text = gradle.read_text()
+          # The health plugin requires Android API 26+. Flutter's generated
+          # template defaults to flutter.minSdkVersion, which is currently 24.
+          text = text.replace('minSdk = flutter.minSdkVersion', 'minSdk = 26')
+          if 'minSdk = 26' not in text:
+              text = text.replace('defaultConfig {', 'defaultConfig {\n        minSdk = 26', 1)
+          if 'isCoreLibraryDesugaringEnabled = true' not in text:
+              text = text.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
+          dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+          if dependency not in text:
+              if 'dependencies {' in text:
+                  text = text.replace('dependencies {', 'dependencies {\n    ' + dependency, 1)
+              else:
+                  text += '\n\ndependencies {\n    ' + dependency + '\n}\n'
+          gradle.write_text(text)
+          PY
+      - name: Get dependencies
+        working-directory: pace_flutter
+        run: flutter pub get
+      - name: Analyze
+        working-directory: pace_flutter
+        run: flutter analyze
+      - name: Test
+        working-directory: pace_flutter
+        run: flutter test
+      - name: Build APK
+        working-directory: pace_flutter
+        run: flutter build apk --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-android-apk
+          path: pace_flutter/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+      - name: Build AAB
+        working-directory: pace_flutter
+        run: flutter build appbundle --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-android-aab
+          path: pace_flutter/build/app/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install Linux build dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev
+      - name: Generate Flutter Linux host
+        working-directory: pace_flutter
+        run: flutter create --platforms=linux --org com.paceos --project-name pace .
+      - name: Remove generated Flutter sample test
+        working-directory: pace_flutter
+        run: rm -f test/widget_test.dart
+      - name: Get dependencies
+        working-directory: pace_flutter
+        run: flutter pub get
+      - name: Analyze
+        working-directory: pace_flutter
+        run: flutter analyze
+      - name: Test
+        working-directory: pace_flutter
+        run: flutter test
+      - name: Build Linux
+        working-directory: pace_flutter
+        run: flutter build linux --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish Linux build
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-linux
+          path: pace_flutter/build/linux/x64/release/bundle
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Flutter Windows host
+        working-directory: pace_flutter
+        run: flutter create --platforms=windows --org com.paceos --project-name pace .
+      - name: Remove generated Flutter sample test
+        working-directory: pace_flutter
+        run: Remove-Item -Force test/widget_test.dart -ErrorAction SilentlyContinue
+      - name: Get dependencies
+        working-directory: pace_flutter
+        run: flutter pub get
+      - name: Analyze
+        working-directory: pace_flutter
+        run: flutter analyze
+      - name: Test
+        working-directory: pace_flutter
+        run: flutter test
+      - name: Build Windows
+        working-directory: pace_flutter
+        run: flutter build windows --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-windows
+          path: pace_flutter/build/windows/x64/runner/Release
+          if-no-files-found: error
+
+  apple:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Generate Flutter Apple hosts
+        working-directory: pace_flutter
+        run: flutter create --platforms=ios,macos --org com.paceos --project-name pace .
+      - name: Remove generated Flutter sample test
+        working-directory: pace_flutter
+        run: rm -f test/widget_test.dart
+      - name: Configure HealthKit usage descriptions
+        working-directory: pace_flutter
+        run: |
+          /usr/libexec/PlistBuddy -c "Add :NSHealthShareUsageDescription string Pace utilise vos données de santé pour afficher vos tendances." ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthShareUsageDescription Pace utilise vos données de santé pour afficher vos tendances." ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSHealthUpdateUsageDescription string Pace utilise vos données de santé pour synchroniser les données autorisées." ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthUpdateUsageDescription Pace utilise vos données de santé pour synchroniser les données autorisées." ios/Runner/Info.plist
+          cat > ios/Runner/Runner.entitlements <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict><key>com.apple.developer.healthkit</key><true/></dict></plist>
+          EOF
+      - name: Get dependencies
+        working-directory: pace_flutter
+        run: flutter pub get
+      - name: Analyze
+        working-directory: pace_flutter
+        run: flutter analyze
+      - name: Test
+        working-directory: pace_flutter
+        run: flutter test
+      - name: Build iOS
+        working-directory: pace_flutter
+        run: flutter build ios --release --no-codesign --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish iOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-ios
+          path: pace_flutter/build/ios/iphoneos/Runner.app
+          if-no-files-found: error
+      - name: Build macOS
+        working-directory: pace_flutter
+        run: flutter build macos --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+      - name: Publish macOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-macos
+          path: pace_flutter/build/macos/Build/Products/Release/pace.app
+          if-no-files-found: error

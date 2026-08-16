@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { Scale } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, CartesianGrid } from "recharts";
 import { PageHeader, StatCard } from "@/components/Stat";
-import { useLocalState, lastNDays, todayKey } from "@/lib/storage";
+import { lastNDays, todayKey } from "@/lib/storage";
+import { useDomainState } from "@/lib/domain-store";
 import { Input } from "@/components/ui/input";
 
 export const Route = createFileRoute("/body")({
@@ -43,7 +44,7 @@ function aggregate(entries: { date: string; e: Entry }[], keyFn: (d: string) => 
 }
 
 function BodyPage() {
-  const [data, setData] = useLocalState<Record<string, Entry>>("pace.weight", {});
+  const [data, setData] = useDomainState<Record<string, Entry>>("weight", {});
   const [w, setW] = useState("");
   const [muscle, setMuscle] = useState("");
   const [fat, setFat] = useState("");
@@ -62,7 +63,7 @@ function BodyPage() {
   const avg = validDaily.length ? validDaily.reduce((s, x) => s + x.e.w!, 0) / validDaily.length : 0;
   const first = validDaily[0]?.e.w;
   const last = validDaily[validDaily.length - 1]?.e.w;
-  const delta = first && last ? last - first : 0;
+  const delta = first != null && last != null ? last - first : 0;
 
   useEffect(() => {
     const hasValue = w.trim() !== "" || muscle.trim() !== "" || fat.trim() !== "";
