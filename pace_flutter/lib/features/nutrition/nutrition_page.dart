@@ -33,33 +33,41 @@ class _NutritionPageState extends State<NutritionPage> {
     return value.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
   }
 
+  double? _parseOptional(TextEditingController controller) {
+    final text = controller.text.trim();
+    if (text.isEmpty) return null;
+    return double.tryParse(text.replaceAll(',', '.'));
+  }
+
   Future<void> _addFood() async {
     final name = TextEditingController();
     final kcal = TextEditingController();
     final protein = TextEditingController();
     final carbs = TextEditingController();
     final fat = TextEditingController();
-    final result = await showDialog<Map<String, double>>(
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Ajouter un aliment'),
         content: SingleChildScrollView(child: Column(children: [
           TextField(controller: name, decoration: const InputDecoration(labelText: 'Aliment')),
-          TextField(controller: kcal, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Calories (kcal)')),
-          TextField(controller: protein, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Protéines (g)')),
-          TextField(controller: carbs, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Glucides (g)')),
-          TextField(controller: fat, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Lipides (g)')),
+          TextField(controller: kcal, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Calories (kcal)')),
+          TextField(controller: protein, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Protéines (g)')),
+          TextField(controller: carbs, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Glucides (g)')),
+          TextField(controller: fat, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Lipides (g)')),
         ])),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
           FilledButton(onPressed: () {
             if (name.text.trim().isEmpty) return;
-            Navigator.pop(context, {
-              'kcal': double.tryParse(kcal.text.replaceAll(',', '.')) ?? 0,
-              'p': double.tryParse(protein.text.replaceAll(',', '.')) ?? 0,
-              'c': double.tryParse(carbs.text.replaceAll(',', '.')) ?? 0,
-              'f': double.tryParse(fat.text.replaceAll(',', '.')) ?? 0,
-            });
+            final values = <String, dynamic>{
+              'kcal': _parseOptional(kcal),
+              'p': _parseOptional(protein),
+              'c': _parseOptional(carbs),
+              'f': _parseOptional(fat),
+            };
+            if (values.values.any((value) => value is double && value.isNaN)) return;
+            Navigator.pop(context, values);
           }, child: const Text('Ajouter')),
         ],
       ),
@@ -84,23 +92,36 @@ class _NutritionPageState extends State<NutritionPage> {
       ...result,
     });
     data[day] = list;
+    await widget.localStore.write('pace.nutrition.items', data);
+    await _recalculateTotals(data);
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _recalculateTotals(Map<String, dynamic> data) async {
     final totals = <String, dynamic>{};
     for (final entry in data.entries) {
       if (entry.value is! List) continue;
       var dayKcal = 0.0, dayP = 0.0, dayC = 0.0, dayF = 0.0;
+      var hasKcal = false, hasP = false, hasC = false, hasF = false;
       for (final item in entry.value as List) {
-        if (item is Map) {
-          dayKcal += (item['kcal'] as num?)?.toDouble() ?? 0;
-          dayP += (item['p'] as num?)?.toDouble() ?? 0;
-          dayC += (item['c'] as num?)?.toDouble() ?? 0;
-          dayF += (item['f'] as num?)?.toDouble() ?? 0;
-        }
+        if (item is! Map) continue;
+        final kcal = item['kcal'];
+        final p = item['p'];
+        final c = item['c'];
+        final f = item['f'];
+        if (kcal is num) { dayKcal += kcal.toDouble(); hasKcal = true; }
+        if (p is num) { dayP += p.toDouble(); hasP = true; }
+        if (c is num) { dayC += c.toDouble(); hasC = true; }
+        if (f is num) { dayF += f.toDouble(); hasF = true; }
       }
-      totals[entry.key.toString()] = {'kcal': dayKcal, 'p': dayP, 'c': dayC, 'f': dayF};
+      totals[entry.key.toString()] = {
+        'kcal': hasKcal ? dayKcal : null,
+        'p': hasP ? dayP : null,
+        'c': hasC ? dayC : null,
+        'f': hasF ? dayF : null,
+      };
     }
-    await widget.localStore.write('pace.nutrition.items', data);
     await widget.localStore.write('pace.nutrition.totals', totals);
-    if (mounted) setState(() {});
   }
 
   Future<void> _deleteItem(Map<String, dynamic> item) async {
@@ -109,20 +130,12 @@ class _NutritionPageState extends State<NutritionPage> {
     final data = Map<String, dynamic>.from(raw);
     final day = _todayKey();
     final list = data[day] is List ? List<dynamic>.from(data[day] as List) : <dynamic>[];
+    final before = list.length;
     list.removeWhere((entry) => entry is Map && entry['id']?.toString() == item['id']?.toString());
+    if (list.length == before) return;
     data[day] = list;
     await widget.localStore.write('pace.nutrition.items', data);
-    final current = _totals();
-    final total = <String, dynamic>{
-      'kcal': ((current['kcal'] as num?)?.toDouble() ?? 0) - ((item['kcal'] as num?)?.toDouble() ?? 0),
-      'p': ((current['p'] as num?)?.toDouble() ?? 0) - ((item['p'] as num?)?.toDouble() ?? 0),
-      'c': ((current['c'] as num?)?.toDouble() ?? 0) - ((item['c'] as num?)?.toDouble() ?? 0),
-      'f': ((current['f'] as num?)?.toDouble() ?? 0) - ((item['f'] as num?)?.toDouble() ?? 0),
-    };
-    final totalsRaw = widget.localStore.read('pace.nutrition.totals');
-    final totals = Map<String, dynamic>.from(totalsRaw is Map ? totalsRaw : <String, dynamic>{});
-    totals[day] = total;
-    await widget.localStore.write('pace.nutrition.totals', totals);
+    await _recalculateTotals(data);
     if (mounted) setState(() {});
   }
 
@@ -130,7 +143,10 @@ class _NutritionPageState extends State<NutritionPage> {
   Widget build(BuildContext context) {
     final totals = _totals();
     final items = _items();
-    double number(String key) => (totals[key] as num?)?.toDouble() ?? 0;
+    String number(String key) {
+      final value = totals[key];
+      return value is num ? value.toStringAsFixed(1) : '—';
+    }
     return RefreshIndicator(
       onRefresh: () async => setState(() {}),
       child: ListView(padding: const EdgeInsets.all(20), children: [
@@ -142,10 +158,10 @@ class _NutritionPageState extends State<NutritionPage> {
         Text('Données réelles de ton journal Pace', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height: 18),
         PaceGlassCard(child: Column(children: [
-          _NutritionRow('Calories', '${number('kcal').toStringAsFixed(0)} kcal', Icons.local_fire_department_outlined),
-          _NutritionRow('Protéines', '${number('p').toStringAsFixed(1)} g', Icons.fitness_center_outlined),
-          _NutritionRow('Glucides', '${number('c').toStringAsFixed(1)} g', Icons.grain_outlined),
-          _NutritionRow('Lipides', '${number('f').toStringAsFixed(1)} g', Icons.opacity_outlined),
+          _NutritionRow('Calories', '${number('kcal')} kcal', Icons.local_fire_department_outlined),
+          _NutritionRow('Protéines', '${number('p')} g', Icons.fitness_center_outlined),
+          _NutritionRow('Glucides', '${number('c')} g', Icons.grain_outlined),
+          _NutritionRow('Lipides', '${number('f')} g', Icons.opacity_outlined),
         ])),
         const SizedBox(height: 14),
         Text('Repas du jour', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
@@ -155,7 +171,7 @@ class _NutritionPageState extends State<NutritionPage> {
           Padding(padding: const EdgeInsets.only(bottom: 8), child: PaceGlassCard(child: ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 14),
             title: Text(item['name']?.toString() ?? 'Aliment'),
-            subtitle: Text('${item['meal'] ?? 'Repas'} · ${(item['kcal'] as num?)?.toStringAsFixed(0) ?? '0'} kcal · P ${(item['p'] as num?)?.toStringAsFixed(1) ?? '0'} g'),
+            subtitle: Text('${item['meal'] ?? 'Repas'} · ${item['kcal'] is num ? (item['kcal'] as num).toStringAsFixed(0) : '—'} kcal · P ${item['p'] is num ? (item['p'] as num).toStringAsFixed(1) : '—'} g'),
             trailing: IconButton(onPressed: () => _deleteItem(item), icon: const Icon(Icons.delete_outline)),
           ))),
       ]),
