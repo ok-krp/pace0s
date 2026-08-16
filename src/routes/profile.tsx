@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { LogOut, Save, User as UserIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { LogOut, User as UserIcon } from "lucide-react";
 import { PageHeader } from "@/components/Stat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,31 +39,43 @@ function ProfilePage() {
     training_goal: "hypertrophy", training_sessions_goal: 3,
   });
   const [saving, setSaving] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const skipNextSave = useRef(true);
 
   useEffect(() => {
     if (!user) { navigate({ to: "/login", search: { next: "/" } }); return; }
+    skipNextSave.current = true;
     supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => {
       if (data) {
         const row = data as unknown as Partial<Profile>;
         setP((current) => ({ ...current, ...row, training_sessions_goal: Math.min(7, Math.max(1, Number(row.training_sessions_goal ?? current.training_sessions_goal))) }));
       }
+      setHydrated(true);
     });
   }, [user, navigate]);
 
-  const save = async () => {
-    if (!user) return;
-    setSaving(true);
-    const { training_sessions_goal, ...profileData } = p;
-    const { error } = await supabase.from("profiles").upsert({
-      ...profileData,
-      training_sessions_goal: Math.min(7, Math.max(1, Number(training_sessions_goal || 3))),
-      user_id: user.id,
-      email: user.email,
-    } as never, { onConflict: "user_id" });
-    setSaving(false);
-    if (error) toast.error(error.message);
-    else toast.success("Profil sauvegardé");
-  };
+  useEffect(() => {
+    if (!user || !hydrated) return;
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return;
+    }
+
+    const timer = window.setTimeout(async () => {
+      setSaving(true);
+      const { training_sessions_goal, ...profileData } = p;
+      const { error } = await supabase.from("profiles").upsert({
+        ...profileData,
+        training_sessions_goal: Math.min(7, Math.max(1, Number(training_sessions_goal || 3))),
+        user_id: user.id,
+        email: user.email,
+      } as never, { onConflict: "user_id" });
+      setSaving(false);
+      if (error) toast.error(error.message);
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [p, user, hydrated]);
 
   const num = (k: keyof Profile) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setP((s) => ({ ...s, [k]: e.target.value === "" ? null : Number(e.target.value) }));
@@ -162,8 +174,12 @@ function ProfilePage() {
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <Button onClick={save} disabled={saving} className="rounded-xl"><Save className="size-4 mr-1" />{saving ? "…" : "Sauvegarder"}</Button>
+      <div className="flex items-center gap-3">
+        {hydrated && (
+          <span className="text-xs text-muted-foreground" aria-live="polite">
+            {saving ? "Sauvegarde…" : "Enregistré automatiquement"}
+          </span>
+        )}
         <Button variant="outline" onClick={async () => { await signOut(); navigate({ to: "/login", search: { next: "/" } }); }} className="rounded-xl">
           <LogOut className="size-4 mr-1" />Se déconnecter
         </Button>
