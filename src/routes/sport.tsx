@@ -672,10 +672,11 @@ const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, se
         return updatedRow;
       }),
     }));
-    // Ne resynchronise que si c'est bien la ligne la plus récente (sinon on écraserait
-    // la cible avec une valeur passée).
+    // Resynchronise si la ligne éditée est bien la plus récente en date (comparaison
+    // directe par date, pas par position dans une liste potentiellement pas encore à jour).
     const rows = rowsByExercise[exerciseId] ?? [];
-    if (updatedRow && rows[0]?.id === id) syncExerciseFromRow(exerciseId, updatedRow);
+    const mostRecentDate = rows.reduce((max, r) => (r.date > max ? r.date : max), "");
+    if (updatedRow && updatedRow.date >= mostRecentDate) syncExerciseFromRow(exerciseId, updatedRow);
   };
   const removeRow = (exerciseId: string, id: string) => {
     setManualStore((p) => ({ ...p, [exerciseId]: (p[exerciseId] ?? []).filter((r) => r.id !== id) }));
