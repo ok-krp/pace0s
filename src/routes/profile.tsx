@@ -26,6 +26,7 @@ type Profile = {
   daily_protein_goal: number | null;
   daily_water_ml_goal: number | null;
   training_goal: string | null;
+  training_sessions_goal: number;
 };
 
 function ProfilePage() {
@@ -35,22 +36,30 @@ function ProfilePage() {
     display_name: "", age: null, sex: null, height_cm: null,
     weight_kg: null, weight_goal_kg: null,
     daily_calorie_goal: 2300, daily_protein_goal: 140, daily_water_ml_goal: 2500,
-    training_goal: "hypertrophy",
+    training_goal: "hypertrophy", training_sessions_goal: 3,
   });
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!user) { navigate({ to: "/login", search: { next: "/" } }); return; }
     supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle().then(({ data }) => {
-      if (data) setP({ ...p, ...data } as Profile);
+      if (data) {
+        const row = data as unknown as Partial<Profile>;
+        setP((current) => ({ ...current, ...row, training_sessions_goal: Math.min(7, Math.max(1, Number(row.training_sessions_goal ?? current.training_sessions_goal))) }));
+      }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [user, navigate]);
 
   const save = async () => {
     if (!user) return;
     setSaving(true);
-    const { error } = await supabase.from("profiles").upsert({ ...p, user_id: user.id, email: user.email }, { onConflict: "user_id" });
+    const { training_sessions_goal, ...profileData } = p;
+    const { error } = await supabase.from("profiles").upsert({
+      ...profileData,
+      training_sessions_goal: Math.min(7, Math.max(1, Number(training_sessions_goal || 3))),
+      user_id: user.id,
+      email: user.email,
+    } as never, { onConflict: "user_id" });
     setSaving(false);
     if (error) toast.error(error.message);
     else toast.success("Profil sauvegardé");
@@ -118,6 +127,19 @@ function ProfilePage() {
                 <SelectItem value="none">Aucun</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div>
+            <Label className="text-xs">Entraînements par semaine</Label>
+            <Input
+              type="number"
+              min={1}
+              max={7}
+              step={1}
+              value={p.training_sessions_goal}
+              onChange={(e) => setP((s) => ({ ...s, training_sessions_goal: Math.min(7, Math.max(1, Number(e.target.value) || 1)) }))}
+              className="mt-1"
+            />
+            <div className="text-[11px] text-muted-foreground mt-1">Objectif hebdomadaire : 1 à 7 séances</div>
           </div>
         </div>
       </div>
