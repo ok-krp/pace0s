@@ -156,6 +156,7 @@ function SportPage() {
         <div className="rounded-2xl glass-card p-4 sm:p-5 mb-3">
           <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
             <h2 className="font-display text-base sm:text-lg font-semibold flex items-center gap-2"><CalIcon className="size-4 text-muted-foreground" /> Aujourd'hui ({DAYS_LABELS[todayDow]})</h2>
+            <Button size="sm" variant="secondary" onClick={() => startSession()} className="rounded-lg"><Play className="size-3 mr-1" />Séance libre</Button>
           </div>
           {todayPrograms.length === 0 ? (
             <div className="text-sm text-muted-foreground">Aucun programme prévu aujourd'hui. Crée-en un dans l'onglet Programmes.</div>
