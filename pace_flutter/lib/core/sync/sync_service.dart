@@ -15,8 +15,11 @@ class SyncService {
     if (_running || client == null || client!.auth.currentUser == null) return;
     _running = true;
     try {
+      final hadLocalAiPreferenceMutation = localStore.pendingOperations().any(
+        (operation) => operation['key'] == 'pace.settings.ai.confirm_actions' || operation['key'] == 'pace.settings.ai.memory',
+      );
       await _pushPending();
-      await _syncAiPreferences();
+      await _syncAiPreferences(pushLocal: hadLocalAiPreferenceMutation);
       await _pullRemote();
     } finally {
       _running = false;
@@ -79,23 +82,40 @@ class SyncService {
     );
   }
 
-  Future<void> _syncAiPreferences() async {
+  Future<void> _syncAiPreferences({required bool pushLocal}) async {
     final user = client!.auth.currentUser;
     if (user == null) return;
 
-    final localConfirm = localStore.read('pace.settings.ai.confirm_actions');
-    final localMemory = localStore.read('pace.settings.ai.memory');
-    final patch = <String, dynamic>{
-      'user_id': user.id,
-      if (localConfirm is bool) 'confirm_actions': localConfirm,
-      if (localMemory is bool) 'memory_level': localMemory ? 'limited' : 'none',
-    };
-    if (patch.length == 1) return;
-
     try {
-      await client!.from('ai_preferences').upsert(patch);
+      if (pushLocal) {
+        final localConfirm = localStore.read('pace.settings.ai.confirm_actions');
+        final localMemory = localStore.read('pace.settings.ai.memory');
+        final patch = <String, dynamic>{
+          'user_id': user.id,
+          if (localConfirm is bool) 'confirm_actions': localConfirm,
+          if (localMemory is bool) 'memory_level': localMemory ? 'limited' : 'none',
+        };
+        if (patch.length > 1) await client!.from('ai_preferences').upsert(patch);
+        return;
+      }
+
+      final rows = await client!
+          .from('ai_preferences')
+          .select('confirm_actions,memory_level')
+          .eq('user_id', user.id)
+          .limit(1);
+      if (rows.isEmpty) return;
+      final row = Map<String, dynamic>.from(rows.first);
+      final remoteConfirm = row['confirm_actions'];
+      final remoteMemory = row['memory_level'];
+      if (remoteConfirm is bool) {
+        await localStore.write('pace.settings.ai.confirm_actions', remoteConfirm, enqueueSync: false);
+      }
+      if (remoteMemory is String) {
+        await localStore.write('pace.settings.ai.memory', remoteMemory != 'none', enqueueSync: false);
+      }
     } catch (_) {
-      // The local settings remain authoritative until the next successful sync.
+      // Cloud preference sync is best-effort; local settings remain available.
     }
   }
 
