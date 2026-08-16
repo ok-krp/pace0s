@@ -14,7 +14,7 @@ jobs:
   android:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -43,6 +43,11 @@ jobs:
 
           gradle = Path('android/app/build.gradle.kts')
           text = gradle.read_text()
+          # The health plugin requires Android API 26+. Flutter's generated
+          # template defaults to flutter.minSdkVersion, which is currently 24.
+          text = text.replace('minSdk = flutter.minSdkVersion', 'minSdk = 26')
+          if 'minSdk = 26' not in text:
+              text = text.replace('defaultConfig {', 'defaultConfig {\n        minSdk = 26', 1)
           if 'isCoreLibraryDesugaringEnabled = true' not in text:
               text = text.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true', 1)
           dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
@@ -84,7 +89,7 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -119,7 +124,7 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -152,7 +157,7 @@ jobs:
   apple:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
