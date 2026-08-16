@@ -11,6 +11,7 @@ class LocalStore {
 
   final File _file;
   Map<String, dynamic> _data = <String, dynamic>{};
+  Future<void> _flushQueue = Future<void>.value();
 
   static Future<LocalStore> open() async {
     final directory = await getApplicationSupportDirectory();
@@ -91,16 +92,26 @@ class LocalStore {
 
   Future<void> acknowledgeOperation(Map<String, dynamic> operation) async {
     final outbox = _outbox;
-    outbox.removeWhere((entry) => entry['key'] == operation['key']);
+    final queuedAt = operation['queuedAt'];
+    outbox.removeWhere((entry) {
+      if (entry['key'] != operation['key']) return false;
+      if (queuedAt != null) return entry['queuedAt'] == queuedAt;
+      return entry['operation'] == operation['operation'] && entry['value'] == operation['value'];
+    });
     _data['__outbox'] = outbox;
     await _flush();
   }
 
-  Future<void> _flush() async {
-    await _file.parent.create(recursive: true);
-    final temporary = File('${_file.path}.tmp');
-    await temporary.writeAsString(jsonEncode(_data), flush: true);
-    if (await _file.exists()) await _file.delete();
-    await temporary.rename(_file.path);
+  Future<void> _flush() {
+    // Network sync can overlap with a user write. Serializing filesystem
+    // replacement prevents an older flush from racing a newer one.
+    _flushQueue = _flushQueue.then((_) async {
+      await _file.parent.create(recursive: true);
+      final temporary = File('${_file.path}.tmp');
+      await temporary.writeAsString(jsonEncode(_data), flush: true);
+      if (await _file.exists()) await _file.delete();
+      await temporary.rename(_file.path);
+    });
+    return _flushQueue;
   }
 }
