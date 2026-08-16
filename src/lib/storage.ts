@@ -7,8 +7,9 @@ const WATER_RECOVERY_FLAG = "pace.__water_recovery_v3";
 
 /**
  * Legacy data is copied forward but never deleted automatically.
- * This is intentional: old keys are a recovery source if a later migration
- * produced an empty or incomplete Pace value.
+ * If a Pace key exists but is empty/incomplete, merge the legacy value back
+ * into it as well. This is important because useLocalState initializes missing
+ * keys with defaults before migration can run, which used to block recovery.
  */
 function migrateLegacyKeys() {
   if (typeof window === "undefined") return;
@@ -18,8 +19,33 @@ function migrateLegacyKeys() {
       const newKey = NEW_PREFIX + oldKey.slice(OLD_PREFIX.length);
       const value = localStorage.getItem(oldKey);
       if (value === null) continue;
-      if (localStorage.getItem(newKey) === null) {
+
+      const current = localStorage.getItem(newKey);
+      if (current === null) {
         try { localStorage.setItem(newKey, value); } catch { continue; }
+        continue;
+      }
+
+      try {
+        const legacyValue: unknown = JSON.parse(value);
+        const currentValue: unknown = JSON.parse(current);
+        const legacyIsObject = legacyValue && typeof legacyValue === "object" && !Array.isArray(legacyValue);
+        const currentIsObject = currentValue && typeof currentValue === "object" && !Array.isArray(currentValue);
+
+        if (legacyIsObject && currentIsObject) {
+          const legacyEntries = Object.entries(legacyValue as Record<string, unknown>);
+          const currentEntries = Object.entries(currentValue as Record<string, unknown>);
+          if (legacyEntries.length > 0 && currentEntries.length === 0) {
+            localStorage.setItem(newKey, JSON.stringify(legacyValue));
+          } else if (legacyEntries.length > 0) {
+            const merged = { ...(legacyValue as Record<string, unknown>), ...(currentValue as Record<string, unknown>) };
+            localStorage.setItem(newKey, JSON.stringify(merged));
+          }
+        } else if ((Array.isArray(currentValue) && currentValue.length === 0) || currentValue == null || current === "") {
+          localStorage.setItem(newKey, value);
+        }
+      } catch {
+        // Ignore malformed legacy/current values and keep the valid target.
       }
     }
     localStorage.setItem(MIGRATION_FLAG, "1");
