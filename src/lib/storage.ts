@@ -28,9 +28,7 @@ function migrateLegacyKeys() {
           const currentEntries = Object.entries(currentValue as Record<string, unknown>);
           if (legacyEntries.length > 0 && currentEntries.length === 0) localStorage.setItem(newKey, JSON.stringify(legacyValue));
           else if (legacyEntries.length > 0) localStorage.setItem(newKey, JSON.stringify({ ...(legacyValue as Record<string, unknown>), ...(currentValue as Record<string, unknown>) }));
-        } else if ((Array.isArray(currentValue) && currentValue.length === 0) || currentValue == null || current === "") {
-          localStorage.setItem(newKey, value);
-        }
+        } else if ((Array.isArray(currentValue) && currentValue.length === 0) || currentValue == null || current === "") localStorage.setItem(newKey, value);
       } catch {}
     }
     localStorage.setItem(MIGRATION_FLAG, "1");
@@ -67,6 +65,78 @@ migrateLegacyKeys();
 const LOCAL_WRITE_EVENT = "pace.local.write";
 const REMOTE_WRITE_EVENT = "pace.remote.write";
 
+type StoredOverloadRow = { id?: string; date?: string; weight?: number; reps?: number; sets?: number; source?: string };
+type StoredOverload = Record<string, StoredOverloadRow[]>;
+type StoredExercise = { id: string; defaultWeight?: number; defaultReps?: number; defaultSets?: number; [key: string]: unknown };
+type StoredProgramItem = { exerciseId: string; weight?: number; reps: number; sets: number; [key: string]: unknown };
+type StoredProgram = { id: string; items: StoredProgramItem[]; [key: string]: unknown };
+
+/**
+ * The first row in the overload UI is the newest manual entry. Every change
+ * to that row must immediately become the current training target. This is
+ * deliberately handled at the persistence layer so it cannot be skipped by
+ * React's asynchronous state batching when weight/reps/sets are edited one by one.
+ */
+function syncLatestOverloadRowsToTraining(value: unknown) {
+  if (typeof window === "undefined" || !value || typeof value !== "object" || Array.isArray(value)) return;
+  try {
+    const overload = value as StoredOverload;
+    const rawExercises = localStorage.getItem("pace.sport.exercises");
+    const rawPrograms = localStorage.getItem("pace.sport.programs");
+    if (!rawExercises && !rawPrograms) return;
+
+    const exercises = rawExercises ? JSON.parse(rawExercises) as StoredExercise[] : [];
+    const programs = rawPrograms ? JSON.parse(rawPrograms) as StoredProgram[] : [];
+    let exercisesChanged = false;
+    let programsChanged = false;
+
+    for (const [exerciseId, rows] of Object.entries(overload)) {
+      if (!Array.isArray(rows)) continue;
+      const latest = rows.find((row) => row?.source === "manual") ?? null;
+      if (!latest) continue;
+      const weight = Number(latest.weight ?? 0);
+      const reps = Number(latest.reps ?? 0);
+      const sets = Number(latest.sets ?? 0);
+      if (![weight, reps, sets].every(Number.isFinite)) continue;
+
+      for (let i = 0; i < exercises.length; i++) {
+        if (exercises[i].id !== exerciseId) continue;
+        if (exercises[i].defaultWeight === weight && exercises[i].defaultReps === reps && exercises[i].defaultSets === sets) continue;
+        exercises[i] = { ...exercises[i], defaultWeight: weight, defaultReps: reps, defaultSets: sets };
+        exercisesChanged = true;
+      }
+
+      for (let i = 0; i < programs.length; i++) {
+        const program = programs[i];
+        let itemsChanged = false;
+        const items = program.items.map((item) => {
+          if (item.exerciseId !== exerciseId) return item;
+          if (item.weight === weight && item.reps === reps && item.sets === sets) return item;
+          itemsChanged = true;
+          return { ...item, weight, reps, sets };
+        });
+        if (itemsChanged) {
+          programs[i] = { ...program, items };
+          programsChanged = true;
+        }
+      }
+    }
+
+    if (exercisesChanged) {
+      const next = JSON.stringify(exercises);
+      localStorage.setItem("pace.sport.exercises", next);
+      window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: "pace.sport.exercises", value: exercises } }));
+    }
+    if (programsChanged) {
+      const next = JSON.stringify(programs);
+      localStorage.setItem("pace.sport.programs", next);
+      window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: "pace.sport.programs", value: programs } }));
+    }
+  } catch {
+    // A malformed optional local value must never prevent the overload row itself from saving.
+  }
+}
+
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
@@ -92,6 +162,7 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     if (!loaded) return;
     try {
       localStorage.setItem(key, JSON.stringify(value));
+      if (key === "pace.sport.overload") syncLatestOverloadRowsToTraining(value);
       window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key, value } }));
     } catch {}
   }, [key, value, loaded]);
