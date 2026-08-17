@@ -44,8 +44,9 @@ function isEmptyValue(value: unknown) {
 
 /**
  * Cross-device sync with a durable key queue and server-side last-write-wins.
- * The queue is populated synchronously before network I/O. Server writes use
- * an atomic PostgreSQL function so a stale device cannot overwrite a newer row.
+ * Local changes are persisted first and then pushed immediately when cloud sync
+ * consent is enabled. If consent is enabled after the app has mounted, the
+ * legal-consent event reactivates the engine without requiring a reload.
  */
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
@@ -55,16 +56,19 @@ export function useCloudSyncEngineInternal() {
 
   useEffect(() => {
     if (typeof window === "undefined" || !user) return;
-    try { if (!isLegalCategoryAllowed("sync_cloud")) return; } catch { return; }
     let cancelled = false;
 
+    const cloudSyncAllowed = () => {
+      try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; }
+    };
+
     const pushKeyNow = async (key: string) => {
-      if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
+      if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX) || !cloudSyncAllowed()) return;
       queueKey(key);
 
       const previous = keyWrites.current[key] ?? Promise.resolve();
       const current = previous.then(async () => {
-        if (cancelled) return;
+        if (cancelled || !cloudSyncAllowed()) return;
         if (!navigator.onLine) { setStatus("offline"); return; }
 
         let value: unknown;
@@ -86,9 +90,6 @@ export function useCloudSyncEngineInternal() {
             return;
           }
 
-          // true = our mutation won; false = the server already had a newer row.
-          // In the latter case, immediately pull the authoritative value instead
-          // of allowing this stale local state to remain marked as current.
           if (data === false) {
             const { data: rows } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", key).limit(1);
             const row = rows?.[0] as SyncRow | undefined;
@@ -113,7 +114,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const flushQueue = async () => {
-      if (cancelled || !navigator.onLine || running.current) return;
+      if (cancelled || !cloudSyncAllowed() || !navigator.onLine || running.current) return;
       const queue = readQueue();
       if (!queue.length) return;
       running.current = true;
@@ -122,7 +123,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const pull = async () => {
-      if (cancelled || !navigator.onLine || running.current) return;
+      if (cancelled || !cloudSyncAllowed() || !navigator.onLine || running.current) return;
       try {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
         if (error || !data || cancelled) return;
@@ -162,21 +163,28 @@ export function useCloudSyncEngineInternal() {
     };
 
     const syncNow = async () => {
+      if (!cloudSyncAllowed()) return;
       if (!navigator.onLine) { setStatus("offline"); return; }
       await flushQueue();
       await pull();
     };
 
     const offLocal = onLocalWrite((key) => {
-      if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
+      if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX) || !cloudSyncAllowed()) return;
       queueKey(key);
       void pushKeyNow(key);
     });
 
     const onOnline = () => { void syncNow(); };
     const onOffline = () => setStatus("offline");
+    const onLegalChanged = () => {
+      if (cloudSyncAllowed()) void syncNow();
+      else setStatus("idle");
+    };
+
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
+    window.addEventListener("pace.legal.changed", onLegalChanged);
     void syncNow();
     const interval = window.setInterval(() => void syncNow(), POLL_MS);
 
@@ -185,6 +193,7 @@ export function useCloudSyncEngineInternal() {
       offLocal();
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
+      window.removeEventListener("pace.legal.changed", onLegalChanged);
       window.clearInterval(interval);
     };
   }, [user]);
