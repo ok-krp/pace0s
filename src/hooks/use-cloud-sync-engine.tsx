@@ -5,6 +5,7 @@ import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 
 const PACE_PREFIX = "pace.";
+const DOMAIN_PREFIX = "pace.domain.";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
 const POLL_MS = 15000;
 const QUEUE_KEY = "pace.__sync_queue";
@@ -15,6 +16,7 @@ const DEVICE_ID = getDeviceId();
 type SyncMeta = Record<string, string>;
 export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
 type SyncRow = { key: string; value: unknown; updated_at: string; updated_by: string | null };
+type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 
 function getDeviceId() {
   if (typeof window === "undefined") return "server";
@@ -42,12 +44,28 @@ function isEmptyValue(value: unknown) {
   return false;
 }
 
-/**
- * Cross-device sync with a durable key queue and server-side last-write-wins.
- * Local changes are persisted first and then pushed immediately when cloud sync
- * consent is enabled. If consent is enabled after the app has mounted, the
- * legal-consent event reactivates the engine without requiring a reload.
- */
+function readDomainRecord(key: string): DomainRecord | null {
+  if (!key.startsWith(PACE_PREFIX)) return null;
+  const domain = key.slice(PACE_PREFIX.length);
+  try {
+    const raw = localStorage.getItem(`${DOMAIN_PREFIX}${domain}`);
+    if (!raw) return null;
+    const record = JSON.parse(raw) as DomainRecord;
+    if (record?.version !== 1 || typeof record.updatedAt !== "string" || typeof record.mutationId !== "string" || !("value" in record)) return null;
+    return record;
+  } catch { return null; }
+}
+
+function writeDomainRecordFromRemote(key: string, value: unknown, updatedAt: string) {
+  if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return;
+  const domain = key.slice(PACE_PREFIX.length);
+  try {
+    const existing = readDomainRecord(key);
+    if (existing && Date.parse(existing.updatedAt) > Date.parse(updatedAt)) return;
+    localStorage.setItem(`${DOMAIN_PREFIX}${domain}`, JSON.stringify({ version: 1, updatedAt, mutationId: `remote-${updatedAt}-${DEVICE_ID}`, value } satisfies DomainRecord));
+  } catch {}
+}
+
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
@@ -57,58 +75,36 @@ export function useCloudSyncEngineInternal() {
   useEffect(() => {
     if (typeof window === "undefined" || !user) return;
     let cancelled = false;
-
-    const cloudSyncAllowed = () => {
-      try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; }
-    };
+    const cloudSyncAllowed = () => { try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; } };
 
     const pushKeyNow = async (key: string) => {
       if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX) || !cloudSyncAllowed()) return;
       queueKey(key);
-
       const previous = keyWrites.current[key] ?? Promise.resolve();
       const current = previous.then(async () => {
         if (cancelled || !cloudSyncAllowed()) return;
         if (!navigator.onLine) { setStatus("offline"); return; }
-
         let value: unknown;
         try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { return; }
         const updatedAt = new Date().toISOString();
         setStatus("syncing");
-
         try {
-          const { data, error } = await (supabase.rpc as never)("upsert_user_state_if_newer", {
-            p_user_id: user.id,
-            p_key: key,
-            p_value: value,
-            p_updated_at: updatedAt,
-            p_updated_by: DEVICE_ID,
-          });
+          const { data, error } = await (supabase.rpc as never)("upsert_user_state_if_newer", { p_user_id: user.id, p_key: key, p_value: value, p_updated_at: updatedAt, p_updated_by: DEVICE_ID });
           if (cancelled) return;
-          if (error) {
-            setStatus("error");
-            return;
-          }
-
+          if (error) { setStatus("error"); return; }
           if (data === false) {
             const { data: rows } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", key).limit(1);
             const row = rows?.[0] as SyncRow | undefined;
-            if (row) {
-              applyRemoteWrite(key, row.value);
-              markLocal(key, row.updated_at);
-            }
+            if (row) { applyRemoteWrite(key, row.value); writeDomainRecordFromRemote(key, row.value, row.updated_at); markLocal(key, row.updated_at); }
           } else {
             markLocal(key, updatedAt);
+            writeDomainRecordFromRemote(key, value, updatedAt);
             localStorage.setItem("pace.__last_sync_at", updatedAt);
           }
-
           unqueueKey(key);
           setStatus("ok");
-        } catch {
-          if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
-        }
+        } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
       });
-
       keyWrites.current[key] = current.catch(() => undefined);
       await current;
     };
@@ -118,8 +114,7 @@ export function useCloudSyncEngineInternal() {
       const queue = readQueue();
       if (!queue.length) return;
       running.current = true;
-      try { for (const key of queue) await pushKeyNow(key); }
-      finally { running.current = false; }
+      try { for (const key of queue) await pushKeyNow(key); } finally { running.current = false; }
     };
 
     const pull = async () => {
@@ -131,35 +126,32 @@ export function useCloudSyncEngineInternal() {
         const meta = readMeta();
         let applied = 0;
         let newest = "";
-
         for (const rawRow of data) {
           const row = rawRow as unknown as SyncRow;
           const rawKey = row.key;
           const isLegacy = rawKey.startsWith("lt.");
           const key = isLegacy ? `${PACE_PREFIX}${rawKey.slice(3)}` : rawKey;
           if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key) || queue.has(key)) continue;
-
           const localRaw = localStorage.getItem(key);
           let localValue: unknown = null;
           try { if (localRaw !== null) localValue = JSON.parse(localRaw); } catch {}
           const shouldRecoverLegacy = isLegacy && isEmptyValue(localValue) && !isEmptyValue(row.value);
-
           const remoteTime = Date.parse(row.updated_at);
-          const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
-          if (!shouldRecoverLegacy && (!Number.isFinite(remoteTime) || remoteTime <= localTime)) continue;
-
+          const localSyncTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
+          const domainRecord = readDomainRecord(key);
+          const domainTime = domainRecord ? Date.parse(domainRecord.updatedAt) : Number.NaN;
+          if (Number.isFinite(domainTime) && Number.isFinite(remoteTime) && domainTime > remoteTime) { queueKey(key); continue; }
+          if (!shouldRecoverLegacy && (!Number.isFinite(remoteTime) || remoteTime <= localSyncTime)) continue;
           applyRemoteWrite(key, row.value);
+          writeDomainRecordFromRemote(key, row.value, row.updated_at);
           meta[key] = row.updated_at;
           newest = row.updated_at;
           applied++;
         }
-
         writeMeta(meta);
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (applied > 0) setStatus("ok");
-      } catch {
-        if (!cancelled && !navigator.onLine) setStatus("offline");
-      }
+      } catch { if (!cancelled && !navigator.onLine) setStatus("offline"); }
     };
 
     const syncNow = async () => {
@@ -168,26 +160,19 @@ export function useCloudSyncEngineInternal() {
       await flushQueue();
       await pull();
     };
-
     const offLocal = onLocalWrite((key) => {
       if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX) || !cloudSyncAllowed()) return;
       queueKey(key);
       void pushKeyNow(key);
     });
-
     const onOnline = () => { void syncNow(); };
     const onOffline = () => setStatus("offline");
-    const onLegalChanged = () => {
-      if (cloudSyncAllowed()) void syncNow();
-      else setStatus("idle");
-    };
-
+    const onLegalChanged = () => { if (cloudSyncAllowed()) void syncNow(); else setStatus("idle"); };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     window.addEventListener("pace.legal.changed", onLegalChanged);
     void syncNow();
     const interval = window.setInterval(() => void syncNow(), POLL_MS);
-
     return () => {
       cancelled = true;
       offLocal();
