@@ -6,7 +6,6 @@ const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
-const manual = read("src/hooks/use-cloud-sync.tsx");
 const sql = read("supabase/migrations/20260821000000_event_driven_sync_timestamp_fix.sql");
 
 // Architectural invariants: local changes are event-driven, not discovered by polling.
