@@ -7,7 +7,6 @@ import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 const PACE_PREFIX = "pace.";
 const DOMAIN_PREFIX = "pace.domain.";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
-const POLL_MS = 30000;
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
@@ -65,10 +64,6 @@ export function useCloudSyncEngineInternal() {
   const [status, setStatus] = useState<SyncStatus>("idle");
   const running = useRef(false);
   const keyWrites = useRef<Record<string, Promise<void>>>({});
-  // Remote state is applied to React state, which causes useLocalState to run
-  // its persistence effect. Without this guard that persistence event is
-  // mistaken for a new local mutation, pushed back to Supabase, and can create
-  // a remote/local write loop (and visible UI resets such as wallpapers).
   const lastRemoteValues = useRef<Record<string, string>>({});
 
   const serializeValue = (value: unknown) => {
@@ -91,22 +86,14 @@ export function useCloudSyncEngineInternal() {
         if (error) throw error;
         return (data?.[0] as SyncRow | undefined) ?? null;
       };
-
       let current = await selectCurrent();
       if (current && Date.parse(current.updated_at) >= Date.parse(updatedAt)) {
         applyRemoteAndRemember(key, current.value, current.updated_at);
         markLocal(key, current.updated_at);
         return false;
       }
-
       if (current) {
-        const { data, error } = await supabase
-          .from("user_state")
-          .update({ value, updated_at: updatedAt, updated_by: DEVICE_ID } as never)
-          .eq("user_id", user.id)
-          .eq("key", key)
-          .lt("updated_at", updatedAt)
-          .select("key,value,updated_at,updated_by");
+        const { data, error } = await supabase.from("user_state").update({ value, updated_at: updatedAt, updated_by: DEVICE_ID } as never).eq("user_id", user.id).eq("key", key).lt("updated_at", updatedAt).select("key,value,updated_at,updated_by");
         if (error) throw error;
         if (data?.length) return true;
         current = await selectCurrent();
@@ -116,7 +103,6 @@ export function useCloudSyncEngineInternal() {
           return false;
         }
       }
-
       const { error: insertError } = await supabase.from("user_state").insert({ user_id: user.id, key, value, updated_at: updatedAt, updated_by: DEVICE_ID } as never);
       if (!insertError) return true;
       if (!/duplicate|unique/i.test(insertError.message ?? "")) throw insertError;
@@ -148,9 +134,7 @@ export function useCloudSyncEngineInternal() {
             rpcError = result?.error ?? null;
             accepted = result?.data === false ? false : result?.data === true ? true : null;
           } catch (error) { rpcError = error; }
-
           if (rpcError) accepted = await fallbackWrite(key, value, updatedAt);
-
           if (cancelled) return;
           if (accepted === false) {
             const { data: rows, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", key).limit(1);
@@ -270,14 +254,12 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("offline", onOffline);
     window.addEventListener("pace.legal.changed", onLegalChanged);
     void syncNow();
-    const interval = window.setInterval(() => void syncNow(), POLL_MS);
     return () => {
       cancelled = true;
       offLocal();
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("pace.legal.changed", onLegalChanged);
-      window.clearInterval(interval);
       void supabase.removeChannel(realtimeChannel);
     };
   }, [user]);

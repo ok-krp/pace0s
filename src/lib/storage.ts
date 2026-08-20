@@ -73,12 +73,6 @@ type StoredProgramItem = { exerciseId: string; weight?: number; reps: number; se
 type StoredProgram = { id: string; items: StoredProgramItem[]; [key: string]: unknown };
 type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 
-/**
- * The first row in the overload UI is the newest manual entry. Every change
- * to that row must immediately become the current training target. This is
- * deliberately handled at the persistence layer so it cannot be skipped by
- * React's asynchronous state batching when weight/reps/sets are edited one by one.
- */
 function syncLatestOverloadRowsToTraining(value: unknown) {
   if (typeof window === "undefined" || !value || typeof value !== "object" || Array.isArray(value)) return;
   try {
@@ -134,9 +128,7 @@ function syncLatestOverloadRowsToTraining(value: unknown) {
       localStorage.setItem("pace.sport.programs", next);
       window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: "pace.sport.programs", value: programs } }));
     }
-  } catch {
-    // A malformed optional local value must never prevent the overload row itself from saving.
-  }
+  } catch {}
 }
 
 function applyRemoteDomainRecord(domain: string, value: unknown, updatedAt: string) {
@@ -150,12 +142,7 @@ function applyRemoteDomainRecord(domain: string, value: unknown, updatedAt: stri
         if (existing.version === 1 && typeof existing.updatedAt === "string" && Date.parse(existing.updatedAt) > Date.parse(updatedAt)) return;
       } catch {}
     }
-    const record: DomainRecord = {
-      version: 1,
-      updatedAt,
-      mutationId: `remote-${updatedAt}`,
-      value,
-    };
+    const record: DomainRecord = { version: 1, updatedAt, mutationId: `remote-${updatedAt}`, value };
     localStorage.setItem(key, JSON.stringify(record));
     window.dispatchEvent(new CustomEvent(DOMAIN_WRITE_EVENT, { detail: { domain, record } }));
   } catch {}
@@ -165,6 +152,11 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const [value, setValue] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
   const valueRef = useRef<T>(initial);
+  const hydratedRef = useRef(false);
+
+  useEffect(() => {
+    hydratedRef.current = false;
+  }, [key]);
 
   useEffect(() => {
     try {
@@ -184,6 +176,13 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
 
   useEffect(() => {
     if (!loaded) return;
+    // Reading existing state during hydration is not a user mutation.
+    // Do not emit a sync event for it, otherwise opening or navigating the
+    // app can rewrite unchanged data to the cloud.
+    if (!hydratedRef.current) {
+      hydratedRef.current = true;
+      return;
+    }
     try {
       localStorage.setItem(key, JSON.stringify(value));
       if (key === "pace.sport.overload") syncLatestOverloadRowsToTraining(value);
