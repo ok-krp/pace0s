@@ -28,6 +28,10 @@ export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
+function setThemeColor(dark: boolean) {
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#111722" : "#f8fafc");
+}
+
 function SettingsPage() {
   const [dark, setDark] = useState(false);
   const push = usePush();
@@ -53,6 +57,7 @@ function SettingsPage() {
     const stored = localStorage.getItem("pace.dark") === "1";
     setDark(stored);
     document.documentElement.classList.toggle("dark", stored);
+    setThemeColor(stored);
   }, []);
 
   const downloadNativeAndroidApp = () => {
@@ -64,6 +69,7 @@ function SettingsPage() {
     setDark(v);
     document.documentElement.classList.toggle("dark", v);
     localStorage.setItem("pace.dark", v ? "1" : "0");
+    setThemeColor(v);
   };
 
   const exportData = () => {

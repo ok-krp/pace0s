@@ -71,6 +71,51 @@ export function useCloudSyncEngineInternal() {
     let cancelled = false;
     const cloudSyncAllowed = () => { try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; } };
 
+    const fallbackWrite = async (key: string, value: unknown, updatedAt: string): Promise<boolean> => {
+      const selectCurrent = async () => {
+        const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", key).limit(1);
+        if (error) throw error;
+        return (data?.[0] as SyncRow | undefined) ?? null;
+      };
+
+      let current = await selectCurrent();
+      if (current && Date.parse(current.updated_at) >= Date.parse(updatedAt)) {
+        applyRemoteWrite(key, current.value, current.updated_at);
+        markLocal(key, current.updated_at);
+        return false;
+      }
+
+      if (current) {
+        const { data, error } = await supabase
+          .from("user_state")
+          .update({ value, updated_at: updatedAt, updated_by: DEVICE_ID } as never)
+          .eq("user_id", user.id)
+          .eq("key", key)
+          .lt("updated_at", updatedAt)
+          .select("key,value,updated_at,updated_by");
+        if (error) throw error;
+        if (data?.length) return true;
+        current = await selectCurrent();
+        if (current) {
+          applyRemoteWrite(key, current.value, current.updated_at);
+          markLocal(key, current.updated_at);
+          return false;
+        }
+      }
+
+      const { error: insertError } = await supabase.from("user_state").insert({ user_id: user.id, key, value, updated_at: updatedAt, updated_by: DEVICE_ID } as never);
+      if (!insertError) return true;
+      if (!/duplicate|unique/i.test(insertError.message ?? "")) throw insertError;
+      current = await selectCurrent();
+      if (!current) throw insertError;
+      if (Date.parse(current.updated_at) >= Date.parse(updatedAt)) {
+        applyRemoteWrite(key, current.value, current.updated_at);
+        markLocal(key, current.updated_at);
+        return false;
+      }
+      throw insertError;
+    };
+
     const pushKeyNow = async (key: string) => {
       if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX) || !cloudSyncAllowed()) return;
       queueKey(key);
@@ -91,15 +136,7 @@ export function useCloudSyncEngineInternal() {
             accepted = result?.data === false ? false : result?.data === true ? true : null;
           } catch (error) { rpcError = error; }
 
-          // Backward-compatible fallback for databases where the RPC migration has not yet been applied.
-          if (rpcError) {
-            const { error } = await supabase.from("user_state").upsert(
-              { user_id: user.id, key, value, updated_at: updatedAt, updated_by: DEVICE_ID } as never,
-              { onConflict: "user_id,key" },
-            );
-            if (error) throw error;
-            accepted = true;
-          }
+          if (rpcError) accepted = await fallbackWrite(key, value, updatedAt);
 
           if (cancelled) return;
           if (accepted === false) {
@@ -107,7 +144,7 @@ export function useCloudSyncEngineInternal() {
             if (error) throw error;
             const row = rows?.[0] as SyncRow | undefined;
             if (row) {
-              applyRemoteWrite(key, row.value);
+              applyRemoteWrite(key, row.value, row.updated_at);
               writeDomainRecordFromRemote(key, row.value, row.updated_at);
               markLocal(key, row.updated_at);
             }
@@ -115,6 +152,7 @@ export function useCloudSyncEngineInternal() {
             markLocal(key, updatedAt);
             writeDomainRecordFromRemote(key, value, updatedAt);
             localStorage.setItem("pace.__last_sync_at", updatedAt);
+            window.dispatchEvent(new CustomEvent("pace.remote.write", { detail: { key, value } }));
           }
           unqueueKey(key);
           setStatus("ok");
@@ -144,8 +182,7 @@ export function useCloudSyncEngineInternal() {
       const domain = readDomainRecord(row.key);
       const domainTime = domain ? Date.parse(domain.updatedAt) : Number.NaN;
       if (Number.isFinite(domainTime) && domainTime >= remoteTime) return;
-      applyRemoteWrite(row.key, row.value);
-      writeDomainRecordFromRemote(row.key, row.value, row.updated_at);
+      applyRemoteWrite(row.key, row.value, row.updated_at);
       meta[row.key] = row.updated_at;
       writeMeta(meta);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
@@ -174,10 +211,9 @@ export function useCloudSyncEngineInternal() {
           const localSyncTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           const domainRecord = readDomainRecord(key);
           const domainTime = domainRecord ? Date.parse(domainRecord.updatedAt) : Number.NaN;
-          if (!shouldRecoverLegacy && Number.isFinite(domainTime) && Number.isFinite(remoteTime) && domainTime > remoteTime) { queueKey(key); continue; }
+          if (!shouldRecoverLegacy && Number.isFinite(domainTime) && domainTime > remoteTime) { queueKey(key); continue; }
           if (!shouldRecoverLegacy && (!Number.isFinite(remoteTime) || remoteTime <= localSyncTime)) continue;
-          applyRemoteWrite(key, row.value);
-          writeDomainRecordFromRemote(key, row.value, row.updated_at);
+          applyRemoteWrite(key, row.value, row.updated_at);
           meta[key] = row.updated_at;
           newest = row.updated_at;
         }

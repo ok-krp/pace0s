@@ -64,12 +64,14 @@ migrateLegacyKeys();
 
 const LOCAL_WRITE_EVENT = "pace.local.write";
 const REMOTE_WRITE_EVENT = "pace.remote.write";
+const DOMAIN_WRITE_EVENT = "pace.domain.write";
 
 type StoredOverloadRow = { id?: string; date?: string; weight?: number; reps?: number; sets?: number; source?: string };
 type StoredOverload = Record<string, StoredOverloadRow[]>;
 type StoredExercise = { id: string; defaultWeight?: number; defaultReps?: number; defaultSets?: number; [key: string]: unknown };
 type StoredProgramItem = { exerciseId: string; weight?: number; reps: number; sets: number; [key: string]: unknown };
 type StoredProgram = { id: string; items: StoredProgramItem[]; [key: string]: unknown };
+type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 
 /**
  * The first row in the overload UI is the newest manual entry. Every change
@@ -137,6 +139,28 @@ function syncLatestOverloadRowsToTraining(value: unknown) {
   }
 }
 
+function applyRemoteDomainRecord(domain: string, value: unknown, updatedAt: string) {
+  if (typeof window === "undefined" || !domain || !updatedAt) return;
+  try {
+    const key = `pace.domain.${domain}`;
+    const existingRaw = localStorage.getItem(key);
+    if (existingRaw) {
+      try {
+        const existing = JSON.parse(existingRaw) as Partial<DomainRecord>;
+        if (existing.version === 1 && typeof existing.updatedAt === "string" && Date.parse(existing.updatedAt) > Date.parse(updatedAt)) return;
+      } catch {}
+    }
+    const record: DomainRecord = {
+      version: 1,
+      updatedAt,
+      mutationId: `remote-${updatedAt}`,
+      value,
+    };
+    localStorage.setItem(key, JSON.stringify(record));
+    window.dispatchEvent(new CustomEvent(DOMAIN_WRITE_EVENT, { detail: { domain, record } }));
+  } catch {}
+}
+
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
@@ -187,8 +211,17 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   return [value, set];
 }
 
-export function applyRemoteWrite(key: string, value: unknown) {
+export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  if (updatedAt) {
+    if (key.startsWith("pace.domain.")) {
+      const domain = key.slice("pace.domain.".length);
+      applyRemoteDomainRecord(domain, value, updatedAt);
+    } else if (key.startsWith(NEW_PREFIX)) {
+      const domain = key.slice(NEW_PREFIX.length);
+      applyRemoteDomainRecord(domain, value, updatedAt);
+    }
+  }
   window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value } }));
 }
 
