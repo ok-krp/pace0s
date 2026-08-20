@@ -73,20 +73,11 @@ function markSynced(key: string, timestamp: string) {
   writeMeta(meta);
 }
 
-function serializeValue(value: unknown) {
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return undefined;
-  }
-}
-
 function readLocalValue(key: string): { value: unknown; serialized: string } | null {
   try {
     const raw = localStorage.getItem(key);
     if (raw === null) return { value: null, serialized: "null" };
-    const value = JSON.parse(raw) as unknown;
-    return { value, serialized: raw };
+    return { value: JSON.parse(raw) as unknown, serialized: raw };
   } catch {
     return null;
   }
@@ -96,11 +87,9 @@ export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
   const activeWrites = useRef(new Map<string, Promise<void>>());
-  const cancelledRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined" || !user) return;
-    cancelledRef.current = false;
     let cancelled = false;
 
     const cloudSyncAllowed = () => {
@@ -126,7 +115,9 @@ export function useCloudSyncEngineInternal() {
       let current = await readCurrentRow(key);
 
       if (current && Date.parse(current.updated_at) >= Date.parse(updatedAt)) {
-        applyRemoteWrite(key, current.value, current.updated_at);
+        const latestLocal = readLocalValue(key);
+        const sentSerialized = JSON.stringify(value);
+        if (latestLocal?.serialized === sentSerialized) applyRemoteWrite(key, current.value, current.updated_at);
         markSynced(key, current.updated_at);
         return false;
       }
@@ -144,7 +135,8 @@ export function useCloudSyncEngineInternal() {
 
         current = await readCurrentRow(key);
         if (current) {
-          applyRemoteWrite(key, current.value, current.updated_at);
+          const latestLocal = readLocalValue(key);
+          if (latestLocal?.serialized === JSON.stringify(value)) applyRemoteWrite(key, current.value, current.updated_at);
           markSynced(key, current.updated_at);
           return false;
         }
@@ -163,7 +155,8 @@ export function useCloudSyncEngineInternal() {
       current = await readCurrentRow(key);
       if (!current) throw insertError;
       if (Date.parse(current.updated_at) >= Date.parse(updatedAt)) {
-        applyRemoteWrite(key, current.value, current.updated_at);
+        const latestLocal = readLocalValue(key);
+        if (latestLocal?.serialized === JSON.stringify(value)) applyRemoteWrite(key, current.value, current.updated_at);
         markSynced(key, current.updated_at);
         return false;
       }
@@ -186,7 +179,7 @@ export function useCloudSyncEngineInternal() {
 
       setStatus("syncing");
 
-      let accepted: boolean | null = null;
+      let accepted: boolean;
       try {
         const result = await (supabase.rpc as never)("upsert_user_state_if_newer", {
           p_user_id: user.id,
@@ -197,9 +190,10 @@ export function useCloudSyncEngineInternal() {
         });
         if (result?.error) {
           accepted = await fallbackWrite(key, sentValue, updatedAt);
+        } else if (result?.data === true || result?.data === false) {
+          accepted = result.data;
         } else {
-          accepted = result?.data === true ? true : result?.data === false ? false : null;
-          if (accepted === null) accepted = await fallbackWrite(key, sentValue, updatedAt);
+          accepted = await fallbackWrite(key, sentValue, updatedAt);
         }
       } catch {
         accepted = await fallbackWrite(key, sentValue, updatedAt);
@@ -207,30 +201,32 @@ export function useCloudSyncEngineInternal() {
 
       if (cancelled) return;
 
+      const latest = readLocalValue(key);
+      const localChangedWhileInFlight = latest?.serialized !== sentSerialized;
+
       if (accepted === false) {
         const current = await readCurrentRow(key);
-        if (current) applyRemoteWrite(key, current.value, current.updated_at);
-        if (current) markSynced(key, current.updated_at);
-      } else {
+        if (current) {
+          // Never overwrite a newer user mutation that happened while this
+          // request was in flight. The queued local value gets its own turn.
+          if (!localChangedWhileInFlight) applyRemoteWrite(key, current.value, current.updated_at);
+          markSynced(key, current.updated_at);
+        }
+      } else if (!localChangedWhileInFlight) {
         markSynced(key, updatedAt);
         try {
           localStorage.setItem("pace.__last_sync_at", updatedAt);
         } catch {}
       }
 
-      // A second mutation may have happened while the request was in flight.
-      // Coalesce all such mutations into the minimum number of follow-up writes.
-      const latest = readLocalValue(key);
-      if (latest?.serialized === sentSerialized) {
-        unqueueKey(key);
-        setStatus("ok");
+      if (localChangedWhileInFlight) {
+        queueKey(key);
+        setStatus("syncing");
         return;
       }
 
-      queueKey(key);
-      // Do not recurse here. The caller's per-key worker will immediately
-      // process the newest value without creating another independent worker.
-      setStatus("syncing");
+      unqueueKey(key);
+      setStatus("ok");
     };
 
     const runKeyWorker = (key: string): Promise<void> => {
@@ -239,15 +235,10 @@ export function useCloudSyncEngineInternal() {
 
       const worker = (async () => {
         try {
-          do {
-            if (cancelled || !cloudSyncAllowed()) return;
-            if (!navigator.onLine) {
-              queueKey(key);
-              setStatus("offline");
-              return;
-            }
+          while (!cancelled && cloudSyncAllowed() && navigator.onLine) {
+            if (!readQueue().includes(key)) break;
             await sendCurrentValue(key);
-          } while (!cancelled && readQueue().includes(key) && navigator.onLine);
+          }
         } catch {
           queueKey(key);
           if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
@@ -262,9 +253,9 @@ export function useCloudSyncEngineInternal() {
 
     const flushQueue = async () => {
       if (cancelled || !cloudSyncAllowed() || !navigator.onLine) return;
-      const queue = readQueue();
+      const queue = [...new Set(readQueue())];
       if (!queue.length) return;
-      await Promise.all([...new Set(queue)].map((key) => runKeyWorker(key)));
+      await Promise.all(queue.map((key) => runKeyWorker(key)));
     };
 
     const applyRemoteRow = (row: SyncRow) => {
@@ -276,8 +267,8 @@ export function useCloudSyncEngineInternal() {
       const localSyncTime = Date.parse(meta[row.key] ?? "1970-01-01T00:00:00.000Z");
       if (!Number.isFinite(remoteTime) || remoteTime <= localSyncTime) return;
 
-      // A local mutation queued/in-flight always wins locally until its own
-      // write has been accepted or rejected by the conflict-safe RPC.
+      // Local user mutations have priority until their own write has been
+      // resolved. This also prevents a late Realtime event from reverting UI.
       if (readQueue().includes(row.key) || activeWrites.current.has(row.key)) return;
 
       applyRemoteWrite(row.key, row.value, row.updated_at);
@@ -377,7 +368,6 @@ export function useCloudSyncEngineInternal() {
 
     return () => {
       cancelled = true;
-      cancelledRef.current = true;
       offLocal();
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
