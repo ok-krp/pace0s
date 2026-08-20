@@ -5,6 +5,7 @@ import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 
 const PACE_PREFIX = "pace.";
+const LEGACY_PREFIX = "lt.";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
@@ -81,6 +82,13 @@ function readLocalValue(key: string): { value: unknown; serialized: string } | n
   } catch {
     return null;
   }
+}
+
+function isEmptyValue(value: unknown) {
+  if (value == null || value === "") return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length === 0;
+  return false;
 }
 
 export function useCloudSyncEngineInternal() {
@@ -295,15 +303,19 @@ export function useCloudSyncEngineInternal() {
 
         for (const rawRow of data) {
           const row = rawRow as unknown as SyncRow;
-          if (!row.key.startsWith(PACE_PREFIX) || EXCLUDED.has(row.key)) continue;
-          if (queue.has(row.key) || active.has(row.key)) continue;
+          const isLegacy = row.key.startsWith(LEGACY_PREFIX);
+          const key = isLegacy ? `${PACE_PREFIX}${row.key.slice(LEGACY_PREFIX.length)}` : row.key;
+          if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) continue;
+          if (queue.has(key) || active.has(key)) continue;
 
+          const local = readLocalValue(key);
+          const shouldRecoverLegacy = isLegacy && isEmptyValue(local?.value) && !isEmptyValue(row.value);
           const remoteTime = Date.parse(row.updated_at);
-          const localSyncTime = Date.parse(meta[row.key] ?? "1970-01-01T00:00:00.000Z");
-          if (!Number.isFinite(remoteTime) || remoteTime <= localSyncTime) continue;
+          const localSyncTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
+          if (!shouldRecoverLegacy && (!Number.isFinite(remoteTime) || remoteTime <= localSyncTime)) continue;
 
-          applyRemoteWrite(row.key, row.value, row.updated_at);
-          meta[row.key] = row.updated_at;
+          applyRemoteWrite(key, row.value, row.updated_at);
+          meta[key] = row.updated_at;
           if (!newest || remoteTime > Date.parse(newest)) newest = row.updated_at;
         }
 
