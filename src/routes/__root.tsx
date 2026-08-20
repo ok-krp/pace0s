@@ -61,6 +61,13 @@ function AuthGate() {
   useGlassPointer();
 
   useEffect(() => {
+    // Apply the persisted theme at the application root so it survives
+    // refreshes and direct launches on any route, not only /settings.
+    try {
+      const storedDark = localStorage.getItem("pace.dark") === "1";
+      document.documentElement.classList.toggle("dark", storedDark);
+    } catch {}
+
     applyGlassQuality("balanced"); applyWallpaper(readWallpaperChoice());
     initPwaInstallPrompt();
     if ("serviceWorker" in navigator) {
