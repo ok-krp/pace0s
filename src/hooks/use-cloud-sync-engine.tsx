@@ -65,6 +65,20 @@ export function useCloudSyncEngineInternal() {
   const [status, setStatus] = useState<SyncStatus>("idle");
   const running = useRef(false);
   const keyWrites = useRef<Record<string, Promise<void>>>({});
+  // Remote state is applied to React state, which causes useLocalState to run
+  // its persistence effect. Without this guard that persistence event is
+  // mistaken for a new local mutation, pushed back to Supabase, and can create
+  // a remote/local write loop (and visible UI resets such as wallpapers).
+  const lastRemoteValues = useRef<Record<string, string>>({});
+
+  const serializeValue = (value: unknown) => {
+    try { return JSON.stringify(value); } catch { return undefined; }
+  };
+  const applyRemoteAndRemember = (key: string, value: unknown, updatedAt?: string) => {
+    const serialized = serializeValue(value);
+    if (serialized !== undefined) lastRemoteValues.current[key] = serialized;
+    applyRemoteWrite(key, value, updatedAt);
+  };
 
   useEffect(() => {
     if (typeof window === "undefined" || !user) return;
@@ -80,7 +94,7 @@ export function useCloudSyncEngineInternal() {
 
       let current = await selectCurrent();
       if (current && Date.parse(current.updated_at) >= Date.parse(updatedAt)) {
-        applyRemoteWrite(key, current.value, current.updated_at);
+        applyRemoteAndRemember(key, current.value, current.updated_at);
         markLocal(key, current.updated_at);
         return false;
       }
@@ -97,7 +111,7 @@ export function useCloudSyncEngineInternal() {
         if (data?.length) return true;
         current = await selectCurrent();
         if (current) {
-          applyRemoteWrite(key, current.value, current.updated_at);
+          applyRemoteAndRemember(key, current.value, current.updated_at);
           markLocal(key, current.updated_at);
           return false;
         }
@@ -109,7 +123,7 @@ export function useCloudSyncEngineInternal() {
       current = await selectCurrent();
       if (!current) throw insertError;
       if (Date.parse(current.updated_at) >= Date.parse(updatedAt)) {
-        applyRemoteWrite(key, current.value, current.updated_at);
+        applyRemoteAndRemember(key, current.value, current.updated_at);
         markLocal(key, current.updated_at);
         return false;
       }
@@ -143,7 +157,7 @@ export function useCloudSyncEngineInternal() {
             if (error) throw error;
             const row = rows?.[0] as SyncRow | undefined;
             if (row) {
-              applyRemoteWrite(key, row.value, row.updated_at);
+              applyRemoteAndRemember(key, row.value, row.updated_at);
               writeDomainRecordFromRemote(key, row.value, row.updated_at);
               markLocal(key, row.updated_at);
             }
@@ -181,7 +195,7 @@ export function useCloudSyncEngineInternal() {
       const domain = readDomainRecord(row.key);
       const domainTime = domain ? Date.parse(domain.updatedAt) : Number.NaN;
       if (Number.isFinite(domainTime) && domainTime >= remoteTime) return;
-      applyRemoteWrite(row.key, row.value, row.updated_at);
+      applyRemoteAndRemember(row.key, row.value, row.updated_at);
       meta[row.key] = row.updated_at;
       writeMeta(meta);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
@@ -212,7 +226,7 @@ export function useCloudSyncEngineInternal() {
           const domainTime = domainRecord ? Date.parse(domainRecord.updatedAt) : Number.NaN;
           if (!shouldRecoverLegacy && Number.isFinite(domainTime) && domainTime > remoteTime) { queueKey(key); continue; }
           if (!shouldRecoverLegacy && (!Number.isFinite(remoteTime) || remoteTime <= localSyncTime)) continue;
-          applyRemoteWrite(key, row.value, row.updated_at);
+          applyRemoteAndRemember(key, row.value, row.updated_at);
           meta[key] = row.updated_at;
           newest = row.updated_at;
         }
@@ -237,8 +251,15 @@ export function useCloudSyncEngineInternal() {
       if (subscriptionStatus === "SUBSCRIBED") void pull();
     });
 
-    const offLocal = onLocalWrite((key) => {
+    const offLocal = onLocalWrite((key, value) => {
       if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX) || !cloudSyncAllowed()) return;
+      const serialized = serializeValue(value);
+      const remoteSerialized = lastRemoteValues.current[key];
+      if (serialized !== undefined && remoteSerialized !== undefined && serialized === remoteSerialized) {
+        delete lastRemoteValues.current[key];
+        return;
+      }
+      delete lastRemoteValues.current[key];
       queueKey(key);
       void pushKeyNow(key);
     });
