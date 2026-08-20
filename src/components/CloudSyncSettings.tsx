@@ -25,11 +25,9 @@ export function CloudSyncSettings() {
   const busy = status === "syncing";
   const autoLabel = !online || autoStatus === "offline"
     ? "Hors ligne — les modifications sont mises en file d'attente"
-    : autoStatus === "syncing"
-      ? "Synchronisation automatique en cours…"
-      : autoStatus === "ok"
-        ? "Synchronisation automatique active"
-        : "Synchronisation automatique prête";
+    : autoStatus === "error"
+      ? "Synchronisation automatique — nouvelle tentative…"
+      : "Synchronisation automatique active";
 
   return (
     <div className="rounded-2xl glass-card p-4 space-y-3">
