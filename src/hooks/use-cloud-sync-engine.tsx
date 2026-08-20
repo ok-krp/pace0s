@@ -7,7 +7,7 @@ import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 const PACE_PREFIX = "pace.";
 const DOMAIN_PREFIX = "pace.domain.";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
-const POLL_MS = 15000;
+const POLL_MS = 30000;
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
@@ -126,7 +126,6 @@ export function useCloudSyncEngineInternal() {
         let value: unknown;
         try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { return; }
         const updatedAt = new Date().toISOString();
-        setStatus("syncing");
         try {
           let rpcError: unknown = null;
           let accepted: boolean | null = null;
@@ -169,7 +168,7 @@ export function useCloudSyncEngineInternal() {
       const queue = readQueue();
       if (!queue.length) return;
       running.current = true;
-      try { for (const key of queue) await pushKeyNow(key); } finally { running.current = false; }
+      try { await Promise.all(queue.map((key) => pushKeyNow(key))); } finally { running.current = false; }
     };
 
     const applyRemoteRow = (row: SyncRow) => {
