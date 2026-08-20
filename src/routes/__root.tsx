@@ -31,7 +31,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" }, { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { title: "Pace — suivi santé, sport, nutrition et finances au quotidien" },
       { name: "description", content: "Score quotidien, calories, eau, sommeil, finances, productivité — tout en un coup d'œil." },
-      { name: "theme-color", content: "#f8fafc" }, { property: "og:title", content: "Pace — ton centre de contrôle quotidien" },
+      { name: "theme-color", content: "#f8fafc" }, { name: "color-scheme", content: "light dark" },
+      { property: "og:title", content: "Pace — ton centre de contrôle quotidien" },
       { name: "twitter:title", content: "Pace — ton centre de contrôle quotidien" }, { property: "og:description", content: "Score quotidien, calories, eau, sommeil, finances, productivité — tout en un coup d'œil." },
       { name: "twitter:description", content: "Score quotidien, calories, eau, sommeil, finances, productivité — tout en un coup d'œil." }, { name: "twitter:card", content: "summary_large_image" }, { property: "og:type", content: "website" },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c5e32b18-bb82-4335-acca-3734bf96e117/id-preview-3e5bec36--7fdf2e74-b469-427a-9a0f-822afd78e57b.lovable.app-1785058212125.png" },
@@ -46,7 +47,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 });
 
 function RootShell({ children }: { children: React.ReactNode }) {
-  return <html lang="fr"><head><HeadContent /><script dangerouslySetInnerHTML={{ __html: JSON.stringify({ "@context": "https://schema.org", "@type": "SoftwareApplication", name: "Pace", applicationCategory: "HealthApplication", operatingSystem: "Web", description: "Suivi quotidien santé, sport, nutrition, sommeil et finances personnelles.", offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" } }) }} /></head><body>{children}<Scripts /></body></html>;
+  return <html lang="fr"><head><HeadContent /><script dangerouslySetInnerHTML={{ __html: `try { if (localStorage.getItem("pace.dark") === "1") { document.documentElement.classList.add("dark"); } } catch {}` }} /><script dangerouslySetInnerHTML={{ __html: JSON.stringify({ "@context": "https://schema.org", "@type": "SoftwareApplication", name: "Pace", applicationCategory: "HealthApplication", operatingSystem: "Web", description: "Suivi quotidien santé, sport, nutrition, sommeil et finances personnelles.", offers: { "@type": "Offer", price: "0", priceCurrency: "EUR" } }) }} /></head><body>{children}<Scripts /></body></html>;
 }
 
 function RootComponent() {
@@ -61,11 +62,14 @@ function AuthGate() {
   useGlassPointer();
 
   useEffect(() => {
-    // Apply the persisted theme at the application root so it survives
-    // refreshes and direct launches on any route, not only /settings.
+    const syncThemeMeta = (dark: boolean) => {
+      const meta = document.querySelector('meta[name="theme-color"]');
+      meta?.setAttribute("content", dark ? "#111722" : "#f8fafc");
+    };
     try {
       const storedDark = localStorage.getItem("pace.dark") === "1";
       document.documentElement.classList.toggle("dark", storedDark);
+      syncThemeMeta(storedDark);
     } catch {}
 
     applyGlassQuality("balanced"); applyWallpaper(readWallpaperChoice());
