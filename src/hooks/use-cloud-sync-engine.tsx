@@ -7,6 +7,7 @@ import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 const PACE_PREFIX = "pace.";
 const INTERNAL_PREFIX = "pace.__";
 const DOMAIN_PREFIX = "pace.domain.";
+const DOMAIN_OUTBOX_KEY = "pace.domain.outbox";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
@@ -18,7 +19,6 @@ export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
 type SyncRow = { key: string; value: unknown; updated_at: string; updated_by: string | null };
 type QueueItem = { key: string; value: unknown; updatedAt: string; mutationId?: string };
 type LegacyQueue = string[] | QueueItem[];
-
 type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 
 function getDeviceId() {
@@ -31,33 +31,39 @@ function getDeviceId() {
     return id;
   } catch { return `${Date.now()}-${Math.random()}`; }
 }
-function isSyncableKey(key: string) { return key.startsWith(PACE_PREFIX) && !key.startsWith(INTERNAL_PREFIX) && !key.startsWith(DOMAIN_PREFIX) && !EXCLUDED.has(key); }
+function isSyncableKey(key: string) { return key.startsWith(PACE_PREFIX) && !key.startsWith(INTERNAL_PREFIX) && key !== DOMAIN_OUTBOX_KEY && !EXCLUDED.has(key); }
 function readQueue(): QueueItem[] {
   try {
     const raw = JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]") as LegacyQueue;
     if (!Array.isArray(raw)) return [];
-    return raw.flatMap((item) => typeof item === "string" ? [{ key: item, value: undefined, updatedAt: "" }] : item?.key && item?.updatedAt ? [item] : []);
+    const meta = readMeta();
+    return raw.flatMap((item) => {
+      if (typeof item === "string") {
+        const timestamp = meta[item];
+        if (!timestamp) return [];
+        let value: unknown;
+        try { value = JSON.parse(localStorage.getItem(item) ?? "null"); } catch { value = null; }
+        return [{ key: item, value, updatedAt: timestamp }];
+      }
+      return item?.key && item?.updatedAt ? [item] : [];
+    });
   } catch { return []; }
 }
-function writeQueue(items: QueueItem[]) {
-  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(items.filter((item) => isSyncableKey(item.key)))); } catch {}
-}
+function writeQueue(items: QueueItem[]) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(items.filter((item) => isSyncableKey(item.key)))); } catch {} }
 function queueItem(item: QueueItem) {
   if (!isSyncableKey(item.key) || !item.updatedAt) return;
   const next = readQueue().filter((queued) => queued.key !== item.key);
-  next.push(item);
-  writeQueue(next);
+  next.push(item); writeQueue(next);
 }
 function getQueued(key: string) { return readQueue().find((item) => item.key === key); }
-function unqueueIfMutation(key: string, updatedAt: string) {
-  writeQueue(readQueue().filter((item) => !(item.key === key && item.updatedAt === updatedAt)));
-}
+function unqueueIfMutation(key: string, updatedAt: string) { writeQueue(readQueue().filter((item) => !(item.key === key && item.updatedAt === updatedAt))); }
 function readMeta(): SyncMeta { try { return JSON.parse(localStorage.getItem(META_KEY) ?? "{}"); } catch { return {}; } }
 function writeMeta(meta: SyncMeta) { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch {} }
 function markVersion(key: string, timestamp: string) { const meta = readMeta(); meta[key] = timestamp; writeMeta(meta); }
 function readDomainRecord(key: string): DomainRecord | null {
   try {
-    const raw = localStorage.getItem(`${DOMAIN_PREFIX}${key.slice(PACE_PREFIX.length)}`);
+    const storageKey = key.startsWith(DOMAIN_PREFIX) ? key : `${DOMAIN_PREFIX}${key.slice(PACE_PREFIX.length)}`;
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return null;
     const record = JSON.parse(raw) as DomainRecord;
     return record?.version === 1 && typeof record.updatedAt === "string" ? record : null;
@@ -77,8 +83,7 @@ export function useCloudSyncEngineInternal() {
     if (encoded !== undefined) lastRemoteValues.current[key] = encoded;
   };
   const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string) => {
-    rememberRemote(key, value);
-    applyRemoteWrite(key, value, updatedAt);
+    rememberRemote(key, value); applyRemoteWrite(key, value, updatedAt);
   };
 
   useEffect(() => {
@@ -118,8 +123,7 @@ export function useCloudSyncEngineInternal() {
       const previous = keyWrites.current[item.key] ?? Promise.resolve();
       const current = previous.then(async () => {
         if (cancelled || !allowed() || !navigator.onLine) return;
-        // Always use the newest queued mutation for this key. Rapid edits are
-        // therefore coalesced instead of sending the same final value repeatedly.
+        // Always use the newest queued mutation for this key. Rapid edits are coalesced.
         const latest = getQueued(item.key);
         if (!latest || latest.updatedAt !== item.updatedAt) return;
         let accepted: boolean | null = null;
@@ -137,8 +141,7 @@ export function useCloudSyncEngineInternal() {
           const row = data?.[0] as SyncRow | undefined;
           if (row) { applyRemoteAndRemember(row.key, row.value, row.updated_at); markVersion(row.key, row.updated_at); }
         } else {
-          markVersion(latest.key, latest.updatedAt);
-          localStorage.setItem("pace.__last_sync_at", latest.updatedAt);
+          markVersion(latest.key, latest.updatedAt); localStorage.setItem("pace.__last_sync_at", latest.updatedAt);
         }
         unqueueIfMutation(latest.key, latest.updatedAt);
         setStatus("ok");
@@ -156,8 +159,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const applyRemoteRow = (row: SyncRow) => {
-      if (cancelled || !isSyncableKey(row.key)) return;
-      if (row.updated_by === DEVICE_ID) return;
+      if (cancelled || !isSyncableKey(row.key) || row.updated_by === DEVICE_ID) return;
       const remoteTime = Date.parse(row.updated_at);
       if (!Number.isFinite(remoteTime)) return;
       const meta = readMeta();
@@ -201,8 +203,7 @@ export function useCloudSyncEngineInternal() {
     const syncNow = async () => {
       if (!allowed()) return;
       if (!navigator.onLine) { setStatus("offline"); return; }
-      await flushQueue();
-      await pull();
+      await flushQueue(); await pull();
     };
 
     const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
@@ -228,8 +229,7 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("pace.legal.changed", onLegalChanged);
     void syncNow();
     return () => {
-      cancelled = true;
-      offLocal();
+      cancelled = true; offLocal();
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("pace.legal.changed", onLegalChanged);
