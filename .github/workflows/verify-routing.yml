@@ -3,6 +3,8 @@ name: Verify Pace routing
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -50,6 +52,7 @@ jobs:
           echo "All expected application routes are present."
 
       - name: Commit regenerated route tree when changed
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         shell: bash
         run: |
           if git diff --quiet -- src/routeTree.gen.ts; then
