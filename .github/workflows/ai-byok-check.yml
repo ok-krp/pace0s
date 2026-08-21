@@ -9,10 +9,6 @@ on:
       - 'scripts/test-ai-byok-policy.mjs'
       - 'package.json'
 
-permissions:
-  contents: read
-  pull-requests: write
-
 jobs:
   byok:
     runs-on: ubuntu-latest
@@ -25,24 +21,4 @@ jobs:
       - run: npm install
       - run: npm run test:byok
       - run: npm run typecheck
-      - name: Lint diagnostics
-        id: lint
-        continue-on-error: true
-        run: npm run lint -- --quiet > /tmp/lint.txt 2>&1
-      - name: Publish lint diagnostics
-        if: steps.lint.outcome == 'failure'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          {
-            echo '### Temporary lint errors only'
-            echo
-            echo '```text'
-            cat /tmp/lint.txt
-            echo
-            echo '```'
-          } > /tmp/comment.md
-          gh pr comment "${{ github.event.pull_request.html_url }}" --body-file /tmp/comment.md
-      - name: Fail if lint failed
-        if: steps.lint.outcome == 'failure'
-        run: exit 1
+      - run: npm run lint
