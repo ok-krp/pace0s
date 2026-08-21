@@ -240,7 +240,7 @@ export type Database = {
           protein_g: number
           sodium_mg: number | null
           source: string | null
-          sugar_g: number | null
+          sugar_g: string | null
           user_id: string
         }
         Insert: {
@@ -337,7 +337,6 @@ export type Database = {
           brand?: string | null
           carbs_g?: number | null
           created_at?: string
-          created_at?: string
           fat_g?: number | null
           favorite?: boolean | null
           fiber_g?: number | null
@@ -413,7 +412,7 @@ export type Database = {
           privacy_version: string
           region: string
           updated_at?: string
-          user_id?: string
+          user_id: string
         }
         Update: {
           consented_at?: string
@@ -442,7 +441,7 @@ export type Database = {
           payload?: Json | null
           sent_at?: string
           type: string
-          user_id?: string
+          user_id: string
         }
         Update: {
           id?: string
@@ -537,7 +536,7 @@ export type Database = {
           target_segment?: string | null
           trigger?: string
           type: string
-          user_id?: string
+          user_id: string
         }
         Update: {
           created_at?: string
@@ -726,7 +725,7 @@ export type Enums<
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Enums"][EnumName]
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
     ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
