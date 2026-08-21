@@ -2,6 +2,8 @@ import type { UIMessage } from "ai";
 
 export type AgentType = "coach" | "build";
 export type MemoryLevel = "none" | "limited" | "complete";
+export type AiProviderSource = "pace" | "byok";
+export type AiProvider = "openai" | "anthropic" | "gemini" | "openrouter" | "custom";
 
 export type AiPermissions = {
   profile: boolean;
@@ -19,6 +21,21 @@ export type AiPreferences = {
   memory_level: MemoryLevel;
   permissions: AiPermissions;
   confirm_actions: boolean;
+};
+
+export type AiProviderAgentSettings = {
+  source: AiProviderSource;
+  provider: AiProvider;
+  model: string;
+  baseUrl: string;
+  keyConfigured: boolean;
+  keyLast4: string;
+};
+
+export type AiProviderSettings = {
+  coach: AiProviderAgentSettings;
+  build: AiProviderAgentSettings;
+  providers: Record<AiProvider, string>;
 };
 
 export type AiConversation = {
