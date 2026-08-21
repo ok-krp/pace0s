@@ -16,7 +16,7 @@ export type HealthConnectPayload = {
   }>;
 };
 
-type NativeHealthConnect = {
+export type NativeHealthConnect = {
   requestSync: () => void;
   acknowledgeSync?: (queueId: string) => void;
   getPendingCount?: () => number;
