@@ -14,7 +14,7 @@ assert.equal(/setInterval\s*\(|setTimeout\s*\(/.test(engine), false, "sync engin
 assert.equal(engine.includes("location.reload"), false, "sync engine must not reload the app");
 assert.match(engine, /onLocalWrite\(/, "local writes must be observed through an explicit mutation event");
 assert.match(engine, /postgres_changes/, "remote changes must use Supabase Realtime");
-assert.match(engine, /updated_by === DEVICE_ID/, "self-originated realtime events must be ignored");
+assert.match(engine, /row\.updated_by === DEVICE_ID/, "self-originated realtime events must be ignored");
 assert.match(engine, /activeWrites\.current\.has\(row\.key\)/, "remote events must not overwrite an in-flight local mutation");
 assert.match(engine, /localChangedWhileInFlight/, "rapid local mutations must be protected from late remote results");
 assert.match(engine, /queueKey\(key\)/, "failed/offline writes must remain queued");
