@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:sync": "node scripts/test-sync-policy.mjs",
+    "test:byok": "node scripts/test-ai-byok-policy.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

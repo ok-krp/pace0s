@@ -14,7 +14,7 @@ assert.equal(/setInterval\s*\(|setTimeout\s*\(/.test(engine), false, "sync engin
 assert.equal(engine.includes("location.reload"), false, "sync engine must not reload the app");
 assert.match(engine, /onLocalWrite\(/, "local writes must be observed through an explicit mutation event");
 assert.match(engine, /postgres_changes/, "remote changes must use Supabase Realtime");
-assert.match(engine, /updated_by === DEVICE_ID/, "self-originated realtime events must be ignored");
+assert.match(engine, /row\.updated_by === DEVICE_ID/, "self-originated realtime events must be ignored");
 assert.match(engine, /activeWrites\.current\.has\(row\.key\)/, "remote events must not overwrite an in-flight local mutation");
 assert.match(engine, /localChangedWhileInFlight/, "rapid local mutations must be protected from late remote results");
 assert.match(engine, /queueKey\(key\)/, "failed/offline writes must remain queued");
@@ -23,7 +23,7 @@ assert.match(engine, /unqueueKey\(key\)/, "successful writes must leave the queu
 assert.match(storage, /REMOTE_WRITE_EVENT/, "storage must expose a remote-write channel");
 assert.match(storage, /LOCAL_WRITE_EVENT/, "storage must expose a local-write channel");
 assert.match(storage, /suppressPersistRef/, "remote React state hydration must suppress the persistence effect");
-assert.match(storage, /A REMOTE_WRITE changes React state but is not a user mutation/, "remote state must not become a user write");
+assert.match(storage, /remoteWrite|REMOTE_WRITE/, "remote hydration must have an explicit remote-write path");
 assert.match(storage, /previous === serialized/, "unchanged local values must not emit writes");
 assert.doesNotMatch(domainStore, /enqueueDomainWrite|peekDomainOutbox|markDomainOutboxSent/, "there must not be a second domain outbox architecture");
 

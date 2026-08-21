@@ -1,68 +1,44 @@
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Brain, ShieldCheck } from "lucide-react";
+import { Brain, Eye, EyeOff, KeyRound, ShieldCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { getAiPreferences, saveAiPreferences } from "@/lib/ai-history.functions";
-import { DEFAULT_AI_PERMISSIONS, type AiPreferences, type MemoryLevel } from "@/lib/ai-history.types";
+import { getAiPreferences, getAiProviderSettings as loadAiProviderSettings, saveAiPreferences, saveAiProviderSettingsFn, deleteAiProviderKeyFn, testAiProviderFn, listAiProviderModelsFn } from "@/lib/ai-history.functions";
+import { DEFAULT_AI_PERMISSIONS, type AiPreferences, type AiProvider, type AiProviderSettings, type AgentType, type MemoryLevel } from "@/lib/ai-history.types";
 
-const PERMISSION_LABELS = {
-  profile: "Profil & objectifs",
-  nutrition: "Nutrition",
-  sport: "Sport",
-  sleep: "Sommeil",
-  water: "Hydratation",
-  habits: "Habitudes",
-  calendar: "Calendrier",
-  work: "Travail",
-  finance: "Finance",
-} as const;
+const PERMISSION_LABELS = { profile: "Profil & objectifs", nutrition: "Nutrition", sport: "Sport", sleep: "Sommeil", water: "Hydratation", habits: "Habitudes", calendar: "Calendrier", work: "Travail", finance: "Finance" } as const;
+const PROVIDERS: Array<{ id: AiProvider; label: string }> = [{ id: "openai", label: "OpenAI" }, { id: "anthropic", label: "Anthropic" }, { id: "gemini", label: "Google Gemini" }, { id: "openrouter", label: "OpenRouter" }, { id: "custom", label: "API personnalisée" }];
+
+function emptyProviderSettings(): AiProviderSettings { const make = () => ({ source: "pace" as const, provider: "gemini" as AiProvider, model: "gemini-2.5-flash", baseUrl: "", keyConfigured: false, keyLast4: "" }); return { coach: make(), build: make(), providers: Object.fromEntries(PROVIDERS.map((p) => [p.id, p.label])) as Record<AiProvider, string> }; }
 
 export function AiSettings() {
-  const load = useServerFn(getAiPreferences);
-  const save = useServerFn(saveAiPreferences);
+  const loadPreferences = useServerFn(getAiPreferences); const savePreferences = useServerFn(saveAiPreferences); const loadProviders = useServerFn(loadAiProviderSettings); const saveProvider = useServerFn(saveAiProviderSettingsFn); const deleteKey = useServerFn(deleteAiProviderKeyFn); const testProvider = useServerFn(testAiProviderFn); const listModels = useServerFn(listAiProviderModelsFn);
   const [value, setValue] = useState<AiPreferences>({ memory_level: "limited", permissions: DEFAULT_AI_PERMISSIONS, confirm_actions: true });
-  const [saving, setSaving] = useState(false);
+  const [providers, setProviders] = useState<AiProviderSettings>(emptyProviderSettings());
+  const [keys, setKeys] = useState<Record<AgentType, string>>({ coach: "", build: "" });
+  const [showKey, setShowKey] = useState<Record<AgentType, boolean>>({ coach: false, build: false });
+  const [saving, setSaving] = useState<AgentType | null>(null); const [testing, setTesting] = useState<AgentType | null>(null); const [loadingModels, setLoadingModels] = useState<AgentType | null>(null);
+  const [modelOptions, setModelOptions] = useState<Record<AgentType, Array<{ id: string; name: string }>>>({ coach: [], build: [] });
 
-  useEffect(() => { void load().then(setValue).catch(() => toast.error("Impossible de charger les préférences IA")); }, [load]);
+  useEffect(() => { void Promise.all([loadPreferences(), loadProviders()]).then(([prefs, config]) => { setValue(prefs); setProviders(config); }).catch(() => toast.error("Impossible de charger les préférences IA")); }, [loadPreferences, loadProviders]);
+  const updateAgent = (agentType: AgentType, patch: Partial<AiProviderSettings["coach"]>) => setProviders((current) => ({ ...current, [agentType]: { ...current[agentType], ...patch } }));
+  const persistAgent = async (agentType: AgentType) => { const config = providers[agentType]; setSaving(agentType); try { await saveProvider({ data: { agentType, source: config.source, provider: config.provider, model: config.model, baseUrl: config.provider === "custom" ? config.baseUrl || null : null, apiKey: keys[agentType] || null } }); setKeys((current) => ({ ...current, [agentType]: "" })); setProviders(await loadProviders()); toast.success(`${agentType === "coach" ? "Coach IA" : "BUILD IA"} configuré`); } catch (error) { toast.error(error instanceof Error ? error.message : "Impossible d’enregistrer la configuration IA"); } finally { setSaving(null); } };
+  const test = async (agentType: AgentType) => { const config = providers[agentType]; setTesting(agentType); try { const result = await testProvider({ data: { provider: config.provider, model: config.model, baseUrl: config.provider === "custom" ? config.baseUrl || null : null, apiKey: keys[agentType] || null } }); if (result.ok) toast.success("✓ Clé valide"); else toast.error(result.message); } catch (error) { toast.error(error instanceof Error ? error.message : "Impossible de contacter le fournisseur"); } finally { setTesting(null); } };
+  const fetchModels = async (agentType: AgentType) => { const config = providers[agentType]; setLoadingModels(agentType); try { const models = await listModels({ data: { provider: config.provider, baseUrl: config.provider === "custom" ? config.baseUrl || null : null, apiKey: keys[agentType] || null } }); setModelOptions((current) => ({ ...current, [agentType]: models })); toast.success(`${models.length} modèles disponibles`); } catch (error) { toast.error(error instanceof Error ? error.message : "Impossible de récupérer les modèles"); } finally { setLoadingModels(null); } };
+  const removeKey = async (provider: AiProvider) => { try { await deleteKey({ data: { provider } }); setProviders(await loadProviders()); setKeys({ coach: "", build: "" }); toast.success("Clé API supprimée"); } catch (error) { toast.error(error instanceof Error ? error.message : "Impossible de supprimer la clé"); } };
+  const saveGeneral = async () => { try { await savePreferences({ data: value }); toast.success("Préférences IA enregistrées"); } catch (error) { toast.error(error instanceof Error ? error.message : "Erreur"); } };
 
-  const submit = async () => {
-    setSaving(true);
-    try { await save({ data: value }); toast.success("Préférences IA enregistrées"); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Erreur"); }
-    finally { setSaving(false); }
-  };
+  return <div className="space-y-5">
+    <section className="space-y-3"><div className="flex items-center gap-2 font-medium"><Brain className="size-4 text-primary" />Mémoire</div><Select value={value.memory_level} onValueChange={(memory_level) => setValue((current) => ({ ...current, memory_level: memory_level as MemoryLevel }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">Aucune mémoire</SelectItem><SelectItem value="limited">Mémoire limitée</SelectItem><SelectItem value="complete">Mémoire complète</SelectItem></SelectContent></Select><p className="text-xs text-muted-foreground">La mémoire ne change jamais vos permissions d’accès.</p></section>
+    <section className="space-y-3"><div className="flex items-center gap-2 font-medium"><KeyRound className="size-4 text-primary" />Fournisseur IA</div><ProviderCard agentType="coach" label="Assistant / Coach IA" config={providers.coach} apiKey={keys.coach} showKey={showKey.coach} modelOptions={modelOptions.coach} busy={saving === "coach"} testing={testing === "coach"} loadingModels={loadingModels === "coach"} onChange={(patch) => updateAgent("coach", patch)} onKeyChange={(apiKey) => setKeys((current) => ({ ...current, coach: apiKey }))} onToggleKey={() => setShowKey((current) => ({ ...current, coach: !current.coach }))} onSave={() => void persistAgent("coach")} onTest={() => void test("coach")} onListModels={() => void fetchModels("coach")} onDelete={() => void removeKey(providers.coach.provider)} /><ProviderCard agentType="build" label="BUILD IA" config={providers.build} apiKey={keys.build} showKey={showKey.build} modelOptions={modelOptions.build} busy={saving === "build"} testing={testing === "build"} loadingModels={loadingModels === "build"} onChange={(patch) => updateAgent("build", patch)} onKeyChange={(apiKey) => setKeys((current) => ({ ...current, build: apiKey }))} onToggleKey={() => setShowKey((current) => ({ ...current, build: !current.build }))} onSave={() => void persistAgent("build")} onTest={() => void test("build")} onListModels={() => void fetchModels("build")} onDelete={() => void removeKey(providers.build.provider)} /></section>
+    <section className="space-y-3"><div className="flex items-center gap-2 font-medium"><ShieldCheck className="size-4 text-primary" />Permissions du Coach IA</div>{Object.entries(PERMISSION_LABELS).map(([key, label]) => <div key={key} className="flex items-center justify-between gap-4 rounded-xl glass-thin px-3 py-2.5"><span className="text-sm">{label}</span><Switch checked={value.permissions[key as keyof typeof value.permissions]} onCheckedChange={(checked) => setValue((current) => ({ ...current, permissions: { ...current.permissions, [key]: checked } }))} /></div>)}</section>
+    <div className="flex items-center justify-between gap-4 rounded-xl glass-thin px-3 py-3"><div><div className="text-sm font-medium">Confirmation avant action</div><div className="text-xs text-muted-foreground">Valider chaque modification proposée</div></div><Switch checked={value.confirm_actions} onCheckedChange={(confirm_actions) => setValue((current) => ({ ...current, confirm_actions }))} /></div><Button onClick={saveGeneral}>Enregistrer les permissions</Button>
+  </div>;
+}
 
-  return (
-    <div className="space-y-5">
-      <section className="space-y-3">
-        <div className="flex items-center gap-2 font-medium"><Brain className="size-4 text-primary" />Mémoire</div>
-        <Select value={value.memory_level} onValueChange={(memory_level) => setValue((current) => ({ ...current, memory_level: memory_level as MemoryLevel }))}>
-          <SelectTrigger><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="none">Aucune mémoire</SelectItem>
-            <SelectItem value="limited">Mémoire limitée</SelectItem>
-            <SelectItem value="complete">Mémoire complète</SelectItem>
-          </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">La mémoire ne change jamais vos permissions d’accès.</p>
-      </section>
-      <section className="space-y-3">
-        <div className="flex items-center gap-2 font-medium"><ShieldCheck className="size-4 text-primary" />Permissions du Coach IA</div>
-        {Object.entries(PERMISSION_LABELS).map(([key, label]) => (
-          <div key={key} className="flex items-center justify-between gap-4 rounded-xl glass-thin px-3 py-2.5">
-            <span className="text-sm">{label}</span>
-            <Switch checked={value.permissions[key as keyof typeof value.permissions]} onCheckedChange={(checked) => setValue((current) => ({ ...current, permissions: { ...current.permissions, [key]: checked } }))} />
-          </div>
-        ))}
-      </section>
-      <div className="flex items-center justify-between gap-4 rounded-xl glass-thin px-3 py-3">
-        <div><div className="text-sm font-medium">Confirmation avant action</div><div className="text-xs text-muted-foreground">Valider chaque modification proposée</div></div>
-        <Switch checked={value.confirm_actions} onCheckedChange={(confirm_actions) => setValue((current) => ({ ...current, confirm_actions }))} />
-      </div>
-      <Button onClick={submit} disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
-    </div>
-  );
+function ProviderCard({ agentType, label, config, apiKey, showKey, modelOptions, busy, testing, loadingModels, onChange, onKeyChange, onToggleKey, onSave, onTest, onListModels, onDelete }: { agentType: AgentType; label: string; config: AiProviderSettings["coach"]; apiKey: string; showKey: boolean; modelOptions: Array<{ id: string; name: string }>; busy: boolean; testing: boolean; loadingModels: boolean; onChange: (patch: Partial<AiProviderSettings["coach"]>) => void; onKeyChange: (value: string) => void; onToggleKey: () => void; onSave: () => void; onTest: () => void; onListModels: () => void; onDelete: () => void }) {
+  return <div className="rounded-2xl glass-thin p-4 space-y-4"><div><div className="font-medium">{label}</div><div className="text-xs text-muted-foreground">Coach et BUILD peuvent utiliser des fournisseurs différents.</div></div><div className="grid sm:grid-cols-2 gap-3"><label className="space-y-1.5"><span className="text-xs text-muted-foreground">Source IA</span><Select value={config.source} onValueChange={(source) => onChange({ source: source as "pace" | "byok" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pace">Pace IA</SelectItem><SelectItem value="byok">Ma propre clé API</SelectItem></SelectContent></Select></label>{config.source === "byok" && <label className="space-y-1.5"><span className="text-xs text-muted-foreground">Fournisseur</span><Select value={config.provider} onValueChange={(provider) => onChange({ provider: provider as AiProvider, model: "" })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{PROVIDERS.map((provider) => <SelectItem key={provider.id} value={provider.id}>{provider.label}</SelectItem>)}</SelectContent></Select></label>}</div>{config.source === "byok" && <><label className="space-y-1.5 block"><span className="text-xs text-muted-foreground">Clé API</span><div className="relative"><Input type={showKey ? "text" : "password"} value={apiKey} onChange={(event) => onKeyChange(event.target.value)} placeholder={config.keyConfigured ? `•••••••••••••••••••••••• ····${config.keyLast4}` : "Collez votre clé API"} autoComplete="off" className="pr-10"/><button type="button" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={onToggleKey} aria-label={showKey ? "Masquer la clé" : "Afficher la clé"}>{showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}</button></div></label><div className="grid sm:grid-cols-[1fr_auto] gap-2"><label className="space-y-1.5"><span className="text-xs text-muted-foreground">Modèle</span><Input value={config.model} onChange={(event) => onChange({ model: event.target.value })} placeholder="Identifiant du modèle" list={`${agentType}-models`} /><datalist id={`${agentType}-models`}>{modelOptions.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</datalist></label><Button type="button" variant="outline" className="self-end" onClick={onListModels} disabled={loadingModels}>{loadingModels ? "Chargement…" : "Récupérer les modèles"}</Button></div>{config.provider === "custom" && <label className="space-y-1.5 block"><span className="text-xs text-muted-foreground">URL API</span><Input value={config.baseUrl} onChange={(event) => onChange({ baseUrl: event.target.value })} placeholder="https://votre-api.example.com/v1" autoComplete="off" /></label>}<div className="flex flex-wrap items-center gap-2"><Button type="button" variant="secondary" onClick={onTest} disabled={testing || !config.model}>{testing ? "Test en cours…" : "Tester la connexion"}</Button><Button type="button" onClick={onSave} disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer"}</Button>{config.keyConfigured && <Button type="button" variant="ghost" className="text-destructive" onClick={onDelete}><Trash2 className="size-4 mr-1.5" />Supprimer la clé</Button>}</div>{config.keyConfigured && <div className="text-xs text-muted-foreground">Clé configurée : •••••••••••••••••••• ····{config.keyLast4}</div>}<div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">Les requêtes de cet assistant utilisent directement votre clé API. Les crédits Lovable ne sont pas utilisés. La clé est chiffrée côté serveur et n’est pas synchronisée comme une donnée Pace.</div></>}{config.source === "pace" && <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">Pace IA utilise la configuration IA du projet. Aucune clé personnelle n’est nécessaire.</div>}</div>;
 }

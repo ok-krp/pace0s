@@ -158,6 +158,14 @@ export type Database = {
           permissions: Json
           updated_at: string
           user_id: string
+          coach_ai_source: string
+          coach_ai_provider: string
+          coach_ai_model: string
+          coach_ai_base_url: string | null
+          build_ai_source: string
+          build_ai_provider: string
+          build_ai_model: string
+          build_ai_base_url: string | null
         }
         Insert: {
           confirm_actions?: boolean
@@ -166,6 +174,14 @@ export type Database = {
           permissions?: Json
           updated_at?: string
           user_id: string
+          coach_ai_source?: string
+          coach_ai_provider?: string
+          coach_ai_model?: string
+          coach_ai_base_url?: string | null
+          build_ai_source?: string
+          build_ai_provider?: string
+          build_ai_model?: string
+          build_ai_base_url?: string | null
         }
         Update: {
           confirm_actions?: boolean
@@ -174,6 +190,41 @@ export type Database = {
           permissions?: Json
           updated_at?: string
           user_id?: string
+          coach_ai_source?: string
+          coach_ai_provider?: string
+          coach_ai_model?: string
+          coach_ai_base_url?: string | null
+          build_ai_source?: string
+          build_ai_provider?: string
+          build_ai_model?: string
+          build_ai_base_url?: string | null
+        }
+        Relationships: []
+      }
+      ai_provider_secrets: {
+        Row: {
+          user_id: string
+          provider: string
+          encrypted_api_key: string
+          key_last4: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          provider: string
+          encrypted_api_key: string
+          key_last4?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          provider?: string
+          encrypted_api_key?: string
+          key_last4?: string
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -240,7 +291,7 @@ export type Database = {
           protein_g: number
           sodium_mg: number | null
           source: string | null
-          sugar_g: number | null
+          sugar_g: string | null
           user_id: string
         }
         Insert: {
@@ -515,6 +566,33 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          id: string
+          user_id: string
+          onesignal_subscription_id: string
+          platform: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          onesignal_subscription_id: string
+          platform?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          onesignal_subscription_id?: string
+          platform?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       reminder_debug_log: {
         Row: {
           created_at: string
@@ -593,6 +671,7 @@ export type Database = {
           id: string
           key: string
           updated_at: string
+          updated_by: string | null
           user_id: string
           value: Json | null
         }
@@ -601,6 +680,7 @@ export type Database = {
           id?: string
           key: string
           updated_at?: string
+          updated_by?: string | null
           user_id: string
           value?: Json | null
         }
@@ -609,6 +689,7 @@ export type Database = {
           id?: string
           key?: string
           updated_at?: string
+          updated_by?: string | null
           user_id?: string
           value?: Json | null
         }
@@ -619,7 +700,25 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      upsert_profile_if_newer: {
+        Args: {
+          p_profile: Json
+          p_updated_at: string
+          p_updated_by: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
+      upsert_user_state_if_newer: {
+        Args: {
+          p_key: string
+          p_updated_at: string
+          p_updated_by: string
+          p_user_id: string
+          p_value: Json
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
@@ -654,7 +753,7 @@ export type Tables<
     ? R
     : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
+      DefaultSchema["Views"])
     ? (DefaultSchema["Tables"] &
         DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R

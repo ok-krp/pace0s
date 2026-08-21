@@ -3,14 +3,13 @@ import { Activity, Apple, CheckCircle2, ExternalLink, HeartPulse, Smartphone } f
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { insertHealthSamples } from "@/lib/health.functions";
+import type { NativeHealthConnect } from "@/lib/health-connect-bridge";
 import { toast } from "sonner";
 
-interface HealthConnectBridge { requestSync?: () => void }
-interface AppleHealthBridge { _receive?: (payload: { ok?: boolean; status?: string; error?: string; samples?: Array<{ ts: string; type: string; value: number; source: string }> }) => void }
+type AppleHealthBridge = { _receive?: (payload: { ok?: boolean; status?: string; error?: string; samples?: Array<{ ts: string; type: string; value: number; source: string }> }) => void };
 
 declare global {
   interface Window {
-    PaceHealthConnect?: HealthConnectBridge;
     PaceAppleHealth?: AppleHealthBridge;
     webkit?: { messageHandlers?: { paceHealthKit?: { postMessage: (message: unknown) => void } } };
   }

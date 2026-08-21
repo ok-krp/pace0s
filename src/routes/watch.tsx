@@ -17,7 +17,7 @@ function WatchPage() {
   return (
     <main className="min-h-screen p-4 md:p-8">
       <div className="mx-auto max-w-5xl space-y-6">
-        <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+        <Link to="/" search={{}} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
           <ArrowLeft className="size-4" /> Retour
         </Link>
         <div className="flex items-center gap-3">

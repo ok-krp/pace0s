@@ -1,5 +1,6 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 
+/** Legacy provider retained for nutrition photo/advice features. Coach/BUILD BYOK never use this gateway. */
 export const createLovableAiGatewayProvider = (lovableApiKey: string) =>
   createOpenAICompatible({
     name: "lovable",
