@@ -21,7 +21,7 @@ export const Route = createFileRoute("/")({
     const quickAdd = (["water", "kcal", "sleep", "weight", "workout"] as const).includes(s.quickAdd as never)
       ? (s.quickAdd as "water" | "kcal" | "sleep" | "weight" | "workout")
       : undefined;
-    return quickAdd ? { quickAdd } : {};
+    return quickAdd === undefined ? undefined : { quickAdd };
   },
   head: () => ({
     meta: [
@@ -51,13 +51,14 @@ const ICONS: Record<ModuleKey, React.ReactNode> = {
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { quickAdd } = Route.useSearch();
+  const search = Route.useSearch();
+  const quickAdd = search?.quickAdd;
   const [dialog, setDialog] = useState<DashDialog>(null);
 
   useEffect(() => {
     if (!quickAdd) return;
     setDialog(quickAdd);
-    navigate({ to: "/", search: {}, replace: true });
+    navigate({ to: "/", search: undefined, replace: true });
   }, [quickAdd, navigate]);
 
   const [todayLabel, setTodayLabel] = useState("");
