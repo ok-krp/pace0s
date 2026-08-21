@@ -28,17 +28,17 @@ jobs:
       - name: Lint diagnostics
         id: lint
         continue-on-error: true
-        run: npm run lint > /tmp/lint.txt 2>&1
+        run: npm run lint -- --quiet > /tmp/lint.txt 2>&1
       - name: Publish lint diagnostics
         if: steps.lint.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo '### Temporary lint diagnostics'
+            echo '### Temporary lint errors only'
             echo
             echo '```text'
-            tail -c 12000 /tmp/lint.txt
+            cat /tmp/lint.txt
             echo
             echo '```'
           } > /tmp/comment.md
