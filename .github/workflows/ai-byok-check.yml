@@ -28,7 +28,7 @@ jobs:
       - name: Lint diagnostics
         id: lint
         continue-on-error: true
-        run: npm run lint -- --format compact > /tmp/lint.txt 2>&1
+        run: npm run lint > /tmp/lint.txt 2>&1
       - name: Publish lint diagnostics
         if: steps.lint.outcome == 'failure'
         env:
