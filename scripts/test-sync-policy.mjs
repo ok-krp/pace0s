@@ -3,9 +3,13 @@ import { readFile } from "node:fs/promises";
 
 const engine = await readFile("src/hooks/use-cloud-sync-engine.tsx", "utf8");
 const storage = await readFile("src/lib/storage.ts", "utf8");
+const domainStore = await readFile("src/lib/domain-store.ts", "utf8");
+const profileSync = await readFile("src/hooks/use-profile-realtime.ts", "utf8");
+const profileRoute = await readFile("src/routes/profile.tsx", "utf8");
+const goals = await readFile("src/hooks/use-user-goals.tsx", "utf8");
+const profileMigration = await readFile("supabase/migrations/20260821090000_profile_sync_hardening.sql", "utf8");
 const migrations = await readFile("supabase/migrations/20260820235000_sync_timestamp_trigger_fix.sql", "utf8");
 
-// Local changes are event-driven; there must be no timer/polling loop in the sync engine.
 assert.equal(/setInterval\s*\(|setTimeout\s*\(/.test(engine), false, "sync engine must not poll with timers");
 assert.equal(engine.includes("location.reload"), false, "sync engine must not reload the app");
 assert.match(engine, /onLocalWrite\(/, "local writes must be observed through an explicit mutation event");
@@ -16,12 +20,21 @@ assert.match(engine, /localChangedWhileInFlight/, "rapid local mutations must be
 assert.match(engine, /queueKey\(key\)/, "failed/offline writes must remain queued");
 assert.match(engine, /unqueueKey\(key\)/, "successful writes must leave the queue only after confirmation");
 
-// Remote application must be explicitly separated from local mutation events.
 assert.match(storage, /REMOTE_WRITE_EVENT/, "storage must expose a remote-write channel");
 assert.match(storage, /LOCAL_WRITE_EVENT/, "storage must expose a local-write channel");
-assert.match(storage, /do not emit a sync event for it/, "initial hydration must not be treated as a user mutation");
+assert.match(storage, /suppressPersistRef/, "remote React state hydration must suppress the persistence effect");
+assert.match(storage, /A REMOTE_WRITE changes React state but is not a user mutation/, "remote state must not become a user write");
+assert.match(storage, /previous === serialized/, "unchanged local values must not emit writes");
+assert.doesNotMatch(domainStore, /enqueueDomainWrite|peekDomainOutbox|markDomainOutboxSent/, "there must not be a second domain outbox architecture");
 
-// The database trigger must preserve timestamps explicitly supplied by the conflict-safe RPC.
+assert.match(profileSync, /postgres_changes/, "profiles must use Realtime");
+assert.match(profileSync, /updated_by === deviceId/, "profile self-originated events must be ignored");
+assert.match(profileRoute, /upsert_profile_if_newer/, "profile writes must use the version-safe RPC");
+assert.match(profileRoute, /PROFILE_REMOTE_EVENT/, "profile UI must consume centralized remote events");
+assert.match(goals, /PROFILE_REMOTE_EVENT/, "derived profile consumers must receive remote changes");
+assert.match(profileMigration, /upsert_profile_if_newer/, "profile conflict RPC must exist");
+assert.match(profileMigration, /auth\.uid\(\) IS NULL OR auth\.uid\(\) <> p_user_id/, "profile RPC must enforce ownership");
+
 assert.match(migrations, /IF NEW\.updated_at IS NOT DISTINCT FROM OLD\.updated_at/, "timestamp trigger must preserve explicit sync timestamps");
 assert.match(migrations, /upsert_user_state_if_newer/, "sync RPC repair migration must exist");
 

@@ -73,6 +73,16 @@ type StoredProgramItem = { exerciseId: string; weight?: number; reps: number; se
 type StoredProgram = { id: string; items: StoredProgramItem[]; [key: string]: unknown };
 type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 
+function syncDebugEnabled() {
+  if (!import.meta.env.DEV || typeof window === "undefined") return false;
+  try { return localStorage.getItem("pace.__sync_debug") === "1"; } catch { return false; }
+}
+
+function syncDebug(event: string, detail: Record<string, unknown>) {
+  if (!syncDebugEnabled()) return;
+  console.debug(`[${event}]`, detail);
+}
+
 function syncLatestOverloadRowsToTraining(value: unknown) {
   if (typeof window === "undefined" || !value || typeof value !== "object" || Array.isArray(value)) return;
   try {
@@ -80,12 +90,10 @@ function syncLatestOverloadRowsToTraining(value: unknown) {
     const rawExercises = localStorage.getItem("pace.sport.exercises");
     const rawPrograms = localStorage.getItem("pace.sport.programs");
     if (!rawExercises && !rawPrograms) return;
-
     const exercises = rawExercises ? JSON.parse(rawExercises) as StoredExercise[] : [];
     const programs = rawPrograms ? JSON.parse(rawPrograms) as StoredProgram[] : [];
     let exercisesChanged = false;
     let programsChanged = false;
-
     for (const [exerciseId, rows] of Object.entries(overload)) {
       if (!Array.isArray(rows)) continue;
       const latest = rows.find((row) => row?.source === "manual") ?? null;
@@ -94,14 +102,12 @@ function syncLatestOverloadRowsToTraining(value: unknown) {
       const reps = Number(latest.reps ?? 0);
       const sets = Number(latest.sets ?? 0);
       if (![weight, reps, sets].every(Number.isFinite)) continue;
-
       for (let i = 0; i < exercises.length; i++) {
         if (exercises[i].id !== exerciseId) continue;
         if (exercises[i].defaultWeight === weight && exercises[i].defaultReps === reps && exercises[i].defaultSets === sets) continue;
         exercises[i] = { ...exercises[i], defaultWeight: weight, defaultReps: reps, defaultSets: sets };
         exercisesChanged = true;
       }
-
       for (let i = 0; i < programs.length; i++) {
         const program = programs[i];
         let itemsChanged = false;
@@ -117,35 +123,34 @@ function syncLatestOverloadRowsToTraining(value: unknown) {
         }
       }
     }
-
     if (exercisesChanged) {
-      const next = JSON.stringify(exercises);
-      localStorage.setItem("pace.sport.exercises", next);
+      localStorage.setItem("pace.sport.exercises", JSON.stringify(exercises));
       window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: "pace.sport.exercises", value: exercises } }));
     }
     if (programsChanged) {
-      const next = JSON.stringify(programs);
-      localStorage.setItem("pace.sport.programs", next);
+      localStorage.setItem("pace.sport.programs", JSON.stringify(programs));
       window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: "pace.sport.programs", value: programs } }));
     }
   } catch {}
 }
 
 function applyRemoteDomainRecord(domain: string, value: unknown, updatedAt: string) {
-  if (typeof window === "undefined" || !domain || !updatedAt) return;
+  if (typeof window === "undefined" || !domain || !updatedAt) return false;
   try {
     const key = `pace.domain.${domain}`;
     const existingRaw = localStorage.getItem(key);
     if (existingRaw) {
       try {
         const existing = JSON.parse(existingRaw) as Partial<DomainRecord>;
-        if (existing.version === 1 && typeof existing.updatedAt === "string" && Date.parse(existing.updatedAt) > Date.parse(updatedAt)) return;
+        if (existing.version === 1 && typeof existing.updatedAt === "string" && Date.parse(existing.updatedAt) > Date.parse(updatedAt)) return false;
       } catch {}
     }
     const record: DomainRecord = { version: 1, updatedAt, mutationId: `remote-${updatedAt}`, value };
     localStorage.setItem(key, JSON.stringify(record));
-    window.dispatchEvent(new CustomEvent(DOMAIN_WRITE_EVENT, { detail: { domain, record } }));
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
@@ -153,9 +158,11 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const [loaded, setLoaded] = useState(false);
   const valueRef = useRef<T>(initial);
   const hydratedRef = useRef(false);
+  const suppressPersistRef = useRef(false);
 
   useEffect(() => {
     hydratedRef.current = false;
+    suppressPersistRef.current = false;
   }, [key]);
 
   useEffect(() => {
@@ -170,22 +177,26 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     setLoaded(true);
   }, [key]);
 
-  useEffect(() => {
-    valueRef.current = value;
-  }, [value]);
+  useEffect(() => { valueRef.current = value; }, [value]);
 
   useEffect(() => {
     if (!loaded) return;
-    // Reading existing state during hydration is not a user mutation.
-    // Do not emit a sync event for it, otherwise opening or navigating the
-    // app can rewrite unchanged data to the cloud.
     if (!hydratedRef.current) {
       hydratedRef.current = true;
       return;
     }
+    if (suppressPersistRef.current) {
+      suppressPersistRef.current = false;
+      syncDebug("REMOTE_APPLIED", { key });
+      return;
+    }
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      const serialized = JSON.stringify(value);
+      const previous = localStorage.getItem(key);
+      if (previous === serialized) return;
+      localStorage.setItem(key, serialized);
       if (key === "pace.sport.overload") syncLatestOverloadRowsToTraining(value);
+      syncDebug("LOCAL_WRITE", { key, timestamp: new Date().toISOString(), source: "user" });
       window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key, value } }));
     } catch {}
   }, [key, value, loaded]);
@@ -194,7 +205,9 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
       if (!detail || detail.key !== key) return;
+      suppressPersistRef.current = true;
       valueRef.current = detail.value as T;
+      syncDebug("REMOTE_RECEIVE", { key, source: "remote" });
       setValue(detail.value as T);
     };
     window.addEventListener(REMOTE_WRITE_EVENT, onRemote);
@@ -211,16 +224,28 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
 }
 
 export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  let valueChanged = true;
+  try {
+    const serialized = JSON.stringify(value);
+    const previous = localStorage.getItem(key);
+    valueChanged = previous !== serialized;
+    if (valueChanged) localStorage.setItem(key, serialized);
+  } catch {}
+
   if (updatedAt) {
     if (key.startsWith("pace.domain.")) {
       const domain = key.slice("pace.domain.".length);
-      applyRemoteDomainRecord(domain, value, updatedAt);
+      const metadataChanged = applyRemoteDomainRecord(domain, value, updatedAt);
+      if (!metadataChanged && !valueChanged) return;
     } else if (key.startsWith(NEW_PREFIX)) {
       const domain = key.slice(NEW_PREFIX.length);
-      applyRemoteDomainRecord(domain, value, updatedAt);
+      const metadataChanged = applyRemoteDomainRecord(domain, value, updatedAt);
+      if (!metadataChanged && !valueChanged) return;
     }
   }
+
+  if (!valueChanged) return;
+  syncDebug("REMOTE_RECEIVE", { key, updatedAt, source: "remote" });
   window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value } }));
 }
 

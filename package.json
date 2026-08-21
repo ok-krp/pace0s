@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test:sync": "node scripts/test-sync-policy.mjs",
     "format": "prettier --write ."
   },
   "dependencies": {

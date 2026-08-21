@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { enqueueDomainWrite } from "@/lib/domain-outbox";
 
 export type DomainRecord<T> = {
   version: 1;
@@ -66,14 +65,13 @@ export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
       localStorage.setItem(storageKey(domain), JSON.stringify(record));
       // Keep the old key during the progressive migration as a recovery copy.
       localStorage.setItem(`pace.${domain}`, JSON.stringify(value));
-      // Persist the mutation before asking the cloud-sync layer to process it.
-      enqueueDomainWrite(domain, value);
+      // There is exactly one local->cloud sync contract: pace.local.write.
+      // The former domain outbox was never consumed by the active sync engine
+      // and could leave stale duplicate state behind.
       window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record } }));
-      // Reuse the existing cloud-sync event contract so domain writes are queued
-      // by the current sync engine instead of creating a second sync mechanism.
       window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key: `pace.${domain}`, value } }));
     } catch {
-      // The in-memory state remains usable; the outbox can retry later.
+      // The in-memory state remains usable; the central sync queue retries later.
     }
   }
 

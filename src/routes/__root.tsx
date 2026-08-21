@@ -6,6 +6,7 @@ import { AppSidebar, MobileTabBar, MobileTopBar } from "@/components/AppSidebar"
 import { Toaster } from "@/components/ui/sonner";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { CloudSyncProvider } from "@/hooks/use-cloud-sync-engine";
+import { useProfileRealtime } from "@/hooks/use-profile-realtime";
 import { LegalConsentGate } from "@/components/LegalConsentGate";
 import { CommandPalette } from "@/components/CommandPalette";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
@@ -60,6 +61,7 @@ const PUBLIC_ROUTES = ["/login"];
 function AuthGate() {
   const { user, loading } = useAuth(); const path = useRouterState({ select: (s) => s.location.pathname }); const navigate = useNavigate(); const isPublic = PUBLIC_ROUTES.includes(path);
   useGlassPointer();
+  useProfileRealtime();
 
   useEffect(() => {
     const syncThemeMeta = (dark: boolean) => {
