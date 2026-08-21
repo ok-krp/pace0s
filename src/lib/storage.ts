@@ -73,6 +73,16 @@ type StoredProgramItem = { exerciseId: string; weight?: number; reps: number; se
 type StoredProgram = { id: string; items: StoredProgramItem[]; [key: string]: unknown };
 type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 
+function syncDebugEnabled() {
+  if (!import.meta.env.DEV || typeof window === "undefined") return false;
+  try { return localStorage.getItem("pace.__sync_debug") === "1"; } catch { return false; }
+}
+
+function syncDebug(event: string, detail: Record<string, unknown>) {
+  if (!syncDebugEnabled()) return;
+  console.debug(`[${event}]`, detail);
+}
+
 function syncLatestOverloadRowsToTraining(value: unknown) {
   if (typeof window === "undefined" || !value || typeof value !== "object" || Array.isArray(value)) return;
   try {
@@ -153,9 +163,11 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const [loaded, setLoaded] = useState(false);
   const valueRef = useRef<T>(initial);
   const hydratedRef = useRef(false);
+  const suppressPersistRef = useRef(false);
 
   useEffect(() => {
     hydratedRef.current = false;
+    suppressPersistRef.current = false;
   }, [key]);
 
   useEffect(() => {
@@ -176,16 +188,25 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
 
   useEffect(() => {
     if (!loaded) return;
-    // Reading existing state during hydration is not a user mutation.
-    // Do not emit a sync event for it, otherwise opening or navigating the
-    // app can rewrite unchanged data to the cloud.
     if (!hydratedRef.current) {
       hydratedRef.current = true;
       return;
     }
+    // A REMOTE_WRITE changes React state but is not a user mutation.
+    // applyRemoteWrite already persists the remote value, so the persistence
+    // effect must not emit pace.local.write for this state transition.
+    if (suppressPersistRef.current) {
+      suppressPersistRef.current = false;
+      syncDebug("REMOTE_APPLIED", { key });
+      return;
+    }
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      const serialized = JSON.stringify(value);
+      const previous = localStorage.getItem(key);
+      if (previous === serialized) return;
+      localStorage.setItem(key, serialized);
       if (key === "pace.sport.overload") syncLatestOverloadRowsToTraining(value);
+      syncDebug("LOCAL_WRITE", { key, timestamp: new Date().toISOString(), source: "user" });
       window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key, value } }));
     } catch {}
   }, [key, value, loaded]);
@@ -194,7 +215,9 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
       if (!detail || detail.key !== key) return;
+      suppressPersistRef.current = true;
       valueRef.current = detail.value as T;
+      syncDebug("REMOTE_RECEIVE", { key, source: "remote" });
       setValue(detail.value as T);
     };
     window.addEventListener(REMOTE_WRITE_EVENT, onRemote);
@@ -211,7 +234,10 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
 }
 
 export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  try {
+    const serialized = JSON.stringify(value);
+    if (localStorage.getItem(key) !== serialized) localStorage.setItem(key, serialized);
+  } catch {}
   if (updatedAt) {
     if (key.startsWith("pace.domain.")) {
       const domain = key.slice("pace.domain.".length);
@@ -221,6 +247,7 @@ export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string
       applyRemoteDomainRecord(domain, value, updatedAt);
     }
   }
+  syncDebug("REMOTE_RECEIVE", { key, updatedAt, source: "remote" });
   window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value } }));
 }
 
