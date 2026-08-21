@@ -1,14 +1,49 @@
 import { createHash, createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import { generateText } from "ai";
+import { generateText, type LanguageModel } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
 import type { AgentType, AiProvider, AiProviderSource } from "./ai-history.types";
 
 type Client = SupabaseClient<Database>;
-type AnyClient = Client & { from: (table: string) => any };
-export type AiGateway = (model: string) => any;
+type ByokPreferences = {
+  coach_ai_source: string;
+  coach_ai_provider: string;
+  coach_ai_model: string;
+  coach_ai_base_url: string | null;
+  build_ai_source: string;
+  build_ai_provider: string;
+  build_ai_model: string;
+  build_ai_base_url: string | null;
+};
+type ByokSecret = {
+  user_id: string;
+  provider: string;
+  encrypted_api_key: string;
+  key_last4: string;
+};
+type ByokDatabase = Database & {
+  public: {
+    Tables: Database["public"]["Tables"] & {
+      ai_preferences: {
+        Row: Database["public"]["Tables"]["ai_preferences"]["Row"] & ByokPreferences;
+        Insert: Database["public"]["Tables"]["ai_preferences"]["Insert"] & Partial<ByokPreferences>;
+        Update: Database["public"]["Tables"]["ai_preferences"]["Update"] & Partial<ByokPreferences>;
+        Relationships: [];
+      };
+      ai_provider_secrets: {
+        Row: ByokSecret;
+        Insert: Omit<ByokSecret, "key_last4"> & { key_last4?: string };
+        Update: Partial<ByokSecret>;
+        Relationships: [];
+      };
+    };
+  };
+};
+type ByokClient = SupabaseClient<ByokDatabase>;
+
+export type AiGateway = (model: string) => LanguageModel;
 
 export const PROVIDER_LABELS: Record<AiProvider, string> = {
   openai: "OpenAI",
@@ -34,7 +69,9 @@ const DEFAULT_MODELS: Record<Exclude<AiProvider, "custom">, string> = {
 
 function encryptionKey() {
   const secret = process.env.PACE_BYOK_ENCRYPTION_KEY;
-  if (!secret) throw new Error("BYOK non configuré côté serveur : PACE_BYOK_ENCRYPTION_KEY est manquante.");
+  if (!secret) {
+    throw new Error("BYOK non configuré côté serveur : PACE_BYOK_ENCRYPTION_KEY est manquante.");
+  }
   return createHash("sha256").update(secret).digest();
 }
 
@@ -51,18 +88,26 @@ function decryptApiKey(value: string) {
   if (!iv64 || !tag64 || !data64) throw new Error("Secret BYOK invalide.");
   const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(iv64, "base64url"));
   decipher.setAuthTag(Buffer.from(tag64, "base64url"));
-  return Buffer.concat([decipher.update(Buffer.from(data64, "base64url")), decipher.final()]).toString("utf8");
+  return Buffer.concat([
+    decipher.update(Buffer.from(data64, "base64url")),
+    decipher.final(),
+  ]).toString("utf8");
 }
 
 function normalizeBaseUrl(provider: AiProvider, custom?: string | null) {
   const value = provider === "custom" ? custom?.trim() : DEFAULT_BASE_URLS[provider];
   if (!value) throw new Error("URL API personnalisée obligatoire.");
   const url = new URL(value);
-  if (!/^https?:$/.test(url.protocol)) throw new Error("URL API invalide.");
+  if (url.protocol !== "https:") throw new Error("URL API invalide : HTTPS est obligatoire.");
   return value.replace(/\/$/, "");
 }
 
-function providerModel(provider: AiProvider, apiKey: string, model: string, baseUrl?: string | null): AiGateway {
+function providerModel(
+  provider: AiProvider,
+  apiKey: string,
+  model: string,
+  baseUrl?: string | null,
+): AiGateway {
   const gateway = createOpenAICompatible({
     name: `pace-byok-${provider}`,
     apiKey,
@@ -70,112 +115,215 @@ function providerModel(provider: AiProvider, apiKey: string, model: string, base
     includeUsage: true,
     headers: provider === "openrouter" ? { "X-Title": "Pace OS" } : undefined,
   });
-  return (selectedModel: string) => gateway(selectedModel || model);
+  return (selectedModel) => gateway(selectedModel || model);
+}
+
+function asByokClient(client: Client) {
+  return client as unknown as ByokClient;
 }
 
 export function defaultModel(provider: AiProvider) {
   return provider === "custom" ? "" : DEFAULT_MODELS[provider];
 }
 
-export async function getAiRuntimeConfig(client: Client, userId: string, agentType: AgentType) {
-  const c = client as AnyClient;
-  const { data, error } = await c.from("ai_preferences").select(agentType === "coach"
-    ? "coach_ai_source,coach_ai_provider,coach_ai_model,coach_ai_base_url"
-    : "build_ai_source,build_ai_provider,build_ai_model,build_ai_base_url").eq("user_id", userId).maybeSingle();
+export async function getAiRuntimeConfig(
+  client: Client,
+  userId: string,
+  agentType: AgentType,
+) {
+  const byokClient = asByokClient(client);
+  const columns = [
+    "coach_ai_source",
+    "coach_ai_provider",
+    "coach_ai_model",
+    "coach_ai_base_url",
+    "build_ai_source",
+    "build_ai_provider",
+    "build_ai_model",
+    "build_ai_base_url",
+  ].join(",");
+  const { data, error } = await byokClient
+    .from("ai_preferences")
+    .select(columns)
+    .eq("user_id", userId)
+    .maybeSingle();
   if (error) throw new Error(error.message);
 
-  const prefix = agentType === "coach" ? "coach_ai" : "build_ai";
-  const source = (data?.[`${prefix}_source`] ?? "pace") as AiProviderSource;
-  const provider = (data?.[`${prefix}_provider`] ?? "gemini") as AiProvider;
-  const model = String(data?.[`${prefix}_model`] ?? defaultModel(provider));
-  const baseUrl = data?.[`${prefix}_base_url`] ?? null;
+  const preferences = data as ByokPreferences | null;
+  const sourceKey = agentType === "coach" ? "coach_ai_source" : "build_ai_source";
+  const providerKey = agentType === "coach" ? "coach_ai_provider" : "build_ai_provider";
+  const modelKey = agentType === "coach" ? "coach_ai_model" : "build_ai_model";
+  const baseUrlKey = agentType === "coach" ? "coach_ai_base_url" : "build_ai_base_url";
+  const source = (preferences?.[sourceKey] ?? "pace") as AiProviderSource;
+  const provider = (preferences?.[providerKey] ?? "gemini") as AiProvider;
+  const model = String(preferences?.[modelKey] ?? defaultModel(provider));
+  const baseUrl = preferences?.[baseUrlKey] ?? null;
 
   if (source === "pace") {
     const key = process.env.GEMINI_API_KEY;
     if (!key) throw new Error("L’IA Pace n’est pas configurée sur le serveur.");
     const gateway = createGoogleGenerativeAI({ apiKey: key });
-    return { source, provider: "gemini" as AiProvider, model: model || "gemini-2.5-flash", baseUrl: null, gateway: (selected: string) => gateway(selected || model || "gemini-2.5-flash") as any, hasKey: true };
+    return {
+      source,
+      provider: "gemini" as AiProvider,
+      model: model || "gemini-2.5-flash",
+      baseUrl: null,
+      gateway: (selected: string) => gateway(selected || model || "gemini-2.5-flash"),
+      hasKey: true,
+    };
   }
 
-  const { data: secret, error: secretError } = await c.from("ai_provider_secrets").select("encrypted_api_key,key_last4").eq("user_id", userId).eq("provider", provider).maybeSingle();
+  const { data: secret, error: secretError } = await byokClient
+    .from("ai_provider_secrets")
+    .select("encrypted_api_key,key_last4")
+    .eq("user_id", userId)
+    .eq("provider", provider)
+    .maybeSingle();
   if (secretError) throw new Error(secretError.message);
-  if (!secret?.encrypted_api_key) throw new Error(`Aucune clé ${PROVIDER_LABELS[provider]} configurée.`);
+  if (!secret?.encrypted_api_key) {
+    throw new Error(`Aucune clé ${PROVIDER_LABELS[provider]} configurée.`);
+  }
+
   const apiKey = decryptApiKey(secret.encrypted_api_key);
   const gateway = providerModel(provider, apiKey, model, baseUrl);
-  return { source, provider, model, baseUrl, gateway, hasKey: true, keyLast4: secret.key_last4 as string };
+  return {
+    source,
+    provider,
+    model,
+    baseUrl,
+    gateway,
+    hasKey: true,
+    keyLast4: secret.key_last4,
+  };
 }
 
-export async function saveAiProviderSettings(client: Client, userId: string, input: {
-  agentType: AgentType;
-  source: AiProviderSource;
-  provider: AiProvider;
-  model: string;
-  baseUrl?: string | null;
-  apiKey?: string | null;
-}) {
-  const c = client as AnyClient;
+export async function saveAiProviderSettings(
+  client: Client,
+  userId: string,
+  input: {
+    agentType: AgentType;
+    source: AiProviderSource;
+    provider: AiProvider;
+    model: string;
+    baseUrl?: string | null;
+    apiKey?: string | null;
+  },
+) {
+  const byokClient = asByokClient(client);
   const model = input.model.trim() || defaultModel(input.provider);
+
   if (input.source === "byok") {
     if (!model) throw new Error("Modèle obligatoire.");
     normalizeBaseUrl(input.provider, input.baseUrl);
     if (input.apiKey?.trim()) {
       const secret = input.apiKey.trim();
       if (secret.length < 8) throw new Error("La clé API semble invalide.");
-      await c.from("ai_provider_secrets").upsert({
-        user_id: userId,
-        provider: input.provider,
-        encrypted_api_key: encryptApiKey(secret),
-        key_last4: secret.slice(-4),
-      }, { onConflict: "user_id,provider" });
+      await byokClient.from("ai_provider_secrets").upsert(
+        {
+          user_id: userId,
+          provider: input.provider,
+          encrypted_api_key: encryptApiKey(secret),
+          key_last4: secret.slice(-4),
+        },
+        { onConflict: "user_id,provider" },
+      );
     }
-    const { data: existing } = await c.from("ai_provider_secrets").select("user_id").eq("user_id", userId).eq("provider", input.provider).maybeSingle();
+
+    const { data: existing } = await byokClient
+      .from("ai_provider_secrets")
+      .select("user_id")
+      .eq("user_id", userId)
+      .eq("provider", input.provider)
+      .maybeSingle();
     if (!existing) throw new Error(`Clé ${PROVIDER_LABELS[input.provider]} manquante.`);
   }
 
-  const prefix = input.agentType === "coach" ? "coach_ai" : "build_ai";
-  const patch = {
-    user_id: userId,
-    [`${prefix}_source`]: input.source,
-    [`${prefix}_provider`]: input.provider,
-    [`${prefix}_model`]: model,
-    [`${prefix}_base_url`]: input.provider === "custom" ? normalizeBaseUrl(input.provider, input.baseUrl) : null,
-  };
-  const { error } = await c.from("ai_preferences").upsert(patch);
+  const common = { user_id: userId };
+  const patch = input.agentType === "coach"
+    ? {
+        ...common,
+        coach_ai_source: input.source,
+        coach_ai_provider: input.provider,
+        coach_ai_model: model,
+        coach_ai_base_url: input.provider === "custom" ? normalizeBaseUrl(input.provider, input.baseUrl) : null,
+      }
+    : {
+        ...common,
+        build_ai_source: input.source,
+        build_ai_provider: input.provider,
+        build_ai_model: model,
+        build_ai_base_url: input.provider === "custom" ? normalizeBaseUrl(input.provider, input.baseUrl) : null,
+      };
+
+  const { error } = await byokClient.from("ai_preferences").upsert(patch as never);
   if (error) throw new Error(error.message);
   return { ok: true, source: input.source, provider: input.provider, model };
 }
 
-export async function deleteAiProviderKey(client: Client, userId: string, provider: AiProvider) {
-  const c = client as AnyClient;
-  const { error } = await c.from("ai_provider_secrets").delete().eq("user_id", userId).eq("provider", provider);
+export async function deleteAiProviderKey(
+  client: Client,
+  userId: string,
+  provider: AiProvider,
+) {
+  const { error } = await asByokClient(client)
+    .from("ai_provider_secrets")
+    .delete()
+    .eq("user_id", userId)
+    .eq("provider", provider);
   if (error) throw new Error(error.message);
   return { ok: true };
 }
 
 export async function getAiProviderSettings(client: Client, userId: string) {
-  const c = client as AnyClient;
-  const { data: prefs, error } = await c.from("ai_preferences").select("coach_ai_source,coach_ai_provider,coach_ai_model,coach_ai_base_url,build_ai_source,build_ai_provider,build_ai_model,build_ai_base_url").eq("user_id", userId).maybeSingle();
+  const byokClient = asByokClient(client);
+  const { data: prefs, error } = await byokClient
+    .from("ai_preferences")
+    .select("coach_ai_source,coach_ai_provider,coach_ai_model,coach_ai_base_url,build_ai_source,build_ai_provider,build_ai_model,build_ai_base_url")
+    .eq("user_id", userId)
+    .maybeSingle();
   if (error) throw new Error(error.message);
-  const { data: secrets, error: secretError } = await c.from("ai_provider_secrets").select("provider,key_last4").eq("user_id", userId);
+
+  const { data: secrets, error: secretError } = await byokClient
+    .from("ai_provider_secrets")
+    .select("provider,key_last4")
+    .eq("user_id", userId);
   if (secretError) throw new Error(secretError.message);
-  const configured = new Set((secrets ?? []).map((row: { provider: AiProvider }) => row.provider));
+
+  const configured = new Set(secrets.map((row) => row.provider as AiProvider));
   const make = (agentType: AgentType) => {
-    const p = agentType === "coach" ? "coach_ai" : "build_ai";
-    const provider = (prefs?.[`${p}_provider`] ?? "gemini") as AiProvider;
+    const prefix = agentType === "coach" ? "coach_ai" : "build_ai";
+    const preferences = prefs as ByokPreferences | null;
+    const provider = String(
+      preferences?.[`${prefix}_provider` as keyof ByokPreferences] ?? "gemini",
+    ) as AiProvider;
+    const model = String(
+      preferences?.[`${prefix}_model` as keyof ByokPreferences] ?? defaultModel(provider),
+    );
+    const source = String(
+      preferences?.[`${prefix}_source` as keyof ByokPreferences] ?? "pace",
+    ) as AiProviderSource;
+    const baseUrl = String(
+      preferences?.[`${prefix}_base_url` as keyof ByokPreferences] ?? "",
+    );
+    const secret = secrets.find((row) => row.provider === provider);
     return {
-      source: (prefs?.[`${p}_source`] ?? "pace") as AiProviderSource,
+      source,
       provider,
-      model: String(prefs?.[`${p}_model`] ?? defaultModel(provider)),
-      baseUrl: prefs?.[`${p}_base_url`] ?? "",
+      model,
+      baseUrl,
       keyConfigured: configured.has(provider),
-      keyLast4: (secrets ?? []).find((row: { provider: AiProvider }) => row.provider === provider)?.key_last4 ?? "",
+      keyLast4: secret?.key_last4 ?? "",
     };
   };
+
   return { coach: make("coach"), build: make("build"), providers: PROVIDER_LABELS };
 }
 
 function providerError(error: unknown) {
-  const status = typeof error === "object" && error && "status" in error && typeof error.status === "number" ? error.status : 0;
+  const status =
+    typeof error === "object" && error && "status" in error && typeof error.status === "number"
+      ? error.status
+      : 0;
   if (status === 401) return { status: 401, message: "Clé API invalide" };
   if (status === 403) return { status: 403, message: "Cette clé n’a pas les permissions nécessaires" };
   if (status === 404) return { status: 404, message: "Modèle ou endpoint introuvable" };
@@ -184,35 +332,76 @@ function providerError(error: unknown) {
   return { status: 0, message: "Impossible de contacter le fournisseur" };
 }
 
-export async function testAiProvider(client: Client, userId: string, input: { provider: AiProvider; model: string; baseUrl?: string | null; apiKey?: string | null }) {
+export async function testAiProvider(
+  client: Client,
+  userId: string,
+  input: {
+    provider: AiProvider;
+    model: string;
+    baseUrl?: string | null;
+    apiKey?: string | null;
+  },
+) {
   let key = input.apiKey?.trim() || "";
   if (!key) {
-    const c = client as AnyClient;
-    const { data, error } = await c.from("ai_provider_secrets").select("encrypted_api_key").eq("user_id", userId).eq("provider", input.provider).maybeSingle();
+    const { data, error } = await asByokClient(client)
+      .from("ai_provider_secrets")
+      .select("encrypted_api_key")
+      .eq("user_id", userId)
+      .eq("provider", input.provider)
+      .maybeSingle();
     if (error) throw new Error(error.message);
-    if (!data?.encrypted_api_key) return { ok: false, status: 401, message: "Clé API invalide" };
+    if (!data?.encrypted_api_key) {
+      return { ok: false, status: 401, message: "Clé API invalide" };
+    }
     key = decryptApiKey(data.encrypted_api_key);
   }
+
   try {
     const gateway = providerModel(input.provider, key, input.model, input.baseUrl);
-    const result = await generateText({ model: gateway(input.model), prompt: "Réponds uniquement par OK." });
+    const result = await generateText({
+      model: gateway(input.model),
+      prompt: "Réponds uniquement par OK.",
+    });
     return { ok: Boolean(result.text.trim()), status: 200, message: "Clé valide" };
   } catch (error) {
     return { ok: false, ...providerError(error) };
   }
 }
 
-export async function listAiProviderModels(client: Client, userId: string, input: { provider: AiProvider; baseUrl?: string | null; apiKey?: string | null }) {
+export async function listAiProviderModels(
+  client: Client,
+  userId: string,
+  input: {
+    provider: AiProvider;
+    baseUrl?: string | null;
+    apiKey?: string | null;
+  },
+) {
   let key = input.apiKey?.trim() || "";
   if (!key) {
-    const c = client as AnyClient;
-    const { data, error } = await c.from("ai_provider_secrets").select("encrypted_api_key").eq("user_id", userId).eq("provider", input.provider).maybeSingle();
+    const { data, error } = await asByokClient(client)
+      .from("ai_provider_secrets")
+      .select("encrypted_api_key")
+      .eq("user_id", userId)
+      .eq("provider", input.provider)
+      .maybeSingle();
     if (error) throw new Error(error.message);
     if (!data?.encrypted_api_key) throw new Error("Clé API manquante.");
     key = decryptApiKey(data.encrypted_api_key);
   }
-  const response = await fetch(`${normalizeBaseUrl(input.provider, input.baseUrl)}/models`, { headers: { Authorization: `Bearer ${key}` } });
-  if (!response.ok) throw new Error(providerError({ status: response.status }).message);
-  const body = await response.json() as { data?: Array<{ id?: string; name?: string }> };
-  return (body.data ?? []).filter((model) => typeof model.id === "string").map((model) => ({ id: model.id!, name: model.name ?? model.id! })).slice(0, 300);
+
+  const response = await fetch(`${normalizeBaseUrl(input.provider, input.baseUrl)}/models`, {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  if (!response.ok) {
+    throw new Error(providerError({ status: response.status }).message);
+  }
+  const body = (await response.json()) as {
+    data?: Array<{ id?: string; name?: string }>;
+  };
+  return (body.data ?? [])
+    .filter((model) => typeof model.id === "string")
+    .map((model) => ({ id: model.id!, name: model.name ?? model.id! }))
+    .slice(0, 300);
 }
