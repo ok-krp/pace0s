@@ -11,6 +11,7 @@ for (const name of ["openai", "anthropic", "gemini", "openrouter", "custom"]) {
 }
 assert.match(provider, /aes-256-gcm/, "BYOK secrets must use authenticated encryption");
 assert.match(provider, /encrypted_api_key/, "encrypted secret column missing");
+assert.match(provider, /supabaseAdmin/, "BYOK secrets must use the server-only Supabase admin client");
 assert.doesNotMatch(provider, /localStorage/, "BYOK secrets must not use localStorage");
 assert.doesNotMatch(chat, /GEMINI_API_KEY/, "chat handler must not bypass provider selection with a hard-coded Gemini key");
 assert.match(chat, /getAiRuntimeConfig/, "chat handler must resolve its provider at runtime");
@@ -20,6 +21,8 @@ assert.match(settings, /Tester la connexion/, "connection test UI missing");
 assert.match(settings, /Supprimer la clé/, "key deletion UI missing");
 assert.match(migration, /ai_provider_secrets/, "secret table migration missing");
 assert.match(migration, /ROW LEVEL SECURITY/, "secret table RLS missing");
+assert.match(migration, /REVOKE ALL ON TABLE public\.ai_provider_secrets FROM anon, authenticated/, "browser roles must not access BYOK secrets");
+assert.match(migration, /GRANT ALL ON TABLE public\.ai_provider_secrets TO service_role/, "service role access missing");
 assert.match(migration, /encrypted_api_key/, "secret encryption storage missing");
 
 console.log("BYOK policy checks passed");
