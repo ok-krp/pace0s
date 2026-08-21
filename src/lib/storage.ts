@@ -90,12 +90,10 @@ function syncLatestOverloadRowsToTraining(value: unknown) {
     const rawExercises = localStorage.getItem("pace.sport.exercises");
     const rawPrograms = localStorage.getItem("pace.sport.programs");
     if (!rawExercises && !rawPrograms) return;
-
     const exercises = rawExercises ? JSON.parse(rawExercises) as StoredExercise[] : [];
     const programs = rawPrograms ? JSON.parse(rawPrograms) as StoredProgram[] : [];
     let exercisesChanged = false;
     let programsChanged = false;
-
     for (const [exerciseId, rows] of Object.entries(overload)) {
       if (!Array.isArray(rows)) continue;
       const latest = rows.find((row) => row?.source === "manual") ?? null;
@@ -104,14 +102,12 @@ function syncLatestOverloadRowsToTraining(value: unknown) {
       const reps = Number(latest.reps ?? 0);
       const sets = Number(latest.sets ?? 0);
       if (![weight, reps, sets].every(Number.isFinite)) continue;
-
       for (let i = 0; i < exercises.length; i++) {
         if (exercises[i].id !== exerciseId) continue;
         if (exercises[i].defaultWeight === weight && exercises[i].defaultReps === reps && exercises[i].defaultSets === sets) continue;
         exercises[i] = { ...exercises[i], defaultWeight: weight, defaultReps: reps, defaultSets: sets };
         exercisesChanged = true;
       }
-
       for (let i = 0; i < programs.length; i++) {
         const program = programs[i];
         let itemsChanged = false;
@@ -127,35 +123,34 @@ function syncLatestOverloadRowsToTraining(value: unknown) {
         }
       }
     }
-
     if (exercisesChanged) {
-      const next = JSON.stringify(exercises);
-      localStorage.setItem("pace.sport.exercises", next);
+      localStorage.setItem("pace.sport.exercises", JSON.stringify(exercises));
       window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: "pace.sport.exercises", value: exercises } }));
     }
     if (programsChanged) {
-      const next = JSON.stringify(programs);
-      localStorage.setItem("pace.sport.programs", next);
+      localStorage.setItem("pace.sport.programs", JSON.stringify(programs));
       window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: "pace.sport.programs", value: programs } }));
     }
   } catch {}
 }
 
 function applyRemoteDomainRecord(domain: string, value: unknown, updatedAt: string) {
-  if (typeof window === "undefined" || !domain || !updatedAt) return;
+  if (typeof window === "undefined" || !domain || !updatedAt) return false;
   try {
     const key = `pace.domain.${domain}`;
     const existingRaw = localStorage.getItem(key);
     if (existingRaw) {
       try {
         const existing = JSON.parse(existingRaw) as Partial<DomainRecord>;
-        if (existing.version === 1 && typeof existing.updatedAt === "string" && Date.parse(existing.updatedAt) > Date.parse(updatedAt)) return;
+        if (existing.version === 1 && typeof existing.updatedAt === "string" && Date.parse(existing.updatedAt) > Date.parse(updatedAt)) return false;
       } catch {}
     }
     const record: DomainRecord = { version: 1, updatedAt, mutationId: `remote-${updatedAt}`, value };
     localStorage.setItem(key, JSON.stringify(record));
-    window.dispatchEvent(new CustomEvent(DOMAIN_WRITE_EVENT, { detail: { domain, record } }));
-  } catch {}
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
@@ -182,9 +177,7 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     setLoaded(true);
   }, [key]);
 
-  useEffect(() => {
-    valueRef.current = value;
-  }, [value]);
+  useEffect(() => { valueRef.current = value; }, [value]);
 
   useEffect(() => {
     if (!loaded) return;
@@ -192,9 +185,6 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
       hydratedRef.current = true;
       return;
     }
-    // A REMOTE_WRITE changes React state but is not a user mutation.
-    // applyRemoteWrite already persists the remote value, so the persistence
-    // effect must not emit pace.local.write for this state transition.
     if (suppressPersistRef.current) {
       suppressPersistRef.current = false;
       syncDebug("REMOTE_APPLIED", { key });
@@ -234,19 +224,27 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
 }
 
 export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
+  let valueChanged = true;
   try {
     const serialized = JSON.stringify(value);
-    if (localStorage.getItem(key) !== serialized) localStorage.setItem(key, serialized);
+    const previous = localStorage.getItem(key);
+    valueChanged = previous !== serialized;
+    if (valueChanged) localStorage.setItem(key, serialized);
   } catch {}
+
   if (updatedAt) {
     if (key.startsWith("pace.domain.")) {
       const domain = key.slice("pace.domain.".length);
-      applyRemoteDomainRecord(domain, value, updatedAt);
+      const metadataChanged = applyRemoteDomainRecord(domain, value, updatedAt);
+      if (!metadataChanged && !valueChanged) return;
     } else if (key.startsWith(NEW_PREFIX)) {
       const domain = key.slice(NEW_PREFIX.length);
-      applyRemoteDomainRecord(domain, value, updatedAt);
+      const metadataChanged = applyRemoteDomainRecord(domain, value, updatedAt);
+      if (!metadataChanged && !valueChanged) return;
     }
   }
+
+  if (!valueChanged) return;
   syncDebug("REMOTE_RECEIVE", { key, updatedAt, source: "remote" });
   window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value } }));
 }
