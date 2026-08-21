@@ -2,6 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createConversationServer, deleteConversationServer, getConversationServer, getPreferencesServer, listConversationsServer, savePreferencesServer, updateConversationServer } from "./ai-history.server";
+import { deleteAiProviderKey, getAiProviderSettings, listAiProviderModels, saveAiProviderSettings, testAiProvider } from "./ai-provider.server";
+import type { AiProvider } from "./ai-history.types";
+
+const providerSchema = z.enum(["openai", "anthropic", "gemini", "openrouter", "custom"]);
 
 export const listAiConversations = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).inputValidator((data: unknown) => z.object({ agentType: z.enum(["coach", "build"]) }).parse(data)).handler(({ data, context }) => listConversationsServer(context.supabase, context.userId, data.agentType));
 
@@ -16,3 +20,20 @@ export const deleteAiConversation = createServerFn({ method: "POST" }).middlewar
 export const getAiPreferences = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(({ context }) => getPreferencesServer(context.supabase, context.userId));
 
 export const saveAiPreferences = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((data: unknown) => z.object({ memory_level: z.enum(["none", "limited", "complete"]), permissions: z.record(z.boolean()), confirm_actions: z.boolean() }).parse(data)).handler(({ data, context }) => savePreferencesServer(context.supabase, context.userId, data as Parameters<typeof savePreferencesServer>[2]));
+
+export const getAiProviderSettings = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(({ context }) => getAiProviderSettings(context.supabase, context.userId));
+
+export const saveAiProviderSettingsFn = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((data: unknown) => z.object({
+  agentType: z.enum(["coach", "build"]),
+  source: z.enum(["pace", "byok"]),
+  provider: providerSchema,
+  model: z.string().max(200),
+  baseUrl: z.string().max(500).nullable().optional(),
+  apiKey: z.string().max(1000).nullable().optional(),
+}).parse(data)).handler(({ data, context }) => saveAiProviderSettings(context.supabase, context.userId, data));
+
+export const deleteAiProviderKeyFn = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((data: unknown) => z.object({ provider: providerSchema }).parse(data)).handler(({ data, context }) => deleteAiProviderKey(context.supabase, context.userId, data.provider as AiProvider));
+
+export const testAiProviderFn = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((data: unknown) => z.object({ provider: providerSchema, model: z.string().max(200), baseUrl: z.string().max(500).nullable().optional(), apiKey: z.string().max(1000).nullable().optional() }).parse(data)).handler(({ data, context }) => testAiProvider(context.supabase, context.userId, data));
+
+export const listAiProviderModelsFn = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((data: unknown) => z.object({ provider: providerSchema, baseUrl: z.string().max(500).nullable().optional(), apiKey: z.string().max(1000).nullable().optional() }).parse(data)).handler(({ data, context }) => listAiProviderModels(context.supabase, context.userId, data));
