@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { applyRemoteWrite, useLocalState } from "@/lib/storage";
 import { useAuth } from "@/hooks/use-auth";
-import { useLocalState } from "@/lib/storage";
 
 export type UserGoals = {
   kcal: number;
@@ -15,7 +15,7 @@ const DEFAULT: UserGoals = { kcal: 2300, protein: 140, waterMl: 2500, weightKg: 
 
 export function useUserGoals(): UserGoals {
   const { user } = useAuth();
-  const [cached, setCached] = useLocalState<UserGoals>("pace.user.goals", DEFAULT);
+  const [cached] = useLocalState<UserGoals>("pace.user.goals", DEFAULT);
   const [goals, setGoals] = useState<UserGoals>(cached);
 
   useEffect(() => {
@@ -35,9 +35,10 @@ export function useUserGoals(): UserGoals {
           weightGoalKg: data.weight_goal_kg ?? null,
         };
         setGoals(next);
-        setCached(next);
+        // This is a server hydration of a derived cache, not a user mutation.
+        applyRemoteWrite("pace.user.goals", next);
       });
-  }, [user, setCached]);
+  }, [user]);
 
   return goals;
 }
