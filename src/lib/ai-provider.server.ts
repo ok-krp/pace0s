@@ -32,4 +32,31 @@ export async function deleteAiProviderKey(_client: Client, userId: string, provi
 export async function getAiProviderSettings(client: Client, userId: string) { const byokClient = asByokClient(client); const { data: prefs, error } = await byokClient.from("ai_preferences").select("coach_ai_source,coach_ai_provider,coach_ai_model,coach_ai_base_url,build_ai_source,build_ai_provider,build_ai_model,build_ai_base_url").eq("user_id", userId).maybeSingle(); if (error) throw new Error(error.message); const { data: secrets, error: secretError } = await secretClient().from("ai_provider_secrets").select("provider,key_last4").eq("user_id", userId); if (secretError) throw new Error(secretError.message); const configured = new Set(secrets.map((row) => row.provider as AiProvider)); const make = (agentType: AgentType) => { const prefix = agentType === "coach" ? "coach_ai" : "build_ai"; const p = prefs as ByokPreferences | null; const provider = String(p?.[`${prefix}_provider`] ?? "gemini") as AiProvider; validateProvider(provider); return { source: String(p?.[`${prefix}_source`] ?? "pace") as AiProviderSource, provider, model: String(p?.[`${prefix}_model`] ?? defaultModel(provider)), baseUrl: String(p?.[`${prefix}_base_url`] ?? ""), keyConfigured: configured.has(provider), keyLast4: secrets.find((row) => row.provider === provider)?.key_last4 ?? "" }; }; return { coach: make("coach"), build: make("build"), providers: PROVIDER_LABELS }; }
 function providerError(error: unknown) { const status = typeof error === "object" && error && "status" in error && typeof error.status === "number" ? error.status : 0; if (status === 400) return { status: 400, message: "Requête refusée par le fournisseur" }; if (status === 401) return { status: 401, message: "Clé API invalide" }; if (status === 403) return { status: 403, message: "Cette clé n’a pas les permissions nécessaires" }; if (status === 404) return { status: 404, message: "Modèle ou endpoint introuvable" }; if (status === 429) return { status: 429, message: "Limite de requêtes atteinte chez votre fournisseur" }; if (status >= 500) return { status, message: "Le fournisseur IA est temporairement indisponible" }; return { status: 0, message: "Impossible de contacter le fournisseur" }; }
 export async function testAiProvider(_client: Client, userId: string, input: { provider: AiProvider; model: string; baseUrl?: string | null; apiKey?: string | null }) { validateProvider(input.provider); const stored = input.apiKey?.trim() ? null : await readSecret(userId, input.provider); const encrypted = stored?.encrypted_api_key; if (!input.apiKey?.trim() && !encrypted) return { ok: false, status: 401, message: "Clé API invalide" }; const plaintext = input.apiKey?.trim() || decryptApiKey(encrypted!); try { const model = input.model.trim() || defaultModel(input.provider); if (!model) throw new Error("Modèle obligatoire."); const gateway = providerModel(input.provider, plaintext, model, input.baseUrl); const result = await generateText({ model: gateway(model), prompt: "Réponds uniquement par OK." }); return { ok: result.text.trim().length > 0, status: 200, message: "Clé valide" }; } catch (error) { return { ok: false, ...providerError(error) }; } }
-export async function listAiProviderModels(_client: Client, userId: string, input: { provider: AiProvider; baseUrl?: string | null; apiKey?: string | null }) { validateProvider(input.provider); const stored = input.apiKey?.trim() ? null : await readSecret(userId, input.provider); const encrypted = stored?.encrypted_api_key; if (!input.apiKey?.trim() && !encrypted) throw new Error("Clé API manquante."); const key = input.apiKey?.trim() || decryptApiKey(encrypted!); const baseUrl = normalizeBaseUrl(input.provider, input.baseUrl); const response = await fetch(`${baseUrl}/models`, { headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15_000) }); if (!response.ok) throw new Error(providerError({ status: response.status }).message); const body = (await response.json()) as { data?: Array<{ id?: string; name?: string }> }; return (body.data ?? []).filter((model) => typeof model.id === "string").map((model) => ({ id: model.id!, name: model.name ?? model.id! })).slice(0, 300); }
+
+async function fetchProviderModels(provider: AiProvider, key: string, baseUrl: string) {
+  const headers: Record<string, string> = { Accept: "application/json" };
+  let url = `${baseUrl}/models`;
+  if (provider === "gemini") {
+    url = "https://generativelanguage.googleapis.com/v1beta/models";
+    headers["x-goog-api-key"] = key;
+  } else if (provider === "anthropic") {
+    headers["x-api-key"] = key;
+    headers["anthropic-version"] = "2023-06-01";
+  } else {
+    headers.Authorization = `Bearer ${key}`;
+  }
+  const response = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
+  if (!response.ok) {
+    const providerBody = await response.text().catch(() => "");
+    const detail = providerBody.length > 0 && providerBody.length < 500 ? providerBody : "";
+    const mapped = providerError({ status: response.status });
+    throw new Error(detail ? `${mapped.message}: ${detail}` : mapped.message);
+  }
+  const body = (await response.json()) as { data?: Array<{ id?: string; name?: string; display_name?: string }>; models?: Array<{ name?: string; displayName?: string; supportedGenerationMethods?: string[] }> };
+  if (provider === "gemini") {
+    return (body.models ?? []).filter((model) => typeof model.name === "string" && (!model.supportedGenerationMethods || model.supportedGenerationMethods.includes("generateContent"))).map((model) => ({ id: model.name!.replace(/^models\//, ""), name: model.displayName ?? model.name!.replace(/^models\//, "") }));
+  }
+  return (body.data ?? []).filter((model) => typeof model.id === "string").map((model) => ({ id: model.id!, name: model.display_name ?? model.name ?? model.id! }));
+}
+
+export async function listAiProviderModels(_client: Client, userId: string, input: { provider: AiProvider; baseUrl?: string | null; apiKey?: string | null }) { validateProvider(input.provider); const stored = input.apiKey?.trim() ? null : await readSecret(userId, input.provider); const encrypted = stored?.encrypted_api_key; if (!input.apiKey?.trim() && !encrypted) throw new Error("Clé API manquante."); const key = input.apiKey?.trim() || decryptApiKey(encrypted!); const baseUrl = normalizeBaseUrl(input.provider, input.baseUrl); const models = await fetchProviderModels(input.provider, key, baseUrl); return models.slice(0, 300); }
