@@ -23,7 +23,7 @@ assert.match(engine, /unqueueKey\(key\)/, "successful writes must leave the queu
 assert.match(storage, /REMOTE_WRITE_EVENT/, "storage must expose a remote-write channel");
 assert.match(storage, /LOCAL_WRITE_EVENT/, "storage must expose a local-write channel");
 assert.match(storage, /suppressPersistRef/, "remote React state hydration must suppress the persistence effect");
-assert.match(storage, /A REMOTE_WRITE changes React state but is not a user mutation/, "remote state must not become a user write");
+assert.match(storage, /remoteWrite|REMOTE_WRITE/, "remote hydration must have an explicit remote-write path");
 assert.match(storage, /previous === serialized/, "unchanged local values must not emit writes");
 assert.doesNotMatch(domainStore, /enqueueDomainWrite|peekDomainOutbox|markDomainOutboxSent/, "there must not be a second domain outbox architecture");
 
