@@ -17,11 +17,12 @@ import { buildIntel, statusColor, type ModuleKey } from "@/lib/insights";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/")({
-  validateSearch: (s: Record<string, unknown>) => ({
-    quickAdd: (["water", "kcal", "sleep", "weight", "workout"] as const).includes(s.quickAdd as never)
+  validateSearch: (s: Record<string, unknown>) => {
+    const quickAdd = (["water", "kcal", "sleep", "weight", "workout"] as const).includes(s.quickAdd as never)
       ? (s.quickAdd as "water" | "kcal" | "sleep" | "weight" | "workout")
-      : undefined,
-  }),
+      : undefined;
+    return quickAdd ? { quickAdd } : {};
+  },
   head: () => ({
     meta: [
       { title: "Pace — votre centre de contrôle quotidien" },
@@ -165,7 +166,6 @@ function Dashboard() {
   return (
     <div>
       <PageHeader title={`${intel.greeting} 👋`} subtitle={todayLabel || "Aujourd’hui"} a11yLabel="Tableau de bord Pace" />
-
       <div className="flex flex-wrap gap-2 mb-4">
         {([
           { icon: <Droplets className="size-3.5" />, label: "Eau", action: () => setDialog("water") },
@@ -179,9 +179,7 @@ function Dashboard() {
           </button>
         ))}
       </div>
-
       <DailyInsight intel={intel} />
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <motion.button type="button" onClick={() => setDialog("score")} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }} whileTap={{ scale: 0.995 }} aria-label="Voir le détail du Daily Rhythm" className="text-left lg:col-span-2 glass-card p-6 md:p-8 relative overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
           <div className="pointer-events-none absolute -top-24 -left-16 size-72 rounded-full blur-3xl opacity-60" style={{ background: "radial-gradient(closest-side, oklch(0.82 0.16 55 / 0.35), transparent)" }} />
@@ -201,14 +199,12 @@ function Dashboard() {
         </motion.button>
         <SmartCard metric={intel.metrics.find((m) => m.key === "kcal")!} icon={ICONS.kcal} onOpen={() => setDialog("kcal")} onQuickAdd={() => setDialog("kcal")} quickLabel="Repas" />
       </div>
-
       <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
         {intel.metrics.filter((m) => m.key !== "kcal").map((m) => {
           const q = quickFor(m.key);
           return <SmartCard key={m.key} metric={m} icon={ICONS[m.key]} onOpen={q.open} onQuickAdd={q.add} quickLabel={q.label} />;
         })}
       </motion.div>
-
       {(health.steps > 0 || health.kcalActive > 0) && (
         <div className="grid grid-cols-3 gap-4 mb-4">
           <StatCard label="Pas" value={health.steps.toLocaleString()} icon={<Footprints className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" />
@@ -216,7 +212,6 @@ function Dashboard() {
           <StatCard label={kcal - health.kcalActive >= 0 ? "Surplus" : "Déficit"} value={Math.abs(kcal - health.kcalActive)} unit="kcal" icon={<Flame className="size-4" />} onClick={() => setDialog("kcal")} hint="Détail" />
         </div>
       )}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <div className="lg:col-span-2 rounded-2xl glass-card p-5">
           <div className="flex items-center justify-between mb-3"><div><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tendance 7 jours</div><div className="font-display text-lg font-semibold mt-0.5">Sommeil & hydratation</div></div></div>
@@ -239,16 +234,13 @@ function Dashboard() {
           <div className="border-t border-border mt-4 pt-3 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">Net</span><span className={`font-medium ${todayIncome - todaySpend >= 0 ? "text-[color:var(--success)]" : "text-destructive"}`}>{(todayIncome - todaySpend).toFixed(2)}€</span></div></div>
         </button>
       </div>
-
       <WeeklyHabits routines={routines} total={allRoutines.length} />
-
       {weightSeries.length > 1 && (
         <button type="button" onClick={() => setDialog("weight")} className="w-full text-left rounded-2xl glass-card p-5 hover:shadow-[var(--shadow-card)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
           <div className="flex items-center justify-between mb-3"><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider"><Dumbbell className="size-3 inline mr-1" /> Évolution du poids</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Peser →</div></div>
           <ResponsiveContainer width="100%" height={140}><LineChart data={weightSeries}><XAxis dataKey="d" hide /><YAxis hide domain={["dataMin - 1", "dataMax + 1"]} /><Tooltip contentStyle={liquidTooltipStyle} /><Line type="monotone" dataKey="w" stroke="var(--primary)" strokeWidth={2.5} dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} connectNulls={false} /></LineChart></ResponsiveContainer>
         </button>
       )}
-
       <DashboardDialogs open={dialog} onOpenChange={setDialog} />
     </div>
   );
