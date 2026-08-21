@@ -186,6 +186,7 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
       return;
     }
     if (suppressPersistRef.current) {
+      // A REMOTE_WRITE changes React state but is not a user mutation.
       suppressPersistRef.current = false;
       syncDebug("REMOTE_APPLIED", { key });
       return;
