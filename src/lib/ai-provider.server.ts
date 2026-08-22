@@ -1,5 +1,6 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateText, type LanguageModel } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/integrations/supabase/types";
@@ -13,7 +14,7 @@ type ByokDatabase = Database & { public: { Tables: Database["public"]["Tables"] 
 type ByokClient = SupabaseClient<ByokDatabase>;
 export type AiGateway = (model: string) => LanguageModel;
 export const PROVIDER_LABELS: Record<AiProvider, string> = { openai: "OpenAI", anthropic: "Anthropic", gemini: "Google Gemini", openrouter: "OpenRouter", custom: "API personnalisée" };
-const DEFAULT_BASE_URLS: Record<Exclude<AiProvider, "custom">, string> = { openai: "https://api.openai.com/v1", anthropic: "https://api.anthropic.com/v1", gemini: "https://generativelanguage.googleapis.com/v1beta/openai", openrouter: "https://openrouter.ai/api/v1" };
+const DEFAULT_BASE_URLS: Record<Exclude<AiProvider, "custom" | "gemini">, string> & { gemini: string } = { openai: "https://api.openai.com/v1", anthropic: "https://api.anthropic.com/v1", gemini: "https://generativelanguage.googleapis.com/v1beta/openai", openrouter: "https://openrouter.ai/api/v1" };
 const DEFAULT_MODELS: Record<Exclude<AiProvider, "custom">, string> = { openai: "gpt-5.4", anthropic: "claude-sonnet-4-6", gemini: "gemini-3.7-flash", openrouter: "openai/gpt-5.4" };
 const ALLOWED_PROVIDERS = new Set<AiProvider>(["openai", "anthropic", "gemini", "openrouter", "custom"]);
 function encryptionKey() { const secret = process.env.PACE_BYOK_ENCRYPTION_KEY; if (!secret) throw new Error("BYOK non configuré côté serveur : PACE_BYOK_ENCRYPTION_KEY est manquante."); return createHash("sha256").update(secret).digest(); }
@@ -21,7 +22,10 @@ function encryptApiKey(value: string) { const iv = randomBytes(12); const cipher
 function decryptApiKey(value: string) { const [iv64, tag64, data64] = value.split("."); if (!iv64 || !tag64 || !data64) throw new Error("Secret BYOK invalide."); const decipher = createDecipheriv("aes-256-gcm", encryptionKey(), Buffer.from(iv64, "base64url")); decipher.setAuthTag(Buffer.from(tag64, "base64url")); return Buffer.concat([decipher.update(Buffer.from(data64, "base64url")), decipher.final()]).toString("utf8"); }
 function validateProvider(provider: AiProvider) { if (!ALLOWED_PROVIDERS.has(provider)) throw new Error("Fournisseur IA invalide."); }
 function normalizeBaseUrl(provider: AiProvider, custom?: string | null) { validateProvider(provider); const value = provider === "custom" ? custom?.trim() : DEFAULT_BASE_URLS[provider]; if (!value) throw new Error("URL API personnalisée obligatoire."); const url = new URL(value); if (url.protocol !== "https:") throw new Error("URL API invalide : HTTPS est obligatoire."); if (url.username || url.password) throw new Error("Les identifiants dans l’URL API sont interdits."); if (provider === "custom") { const hostname = url.hostname.toLowerCase(); if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local") || hostname === "0.0.0.0" || hostname === "127.0.0.1" || hostname === "::1") throw new Error("URL API personnalisée non autorisée : hôte local."); if (/^10\.|^127\.|^169\.254\.|^192\.168\.|^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname)) throw new Error("URL API personnalisée non autorisée : adresse réseau privée."); } return value.replace(/\/$/, ""); }
-function providerModel(provider: AiProvider, apiKey: string, model: string, baseUrl?: string | null): AiGateway { const gateway = createOpenAICompatible({ name: `pace-ai-${provider}`, apiKey, baseURL: normalizeBaseUrl(provider, baseUrl), includeUsage: true, headers: provider === "openrouter" ? { "X-Title": "Pace OS" } : undefined }); return (selectedModel) => gateway(selectedModel || model); }
+function providerModel(provider: AiProvider, apiKey: string, model: string, baseUrl?: string | null): AiGateway {
+  if (provider === "gemini") { const google = createGoogleGenerativeAI({ apiKey }); return (selectedModel) => google(selectedModel || model); }
+  const gateway = createOpenAICompatible({ name: `pace-ai-${provider}`, apiKey, baseURL: normalizeBaseUrl(provider, baseUrl), includeUsage: true, headers: provider === "openrouter" ? { "X-Title": "Pace OS" } : undefined }); return (selectedModel) => gateway(selectedModel || model);
+}
 function asByokClient(client: Client) { return client as unknown as ByokClient; }
 function secretClient() { return supabaseAdmin as unknown as ByokClient; }
 async function readSecret(userId: string, provider: AiProvider) { const { data, error } = await secretClient().from("ai_provider_secrets").select("encrypted_api_key,key_last4").eq("user_id", userId).eq("provider", provider).maybeSingle(); if (error) throw new Error(error.message); return data; }
@@ -32,31 +36,5 @@ export async function deleteAiProviderKey(_client: Client, userId: string, provi
 export async function getAiProviderSettings(client: Client, userId: string) { const byokClient = asByokClient(client); const { data: prefs, error } = await byokClient.from("ai_preferences").select("coach_ai_source,coach_ai_provider,coach_ai_model,coach_ai_base_url,build_ai_source,build_ai_provider,build_ai_model,build_ai_base_url").eq("user_id", userId).maybeSingle(); if (error) throw new Error(error.message); const { data: secrets, error: secretError } = await secretClient().from("ai_provider_secrets").select("provider,key_last4").eq("user_id", userId); if (secretError) throw new Error(secretError.message); const configured = new Set(secrets.map((row) => row.provider as AiProvider)); const make = (agentType: AgentType) => { const prefix = agentType === "coach" ? "coach_ai" : "build_ai"; const p = prefs as ByokPreferences | null; const provider = String(p?.[`${prefix}_provider`] ?? "gemini") as AiProvider; validateProvider(provider); return { source: String(p?.[`${prefix}_source`] ?? "pace") as AiProviderSource, provider, model: String(p?.[`${prefix}_model`] ?? defaultModel(provider)), baseUrl: String(p?.[`${prefix}_base_url`] ?? ""), keyConfigured: configured.has(provider), keyLast4: secrets.find((row) => row.provider === provider)?.key_last4 ?? "" }; }; return { coach: make("coach"), build: make("build"), providers: PROVIDER_LABELS }; }
 function providerError(error: unknown) { const status = typeof error === "object" && error && "status" in error && typeof error.status === "number" ? error.status : 0; if (status === 400) return { status: 400, message: "Requête refusée par le fournisseur" }; if (status === 401) return { status: 401, message: "Clé API invalide" }; if (status === 403) return { status: 403, message: "Cette clé n’a pas les permissions nécessaires" }; if (status === 404) return { status: 404, message: "Modèle ou endpoint introuvable" }; if (status === 429) return { status: 429, message: "Limite de requêtes atteinte chez votre fournisseur" }; if (status >= 500) return { status, message: "Le fournisseur IA est temporairement indisponible" }; return { status: 0, message: "Impossible de contacter le fournisseur" }; }
 export async function testAiProvider(_client: Client, userId: string, input: { provider: AiProvider; model: string; baseUrl?: string | null; apiKey?: string | null }) { validateProvider(input.provider); const stored = input.apiKey?.trim() ? null : await readSecret(userId, input.provider); const encrypted = stored?.encrypted_api_key; if (!input.apiKey?.trim() && !encrypted) return { ok: false, status: 401, message: "Clé API invalide" }; const plaintext = input.apiKey?.trim() || decryptApiKey(encrypted!); try { const model = input.model.trim() || defaultModel(input.provider); if (!model) throw new Error("Modèle obligatoire."); const gateway = providerModel(input.provider, plaintext, model, input.baseUrl); const result = await generateText({ model: gateway(model), prompt: "Réponds uniquement par OK." }); return { ok: result.text.trim().length > 0, status: 200, message: "Clé valide" }; } catch (error) { return { ok: false, ...providerError(error) }; } }
-
-async function fetchProviderModels(provider: AiProvider, key: string, baseUrl: string) {
-  const headers: Record<string, string> = { Accept: "application/json" };
-  let url = `${baseUrl}/models`;
-  if (provider === "gemini") {
-    url = "https://generativelanguage.googleapis.com/v1beta/models";
-    headers["x-goog-api-key"] = key;
-  } else if (provider === "anthropic") {
-    headers["x-api-key"] = key;
-    headers["anthropic-version"] = "2023-06-01";
-  } else {
-    headers.Authorization = `Bearer ${key}`;
-  }
-  const response = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
-  if (!response.ok) {
-    const providerBody = await response.text().catch(() => "");
-    const detail = providerBody.length > 0 && providerBody.length < 500 ? providerBody : "";
-    const mapped = providerError({ status: response.status });
-    throw new Error(detail ? `${mapped.message}: ${detail}` : mapped.message);
-  }
-  const body = (await response.json()) as { data?: Array<{ id?: string; name?: string; display_name?: string }>; models?: Array<{ name?: string; displayName?: string; supportedGenerationMethods?: string[] }> };
-  if (provider === "gemini") {
-    return (body.models ?? []).filter((model) => typeof model.name === "string" && (!model.supportedGenerationMethods || model.supportedGenerationMethods.includes("generateContent"))).map((model) => ({ id: model.name!.replace(/^models\//, ""), name: model.displayName ?? model.name!.replace(/^models\//, "") }));
-  }
-  return (body.data ?? []).filter((model) => typeof model.id === "string").map((model) => ({ id: model.id!, name: model.display_name ?? model.name ?? model.id! }));
-}
-
+async function fetchProviderModels(provider: AiProvider, key: string, baseUrl: string) { const headers: Record<string, string> = { Accept: "application/json" }; let url = `${baseUrl}/models`; if (provider === "gemini") { url = "https://generativelanguage.googleapis.com/v1beta/models"; headers["x-goog-api-key"] = key; } else if (provider === "anthropic") { headers["x-api-key"] = key; headers["anthropic-version"] = "2023-06-01"; } else { headers.Authorization = `Bearer ${key}`; } const response = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) }); if (!response.ok) { const providerBody = await response.text().catch(() => ""); const detail = providerBody.length > 0 && providerBody.length < 500 ? providerBody : ""; const mapped = providerError({ status: response.status }); throw new Error(detail ? `${mapped.message}: ${detail}` : mapped.message); } const body = (await response.json()) as { data?: Array<{ id?: string; name?: string; display_name?: string }>; models?: Array<{ name?: string; displayName?: string; supportedGenerationMethods?: string[] }> }; if (provider === "gemini") return (body.models ?? []).filter((model) => typeof model.name === "string" && (!model.supportedGenerationMethods || model.supportedGenerationMethods.includes("generateContent"))).map((model) => ({ id: model.name!.replace(/^models\//, ""), name: model.displayName ?? model.name!.replace(/^models\//, "") })); return (body.data ?? []).filter((model) => typeof model.id === "string").map((model) => ({ id: model.id!, name: model.display_name ?? model.name ?? model.id! })); }
 export async function listAiProviderModels(_client: Client, userId: string, input: { provider: AiProvider; baseUrl?: string | null; apiKey?: string | null }) { validateProvider(input.provider); const stored = input.apiKey?.trim() ? null : await readSecret(userId, input.provider); const encrypted = stored?.encrypted_api_key; if (!input.apiKey?.trim() && !encrypted) throw new Error("Clé API manquante."); const key = input.apiKey?.trim() || decryptApiKey(encrypted!); const baseUrl = normalizeBaseUrl(input.provider, input.baseUrl); const models = await fetchProviderModels(input.provider, key, baseUrl); return models.slice(0, 300); }
