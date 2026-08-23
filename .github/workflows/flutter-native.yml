@@ -2,6 +2,10 @@ name: Pace Native Flutter
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - 'pace_flutter/**'
+      - '.github/workflows/flutter-native.yml'
   push:
     paths:
       - 'pace_flutter/**'
@@ -43,8 +47,6 @@ jobs:
 
           gradle = Path('android/app/build.gradle.kts')
           text = gradle.read_text()
-          # The health plugin requires Android API 26+. Flutter's generated
-          # template defaults to flutter.minSdkVersion, which is currently 24.
           text = text.replace('minSdk = flutter.minSdkVersion', 'minSdk = 26')
           if 'minSdk = 26' not in text:
               text = text.replace('defaultConfig {', 'defaultConfig {\n        minSdk = 26', 1)
@@ -168,11 +170,13 @@ jobs:
       - name: Remove generated Flutter sample test
         working-directory: pace_flutter
         run: rm -f test/widget_test.dart
-      - name: Configure HealthKit usage descriptions
+      - name: Configure HealthKit and photo usage descriptions
         working-directory: pace_flutter
         run: |
           /usr/libexec/PlistBuddy -c "Add :NSHealthShareUsageDescription string Pace utilise vos données de santé pour afficher vos tendances." ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthShareUsageDescription Pace utilise vos données de santé pour afficher vos tendances." ios/Runner/Info.plist
           /usr/libexec/PlistBuddy -c "Add :NSHealthUpdateUsageDescription string Pace utilise vos données de santé pour synchroniser les données autorisées." ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Set :NSHealthUpdateUsageDescription Pace utilise vos données de santé pour synchroniser les données autorisées." ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string Pace utilise la caméra uniquement lorsque vous choisissez de prendre une photo." ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Set :NSCameraUsageDescription Pace utilise la caméra uniquement lorsque vous choisissez de prendre une photo." ios/Runner/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :NSPhotoLibraryUsageDescription string Pace utilise vos photos uniquement lorsque vous choisissez une image à ajouter." ios/Runner/Info.plist || /usr/libexec/PlistBuddy -c "Set :NSPhotoLibraryUsageDescription Pace utilise vos photos uniquement lorsque vous choisissez une image à ajouter." ios/Runner/Info.plist
           cat > ios/Runner/Runner.entitlements <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
