@@ -1,6 +1,7 @@
 name: Pace Native Flutter
 
 on:
+  workflow_dispatch:
   pull_request:
     types: [opened, reopened, synchronize]
     paths:
@@ -10,7 +11,6 @@ on:
     paths:
       - 'pace_flutter/**'
       - '.github/workflows/flutter-native.yml'
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -38,7 +38,15 @@ jobs:
           from pathlib import Path
           p = Path('android/app/src/main/AndroidManifest.xml')
           text = p.read_text()
-          permissions = '''\n    <uses-permission android:name="android.permission.health.READ_STEPS" />\n    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />\n    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />\n    <uses-permission android:name="android.permission.health.READ_SLEEP" />\n    <uses-permission android:name="android.permission.health.READ_WEIGHT" />\n    <uses-permission android:name="android.permission.health.READ_EXERCISE" />\n    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />\n'''
+          permissions = '''
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_WEIGHT" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+'''
           if 'android.permission.health.READ_STEPS' not in text:
               text = text.replace('<application', permissions + '    <application', 1)
           queries = '\n    <queries><package android:name="com.google.android.apps.healthdata" /></queries>\n'
