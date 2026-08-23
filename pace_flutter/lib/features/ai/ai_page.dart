@@ -174,21 +174,21 @@ class _AiPageState extends State<AiPage> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        IconButton.filledTonal(
-                          tooltip: 'Ajouter une photo',
-                          onPressed: _loading ? null : () {},
-                          icon: const Icon(Icons.add),
+                        PhotoPickerButton(
+                          onChanged: (file) => setState(() => _selectedImage = file),
+                          initialValue: _selectedImage,
                         ),
                         const SizedBox(width: 8),
                         Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              PhotoPickerButton(onChanged: (file) => setState(() => _selectedImage = file), initialValue: _selectedImage),
-                              const SizedBox(height: 8),
-                              TextField(controller: _input, minLines: 1, maxLines: 6, onSubmitted: (_) => _send(), decoration: InputDecoration(hintText: _selectedImage == null ? (_ephemeral ? 'Message éphémère…' : 'Écrire à Pace IA…') : 'Décrivez ce que Pace doit analyser…', border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)))),
-                            ],
+                          child: TextField(
+                            controller: _input,
+                            minLines: 1,
+                            maxLines: 6,
+                            onSubmitted: (_) => _send(),
+                            decoration: InputDecoration(
+                              hintText: _selectedImage == null ? (_ephemeral ? 'Message éphémère…' : 'Écrire à Pace IA…') : 'Décrivez ce que Pace doit analyser…',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
