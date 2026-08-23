@@ -1,7 +1,6 @@
-import 'dart:async';
+import 'dart:convert';
 
 import 'package:cross_file/cross_file.dart';
-import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 
 class PhotoPickerException implements Exception {
@@ -91,22 +90,4 @@ class PhotoPickerService {
     if (bytes.isEmpty) throw const PhotoPickerException('Impossible de lire l’image sélectionnée.');
     return 'data:${mediaTypeFor(file)};base64,${base64Encode(bytes)}';
   }
-}
-
-String base64Encode(List<int> bytes) {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  final output = StringBuffer();
-  for (var i = 0; i < bytes.length; i += 3) {
-    final a = bytes[i];
-    final hasB = i + 1 < bytes.length;
-    final hasC = i + 2 < bytes.length;
-    final b = hasB ? bytes[i + 1] : 0;
-    final c = hasC ? bytes[i + 2] : 0;
-    output
-      ..write(alphabet[(a >> 2) & 0x3f])
-      ..write(alphabet[((a & 3) << 4) | (b >> 4)])
-      ..write(hasB ? alphabet[((b & 15) << 2) | (c >> 6)] : '=')
-      ..write(hasC ? alphabet[c & 63] : '=');
-  }
-  return output.toString();
 }
