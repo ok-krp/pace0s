@@ -1,10 +1,12 @@
-import 'package:cross_file/cross_file.dart';
-import 'package:flutter_test/flutter_test.dart';
+import 'dart:typed_data';
 
-import '../lib/core/photo/photo_picker_service.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
+
+import 'package:pace/core/photo/photo_picker_service.dart';
 
 void main() {
-  XFile file({String name = 'photo.jpg', int size = 4}) => XFile.fromData(List<int>.filled(size, 1), name: name, mimeType: 'image/jpeg');
+  XFile file({String name = 'photo.jpg', int size = 4}) => XFile.fromData(Uint8List.fromList(List<int>.filled(size, 1)), name: name, mimeType: 'image/jpeg');
 
   test('accepts a supported image below the size limit', () async {
     await expectLater(PhotoPickerService.validate(file()), completes);
@@ -26,7 +28,7 @@ void main() {
 
   test('rejects images over the maximum size', () async {
     final oversized = XFile.fromData(
-      List<int>.filled(PhotoPickerService.maxBytes + 1, 1),
+      Uint8List.fromList(List<int>.filled(PhotoPickerService.maxBytes + 1, 1)),
       name: 'large.jpg',
       mimeType: 'image/jpeg',
     );
