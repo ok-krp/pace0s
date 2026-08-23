@@ -63,7 +63,7 @@ class DashboardSnapshot {
   final Map<String, int> routineDoneByDay;
   final Map<String, double> weightByDay;
 
-  double _ratio(double value, double target) => target <= 0 ? 0 : (value / target).clamp(0, 1);
+  double _ratio(double value, double target) => target <= 0 ? 0 : (value / target).clamp(0, 1).toDouble();
 
   int scoreFor(String day) {
     final routineTotalSafe = routineTotal == 0 ? 1 : routineTotal;
