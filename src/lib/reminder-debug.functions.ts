@@ -9,6 +9,9 @@ export const listReminderDebug = createServerFn({ method: "GET" })
       .select("id, type, status, reason, trigger, target_segment, payload, created_at")
       .order("created_at", { ascending: false })
       .limit(50);
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("reminder debug read failed", error);
+      throw new Error("Impossible de charger les journaux de rappels.");
+    }
     return { entries: data ?? [] };
   });
