@@ -22,13 +22,22 @@ class _PhotoPickerButtonState extends State<PhotoPickerButton> {
   Uint8List? _preview;
   bool _loading = false;
 
-  XFile? get _value => _selected ?? widget.initialValue;
+  XFile? get _value => _selected;
 
   @override
   void initState() {
     super.initState();
     _selected = widget.initialValue;
     _loadPreview(_selected);
+  }
+
+  @override
+  void didUpdateWidget(covariant PhotoPickerButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialValue != widget.initialValue) {
+      _selected = widget.initialValue;
+      _loadPreview(_selected);
+    }
   }
 
   Future<void> _loadPreview(XFile? file) async {
