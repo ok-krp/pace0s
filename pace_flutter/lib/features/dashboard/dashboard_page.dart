@@ -169,7 +169,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final average = (days.map(snapshot.scoreFor).fold<int>(0, (a, b) => a + b) / days.length).round();
     final routineRatio = snapshot.routineTotal <= 0
         ? 0.0
-        : (snapshot.routineDone / snapshot.routineTotal).clamp(0.0, 1.0);
+        : (snapshot.routineDone / snapshot.routineTotal).clamp(0.0, 1.0).toDouble();
 
     return RefreshIndicator(
       onRefresh: _load,
@@ -260,7 +260,7 @@ class _Metric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final safe = progress.clamp(0.0, 1.0);
+    final safe = progress.clamp(0.0, 1.0).toDouble();
     return Padding(
       padding: const EdgeInsets.only(bottom: 9),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
