@@ -21,8 +21,6 @@ class _PhotoPickerButtonState extends State<PhotoPickerButton> {
   Uint8List? _preview;
   bool _loading = false;
 
-  XFile? get _value => _selected;
-
   @override
   void initState() {
     super.initState();
@@ -83,7 +81,9 @@ class _PhotoPickerButtonState extends State<PhotoPickerButton> {
 
     setState(() => _loading = true);
     try {
-      final file = source == ImageSource.camera ? await _service.pickFromCamera() : await _service.pickFromGallery();
+      final file = source == ImageSource.camera
+          ? await _service.pickFromCamera()
+          : await _service.pickFromGallery();
       if (!mounted) return;
       if (file != null) {
         setState(() {
@@ -112,12 +112,14 @@ class _PhotoPickerButtonState extends State<PhotoPickerButton> {
 
   @override
   Widget build(BuildContext context) {
-    final selected = _value;
+    final selected = _selected;
     if (selected == null) {
-      return OutlinedButton.icon(
+      return IconButton.filledTonal(
+        tooltip: 'Ajouter une photo',
         onPressed: _loading ? null : _choose,
-        icon: _loading ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.add_a_photo_outlined),
-        label: const Text('Ajouter une photo'),
+        icon: _loading
+            ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.add),
       );
     }
 
@@ -126,14 +128,32 @@ class _PhotoPickerButtonState extends State<PhotoPickerButton> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (_preview != null) AspectRatio(aspectRatio: 16 / 9, child: Image.memory(_preview!, fit: BoxFit.cover)),
+          if (_preview != null)
+            AspectRatio(
+              aspectRatio: 16 / 9,
+              child: Image.memory(_preview!, fit: BoxFit.cover),
+            ),
           Padding(
             padding: const EdgeInsets.all(8),
             child: Row(
               children: [
-                Expanded(child: Text(selected.name, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                IconButton(tooltip: 'Remplacer', onPressed: _loading ? null : _choose, icon: const Icon(Icons.refresh)),
-                IconButton(tooltip: 'Supprimer', onPressed: _remove, icon: const Icon(Icons.delete_outline)),
+                Expanded(
+                  child: Text(
+                    selected.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Remplacer',
+                  onPressed: _loading ? null : _choose,
+                  icon: const Icon(Icons.refresh),
+                ),
+                IconButton(
+                  tooltip: 'Supprimer',
+                  onPressed: _remove,
+                  icon: const Icon(Icons.delete_outline),
+                ),
               ],
             ),
           ),
