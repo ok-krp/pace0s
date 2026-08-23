@@ -1,7 +1,5 @@
 part of 'ai_service.dart';
 
-import 'package:cross_file/cross_file.dart';
-
 extension PaceAiImageSupport on PaceAiService {
   Future<String> sendWithImage({
     required AiConversation conversation,
@@ -12,14 +10,14 @@ extension PaceAiImageSupport on PaceAiService {
     if (clean.isEmpty) return '';
 
     final now = DateTime.now();
-    final userMessage = AiMessage(id: _uuid(), role: 'user', text: clean, createdAt: now);
+    final userMessage = AiMessage(id: this._uuid(), role: 'user', text: clean, createdAt: now);
     final previous = await loadMessages(conversation.id);
     final next = [...previous, userMessage];
     if (!conversation.ephemeral) await _replaceMessages(conversation.id, next);
     await _insertCloudMessage(conversation, userMessage);
 
     final responseText = await _requestModelWithImage(conversation, next, image);
-    final assistant = AiMessage(id: _uuid(), role: 'assistant', text: responseText, createdAt: DateTime.now());
+    final assistant = AiMessage(id: this._uuid(), role: 'assistant', text: responseText, createdAt: DateTime.now());
     if (!conversation.ephemeral) {
       await _replaceMessages(conversation.id, [...next, assistant]);
       await _insertCloudMessage(conversation, assistant);
