@@ -1,5 +1,7 @@
+import 'package:cross_file/cross_file.dart';
 import 'package:flutter/material.dart';
 
+import '../../core/photo/photo_picker_button.dart';
 import '../../core/storage/local_store.dart';
 import '../../core/supabase/pace_supabase.dart';
 import '../../core/sync/sync_service.dart';
@@ -24,6 +26,7 @@ class _AiPageState extends State<AiPage> {
   List<AiConversation> _history = const [];
   AiConversation? _conversation;
   List<AiMessage> _messages = const [];
+  XFile? _selectedImage;
   bool _loading = false;
   bool _ephemeral = false;
   String _search = '';
@@ -58,6 +61,7 @@ class _AiPageState extends State<AiPage> {
     setState(() {
       _conversation = conversation;
       _messages = const [];
+      _selectedImage = null;
     });
     if (!_ephemeral) setState(() => _history = _service.loadLocalConversations());
   }
@@ -69,6 +73,7 @@ class _AiPageState extends State<AiPage> {
       _ephemeral = false;
       _conversation = conversation;
       _messages = messages;
+      _selectedImage = null;
     });
     _jumpToEnd();
   }
@@ -76,6 +81,7 @@ class _AiPageState extends State<AiPage> {
   Future<void> _send() async {
     final text = _input.text.trim();
     final conversation = _conversation;
+    final image = _selectedImage;
     if (text.isEmpty || conversation == null || _loading) return;
     _input.clear();
     final optimistic = AiMessage(id: 'local-${DateTime.now().microsecondsSinceEpoch}', role: 'user', text: text, createdAt: DateTime.now());
@@ -85,7 +91,9 @@ class _AiPageState extends State<AiPage> {
     });
     _jumpToEnd();
     try {
-      final response = await _service.send(conversation: conversation, text: text);
+      final response = image == null
+          ? await _service.send(conversation: conversation, text: text)
+          : await _service.sendWithImage(conversation: conversation, text: text, image: image);
       if (!mounted) return;
       setState(() {
         _messages = [..._messages, AiMessage(id: 'assistant-${DateTime.now().microsecondsSinceEpoch}', role: 'assistant', text: response, createdAt: DateTime.now())];
@@ -163,8 +171,19 @@ class _AiPageState extends State<AiPage> {
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(14, 8, 14, 14),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Expanded(child: TextField(controller: _input, minLines: 1, maxLines: 6, onSubmitted: (_) => _send(), decoration: InputDecoration(hintText: _ephemeral ? 'Message éphémère…' : 'Écrire à Pace IA…', border: OutlineInputBorder(borderRadius: BorderRadius.circular(18))))),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              PhotoPickerButton(onChanged: (file) => setState(() => _selectedImage = file), initialValue: _selectedImage),
+                              const SizedBox(height: 8),
+                              TextField(controller: _input, minLines: 1, maxLines: 6, onSubmitted: (_) => _send(), decoration: InputDecoration(hintText: _selectedImage == null ? (_ephemeral ? 'Message éphémère…' : 'Écrire à Pace IA…') : 'Décrivez ce que Pace doit analyser…', border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)))),
+                            ],
+                          ),
+                        ),
                         const SizedBox(width: 8),
                         IconButton.filled(tooltip: 'Envoyer', onPressed: _loading ? null : _send, icon: const Icon(Icons.arrow_upward)),
                       ],
