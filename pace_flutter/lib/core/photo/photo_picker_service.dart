@@ -1,6 +1,3 @@
-import 'dart:convert';
-
-import 'package:cross_file/cross_file.dart';
 import 'package:image_picker/image_picker.dart';
 
 class PhotoPickerException implements Exception {
@@ -29,10 +26,6 @@ class PhotoPickerService {
   Future<XFile?> pickFromCamera() => _pick(ImageSource.camera);
 
   Future<XFile?> pickFromGallery() => _pick(ImageSource.gallery);
-
-  Future<XFile?> pick() async {
-    throw const PhotoPickerException('Choisissez une source photo depuis l’interface Pace.');
-  }
 
   Future<XFile?> _pick(ImageSource source) async {
     try {
