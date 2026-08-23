@@ -12,9 +12,6 @@ class PhotoPickerException implements Exception {
 }
 
 /// Platform-neutral boundary for camera/gallery selection.
-///
-/// Permissions are intentionally requested by the native picker only when a
-/// source is used. No permission is requested during app startup.
 class PhotoPickerService {
   PhotoPickerService({ImagePicker? picker}) : _picker = picker ?? ImagePicker();
 
@@ -29,10 +26,6 @@ class PhotoPickerService {
 
   Future<XFile?> pickFromGallery() => pick(ImageSource.gallery);
 
-  /// Picks one image from the requested native source.
-  ///
-  /// Keeping the source dispatch here makes the UI independent from the
-  /// image_picker implementation while preserving lazy permission requests.
   Future<XFile?> pick(ImageSource source) => _pick(source);
 
   Future<XFile?> _pick(ImageSource source) async {
@@ -68,15 +61,6 @@ class PhotoPickerService {
       throw const PhotoPickerException('Cette image est trop volumineuse. Choisissez une image de moins de 5 Mo.');
     }
 
-    final name = file.name.toLowerCase();
-    const supported = <String>{'.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.gif', '.bmp'};
-    if (name.isNotEmpty) {
-      if (!supported.any(name.endsWith)) {
-        throw const PhotoPickerException('Format d’image non pris en charge.');
-      }
-      return;
-    }
-
     final mimeType = file.mimeType?.toLowerCase();
     const supportedMimeTypes = <String>{
       'image/jpeg',
@@ -87,20 +71,21 @@ class PhotoPickerService {
       'image/gif',
       'image/bmp',
     };
-    if (mimeType == null || !supportedMimeTypes.contains(mimeType)) {
+    if (mimeType != null && mimeType.isNotEmpty) {
+      if (!supportedMimeTypes.contains(mimeType)) {
+        throw const PhotoPickerException('Format d’image non pris en charge.');
+      }
+      return;
+    }
+
+    final name = file.name.toLowerCase();
+    const supportedExtensions = <String>{'.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.gif', '.bmp'};
+    if (name.isEmpty || !supportedExtensions.any(name.endsWith)) {
       throw const PhotoPickerException('Format d’image non pris en charge.');
     }
   }
 
   static String mediaTypeFor(XFile file) {
-    final name = file.name.toLowerCase();
-    if (name.endsWith('.png')) return 'image/png';
-    if (name.endsWith('.webp')) return 'image/webp';
-    if (name.endsWith('.heic')) return 'image/heic';
-    if (name.endsWith('.heif')) return 'image/heif';
-    if (name.endsWith('.gif')) return 'image/gif';
-    if (name.endsWith('.bmp')) return 'image/bmp';
-
     final mimeType = file.mimeType?.toLowerCase();
     const supportedMimeTypes = <String>{
       'image/jpeg',
@@ -112,6 +97,14 @@ class PhotoPickerService {
       'image/bmp',
     };
     if (mimeType != null && supportedMimeTypes.contains(mimeType)) return mimeType;
+
+    final name = file.name.toLowerCase();
+    if (name.endsWith('.png')) return 'image/png';
+    if (name.endsWith('.webp')) return 'image/webp';
+    if (name.endsWith('.heic')) return 'image/heic';
+    if (name.endsWith('.heif')) return 'image/heif';
+    if (name.endsWith('.gif')) return 'image/gif';
+    if (name.endsWith('.bmp')) return 'image/bmp';
     return 'image/jpeg';
   }
 
