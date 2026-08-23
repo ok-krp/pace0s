@@ -25,9 +25,15 @@ class PhotoPickerService {
 
   final ImagePicker _picker;
 
-  Future<XFile?> pickFromCamera() => _pick(ImageSource.camera);
+  Future<XFile?> pickFromCamera() => pick(ImageSource.camera);
 
-  Future<XFile?> pickFromGallery() => _pick(ImageSource.gallery);
+  Future<XFile?> pickFromGallery() => pick(ImageSource.gallery);
+
+  /// Picks one image from the requested native source.
+  ///
+  /// Keeping the source dispatch here makes the UI independent from the
+  /// image_picker implementation while preserving lazy permission requests.
+  Future<XFile?> pick(ImageSource source) => _pick(source);
 
   Future<XFile?> _pick(ImageSource source) async {
     try {
