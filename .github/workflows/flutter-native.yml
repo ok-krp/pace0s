@@ -1,8 +1,8 @@
 name: Pace Native Flutter
 
 on:
-  workflow_dispatch:
   pull_request:
+    types: [opened, reopened, synchronize]
     paths:
       - 'pace_flutter/**'
       - '.github/workflows/flutter-native.yml'
@@ -10,6 +10,7 @@ on:
     paths:
       - 'pace_flutter/**'
       - '.github/workflows/flutter-native.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
