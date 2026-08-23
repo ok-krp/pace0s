@@ -3,12 +3,15 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../core/storage/local_store.dart';
 import '../../core/supabase/pace_supabase.dart';
 import '../../core/sync/sync_service.dart';
 import 'ai_models.dart';
+
+part 'ai_service_image.dart';
 
 /// Native AI data/service boundary. Conversations and memory are kept locally
 /// first; the existing Pace AI HTTP endpoint is used only for model inference.

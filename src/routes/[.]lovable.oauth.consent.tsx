@@ -2,6 +2,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { getSafeClientErrorMessage } from "@/lib/client-error";
 
 type AuthorizationDetails = {
   client?: { name?: string; redirect_uri?: string } | null;
@@ -44,9 +45,7 @@ export const Route = createFileRoute("/.lovable/oauth/consent")({
     <main className="min-h-screen grid place-items-center p-6">
       <div className="glass-card rounded-2xl p-6 max-w-md text-center">
         <h1 className="text-lg font-semibold mb-2">Autorisation impossible</h1>
-        <p className="text-sm text-muted-foreground">
-          {String((error as Error)?.message ?? error)}
-        </p>
+        <p className="text-sm text-muted-foreground">{getSafeClientErrorMessage(error)}</p>
       </div>
     </main>
   ),
@@ -67,7 +66,7 @@ function Consent() {
       : await api.denyAuthorization(authorization_id);
     if (error) {
       setBusy(false);
-      setError(error.message);
+      setError(getSafeClientErrorMessage(error, "Impossible de traiter l'autorisation."));
       return;
     }
     const target = data?.redirect_url ?? data?.redirect_to;
@@ -107,21 +106,8 @@ function Consent() {
           </p>
         )}
         <div className="mt-6 flex gap-2">
-          <Button
-            disabled={busy}
-            onClick={() => decide(true)}
-            className="flex-1 rounded-xl"
-          >
-            Approuver
-          </Button>
-          <Button
-            disabled={busy}
-            variant="outline"
-            onClick={() => decide(false)}
-            className="flex-1 rounded-xl"
-          >
-            Refuser
-          </Button>
+          <Button disabled={busy} onClick={() => decide(true)} className="flex-1 rounded-xl">Approuver</Button>
+          <Button disabled={busy} variant="outline" onClick={() => decide(false)} className="flex-1 rounded-xl">Refuser</Button>
         </div>
       </div>
     </main>
