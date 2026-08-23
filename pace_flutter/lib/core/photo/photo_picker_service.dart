@@ -67,9 +67,27 @@ class PhotoPickerService {
     if (size > maxBytes) {
       throw const PhotoPickerException('Cette image est trop volumineuse. Choisissez une image de moins de 5 Mo.');
     }
+
     final name = file.name.toLowerCase();
     const supported = <String>{'.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif', '.gif', '.bmp'};
-    if (!supported.any(name.endsWith)) {
+    if (name.isNotEmpty) {
+      if (!supported.any(name.endsWith)) {
+        throw const PhotoPickerException('Format d’image non pris en charge.');
+      }
+      return;
+    }
+
+    final mimeType = file.mimeType?.toLowerCase();
+    const supportedMimeTypes = <String>{
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+      'image/heif',
+      'image/gif',
+      'image/bmp',
+    };
+    if (mimeType == null || !supportedMimeTypes.contains(mimeType)) {
       throw const PhotoPickerException('Format d’image non pris en charge.');
     }
   }
@@ -82,6 +100,18 @@ class PhotoPickerService {
     if (name.endsWith('.heif')) return 'image/heif';
     if (name.endsWith('.gif')) return 'image/gif';
     if (name.endsWith('.bmp')) return 'image/bmp';
+
+    final mimeType = file.mimeType?.toLowerCase();
+    const supportedMimeTypes = <String>{
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+      'image/heic',
+      'image/heif',
+      'image/gif',
+      'image/bmp',
+    };
+    if (mimeType != null && supportedMimeTypes.contains(mimeType)) return mimeType;
     return 'image/jpeg';
   }
 
