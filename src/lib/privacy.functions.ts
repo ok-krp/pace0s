@@ -16,7 +16,7 @@ const USER_TABLES = [
 /**
  * Portabilité (RGPD Art. 20 / LGPD Art. 18 / CCPA §1798.110)
  * Renvoie un JSON structuré contenant toutes les données du user courant.
- * Passe par le client authentifié → RLS s'assure qu'aucune ligne étrangère ne peut fuir.
+ * Passe par le client authentifié → RLS s'assure qu'aucune ligne étrangère ne fuit.
  */
 export const exportMyData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -24,10 +24,12 @@ export const exportMyData = createServerFn({ method: "POST" })
     const tables: Record<string, unknown[]> = {};
     for (const t of USER_TABLES) {
       const { data, error } = await context.supabase.from(t).select("*").eq("user_id", context.userId);
-      if (error) throw new Error(`${t}: ${error.message}`);
+      if (error) {
+        console.error("privacy export failed", { table: t, error });
+        throw new Error("Impossible d'exporter vos données.");
+      }
       tables[t] = (data ?? []) as unknown[];
     }
-    // Return a JSON string so nested Supabase row shapes don't fight the RPC serializer.
     return {
       generated_at: new Date().toISOString(),
       user_id: context.userId,
@@ -36,7 +38,6 @@ export const exportMyData = createServerFn({ method: "POST" })
       json: JSON.stringify(tables),
     };
   });
-
 
 /**
  * Droit à l'oubli (RGPD Art. 17 / LGPD Art. 18 / CCPA §1798.105)
@@ -50,12 +51,15 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     const userId = context.userId;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Safety net — best-effort scrub before dropping the auth row (cascade covers it too).
     for (const t of USER_TABLES) {
-      await supabaseAdmin.from(t).delete().eq("user_id", userId);
+      const { error } = await supabaseAdmin.from(t).delete().eq("user_id", userId);
+      if (error) console.error("account cleanup failed", { table: t, error });
     }
 
     const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
-    if (error) throw new Error(error.message);
+    if (error) {
+      console.error("account deletion failed", error);
+      throw new Error("Impossible de supprimer le compte.");
+    }
     return { ok: true };
   });
