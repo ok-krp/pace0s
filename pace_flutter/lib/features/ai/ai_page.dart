@@ -82,7 +82,7 @@ class _AiPageState extends State<AiPage> {
     final text = _input.text.trim();
     final conversation = _conversation;
     final image = _selectedImage;
-    if (text.isEmpty || conversation == null || _loading) return;
+    if ((text.isEmpty && image == null) || conversation == null || _loading) return;
     _input.clear();
     final optimistic = AiMessage(id: 'local-${DateTime.now().microsecondsSinceEpoch}', role: 'user', text: text, createdAt: DateTime.now());
     setState(() {
@@ -96,6 +96,7 @@ class _AiPageState extends State<AiPage> {
           : await _service.sendWithImage(conversation: conversation, text: text, image: image);
       if (!mounted) return;
       setState(() {
+        _selectedImage = null;
         _messages = [..._messages, AiMessage(id: 'assistant-${DateTime.now().microsecondsSinceEpoch}', role: 'assistant', text: response, createdAt: DateTime.now())];
         _loading = false;
         _history = _service.loadLocalConversations();
@@ -173,6 +174,12 @@ class _AiPageState extends State<AiPage> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
+                        IconButton.filledTonal(
+                          tooltip: 'Ajouter une photo',
+                          onPressed: _loading ? null : () {},
+                          icon: const Icon(Icons.add),
+                        ),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
@@ -214,13 +221,7 @@ class _AiPageState extends State<AiPage> {
               itemBuilder: (_, index) {
                 final item = filtered[index];
                 final selected = item.id == _conversation?.id;
-                return ListTile(
-                  selected: selected,
-                  title: Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(_formatDate(item.updatedAt)),
-                  onTap: () => _openConversation(item),
-                  onLongPress: () => _conversationMenu(item),
-                );
+                return ListTile(selected: selected, title: Text(item.title, maxLines: 2, overflow: TextOverflow.ellipsis), subtitle: Text(_formatDate(item.updatedAt)), onTap: () => _openConversation(item), onLongPress: () => _conversationMenu(item));
               },
             ),
           ),
@@ -230,10 +231,7 @@ class _AiPageState extends State<AiPage> {
   }
 
   Future<void> _conversationMenu(AiConversation conversation) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [ListTile(leading: const Icon(Icons.edit), title: const Text('Renommer'), onTap: () => Navigator.pop(context, 'rename')), ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Supprimer'), onTap: () => Navigator.pop(context, 'delete'))])),
-    );
+    final action = await showModalBottomSheet<String>(context: context, builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [ListTile(leading: const Icon(Icons.edit), title: const Text('Renommer'), onTap: () => Navigator.pop(context, 'rename')), ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Supprimer'), onTap: () => Navigator.pop(context, 'delete'))])));
     if (action == 'rename' && mounted) {
       final controller = TextEditingController(text: conversation.title);
       final title = await showDialog<String>(context: context, builder: (_) => AlertDialog(title: const Text('Renommer'), content: TextField(controller: controller, autofocus: true), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Enregistrer'))]));
@@ -283,26 +281,5 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: const Text('Mémoire IA')),
-        body: ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            SwitchListTile.adaptive(title: const Text('Mémoire IA'), subtitle: const Text('Autoriser Pace IA à conserver des souvenirs persistants.'), value: _enabled, onChanged: (value) async { await widget.service.setMemoryEnabled(value); setState(() { _enabled = value; _items = widget.service.loadMemory(); }); }),
-            const SizedBox(height: 8),
-            if (!_enabled)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text('La mémoire est désactivée. Les souvenirs existants sont supprimés du stockage local.'),
-                ),
-              ),
-            if (_enabled) ...[
-              FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('Ajouter un souvenir')),
-              const SizedBox(height: 12),
-              for (final item in _items) Card(child: ListTile(title: Text(item.text), subtitle: Text('Ajouté le ${item.createdAt.day}/${item.createdAt.month}/${item.createdAt.year}'), trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async { await widget.service.deleteMemory(item.id); setState(() => _items = widget.service.loadMemory()); }))),
-            ],
-          ],
-        ),
-      );
+  Widget build(BuildContext context) => Scaffold(appBar: AppBar(title: const Text('Mémoire IA')), body: ListView(padding: const EdgeInsets.all(20), children: [SwitchListTile.adaptive(title: const Text('Mémoire IA'), subtitle: const Text('Autoriser Pace IA à conserver des souvenirs persistants.'), value: _enabled, onChanged: (value) async { await widget.service.setMemoryEnabled(value); setState(() { _enabled = value; _items = widget.service.loadMemory(); }); }), const SizedBox(height: 8), if (!_enabled) const Card(child: Padding(padding: EdgeInsets.all(16), child: Text('La mémoire est désactivée. Les souvenirs existants sont supprimés du stockage local.'))), if (_enabled) ...[FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('Ajouter un souvenir')), const SizedBox(height: 12), for (final item in _items) Card(child: ListTile(title: Text(item.text), subtitle: Text('Ajouté le ${item.createdAt.day}/${item.createdAt.month}/${item.createdAt.year}'), trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async { await widget.service.deleteMemory(item.id); setState(() => _items = widget.service.loadMemory()); }))),],));
 }
