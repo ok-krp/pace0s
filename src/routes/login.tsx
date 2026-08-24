@@ -81,10 +81,11 @@ function LoginPage() {
       });
       if (error) throw error;
     } catch (err) {
+      const message = err instanceof Error ? err.message : "";
       toast.error(
-        err instanceof Error
-          ? err.message
-          : "Impossible de se connecter avec Google.",
+        message.includes("Unsupported provider") || message.includes("provider is not enabled")
+          ? "La connexion Google n’est pas encore activée dans Supabase. Activez le fournisseur Google pour continuer."
+          : message || "Impossible de se connecter avec Google.",
       );
       setBusy(false);
     }
