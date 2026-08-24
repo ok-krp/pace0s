@@ -114,12 +114,13 @@ class _PhotoPickerButtonState extends State<PhotoPickerButton> {
   Widget build(BuildContext context) {
     final selected = _selected;
     if (selected == null) {
-      return IconButton.filledTonal(
+      return FilledButton.tonalIcon(
         tooltip: 'Ajouter une photo',
         onPressed: _loading ? null : _choose,
         icon: _loading
             ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2))
-            : const Icon(Icons.add),
+            : const Icon(Icons.add_photo_alternate_outlined),
+        label: const Text('Photo'),
       );
     }
 
