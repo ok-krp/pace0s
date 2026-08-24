@@ -4,7 +4,7 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { AlertTriangle, Archive, Bot, Brain, Check, ChevronRight, Clock3, Code2, History, Loader2, Menu, MoreHorizontal, Plus, RefreshCw, Send, Sparkles, Star, Trash2, X } from "lucide-react";
+import { AlertTriangle, Archive, Bot, Brain, Check, ChevronRight, Clock3, Code2, History, ImagePlus, Loader2, Menu, MoreHorizontal, Plus, RefreshCw, Send, Sparkles, Star, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,6 +26,7 @@ const SUGGESTIONS: Record<AgentType, string[]> = {
   coach: ["Analyse ma journée et donne-moi la priorité de ce soir", "J'ai mangé un poulet curry avec du riz", "Mets mon poids à 78,4 kg"],
   build: ["Créer un bug : le scan se ferme trop tôt", "Proposer une amélioration pour le suivi du sommeil", "Structurer une fonctionnalité de planification des repas"],
 };
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 function AiConversationPage() {
   const { agentType, conversationId } = Route.useParams();
@@ -49,8 +50,11 @@ function AiConversationPage() {
 function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephemeral, onEphemeralChange }: { agentType: AgentType; conversationId: string; initialMessages: UIMessage[]; title: string; ephemeral: boolean; onEphemeralChange: (value: boolean) => void }) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState("");
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const transport = useMemo(() => new DefaultChatTransport({
     api: "/api/ai-chat",
@@ -60,7 +64,6 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
       if (sessionError || !data.session) throw new Error("Authentification expirée : reconnectez-vous puis renvoyez votre message.");
       const headers = new Headers(init?.headers);
       headers.set("Authorization", `Bearer ${data.session.access_token}`);
-      // Garde-fou anti chargement infini : on abandonne proprement au bout de 5 minutes.
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 300_000);
       init?.signal?.addEventListener("abort", () => controller.abort());
@@ -84,7 +87,6 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
         clearTimeout(timeout);
       }
     },
-    // On n'envoie que la fenêtre récente : le serveur reconstitue la mémoire longue via son résumé.
     prepareSendMessagesRequest: ({ messages: all, body }) => ({ body: { ...body, messages: all.slice(-30) } }),
     body: { conversationId, agentType, ephemeral },
   }), [agentType, conversationId, ephemeral]);
@@ -93,16 +95,28 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
   useEffect(() => { if (error) setFailure(describeChatError(error)); }, [error]);
-  const send = async (text = input) => {
-    const clean = text.trim();
-    if (!clean || busy) return;
-    setInput("");
+
+  const chooseImage = (file: File | undefined) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { toast.error("Sélectionnez une image."); return; }
+    if (file.size > MAX_IMAGE_BYTES) { toast.error("L’image doit faire au maximum 5 Mo."); return; }
+    setSelectedImage(file);
     setFailure(null);
-    savePendingMessage(conversationId, clean);
+  };
+
+  const send = async (text = input, file = selectedImage) => {
+    const clean = text.trim();
+    if ((!clean && !file) || busy) return;
+    const messageText = clean || "Analyse cette image.";
+    setInput("");
+    setSelectedImage(null);
+    setFailure(null);
+    if (!file) savePendingMessage(conversationId, messageText);
     try {
-      await sendMessage({ text: clean });
-      clearPendingMessage(conversationId);
+      await sendMessage(file ? { text: messageText, files: [file] } : { text: messageText });
+      if (!file) clearPendingMessage(conversationId);
     } catch (sendError) {
+      if (file) setSelectedImage(file);
       setFailure(describeChatError(sendError));
     } finally {
       inputRef.current?.focus();
@@ -112,7 +126,6 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
     const pending = readPendingMessage(conversationId);
     if (pending && !busy) void send(pending);
   }, [busy, conversationId]);
-  // Renvoi automatique dès le retour de la connexion.
   useEffect(() => {
     const onOnline = () => retryPending();
     window.addEventListener("online", onOnline);
@@ -142,7 +155,24 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
         {failure && <div className="glass-card rounded-2xl p-3 text-sm border border-destructive/40"><div className="flex items-start gap-2"><AlertTriangle className="size-4 text-destructive mt-0.5 shrink-0" /><div className="min-w-0 flex-1"><div className="font-medium text-destructive">Envoi impossible</div><div className="text-muted-foreground mt-1 break-words">{failure}</div><div className="flex gap-2 mt-3"><Button size="sm" variant="outline" onClick={retryPending} disabled={busy}><RefreshCw className="size-3.5 mr-1" />Réessayer</Button><Button size="sm" variant="ghost" onClick={() => setFailure(null)}>Ignorer</Button></div></div></div></div>}
         <div ref={bottomRef} />
       </div>
-      <footer className="shrink-0 p-3 sm:p-4 border-t border-border/60"><div className="glass-thin rounded-2xl p-2 flex items-end gap-2"><Textarea ref={inputRef} autoFocus value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={agentType === "coach" ? "Parlez de votre journée ou demandez une action…" : "Décrivez un bug, une idée ou une fonctionnalité…"} rows={1} className="min-h-11 max-h-40 resize-none border-0 bg-transparent focus-visible:ring-0" /><Button size="icon" onClick={() => void send()} disabled={!input.trim() || busy} aria-label="Envoyer">{busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</Button></div><div className="mt-2 flex items-center justify-center gap-3 text-[10px] text-muted-foreground"><span>Les actions et accès aux données respectent vos permissions IA.</span><button type="button" className="underline" onClick={() => setDebugEnabled(!isDebugEnabled())}>Mode développeur</button></div><DebugPanel /></footer>
+      <footer className="shrink-0 p-3 sm:p-4 border-t border-border/60">
+        {selectedImage && <div className="mb-2 flex items-center gap-2 rounded-xl glass-thin p-2"><img src={URL.createObjectURL(selectedImage)} alt="Aperçu de la photo" className="size-16 rounded-lg object-cover" /><div className="min-w-0 flex-1"><div className="text-xs font-medium truncate">{selectedImage.name}</div><div className="text-[11px] text-muted-foreground">Photo prête pour l’analyse</div></div><Button size="icon" variant="ghost" onClick={() => setSelectedImage(null)} aria-label="Supprimer la photo"><X className="size-4" /></Button></div>}
+        <div className="glass-thin rounded-2xl p-2 flex items-end gap-2">
+          <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { chooseImage(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+          <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => { chooseImage(event.target.files?.[0]); event.currentTarget.value = ""; }} />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label="Ajouter une photo" disabled={busy}><ImagePlus className="size-5" /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="top">
+              <DropdownMenuItem onSelect={() => cameraInputRef.current?.click()}><ImagePlus className="size-4" />Prendre une photo</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => galleryInputRef.current?.click()}><Plus className="size-4" />Choisir dans la galerie</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setSelectedImage(null)} disabled={!selectedImage}><X className="size-4" />Annuler</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Textarea ref={inputRef} autoFocus value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={selectedImage ? "Décrivez ce que Pace doit analyser…" : agentType === "coach" ? "Parlez de votre journée ou demandez une action…" : "Décrivez un bug, une idée ou une fonctionnalité…"} rows={1} className="min-h-11 max-h-40 resize-none border-0 bg-transparent focus-visible:ring-0" />
+          <Button size="icon" onClick={() => void send()} disabled={(!input.trim() && !selectedImage) || busy} aria-label="Envoyer">{busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</Button>
+        </div>
+        <div className="mt-2 flex items-center justify-center gap-3 text-[10px] text-muted-foreground"><span>Les actions et accès aux données respectent vos permissions IA.</span><button type="button" className="underline" onClick={() => setDebugEnabled(!isDebugEnabled())}>Mode développeur</button></div><DebugPanel />
+      </footer>
     </section>
     <aside className="hidden md:block w-72 shrink-0 glass-card rounded-[24px] p-3 overflow-hidden"><ConversationHistory activeId={conversationId} agentType={agentType} /></aside>
   </div>;
@@ -150,7 +180,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
 
 function EmptyState({ agentType, onPick }: { agentType: AgentType; onPick: (text: string) => void }) { const Icon = agentType === "coach" ? Brain : Code2; return <div className="max-w-xl mx-auto pt-12 text-center"><span className="glass-icon size-14 mx-auto"><Icon className="size-6 text-primary" /></span><h1 className="font-display text-2xl font-semibold mt-4">{agentType === "coach" ? "Votre coach connaît votre Pace" : "Construisons Pace intelligemment"}</h1><p className="text-sm text-muted-foreground mt-2">{agentType === "coach" ? "Analyse, conseils et actions directes sur vos données autorisées." : "Transformez vos retours en éléments de développement structurés."}</p><div className="mt-6 grid gap-2 text-left">{SUGGESTIONS[agentType].map((suggestion) => <Button key={suggestion} variant="outline" className="h-auto justify-between text-left py-3 whitespace-normal" onClick={() => onPick(suggestion)}><span>{suggestion}</span><ChevronRight className="size-4 shrink-0" /></Button>)}</div></div>; }
 
-function MessageBubble({ message, onApproval }: { message: UIMessage; onApproval: (id: string, approved: boolean) => void }) { const assistant = message.role === "assistant"; return <div className={`flex gap-3 ${assistant ? "justify-start" : "justify-end"}`}>{assistant && <span className="glass-icon size-8 shrink-0"><Bot className="size-4 text-primary" /></span>}<div className={`max-w-[88%] sm:max-w-[78%] space-y-2 ${assistant ? "" : "rounded-2xl bg-primary text-primary-foreground px-4 py-2.5"}`}>{message.parts.map((part, index) => { if (part.type === "text") return <div key={index} className="text-sm leading-relaxed [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5"><ReactMarkdown>{part.text}</ReactMarkdown></div>; if (part.type === "reasoning") return <details key={index} className="text-xs text-muted-foreground glass-thin rounded-xl px-3 py-2"><summary className="cursor-pointer">Raisonnement</summary><div className="mt-2 whitespace-pre-wrap">{part.text}</div></details>; if (part.type.startsWith("tool-")) return <ToolPart key={index} part={part as unknown as Record<string, unknown>} onApproval={onApproval} />; return null; })}</div></div>; }
+function MessageBubble({ message, onApproval }: { message: UIMessage; onApproval: (id: string, approved: boolean) => void }) { const assistant = message.role === "assistant"; return <div className={`flex gap-3 ${assistant ? "justify-start" : "justify-end"}`}>{assistant && <span className="glass-icon size-8 shrink-0"><Bot className="size-4 text-primary" /></span>}<div className={`max-w-[88%] sm:max-w-[78%] space-y-2 ${assistant ? "" : "rounded-2xl bg-primary text-primary-foreground px-4 py-2.5"}`}>{message.parts.map((part, index) => { if (part.type === "text") return <div key={index} className="text-sm leading-relaxed [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5"><ReactMarkdown>{part.text}</ReactMarkdown></div>; if (part.type === "file") return part.mediaType.startsWith("image/") ? <img key={index} src={part.url} alt={part.filename ?? "Image jointe"} className="max-w-full rounded-xl max-h-72 object-contain" /> : null; if (part.type === "reasoning") return <details key={index} className="text-xs text-muted-foreground glass-thin rounded-xl px-3 py-2"><summary className="cursor-pointer">Raisonnement</summary><div className="mt-2 whitespace-pre-wrap">{part.text}</div></details>; if (part.type.startsWith("tool-")) return <ToolPart key={index} part={part as unknown as Record<string, unknown>} onApproval={onApproval} />; return null; })}</div></div>; }
 
 function ToolPart({ part, onApproval }: { part: Record<string, unknown>; onApproval: (id: string, approved: boolean) => void }) { const state = typeof part.state === "string" ? part.state : ""; const approval = typeof part.approval === "object" && part.approval ? part.approval as Record<string, unknown> : null; const toolName = typeof part.type === "string" ? part.type.replace("tool-", "").replaceAll("_", " ") : "action"; if (state === "approval-requested" && approval && approval.isAutomatic !== true && typeof approval.id === "string") return <div className="glass-card rounded-2xl p-3 text-sm"><div className="font-medium">Autoriser : {toolName} ?</div><div className="flex gap-2 mt-3"><Button size="sm" onClick={() => onApproval(approval.id as string, true)}><Check className="size-3.5 mr-1" />Confirmer</Button><Button size="sm" variant="outline" onClick={() => onApproval(approval.id as string, false)}><X className="size-3.5 mr-1" />Refuser</Button></div></div>; const success = state === "output-available"; return <div className="glass-thin rounded-xl px-3 py-2 flex items-center gap-2 text-xs"><span className={`size-5 rounded-full grid place-items-center ${success ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>{success ? <Check className="size-3" /> : <Loader2 className="size-3 animate-spin" />}</span><span className="capitalize">{toolName}</span></div>; }
 
@@ -171,8 +201,5 @@ function DebugPanel() {
   }, []);
   if (!enabled) return null;
   const entries = getAiDebugEntries();
-  return <div className="mt-2 glass-thin rounded-xl p-2 max-h-40 overflow-y-auto text-[10px] font-mono">
-    <div className="flex items-center justify-between pb-1"><span className="font-medium">Journal de débogage</span><Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={clearAiDebug}>Vider</Button></div>
-    {entries.length === 0 ? <div className="text-muted-foreground">Aucune requête enregistrée.</div> : entries.map((entry) => <div key={entry.id} className={entry.phase === "erreur" ? "text-destructive" : "text-muted-foreground"}>{new Date(entry.at).toLocaleTimeString("fr-FR")} · {entry.phase} · {entry.message}{entry.durationMs === undefined ? "" : ` · ${entry.durationMs} ms`}{entry.detail ? ` · ${entry.detail}` : ""}</div>)}
-  </div>;
+  return <div className="mt-2 glass-thin rounded-xl p-2 max-h-40 overflow-y-auto text-[10px] font-mono"><div className="flex items-center justify-between pb-1"><span className="font-medium">Journal de débogage</span><Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={clearAiDebug}>Vider</Button></div>{entries.length === 0 ? <div className="text-muted-foreground">Aucune requête enregistrée.</div> : entries.map((entry) => <div key={entry.id} className={entry.phase === "erreur" ? "text-destructive" : "text-muted-foreground"}>{new Date(entry.at).toLocaleTimeString("fr-FR")} · {entry.phase} · {entry.message}{entry.durationMs === undefined ? "" : ` · ${entry.durationMs} ms`}{entry.detail ? ` · ${entry.detail}` : ""}</div>)}</div>;
 }
