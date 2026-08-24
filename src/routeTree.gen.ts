@@ -22,7 +22,6 @@ import { Route as RecallsRouteImport } from './routes/recalls'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as NutritionRouteImport } from './routes/nutrition'
 import { Route as NotesRouteImport } from './routes/notes'
-import { Route as McpRouteImport } from './routes/mcp'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InvestmentsRouteImport } from './routes/investments'
 import { Route as FinanceRouteImport } from './routes/finance'
@@ -33,10 +32,7 @@ import { Route as AssistantRouteImport } from './routes/assistant'
 import { Route as AiActivityRouteImport } from './routes/ai-activity'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAiChatRouteImport } from './routes/api/ai-chat'
-import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
-import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as AiAgentTypeConversationIdRouteImport } from './routes/ai.$agentType.$conversationId'
-import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as ApiPublicHooksRemindersRouteImport } from './routes/api/public/hooks/reminders'
 
@@ -105,11 +101,6 @@ const NotesRoute = NotesRouteImport.update({
   path: '/notes',
   getParentRoute: () => rootRouteImport,
 } as any)
-const McpRoute = McpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -160,28 +151,10 @@ const ApiAiChatRoute = ApiAiChatRouteImport.update({
   path: '/api/ai-chat',
   getParentRoute: () => rootRouteImport,
 } as any)
-const Char91DotwellKnownChar93OauthProtectedResourceRoute =
-  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
-    id: '/.well-known/oauth-protected-resource',
-    path: '/.well-known/oauth-protected-resource',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const Char91DotmcpChar93ListToolsRoute =
-  Char91DotmcpChar93ListToolsRouteImport.update({
-    id: '/.mcp/list-tools',
-    path: '/.mcp/list-tools',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AiAgentTypeConversationIdRoute =
   AiAgentTypeConversationIdRouteImport.update({
     id: '/ai/$agentType/$conversationId',
     path: '/ai/$agentType/$conversationId',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const Char91DotmcpChar93InvokeToolToolRoute =
-  Char91DotmcpChar93InvokeToolToolRouteImport.update({
-    id: '/.mcp/invoke-tool/$tool',
-    path: '/.mcp/invoke-tool/$tool',
     getParentRoute: () => rootRouteImport,
   } as any)
 const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
@@ -205,7 +178,6 @@ export interface FileRoutesByFullPath {
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
   '/login': typeof LoginRoute
-  '/mcp': typeof McpRoute
   '/notes': typeof NotesRoute
   '/nutrition': typeof NutritionRoute
   '/profile': typeof ProfileRoute
@@ -219,11 +191,8 @@ export interface FileRoutesByFullPath {
   '/watch': typeof WatchRoute
   '/water': typeof WaterRoute
   '/work': typeof WorkRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/ai-chat': typeof ApiAiChatRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/ai/$agentType/$conversationId': typeof AiAgentTypeConversationIdRoute
   '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
@@ -237,7 +206,6 @@ export interface FileRoutesByTo {
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
   '/login': typeof LoginRoute
-  '/mcp': typeof McpRoute
   '/notes': typeof NotesRoute
   '/nutrition': typeof NutritionRoute
   '/profile': typeof ProfileRoute
@@ -251,11 +219,8 @@ export interface FileRoutesByTo {
   '/watch': typeof WatchRoute
   '/water': typeof WaterRoute
   '/work': typeof WorkRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/ai-chat': typeof ApiAiChatRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/ai/$agentType/$conversationId': typeof AiAgentTypeConversationIdRoute
   '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
@@ -270,7 +235,6 @@ export interface FileRoutesById {
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
   '/login': typeof LoginRoute
-  '/mcp': typeof McpRoute
   '/notes': typeof NotesRoute
   '/nutrition': typeof NutritionRoute
   '/profile': typeof ProfileRoute
@@ -284,11 +248,8 @@ export interface FileRoutesById {
   '/watch': typeof WatchRoute
   '/water': typeof WaterRoute
   '/work': typeof WorkRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/ai-chat': typeof ApiAiChatRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/ai/$agentType/$conversationId': typeof AiAgentTypeConversationIdRoute
   '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
@@ -304,7 +265,6 @@ export interface FileRouteTypes {
     | '/finance'
     | '/investments'
     | '/login'
-    | '/mcp'
     | '/notes'
     | '/nutrition'
     | '/profile'
@@ -318,11 +278,8 @@ export interface FileRouteTypes {
     | '/watch'
     | '/water'
     | '/work'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/api/ai-chat'
     | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/ai/$agentType/$conversationId'
     | '/api/public/hooks/reminders'
   fileRoutesByTo: FileRoutesByTo
@@ -336,7 +293,6 @@ export interface FileRouteTypes {
     | '/finance'
     | '/investments'
     | '/login'
-    | '/mcp'
     | '/notes'
     | '/nutrition'
     | '/profile'
@@ -350,11 +306,8 @@ export interface FileRouteTypes {
     | '/watch'
     | '/water'
     | '/work'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/api/ai-chat'
     | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/ai/$agentType/$conversationId'
     | '/api/public/hooks/reminders'
   id:
@@ -368,7 +321,6 @@ export interface FileRouteTypes {
     | '/finance'
     | '/investments'
     | '/login'
-    | '/mcp'
     | '/notes'
     | '/nutrition'
     | '/profile'
@@ -382,11 +334,8 @@ export interface FileRouteTypes {
     | '/watch'
     | '/water'
     | '/work'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/api/ai-chat'
     | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/ai/$agentType/$conversationId'
     | '/api/public/hooks/reminders'
   fileRoutesById: FileRoutesById
@@ -401,7 +350,6 @@ export interface RootRouteChildren {
   FinanceRoute: typeof FinanceRoute
   InvestmentsRoute: typeof InvestmentsRoute
   LoginRoute: typeof LoginRoute
-  McpRoute: typeof McpRoute
   NotesRoute: typeof NotesRoute
   NutritionRoute: typeof NutritionRoute
   ProfileRoute: typeof ProfileRoute
@@ -415,11 +363,8 @@ export interface RootRouteChildren {
   WatchRoute: typeof WatchRoute
   WaterRoute: typeof WaterRoute
   WorkRoute: typeof WorkRoute
-  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
-  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   ApiAiChatRoute: typeof ApiAiChatRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
-  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   AiAgentTypeConversationIdRoute: typeof AiAgentTypeConversationIdRoute
   ApiPublicHooksRemindersRoute: typeof ApiPublicHooksRemindersRoute
 }
@@ -517,13 +462,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NotesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/mcp': {
-      id: '/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof McpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -594,32 +532,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/.well-known/oauth-protected-resource': {
-      id: '/.well-known/oauth-protected-resource'
-      path: '/.well-known/oauth-protected-resource'
-      fullPath: '/.well-known/oauth-protected-resource'
-      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/.mcp/list-tools': {
-      id: '/.mcp/list-tools'
-      path: '/.mcp/list-tools'
-      fullPath: '/.mcp/list-tools'
-      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/ai/$agentType/$conversationId': {
       id: '/ai/$agentType/$conversationId'
       path: '/ai/$agentType/$conversationId'
       fullPath: '/ai/$agentType/$conversationId'
       preLoaderRoute: typeof AiAgentTypeConversationIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/.mcp/invoke-tool/$tool': {
-      id: '/.mcp/invoke-tool/$tool'
-      path: '/.mcp/invoke-tool/$tool'
-      fullPath: '/.mcp/invoke-tool/$tool'
-      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/.lovable/oauth/consent': {
@@ -649,7 +566,6 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceRoute: FinanceRoute,
   InvestmentsRoute: InvestmentsRoute,
   LoginRoute: LoginRoute,
-  McpRoute: McpRoute,
   NotesRoute: NotesRoute,
   NutritionRoute: NutritionRoute,
   ProfileRoute: ProfileRoute,
@@ -663,12 +579,8 @@ const rootRouteChildren: RootRouteChildren = {
   WatchRoute: WatchRoute,
   WaterRoute: WaterRoute,
   WorkRoute: WorkRoute,
-  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
-  Char91DotwellKnownChar93OauthProtectedResourceRoute:
-    Char91DotwellKnownChar93OauthProtectedResourceRoute,
   ApiAiChatRoute: ApiAiChatRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
-  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   AiAgentTypeConversationIdRoute: AiAgentTypeConversationIdRoute,
   ApiPublicHooksRemindersRoute: ApiPublicHooksRemindersRoute,
 }
