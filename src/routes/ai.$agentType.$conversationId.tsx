@@ -113,7 +113,13 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
     setFailure(null);
     if (!file) savePendingMessage(conversationId, messageText);
     try {
-      await sendMessage(file ? { text: messageText, files: [file] } : { text: messageText });
+      if (file) {
+        const files = new DataTransfer();
+        files.items.add(file);
+        await sendMessage({ text: messageText, files: files.files });
+      } else {
+        await sendMessage({ text: messageText });
+      }
       if (!file) clearPendingMessage(conversationId);
     } catch (sendError) {
       if (file) setSelectedImage(file);
