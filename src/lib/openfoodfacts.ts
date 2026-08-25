@@ -1,3 +1,5 @@
+import { supabase } from "@/integrations/supabase/client";
+
 // Open Food Facts public API — no key required
 export type OFFProduct = {
   barcode: string;
@@ -31,7 +33,7 @@ export async function fetchProductByBarcode(barcode: string): Promise<OFFProduct
   const p = data.product;
   const n = p.nutriments ?? {};
   const num = (k: string) => Number(n[k]) || 0;
-  return {
+  const product: OFFProduct = {
     barcode,
     name: p.product_name || "Produit inconnu",
     brand: p.brands || "",
@@ -54,8 +56,46 @@ export async function fetchProductByBarcode(barcode: string): Promise<OFFProduct
     additives: (p.additives_tags ?? []).map((x: string) => x.replace("en:", "")),
     allergens: (p.allergens_tags ?? []).map((x: string) => x.replace("en:", "")),
   };
-}
 
+  // Keep the scan history in Supabase. This is deliberately best-effort:
+  // the local nutrition flow remains usable if scan-history persistence is
+  // temporarily unavailable, while the repaired RLS protects user isolation.
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const userId = auth.user?.id;
+    if (userId) {
+      const health = computeHealthScore(product);
+      const { error } = await supabase.from("food_scans").insert({
+        user_id: userId,
+        kind: "barcode",
+        barcode: product.barcode,
+        product_name: product.name,
+        brand: product.brand || null,
+        kcal: product.kcal,
+        protein_g: product.protein_g,
+        carbs_g: product.carbs_g,
+        fat_g: product.fat_g,
+        fiber_g: product.fiber_g,
+        sugar_g: product.sugar_g,
+        salt_g: product.salt_g,
+        sodium_mg: product.sodium_mg,
+        nutri_score: product.nutri_score,
+        nova_group: product.nova_group,
+        health_score: health.score,
+        warnings: health.warnings,
+        ingredients: product.ingredients || null,
+        image_url: product.image_url,
+        raw: data.product,
+        favorite: false,
+      });
+      if (error && import.meta.env.DEV) console.warn("[food_scans] persist failed", error);
+    }
+  } catch (error) {
+    if (import.meta.env.DEV) console.warn("[food_scans] persist failed", error);
+  }
+
+  return product;
+}
 
 export function computeHealthScore(p: OFFProduct): { score: "green" | "orange" | "red"; warnings: string[] } {
   const warnings: string[] = [];
