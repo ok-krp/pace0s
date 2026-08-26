@@ -7,7 +7,6 @@ on:
       - "supabase/**"
       - "scripts/test-sync-policy.mjs"
       - "package.json"
-      - "package-lock.json"
       - ".github/workflows/sync-audit.yml"
 
 jobs:
@@ -18,7 +17,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm ci --no-audit --no-fund
+      - run: npm install --no-audit --no-fund
       - run: node scripts/test-sync-policy.mjs
       - run: npm run lint
       - run: npm run typecheck
