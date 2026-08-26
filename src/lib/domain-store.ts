@@ -26,18 +26,20 @@ function compareRecords<T>(a: DomainRecord<T>, b: DomainRecord<T>) {
   return a.mutationId.localeCompare(b.mutationId);
 }
 
-function recomputeNutritionTotals(value: unknown) {
-  if (!value || typeof value !== "object") return {};
-  const totals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
+type NutritionTotals = { kcal: number; p: number; c: number; f: number };
+
+function recomputeNutritionTotals(value: unknown): Record<string, NutritionTotals> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const totals: Record<string, NutritionTotals> = {};
   for (const [day, rawList] of Object.entries(value as Record<string, unknown>)) {
     const list = Array.isArray(rawList) ? rawList : [];
-    totals[day] = list.reduce((a, raw) => {
-      const x = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
+    totals[day] = list.reduce<NutritionTotals>((a, raw) => {
+      const x = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
       return {
-        kcal: a.kcal + Number(x.kcal || 0),
-        p: a.p + Number(x.p || 0),
-        c: a.c + Number(x.c || 0),
-        f: a.f + Number(x.f || 0),
+        kcal: a.kcal + Number(x.kcal ?? 0),
+        p: a.p + Number(x.p ?? 0),
+        c: a.c + Number(x.c ?? 0),
+        f: a.f + Number(x.f ?? 0),
       };
     }, { kcal: 0, p: 0, c: 0, f: 0 });
   }
@@ -85,8 +87,7 @@ export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
       window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key: `pace.${domain}`, value } }));
 
       // nutrition.items is the source of truth for the local-first nutrition domain.
-      // Keep its derived totals synchronized even when a legacy screen writes items
-      // directly through useDomainState instead of nutrition-log.ts.
+      // Keep its derived totals synchronized when legacy screens write items directly.
       if (domain === "nutrition.items") {
         const totals = recomputeNutritionTotals(value);
         const totalsRecord: DomainRecord<typeof totals> = {
