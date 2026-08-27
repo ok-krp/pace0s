@@ -21,7 +21,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
     const { data: consent, error: consentError } = await context.supabase
       .from("legal_consent")
       .select("opts")
-      .eq("user_id", context.user.id)
+      .eq("user_id", context.userId)
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
       .maybeSingle();
@@ -77,7 +77,7 @@ export const nutritionAdvice = createServerFn({ method: "POST" })
     const { data: consent, error: consentError } = await context.supabase
       .from("legal_consent")
       .select("opts")
-      .eq("user_id", context.user.id)
+      .eq("user_id", context.userId)
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
       .maybeSingle();
