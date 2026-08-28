@@ -26,6 +26,26 @@ function compareRecords<T>(a: DomainRecord<T>, b: DomainRecord<T>) {
   return a.mutationId.localeCompare(b.mutationId);
 }
 
+type NutritionTotals = { kcal: number; p: number; c: number; f: number };
+
+function recomputeNutritionTotals(value: unknown): Record<string, NutritionTotals> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const totals: Record<string, NutritionTotals> = {};
+  for (const [day, rawList] of Object.entries(value as Record<string, unknown>)) {
+    const list = Array.isArray(rawList) ? rawList : [];
+    totals[day] = list.reduce<NutritionTotals>((a, raw) => {
+      const x = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+      return {
+        kcal: a.kcal + Number(x.kcal ?? 0),
+        p: a.p + Number(x.p ?? 0),
+        c: a.c + Number(x.c ?? 0),
+        f: a.f + Number(x.f ?? 0),
+      };
+    }, { kcal: 0, p: 0, c: 0, f: 0 });
+  }
+  return totals;
+}
+
 export function readDomain<T>(domain: string, fallback: T): DomainRecord<T> {
   if (typeof window === "undefined") {
     return { version: 1, updatedAt: new Date(0).toISOString(), mutationId: "server", value: fallback };
@@ -40,7 +60,6 @@ export function readDomain<T>(domain: string, fallback: T): DomainRecord<T> {
       }
     }
 
-    // Progressive migration: preserve the existing Pace key and promote it on first write.
     const legacyRaw = localStorage.getItem(`pace.${domain}`);
     if (legacyRaw !== null) {
       try {
@@ -63,13 +82,25 @@ export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
   if (typeof window !== "undefined") {
     try {
       localStorage.setItem(storageKey(domain), JSON.stringify(record));
-      // Keep the old key during the progressive migration as a recovery copy.
       localStorage.setItem(`pace.${domain}`, JSON.stringify(value));
-      // There is exactly one local->cloud sync contract: pace.local.write.
-      // The former domain outbox was never consumed by the active sync engine
-      // and could leave stale duplicate state behind.
       window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record } }));
       window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key: `pace.${domain}`, value } }));
+
+      // nutrition.items is the source of truth for the local-first nutrition domain.
+      // Keep its derived totals synchronized when legacy screens write items directly.
+      if (domain === "nutrition.items") {
+        const totals = recomputeNutritionTotals(value);
+        const totalsRecord: DomainRecord<typeof totals> = {
+          version: 1,
+          updatedAt: new Date().toISOString(),
+          mutationId: mutationId(),
+          value: totals,
+        };
+        localStorage.setItem(storageKey("nutrition.totals"), JSON.stringify(totalsRecord));
+        localStorage.setItem("pace.nutrition.totals", JSON.stringify(totals));
+        window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain: "nutrition.totals", record: totalsRecord } }));
+        window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key: "pace.nutrition.totals", value: totals } }));
+      }
     } catch {
       // The in-memory state remains usable; the central sync queue retries later.
     }
