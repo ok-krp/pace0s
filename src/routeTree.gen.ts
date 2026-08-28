@@ -9,140 +9,36 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as WorkRouteImport } from './routes/work'
-import { Route as WaterRouteImport } from './routes/water'
-import { Route as WatchRouteImport } from './routes/watch'
-import { Route as SportRouteImport } from './routes/sport'
-import { Route as SleepRouteImport } from './routes/sleep'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as ScanRouteImport } from './routes/scan'
-import { Route as RoutineRouteImport } from './routes/routine'
-import { Route as RecipesRouteImport } from './routes/recipes'
-import { Route as RecallsRouteImport } from './routes/recalls'
-import { Route as ProfileRouteImport } from './routes/profile'
-import { Route as NutritionRouteImport } from './routes/nutrition'
-import { Route as NotesRouteImport } from './routes/notes'
-import { Route as McpRouteImport } from './routes/mcp'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as InvestmentsRouteImport } from './routes/investments'
-import { Route as FinanceRouteImport } from './routes/finance'
-import { Route as DevelopmentRouteImport } from './routes/development'
-import { Route as CalendarRouteImport } from './routes/calendar'
-import { Route as BodyRouteImport } from './routes/body'
-import { Route as AssistantRouteImport } from './routes/assistant'
-import { Route as AiActivityRouteImport } from './routes/ai-activity'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AiActivityRouteImport } from './routes/ai-activity'
+import { Route as AssistantRouteImport } from './routes/assistant'
+import { Route as BodyRouteImport } from './routes/body'
+import { Route as CalendarRouteImport } from './routes/calendar'
+import { Route as DevelopmentRouteImport } from './routes/development'
+import { Route as FinanceRouteImport } from './routes/finance'
+import { Route as InvestmentsRouteImport } from './routes/investments'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as NotesRouteImport } from './routes/notes'
+import { Route as NutritionRouteImport } from './routes/nutrition'
+import { Route as ProfileRouteImport } from './routes/profile'
+import { Route as RecallsRouteImport } from './routes/recalls'
+import { Route as RecipesRouteImport } from './routes/recipes'
+import { Route as RoutineRouteImport } from './routes/routine'
+import { Route as ScanRouteImport } from './routes/scan'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SleepRouteImport } from './routes/sleep'
+import { Route as SportRouteImport } from './routes/sport'
+import { Route as WatchRouteImport } from './routes/watch'
+import { Route as WaterRouteImport } from './routes/water'
+import { Route as WorkRouteImport } from './routes/work'
 import { Route as ApiAiChatRouteImport } from './routes/api/ai-chat'
-import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
-import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
-import { Route as AiAgentTypeConversationIdRouteImport } from './routes/ai.$agentType.$conversationId'
-import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
+import { Route as AiAgentTypeConversationIdRouteImport } from './routes/ai.$agentType.$conversationId'
 import { Route as ApiPublicHooksRemindersRouteImport } from './routes/api/public/hooks/reminders'
 
-const WorkRoute = WorkRouteImport.update({
-  id: '/work',
-  path: '/work',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WaterRoute = WaterRouteImport.update({
-  id: '/water',
-  path: '/water',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const WatchRoute = WatchRouteImport.update({
-  id: '/watch',
-  path: '/watch',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SportRoute = SportRouteImport.update({
-  id: '/sport',
-  path: '/sport',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SleepRoute = SleepRouteImport.update({
-  id: '/sleep',
-  path: '/sleep',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ScanRoute = ScanRouteImport.update({
-  id: '/scan',
-  path: '/scan',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RoutineRoute = RoutineRouteImport.update({
-  id: '/routine',
-  path: '/routine',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RecipesRoute = RecipesRouteImport.update({
-  id: '/recipes',
-  path: '/recipes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const RecallsRoute = RecallsRouteImport.update({
-  id: '/recalls',
-  path: '/recalls',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProfileRoute = ProfileRouteImport.update({
-  id: '/profile',
-  path: '/profile',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NutritionRoute = NutritionRouteImport.update({
-  id: '/nutrition',
-  path: '/nutrition',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const NotesRoute = NotesRouteImport.update({
-  id: '/notes',
-  path: '/notes',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const McpRoute = McpRouteImport.update({
-  id: '/mcp',
-  path: '/mcp',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InvestmentsRoute = InvestmentsRouteImport.update({
-  id: '/investments',
-  path: '/investments',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FinanceRoute = FinanceRouteImport.update({
-  id: '/finance',
-  path: '/finance',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const DevelopmentRoute = DevelopmentRouteImport.update({
-  id: '/development',
-  path: '/development',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CalendarRoute = CalendarRouteImport.update({
-  id: '/calendar',
-  path: '/calendar',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const BodyRoute = BodyRouteImport.update({
-  id: '/body',
-  path: '/body',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AssistantRoute = AssistantRouteImport.update({
-  id: '/assistant',
-  path: '/assistant',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AiActivityRoute = AiActivityRouteImport.update({
@@ -150,9 +46,104 @@ const AiActivityRoute = AiActivityRouteImport.update({
   path: '/ai-activity',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AssistantRoute = AssistantRouteImport.update({
+  id: '/assistant',
+  path: '/assistant',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BodyRoute = BodyRouteImport.update({
+  id: '/body',
+  path: '/body',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CalendarRoute = CalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DevelopmentRoute = DevelopmentRouteImport.update({
+  id: '/development',
+  path: '/development',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceRoute = FinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InvestmentsRoute = InvestmentsRouteImport.update({
+  id: '/investments',
+  path: '/investments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotesRoute = NotesRouteImport.update({
+  id: '/notes',
+  path: '/notes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NutritionRoute = NutritionRouteImport.update({
+  id: '/nutrition',
+  path: '/nutrition',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProfileRoute = ProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecallsRoute = RecallsRouteImport.update({
+  id: '/recalls',
+  path: '/recalls',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RecipesRoute = RecipesRouteImport.update({
+  id: '/recipes',
+  path: '/recipes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoutineRoute = RoutineRouteImport.update({
+  id: '/routine',
+  path: '/routine',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScanRoute = ScanRouteImport.update({
+  id: '/scan',
+  path: '/scan',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SleepRoute = SleepRouteImport.update({
+  id: '/sleep',
+  path: '/sleep',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SportRoute = SportRouteImport.update({
+  id: '/sport',
+  path: '/sport',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WatchRoute = WatchRouteImport.update({
+  id: '/watch',
+  path: '/watch',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WaterRoute = WaterRouteImport.update({
+  id: '/water',
+  path: '/water',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WorkRoute = WorkRouteImport.update({
+  id: '/work',
+  path: '/work',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAiChatRoute = ApiAiChatRouteImport.update({
@@ -160,35 +151,17 @@ const ApiAiChatRoute = ApiAiChatRouteImport.update({
   path: '/api/ai-chat',
   getParentRoute: () => rootRouteImport,
 } as any)
-const Char91DotwellKnownChar93OauthProtectedResourceRoute =
-  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
-    id: '/.well-known/oauth-protected-resource',
-    path: '/.well-known/oauth-protected-resource',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const Char91DotmcpChar93ListToolsRoute =
-  Char91DotmcpChar93ListToolsRouteImport.update({
-    id: '/.mcp/list-tools',
-    path: '/.mcp/list-tools',
-    getParentRoute: () => rootRouteImport,
-  } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AiAgentTypeConversationIdRoute =
   AiAgentTypeConversationIdRouteImport.update({
     id: '/ai/$agentType/$conversationId',
     path: '/ai/$agentType/$conversationId',
     getParentRoute: () => rootRouteImport,
   } as any)
-const Char91DotmcpChar93InvokeToolToolRoute =
-  Char91DotmcpChar93InvokeToolToolRouteImport.update({
-    id: '/.mcp/invoke-tool/$tool',
-    path: '/.mcp/invoke-tool/$tool',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
-  id: '/.lovable/oauth/consent',
-  path: '/.lovable/oauth/consent',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiPublicHooksRemindersRoute = ApiPublicHooksRemindersRouteImport.update({
   id: '/api/public/hooks/reminders',
   path: '/api/public/hooks/reminders',
@@ -205,7 +178,6 @@ export interface FileRoutesByFullPath {
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
   '/login': typeof LoginRoute
-  '/mcp': typeof McpRoute
   '/notes': typeof NotesRoute
   '/nutrition': typeof NutritionRoute
   '/profile': typeof ProfileRoute
@@ -219,11 +191,8 @@ export interface FileRoutesByFullPath {
   '/watch': typeof WatchRoute
   '/water': typeof WaterRoute
   '/work': typeof WorkRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/ai-chat': typeof ApiAiChatRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/ai/$agentType/$conversationId': typeof AiAgentTypeConversationIdRoute
   '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
@@ -237,7 +206,6 @@ export interface FileRoutesByTo {
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
   '/login': typeof LoginRoute
-  '/mcp': typeof McpRoute
   '/notes': typeof NotesRoute
   '/nutrition': typeof NutritionRoute
   '/profile': typeof ProfileRoute
@@ -251,11 +219,8 @@ export interface FileRoutesByTo {
   '/watch': typeof WatchRoute
   '/water': typeof WaterRoute
   '/work': typeof WorkRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/ai-chat': typeof ApiAiChatRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/ai/$agentType/$conversationId': typeof AiAgentTypeConversationIdRoute
   '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
@@ -270,7 +235,6 @@ export interface FileRoutesById {
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
   '/login': typeof LoginRoute
-  '/mcp': typeof McpRoute
   '/notes': typeof NotesRoute
   '/nutrition': typeof NutritionRoute
   '/profile': typeof ProfileRoute
@@ -284,11 +248,8 @@ export interface FileRoutesById {
   '/watch': typeof WatchRoute
   '/water': typeof WaterRoute
   '/work': typeof WorkRoute
-  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
-  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/api/ai-chat': typeof ApiAiChatRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
-  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/ai/$agentType/$conversationId': typeof AiAgentTypeConversationIdRoute
   '/api/public/hooks/reminders': typeof ApiPublicHooksRemindersRoute
 }
@@ -304,7 +265,6 @@ export interface FileRouteTypes {
     | '/finance'
     | '/investments'
     | '/login'
-    | '/mcp'
     | '/notes'
     | '/nutrition'
     | '/profile'
@@ -318,11 +278,8 @@ export interface FileRouteTypes {
     | '/watch'
     | '/water'
     | '/work'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/api/ai-chat'
     | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/ai/$agentType/$conversationId'
     | '/api/public/hooks/reminders'
   fileRoutesByTo: FileRoutesByTo
@@ -336,7 +293,6 @@ export interface FileRouteTypes {
     | '/finance'
     | '/investments'
     | '/login'
-    | '/mcp'
     | '/notes'
     | '/nutrition'
     | '/profile'
@@ -350,11 +306,8 @@ export interface FileRouteTypes {
     | '/watch'
     | '/water'
     | '/work'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/api/ai-chat'
     | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/ai/$agentType/$conversationId'
     | '/api/public/hooks/reminders'
   id:
@@ -368,7 +321,6 @@ export interface FileRouteTypes {
     | '/finance'
     | '/investments'
     | '/login'
-    | '/mcp'
     | '/notes'
     | '/nutrition'
     | '/profile'
@@ -382,11 +334,8 @@ export interface FileRouteTypes {
     | '/watch'
     | '/water'
     | '/work'
-    | '/.mcp/list-tools'
-    | '/.well-known/oauth-protected-resource'
     | '/api/ai-chat'
     | '/.lovable/oauth/consent'
-    | '/.mcp/invoke-tool/$tool'
     | '/ai/$agentType/$conversationId'
     | '/api/public/hooks/reminders'
   fileRoutesById: FileRoutesById
@@ -401,7 +350,6 @@ export interface RootRouteChildren {
   FinanceRoute: typeof FinanceRoute
   InvestmentsRoute: typeof InvestmentsRoute
   LoginRoute: typeof LoginRoute
-  McpRoute: typeof McpRoute
   NotesRoute: typeof NotesRoute
   NutritionRoute: typeof NutritionRoute
   ProfileRoute: typeof ProfileRoute
@@ -415,162 +363,19 @@ export interface RootRouteChildren {
   WatchRoute: typeof WatchRoute
   WaterRoute: typeof WaterRoute
   WorkRoute: typeof WorkRoute
-  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
-  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   ApiAiChatRoute: typeof ApiAiChatRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
-  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   AiAgentTypeConversationIdRoute: typeof AiAgentTypeConversationIdRoute
   ApiPublicHooksRemindersRoute: typeof ApiPublicHooksRemindersRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/work': {
-      id: '/work'
-      path: '/work'
-      fullPath: '/work'
-      preLoaderRoute: typeof WorkRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/water': {
-      id: '/water'
-      path: '/water'
-      fullPath: '/water'
-      preLoaderRoute: typeof WaterRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/watch': {
-      id: '/watch'
-      path: '/watch'
-      fullPath: '/watch'
-      preLoaderRoute: typeof WatchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sport': {
-      id: '/sport'
-      path: '/sport'
-      fullPath: '/sport'
-      preLoaderRoute: typeof SportRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sleep': {
-      id: '/sleep'
-      path: '/sleep'
-      fullPath: '/sleep'
-      preLoaderRoute: typeof SleepRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/scan': {
-      id: '/scan'
-      path: '/scan'
-      fullPath: '/scan'
-      preLoaderRoute: typeof ScanRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/routine': {
-      id: '/routine'
-      path: '/routine'
-      fullPath: '/routine'
-      preLoaderRoute: typeof RoutineRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recipes': {
-      id: '/recipes'
-      path: '/recipes'
-      fullPath: '/recipes'
-      preLoaderRoute: typeof RecipesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/recalls': {
-      id: '/recalls'
-      path: '/recalls'
-      fullPath: '/recalls'
-      preLoaderRoute: typeof RecallsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/profile': {
-      id: '/profile'
-      path: '/profile'
-      fullPath: '/profile'
-      preLoaderRoute: typeof ProfileRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/nutrition': {
-      id: '/nutrition'
-      path: '/nutrition'
-      fullPath: '/nutrition'
-      preLoaderRoute: typeof NutritionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/notes': {
-      id: '/notes'
-      path: '/notes'
-      fullPath: '/notes'
-      preLoaderRoute: typeof NotesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/mcp': {
-      id: '/mcp'
-      path: '/mcp'
-      fullPath: '/mcp'
-      preLoaderRoute: typeof McpRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/investments': {
-      id: '/investments'
-      path: '/investments'
-      fullPath: '/investments'
-      preLoaderRoute: typeof InvestmentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/finance': {
-      id: '/finance'
-      path: '/finance'
-      fullPath: '/finance'
-      preLoaderRoute: typeof FinanceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/development': {
-      id: '/development'
-      path: '/development'
-      fullPath: '/development'
-      preLoaderRoute: typeof DevelopmentRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/calendar': {
-      id: '/calendar'
-      path: '/calendar'
-      fullPath: '/calendar'
-      preLoaderRoute: typeof CalendarRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/body': {
-      id: '/body'
-      path: '/body'
-      fullPath: '/body'
-      preLoaderRoute: typeof BodyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/assistant': {
-      id: '/assistant'
-      path: '/assistant'
-      fullPath: '/assistant'
-      preLoaderRoute: typeof AssistantRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ai-activity': {
@@ -580,11 +385,144 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AiActivityRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/assistant': {
+      id: '/assistant'
+      path: '/assistant'
+      fullPath: '/assistant'
+      preLoaderRoute: typeof AssistantRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/body': {
+      id: '/body'
+      path: '/body'
+      fullPath: '/body'
+      preLoaderRoute: typeof BodyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/calendar': {
+      id: '/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof CalendarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/development': {
+      id: '/development'
+      path: '/development'
+      fullPath: '/development'
+      preLoaderRoute: typeof DevelopmentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance': {
+      id: '/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof FinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/investments': {
+      id: '/investments'
+      path: '/investments'
+      fullPath: '/investments'
+      preLoaderRoute: typeof InvestmentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notes': {
+      id: '/notes'
+      path: '/notes'
+      fullPath: '/notes'
+      preLoaderRoute: typeof NotesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/nutrition': {
+      id: '/nutrition'
+      path: '/nutrition'
+      fullPath: '/nutrition'
+      preLoaderRoute: typeof NutritionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/profile': {
+      id: '/profile'
+      path: '/profile'
+      fullPath: '/profile'
+      preLoaderRoute: typeof ProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recalls': {
+      id: '/recalls'
+      path: '/recalls'
+      fullPath: '/recalls'
+      preLoaderRoute: typeof RecallsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/recipes': {
+      id: '/recipes'
+      path: '/recipes'
+      fullPath: '/recipes'
+      preLoaderRoute: typeof RecipesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/routine': {
+      id: '/routine'
+      path: '/routine'
+      fullPath: '/routine'
+      preLoaderRoute: typeof RoutineRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scan': {
+      id: '/scan'
+      path: '/scan'
+      fullPath: '/scan'
+      preLoaderRoute: typeof ScanRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sleep': {
+      id: '/sleep'
+      path: '/sleep'
+      fullPath: '/sleep'
+      preLoaderRoute: typeof SleepRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sport': {
+      id: '/sport'
+      path: '/sport'
+      fullPath: '/sport'
+      preLoaderRoute: typeof SportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/watch': {
+      id: '/watch'
+      path: '/watch'
+      fullPath: '/watch'
+      preLoaderRoute: typeof WatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/water': {
+      id: '/water'
+      path: '/water'
+      fullPath: '/water'
+      preLoaderRoute: typeof WaterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/work': {
+      id: '/work'
+      path: '/work'
+      fullPath: '/work'
+      preLoaderRoute: typeof WorkRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/ai-chat': {
@@ -594,18 +532,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/.well-known/oauth-protected-resource': {
-      id: '/.well-known/oauth-protected-resource'
-      path: '/.well-known/oauth-protected-resource'
-      fullPath: '/.well-known/oauth-protected-resource'
-      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/.mcp/list-tools': {
-      id: '/.mcp/list-tools'
-      path: '/.mcp/list-tools'
-      fullPath: '/.mcp/list-tools'
-      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ai/$agentType/$conversationId': {
@@ -613,20 +544,6 @@ declare module '@tanstack/react-router' {
       path: '/ai/$agentType/$conversationId'
       fullPath: '/ai/$agentType/$conversationId'
       preLoaderRoute: typeof AiAgentTypeConversationIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/.mcp/invoke-tool/$tool': {
-      id: '/.mcp/invoke-tool/$tool'
-      path: '/.mcp/invoke-tool/$tool'
-      fullPath: '/.mcp/invoke-tool/$tool'
-      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/.lovable/oauth/consent': {
-      id: '/.lovable/oauth/consent'
-      path: '/.lovable/oauth/consent'
-      fullPath: '/.lovable/oauth/consent'
-      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/reminders': {
@@ -649,7 +566,6 @@ const rootRouteChildren: RootRouteChildren = {
   FinanceRoute: FinanceRoute,
   InvestmentsRoute: InvestmentsRoute,
   LoginRoute: LoginRoute,
-  McpRoute: McpRoute,
   NotesRoute: NotesRoute,
   NutritionRoute: NutritionRoute,
   ProfileRoute: ProfileRoute,
@@ -663,12 +579,8 @@ const rootRouteChildren: RootRouteChildren = {
   WatchRoute: WatchRoute,
   WaterRoute: WaterRoute,
   WorkRoute: WorkRoute,
-  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
-  Char91DotwellKnownChar93OauthProtectedResourceRoute:
-    Char91DotwellKnownChar93OauthProtectedResourceRoute,
   ApiAiChatRoute: ApiAiChatRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
-  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   AiAgentTypeConversationIdRoute: AiAgentTypeConversationIdRoute,
   ApiPublicHooksRemindersRoute: ApiPublicHooksRemindersRoute,
 }
