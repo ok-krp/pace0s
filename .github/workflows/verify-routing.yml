@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-and-verify-routing:
@@ -50,16 +50,13 @@ jobs:
           done
           echo "All expected application routes are present."
 
-      - name: Commit regenerated route tree when changed
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Verify route tree is committed
         shell: bash
         run: |
           if git diff --quiet -- src/routeTree.gen.ts; then
-            echo "routeTree.gen.ts is already current"
+            echo "routeTree.gen.ts is current"
             exit 0
           fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/routeTree.gen.ts
-          git commit -m "chore(routing): regenerate TanStack route tree"
-          git push
+          echo "routeTree.gen.ts is stale. Regenerate it locally and commit the result through a pull request."
+          git diff -- src/routeTree.gen.ts
+          exit 1
