@@ -8,6 +8,7 @@ import { LEGAL_VERSIONS } from "./legal";
 import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema } from "./nutrition-ai.shared";
 
 const PHOTO_BUCKET = "nutrition-ai";
+const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
 
 function getGeminiModel() {
   const key = process.env.GEMINI_API_KEY;
@@ -52,7 +53,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
       const { data: file, error: downloadError } = await supabaseAdmin.storage.from(PHOTO_BUCKET).download(path);
       if (downloadError || !file) throw new Error("Image introuvable ou inaccessible.");
       const bytes = Buffer.from(await file.arrayBuffer());
-      if (bytes.length === 0 || bytes.length > 8 * 1024 * 1024) throw new Error("Image trop lourde ou vide.");
+      if (bytes.length === 0 || bytes.length > MAX_PHOTO_BYTES) throw new Error("Image trop lourde ou vide.");
       const contentType = file.type || "image/jpeg";
       if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Format image non autorisé.");
       const imageDataUrl = `data:${contentType};base64,${bytes.toString("base64")}`;
@@ -81,6 +82,8 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
     } catch (e) {
       console.error("analyzeFoodPhoto error", e);
       return { error: e instanceof Error ? e.message : "Erreur IA", result: null };
+    } finally {
+      await supabaseAdmin.storage.from(PHOTO_BUCKET).remove([path]).catch(() => undefined);
     }
   });
 
