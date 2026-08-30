@@ -3,8 +3,11 @@ import { z } from "zod";
 import { generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { LEGAL_VERSIONS } from "./legal";
-import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema, validateImageBase64 } from "./nutrition-ai.shared";
+import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema } from "./nutrition-ai.shared";
+
+const PHOTO_BUCKET = "nutrition-ai";
 
 function getGeminiModel() {
   const key = process.env.GEMINI_API_KEY;
@@ -13,16 +16,22 @@ function getGeminiModel() {
   return google(AI_MODEL.replace(/^google\//, ""));
 }
 
+function storagePathForUser(userId: string, path: string) {
+  const normalized = path.replace(/^\/+/, "");
+  if (!normalized || normalized.includes("..") || !normalized.startsWith(`${userId}/`)) {
+    throw new Error("Référence image invalide.");
+  }
+  return normalized;
+}
+
 export const analyzeFoodPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { imageBase64: string; goal?: string; hint?: string }) =>
-    z
-      .object({
-        imageBase64: z.string().min(20).max(8_000_000),
-        goal: z.string().max(300).optional(),
-        hint: z.string().max(300).optional(),
-      })
-      .parse(d)
+  .inputValidator((d: { storagePath: string; goal?: string; hint?: string }) =>
+    z.object({
+      storagePath: z.string().min(3).max(500),
+      goal: z.string().max(300).optional(),
+      hint: z.string().max(300).optional(),
+    }).parse(d)
   )
   .handler(async ({ data, context }) => {
     const { data: consent, error: consentError } = await context.supabase
@@ -36,30 +45,31 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
       return { error: "Consentement Analyse IA requis", result: null };
     }
-    const imageCheck = validateImageBase64(data.imageBase64);
-    if (!imageCheck.ok) return { error: imageCheck.error, result: null };
+
+    const path = storagePathForUser(context.userId, data.storagePath);
 
     try {
+      const { data: file, error: downloadError } = await supabaseAdmin.storage.from(PHOTO_BUCKET).download(path);
+      if (downloadError || !file) throw new Error("Image introuvable ou inaccessible.");
+      const bytes = Buffer.from(await file.arrayBuffer());
+      if (bytes.length === 0 || bytes.length > 8 * 1024 * 1024) throw new Error("Image trop lourde ou vide.");
+      const contentType = file.type || "image/jpeg";
+      if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Format image non autorisé.");
+      const imageDataUrl = `data:${contentType};base64,${bytes.toString("base64")}`;
+
       const prompt = [
         PHOTO_INSTRUCTIONS,
         data.goal ? `Objectif de l'utilisateur : ${data.goal}.` : "",
         data.hint ? `Indice fourni par l'utilisateur : ${data.hint}.` : "",
         "Analyse la photo ci-dessous et réponds en JSON pur.",
-      ]
-        .filter(Boolean)
-        .join("\n\n");
+      ].filter(Boolean).join("\n\n");
 
       const { text } = await generateText({
         model: getGeminiModel(),
-        messages: [
-          {
-            role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image", image: data.imageBase64 },
-            ],
-          },
-        ],
+        messages: [{ role: "user", content: [
+          { type: "text", text: prompt },
+          { type: "image", image: imageDataUrl },
+        ] }],
       });
 
       const parsed = foodAnalysisSchema.safeParse(extractJson(text));
@@ -92,12 +102,7 @@ export const nutritionAdvice = createServerFn({ method: "POST" })
     try {
       const { text } = await generateText({
         model: getGeminiModel(),
-        messages: [
-          {
-            role: "user",
-            content: `Tu es un coach nutrition. À partir du résumé ci-dessous, donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français, au format "• conseil". Pas de salutation, pas d'introduction.\n\nRésumé :\n${data.summary}`,
-          },
-        ],
+        messages: [{ role: "user", content: `Tu es un coach nutrition. À partir du résumé ci-dessous, donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français, au format "• conseil". Pas de salutation, pas d'introduction.\n\nRésumé :\n${data.summary}` }],
       });
       return { advice: text, error: null };
     } catch (e) {

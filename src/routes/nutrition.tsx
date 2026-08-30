@@ -24,6 +24,7 @@ import { sumItems, type FoodAnalysis, type FoodItem } from "@/lib/nutrition-ai.s
 import { FoodAnalysisEditor } from "@/components/FoodAnalysisEditor";
 import { toast } from "sonner";
 import { isLegalCategoryAllowed } from "@/lib/legal";
+import { supabase } from "@/integrations/supabase/client";
 
 const searchSchema = z.object({ tab: z.enum(["nutrition", "recipes", "water"]).optional() });
 
@@ -42,6 +43,8 @@ const COL_FIELD: Record<NutCol, keyof Item> = {
 };
 
 const MEALS = ["Petit déjeuner", "Déjeuner", "Goûter", "Dîner", "Collation"];
+const NUTRITION_PHOTO_BUCKET = "nutrition-ai";
+const MAX_NUTRITION_PHOTO_BYTES = 8 * 1024 * 1024;
 
 function NutritionPage() {
   const { tab } = Route.useSearch();
@@ -74,21 +77,37 @@ function NutritionPage() {
     e.target.value = "";
     if (!file) return;
     if (!isLegalCategoryAllowed("ai")) { toast.error("Consentement Analyse IA requis."); return; }
-    if (file.size > 6 * 1024 * 1024) { toast.error("Image trop lourde (max 6 Mo)"); return; }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const b64 = reader.result as string;
-      setBusy(true);
-      try {
-        const res = await analyzePhoto({ data: { imageBase64: b64 } });
-        if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
-        const r = res.result as FoodAnalysis;
-        setPending({ kind: "photo", photo: b64, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner" });
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Erreur IA");
-      } finally { setBusy(false); }
-    };
-    reader.readAsDataURL(file);
+    if (!file.type.startsWith("image/") || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("Format image non autorisé");
+      return;
+    }
+    if (file.size > MAX_NUTRITION_PHOTO_BYTES) { toast.error("Image trop lourde (max 8 Mo)"); return; }
+
+    setBusy(true);
+    const previewUrl = URL.createObjectURL(file);
+    let storagePath: string | null = null;
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) throw new Error("Session utilisateur indisponible.");
+      const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+      storagePath = `${user.id}/${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from(NUTRITION_PHOTO_BUCKET).upload(storagePath, file, {
+        contentType: file.type,
+        cacheControl: "3600",
+        upsert: false,
+      });
+      if (uploadError) throw new Error(`Upload photo impossible : ${uploadError.message}`);
+
+      const res = await analyzePhoto({ data: { storagePath } });
+      if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
+      const r = res.result as FoodAnalysis;
+      setPending({ kind: "photo", photo: previewUrl, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner" });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur IA");
+    } finally {
+      if (storagePath) await supabase.storage.from(NUTRITION_PHOTO_BUCKET).remove([storagePath]);
+      setBusy(false);
+    }
   };
 
   const confirmAdd = () => {
