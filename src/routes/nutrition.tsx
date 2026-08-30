@@ -102,7 +102,6 @@ function NutritionPage() {
       if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
       const r = res.result as FoodAnalysis;
       setPending({ kind: "photo", photo: previewUrl, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner" });
-      storagePath = null;
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur IA");
     } finally {
