@@ -78,6 +78,41 @@ const scoreColors = {
   red: "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/30",
 };
 
+async function prepareNutritionPhoto(file: File): Promise<Blob> {
+  if (!file.type.startsWith("image/")) throw new Error("Fichier image non valide.");
+  if (typeof createImageBitmap === "undefined") return file;
+
+  const bitmap = await createImageBitmap(file);
+  try {
+    const maxDimension = 2048;
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Préparation de l’image impossible.");
+    ctx.drawImage(bitmap, 0, 0, width, height);
+
+    let quality = 0.88;
+    let blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    if (!blob) throw new Error("Compression de l’image impossible.");
+
+    // Keep the AI payload comfortably below provider/server request limits while
+    // preserving enough detail for food recognition. The original file may be
+    // arbitrarily large; only this normalized derivative is uploaded for AI.
+    while (blob.size > 8 * 1024 * 1024 && quality > 0.5) {
+      quality -= 0.08;
+      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+      if (!blob) throw new Error("Compression de l’image impossible.");
+    }
+    return blob;
+  } finally {
+    bitmap.close();
+  }
+}
+
 function ScanPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -156,34 +191,30 @@ function ScanPage() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!isLegalCategoryAllowed("ai")) { toast.error("Consentement Analyse IA requis."); return; }
-    if (file.size > 6 * 1024 * 1024) { toast.error("Image trop lourde (max 6 Mo)"); return; }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const b64 = reader.result as string;
-      setPhoto(b64);
-      setProduct(null);
-      setBusy(true);
-      try {
-        const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-        const storagePath = `${user.id}/${crypto.randomUUID()}.${extension}`;
-        const { error: uploadError } = await supabase.storage
-          .from("nutrition-ai")
-          .upload(storagePath, file, { contentType: file.type || "image/jpeg", upsert: false });
-        if (uploadError) throw new Error(`Upload image impossible : ${uploadError.message}`);
+    setBusy(true);
+    setProduct(null);
+    try {
+      const prepared = await prepareNutritionPhoto(file);
+      const previewUrl = URL.createObjectURL(prepared);
+      setPhoto(previewUrl);
 
-        const res = await analyzeFoodPhoto({ data: { storagePath } });
-        if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
-        const r = res.result as AnalysisResult;
-        setAiResult(r);
-        setAiItems(r.items);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Erreur IA");
-      } finally {
-        setBusy(false);
-        if (fileRef.current) fileRef.current.value = "";
-      }
-    };
-    reader.readAsDataURL(file);
+      const storagePath = `${user.id}/${crypto.randomUUID()}.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from("nutrition-ai")
+        .upload(storagePath, prepared, { contentType: "image/jpeg", upsert: false });
+      if (uploadError) throw new Error(`Upload image impossible : ${uploadError.message}`);
+
+      const res = await analyzeFoodPhoto({ data: { storagePath } });
+      if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
+      const r = res.result as AnalysisResult;
+      setAiResult(r);
+      setAiItems(r.items);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erreur IA");
+    } finally {
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
   const addProductToLog = async () => {
