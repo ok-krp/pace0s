@@ -41,7 +41,6 @@ function offValue(p: OFFProduct, c: NutCol): number {
   }
 }
 
-
 function NutGrid({ cols, factor, getter }: { cols: NutCol[]; factor: number; getter: (c: NutCol) => number }) {
   const visible = cols.length ? cols : (["kcal", "protein", "carbs", "fat"] as NutCol[]);
   const gridCols = visible.length === 1 ? "grid-cols-1" : visible.length === 2 ? "grid-cols-2" : visible.length === 3 ? "grid-cols-3" : "grid-cols-4";
@@ -62,7 +61,6 @@ function NutGrid({ cols, factor, getter }: { cols: NutCol[]; factor: number; get
   );
 }
 
-
 export const Route = createFileRoute("/scan")({
   head: () => ({ meta: [{ title: "IA Nutrition — Pace" }, { name: "description", content: "Scan code-barres et analyse photo IA de vos repas." }] }),
   validateSearch: (s: Record<string, unknown>): { open?: "barcode" | "photo" } => {
@@ -74,7 +72,6 @@ export const Route = createFileRoute("/scan")({
 
 type AnalysisResult = FoodAnalysis;
 
-
 const scoreColors = {
   green: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30",
   orange: "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30",
@@ -85,22 +82,19 @@ function ScanPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const search = Route.useSearch();
-  const analyzePhoto = useServerFn(analyzeFoodPhoto);
-  const [nutCols] = useNutritionCols();
-
-
   const [scanning, setScanning] = useState(false);
-  const [meal, setMeal] = useState("Déjeuner");
   const [product, setProduct] = useState<OFFProduct | null>(null);
-  const [scoreInfo, setScoreInfo] = useState<{ score: "green" | "orange" | "red"; warnings: string[] } | null>(null);
+  const [scoreInfo, setScoreInfo] = useState<ReturnType<typeof computeHealthScore> | null>(null);
   const [score100, setScore100] = useState<number | null>(null);
   const [recalls, setRecalls] = useState<RecallInfo[]>([]);
-  const [productGrams, setProductGrams] = useState<number>(100);
+  const [meal, setMeal] = useState("Déjeuner");
+  const [productGrams, setProductGrams] = useState(100);
   const [photo, setPhoto] = useState<string | null>(null);
   const [aiResult, setAiResult] = useState<AnalysisResult | null>(null);
   const [aiItems, setAiItems] = useState<FoodItem[]>([]);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const nutCols = useNutritionCols();
 
   useEffect(() => {
     if (!user) return;
@@ -170,7 +164,14 @@ function ScanPage() {
       setProduct(null);
       setBusy(true);
       try {
-        const res = await analyzePhoto({ data: { imageBase64: b64 } });
+        const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+        const storagePath = `${user.id}/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage
+          .from("nutrition-ai")
+          .upload(storagePath, file, { contentType: file.type || "image/jpeg", upsert: false });
+        if (uploadError) throw new Error(`Upload image impossible : ${uploadError.message}`);
+
+        const res = await analyzeFoodPhoto({ data: { storagePath } });
         if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
         const r = res.result as AnalysisResult;
         setAiResult(r);
@@ -179,6 +180,7 @@ function ScanPage() {
         toast.error(err instanceof Error ? err.message : "Erreur IA");
       } finally {
         setBusy(false);
+        if (fileRef.current) fileRef.current.value = "";
       }
     };
     reader.readAsDataURL(file);
@@ -226,179 +228,40 @@ function ScanPage() {
     else { toast.success("Repas ajouté au journal"); setAiResult(null); setAiItems([]); setPhoto(null); }
   };
 
-
   return (
     <div>
       <PageHeader title="IA Nutrition" subtitle="Scan code-barres + analyse photo intelligente." />
-
       <div className="grid sm:grid-cols-2 gap-3 mb-6">
-        <motion.button
-          whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
-          onClick={() => setScanning(true)}
-          className="rounded-2xl glass-card p-5 text-left hover:shadow-[var(--shadow-card)] transition group"
-        >
-          <div className="size-11 rounded-xl stat-grad grid place-items-center text-primary-foreground mb-3 shadow-[var(--shadow-glow)]">
-            <ScanLine className="size-5" />
-          </div>
+        <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => setScanning(true)} className="rounded-2xl glass-card p-5 text-left hover:shadow-[var(--shadow-card)] transition group">
+          <div className="size-11 rounded-xl stat-grad grid place-items-center text-primary-foreground mb-3 shadow-[var(--shadow-glow)]"><ScanLine className="size-5" /></div>
           <h2 className="font-display text-lg font-semibold">Scanner code-barres</h2>
           <div className="text-xs text-muted-foreground mt-1">Base OpenFoodFacts · 3M+ produits</div>
         </motion.button>
-
-        <motion.button
-          whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}
-          onClick={() => fileRef.current?.click()}
-          className="rounded-2xl glass-card p-5 text-left hover:shadow-[var(--shadow-card)] transition"
-        >
-          <div className="size-11 rounded-xl bg-gradient-to-br from-fuchsia-500 to-purple-600 grid place-items-center text-white mb-3 shadow-[var(--shadow-glow)]">
-            <Camera className="size-5" />
-          </div>
+        <motion.button whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }} onClick={() => fileRef.current?.click()} className="rounded-2xl glass-card p-5 text-left hover:shadow-[var(--shadow-card)] transition">
+          <div className="size-11 rounded-xl bg-gradient-to-br from-fuchsia-500 to-purple-600 grid place-items-center text-white mb-3 shadow-[var(--shadow-glow)]"><Camera className="size-5" /></div>
           <h2 className="font-display text-lg font-semibold">Photo IA</h2>
           <div className="text-xs text-muted-foreground mt-1">Analyse vision · macros estimées</div>
           <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
         </motion.button>
       </div>
-
       <div className="flex items-center gap-3 mb-4">
         <span className="text-sm text-muted-foreground">Ajouter au repas :</span>
-        <Select value={meal} onValueChange={setMeal}>
-          <SelectTrigger className="w-44 h-9 rounded-xl"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {["Petit déjeuner", "Déjeuner", "Goûter", "Dîner", "Collation"].map((m) => (
-              <SelectItem key={m} value={m}>{m}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Select value={meal} onValueChange={setMeal}><SelectTrigger className="w-44 h-9 rounded-xl"><SelectValue /></SelectTrigger><SelectContent>{["Petit déjeuner", "Déjeuner", "Goûter", "Dîner", "Collation"].map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent></Select>
       </div>
-
-      {busy && (
-        <div className="rounded-2xl glass-card p-8 text-center mb-4">
-          <Loader2 className="size-6 animate-spin mx-auto text-primary" />
-          <p className="text-sm text-muted-foreground mt-3">Analyse en cours…</p>
-        </div>
-      )}
-
-      {product && scoreInfo && !busy && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass-card overflow-hidden mb-4">
-          <div className="flex gap-4 p-5">
-            {product.image_url && <img src={product.image_url} alt={product.name} className="size-20 rounded-xl object-cover" />}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <h2 className="font-display text-lg font-semibold truncate">{product.name}</h2>
-                  <div className="text-xs text-muted-foreground">{product.brand || "—"}</div>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <div className={`px-2.5 py-1 rounded-full text-[11px] font-medium border ${scoreColors[scoreInfo.score]}`}>
-                    {scoreInfo.score === "green" ? "Sain" : scoreInfo.score === "orange" ? "Moyen" : "À éviter"}
-                  </div>
-                  {score100 !== null && (
-                    <div className={`text-xs font-display font-semibold ${score100 >= 70 ? "text-emerald-600" : score100 >= 40 ? "text-amber-600" : "text-rose-600"}`}>
-                      {score100}<span className="text-muted-foreground font-normal">/100</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2 mt-2">
-                {product.nutri_score && <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted">Nutri-Score {product.nutri_score}</span>}
-                {product.nova_group && <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted">NOVA {product.nova_group}</span>}
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted">{product.additives.length} additif{product.additives.length === 1 ? "" : "s"}</span>
-              </div>
-              {product.additives.length > 0 && (
-                <div className="text-[10px] text-muted-foreground mt-1.5 line-clamp-2">
-                  {product.additives.slice(0, 8).map((a) => a.toUpperCase()).join(" · ")}
-                </div>
-              )}
-            </div>
-          </div>
-          <NutGrid cols={nutCols} factor={(productGrams || 0) / 100} getter={(c) => offValue(product, c)} />
-
-          <div className="px-5 py-3 border-t border-border flex items-center gap-3">
-            <label className="text-xs text-muted-foreground shrink-0">Quantité consommée</label>
-            <Input
-              type="number"
-              inputMode="numeric"
-              min={1}
-              value={productGrams}
-              onChange={(e) => setProductGrams(Math.max(0, Number(e.target.value) || 0))}
-              className="h-9 w-24 rounded-xl"
-            />
-            <span className="text-xs text-muted-foreground">g</span>
-          </div>
-          {recalls.length > 0 && (
-            <div className="px-5 py-3 bg-rose-500/10 border-t border-rose-500/30 flex gap-2 items-start">
-              <AlertTriangle className="size-4 text-rose-600 shrink-0 mt-0.5" />
-              <div className="text-xs">
-                <div className="font-semibold text-rose-700 dark:text-rose-300">Rappel produit en cours</div>
-                <div className="text-muted-foreground">{recalls[0].reason}{recalls[0].risk ? ` — ${recalls[0].risk}` : ""}</div>
-                {recalls[0].url && <a href={recalls[0].url} target="_blank" rel="noreferrer" className="underline text-rose-600">Fiche officielle</a>}
-              </div>
-            </div>
-          )}
-          {scoreInfo.warnings.length > 0 && (
-            <div className="px-5 py-3 bg-amber-500/5 border-t border-border flex gap-2 items-start">
-              <AlertTriangle className="size-4 text-amber-500 shrink-0 mt-0.5" />
-              <div className="text-xs text-muted-foreground">{scoreInfo.warnings.join(" · ")}</div>
-            </div>
-          )}
-          <div className="p-4 border-t border-border flex gap-2">
-            <Button onClick={addProductToLog} disabled={!productGrams} className="flex-1 rounded-xl"><Plus className="size-4 mr-1" />Ajouter à {meal}</Button>
-            <Button variant="ghost" onClick={() => { setProduct(null); setScoreInfo(null); setScore100(null); setRecalls([]); }}>Annuler</Button>
-          </div>
-          <div className="px-5 py-2 text-[10px] text-muted-foreground border-t border-border">Macros recalculées pour {productGrams}g (référence 100g)</div>
-        </motion.div>
-      )}
-
-      {aiResult && photo && !busy && (
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass-card overflow-hidden mb-4">
-          <div className="flex gap-4 p-5">
-            <img src={photo} alt="Photo du repas scanné" className="size-20 rounded-xl object-cover" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <Sparkles className="size-3.5 text-primary" />
-                    <span className="text-[10px] uppercase tracking-wider text-primary font-medium">Analyse IA</span>
-                  </div>
-                  <h2 className="font-display text-lg font-semibold truncate">{aiResult.dish_name}</h2>
-                  <div className="text-xs text-muted-foreground">~{Math.round(sumItems(aiItems).grams)}g · {aiItems.slice(0,3).map((i) => i.name).join(", ")}</div>
-                </div>
-                <div className="flex flex-col items-end gap-1">
-                  <div className={`px-2.5 py-1 rounded-full text-[11px] font-medium border ${scoreColors[aiResult.health_score]}`}>
-                    {aiResult.quality}
-                  </div>
-                  {(() => {
-                    const s = aiResult.health_score === "green" ? 80 : aiResult.health_score === "orange" ? 55 : 25;
-                    return (
-                      <div className={`text-xs font-display font-semibold ${s >= 70 ? "text-emerald-600" : s >= 40 ? "text-amber-600" : "text-rose-600"}`}>
-                        ~{s}<span className="text-muted-foreground font-normal">/100</span>
-                      </div>
-                    );
-                  })()}
-                </div>
-              </div>
-            </div>
-          </div>
-          <div className="px-5 pb-4">
-            <FoodAnalysisEditor
-              items={aiItems}
-              onChange={setAiItems}
-              confidence={aiResult.confidence}
-              confidenceNote={aiResult.confidence_note || aiResult.notes}
-            />
-          </div>
-          {aiResult.notes && (
-            <div className="px-5 py-3 bg-muted/30 border-t border-border text-xs text-muted-foreground">
-              {aiResult.notes}
-            </div>
-          )}
-          <div className="p-4 border-t border-border flex gap-2 items-center">
-            <Button onClick={addAiToLog} disabled={aiItems.length === 0} className="flex-1 rounded-xl"><Check className="size-4 mr-1" />Ajouter au journal</Button>
-            <span className="text-[10px] text-muted-foreground">confiance {Math.round(aiResult.confidence * 100)}%</span>
-          </div>
-        </motion.div>
-      )}
-
-      {scanning && <BarcodeScanner onDetected={handleBarcode} onClose={() => setScanning(false)} />}
+      {busy && <div className="rounded-2xl glass-card p-8 text-center mb-4"><Loader2 className="size-6 animate-spin mx-auto text-primary" /><p className="text-sm text-muted-foreground mt-3">Analyse en cours…</p></div>}
+      {product && scoreInfo && !busy && <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass-card overflow-hidden mb-4">
+        <div className="flex gap-4 p-5">{product.image_url && <img src={product.image_url} alt={product.name} className="size-20 rounded-xl object-cover" />}<div className="flex-1 min-w-0"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><h2 className="font-display text-lg font-semibold truncate">{product.name}</h2><div className="text-xs text-muted-foreground">{product.brand || "—"}</div></div><div className="flex flex-col items-end gap-1"><div className={`px-2.5 py-1 rounded-full text-[11px] font-medium border ${scoreColors[scoreInfo.score]}`}>{scoreInfo.score === "green" ? "Sain" : scoreInfo.score === "orange" ? "Moyen" : "À éviter"}</div>{score100 !== null && <div className={`text-xs font-display font-semibold ${score100 >= 70 ? "text-emerald-600" : score100 >= 40 ? "text-amber-600" : "text-rose-600"}`}>{score100}<span className="text-muted-foreground font-normal">/100</span></div>}</div></div><div className="flex flex-wrap gap-2 mt-2">{product.nutri_score && <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted">Nutri-Score {product.nutri_score}</span>}{product.nova_group && <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted">NOVA {product.nova_group}</span>}<span className="text-[10px] px-2 py-0.5 rounded-full bg-muted">{product.additives.length} additif{product.additives.length === 1 ? "" : "s"}</span></div>{product.additives.length > 0 && <div className="text-[10px] text-muted-foreground mt-1.5 line-clamp-2">{product.additives.slice(0, 8).map((a) => a.toUpperCase()).join(" · ")}</div>}</div></div>
+        <NutGrid cols={nutCols} factor={(productGrams || 0) / 100} getter={(c) => offValue(product, c)} />
+        <div className="px-5 py-3 border-t border-border flex items-center gap-3"><label className="text-xs text-muted-foreground shrink-0">Quantité consommée</label><Input type="number" inputMode="numeric" min={1} value={productGrams} onChange={(e) => setProductGrams(Math.max(0, Number(e.target.value) || 0))} className="h-9 w-24 rounded-xl" /><span className="text-xs text-muted-foreground">g</span></div>
+        {recalls.length > 0 && <div className="px-5 py-3 bg-rose-500/10 border-t border-rose-500/30 flex gap-2 items-start"><AlertTriangle className="size-4 text-rose-600 shrink-0 mt-0.5" /><div className="text-xs"><div className="font-semibold text-rose-700 dark:text-rose-300">Rappel produit en cours</div><div className="text-muted-foreground">{recalls[0].reason}{recalls[0].risk ? ` — ${recalls[0].risk}` : ""}</div>{recalls[0].url && <a href={recalls[0].url} target="_blank" rel="noreferrer" className="underline text-rose-600">Fiche officielle</a>}</div></div>}
+        {scoreInfo.warnings.length > 0 && <div className="px-5 py-3 bg-amber-500/5 border-t border-border flex gap-2 items-start"><AlertTriangle className="size-4 text-amber-500 shrink-0 mt-0.5" /><div className="text-xs text-muted-foreground">{scoreInfo.warnings.join(" · ")}</div></div>}
+        <div className="p-4 border-t border-border flex gap-2"><Button onClick={addProductToLog} disabled={!productGrams} className="flex-1 rounded-xl"><Plus className="size-4 mr-1" />Ajouter à {meal}</Button><Button variant="ghost" onClick={() => { setProduct(null); setScoreInfo(null); setScore100(null); setRecalls([]); }}>Annuler</Button></div>
+        <div className="px-5 py-2 text-[10px] text-muted-foreground border-t border-border">Macros recalculées pour {productGrams}g (référence 100g)</div>
+      </motion.div>}
+      {aiResult && photo && !busy && <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass-card overflow-hidden mb-4">
+        <div className="flex gap-4 p-5"><img src={photo} alt="Photo du repas scanné" className="size-20 rounded-xl object-cover" /><div className="flex-1 min-w-0"><div className="flex items-center gap-1.5"><Sparkles className="size-3.5 text-primary" /><span className="text-[10px] uppercase tracking-wider text-primary font-medium">Analyse IA</span></div><h2 className="font-display text-lg font-semibold truncate mt-1">{aiResult.dish_name}</h2><div className="text-xs text-muted-foreground mt-1">Confiance : {Math.round(aiResult.confidence * 100)}% · Qualité : {aiResult.quality}</div></div></div>
+        <FoodAnalysisEditor items={aiItems} onChange={setAiItems} /><div className="p-4 border-t border-border flex gap-2"><Button onClick={addAiToLog} className="flex-1 rounded-xl"><Check className="size-4 mr-1" />Ajouter à {meal}</Button><Button variant="ghost" onClick={() => { setAiResult(null); setAiItems([]); setPhoto(null); }}>Annuler</Button></div>
+      </motion.div>}
     </div>
   );
 }
