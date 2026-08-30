@@ -94,7 +94,7 @@ function ScanPage() {
   const [aiItems, setAiItems] = useState<FoodItem[]>([]);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const nutCols = useNutritionCols();
+  const [nutCols] = useNutritionCols();
 
   useEffect(() => {
     if (!user) return;
@@ -260,7 +260,8 @@ function ScanPage() {
       </motion.div>}
       {aiResult && photo && !busy && <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="rounded-2xl glass-card overflow-hidden mb-4">
         <div className="flex gap-4 p-5"><img src={photo} alt="Photo du repas scanné" className="size-20 rounded-xl object-cover" /><div className="flex-1 min-w-0"><div className="flex items-center gap-1.5"><Sparkles className="size-3.5 text-primary" /><span className="text-[10px] uppercase tracking-wider text-primary font-medium">Analyse IA</span></div><h2 className="font-display text-lg font-semibold truncate mt-1">{aiResult.dish_name}</h2><div className="text-xs text-muted-foreground mt-1">Confiance : {Math.round(aiResult.confidence * 100)}% · Qualité : {aiResult.quality}</div></div></div>
-        <FoodAnalysisEditor items={aiItems} onChange={setAiItems} /><div className="p-4 border-t border-border flex gap-2"><Button onClick={addAiToLog} className="flex-1 rounded-xl"><Check className="size-4 mr-1" />Ajouter à {meal}</Button><Button variant="ghost" onClick={() => { setAiResult(null); setAiItems([]); setPhoto(null); }}>Annuler</Button></div>
+        <FoodAnalysisEditor items={aiItems} onChange={setAiItems} confidence={aiResult.confidence} />
+        <div className="p-4 border-t border-border flex gap-2"><Button onClick={addAiToLog} className="flex-1 rounded-xl"><Check className="size-4 mr-1" />Ajouter à {meal}</Button><Button variant="ghost" onClick={() => { setAiResult(null); setAiItems([]); setPhoto(null); }}>Annuler</Button></div>
       </motion.div>}
     </div>
   );
