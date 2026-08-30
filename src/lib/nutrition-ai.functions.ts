@@ -1,10 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { generateText } from "ai";
-import { createLovableAiGatewayProvider } from "./ai-gateway";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { LEGAL_VERSIONS } from "./legal";
 import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema, validateImageBase64 } from "./nutrition-ai.shared";
+
+function getGeminiModel() {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("L’IA Pace n’est pas configurée sur le serveur.");
+  const google = createGoogleGenerativeAI({ apiKey: key });
+  return google(AI_MODEL.replace(/^google\//, ""));
+}
 
 export const analyzeFoodPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -31,11 +38,8 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
     }
     const imageCheck = validateImageBase64(data.imageBase64);
     if (!imageCheck.ok) return { error: imageCheck.error, result: null };
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) return { error: "AI Gateway non configuré", result: null };
 
     try {
-      const gateway = createLovableAiGatewayProvider(key);
       const prompt = [
         PHOTO_INSTRUCTIONS,
         data.goal ? `Objectif de l'utilisateur : ${data.goal}.` : "",
@@ -46,7 +50,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
         .join("\n\n");
 
       const { text } = await generateText({
-        model: gateway(AI_MODEL),
+        model: getGeminiModel(),
         messages: [
           {
             role: "user",
@@ -85,12 +89,9 @@ export const nutritionAdvice = createServerFn({ method: "POST" })
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
       return { advice: null, error: "Consentement Analyse IA requis" };
     }
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) return { advice: null, error: "AI Gateway non configuré" };
     try {
-      const gateway = createLovableAiGatewayProvider(key);
       const { text } = await generateText({
-        model: gateway(AI_MODEL),
+        model: getGeminiModel(),
         messages: [
           {
             role: "user",
