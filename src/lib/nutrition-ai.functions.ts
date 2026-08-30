@@ -8,7 +8,7 @@ import { LEGAL_VERSIONS } from "./legal";
 import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema } from "./nutrition-ai.shared";
 
 const PHOTO_BUCKET = "nutrition-ai";
-const MAX_PHOTO_BYTES = 6 * 1024 * 1024;
+const MAX_PHOTO_BYTES = 100 * 1024 * 1024;
 
 function getGeminiModel() {
   const key = process.env.GEMINI_API_KEY;
@@ -105,7 +105,7 @@ export const nutritionAdvice = createServerFn({ method: "POST" })
     try {
       const { text } = await generateText({
         model: getGeminiModel(),
-        messages: [{ role: "user", content: `Tu es un coach nutrition. À partir du résumé ci-dessous, donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français, au format "• conseil". Pas de salutation, pas d'introduction.\n\nRésumé :\n${data.summary}` }],
+        messages: [{ role: "user", content: `Tu es un coach nutrition. À partir du résumé ci-dessous, donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français, au format "• conseil". Pas de salutation, pas d’introduction.\n\nRésumé :\n${data.summary}` }],
       });
       return { advice: text, error: null };
     } catch (e) {
