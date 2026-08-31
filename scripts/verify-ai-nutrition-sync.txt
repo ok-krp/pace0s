@@ -1,0 +1,1 @@
+AI nutrition sync verification notes: add_food must respect AiPermissions.nutrition; when disabled it must return the settings instruction without approval; successful Coach IA food_log inserts must mirror into user_state key pace.nutrition.items so the local Nutrition view updates through the existing cloud sync/realtime path.
