@@ -97,8 +97,22 @@ async function rollingSummary(client: Client, userId: string, conversationId: st
 }
 
 function closeDanglingToolCalls(messages: UIMessage[]): UIMessage[] {
-  const terminal = new Set(["output-available", "output-error"]);
-  return messages.map((message) => { if (message.role !== "assistant") return message; let mutated = false; const parts = message.parts.map((part) => { const p = part as unknown as Record<string, unknown>; if (typeof p.type !== "string" || !p.type.startsWith("tool-")) return part; const state = typeof p.state === "string" ? p.state : ""; if (terminal.has(state)) return part; mutated = true; return { ...p, state: "output-error", errorText: "Action annulée (conversation interrompue avant confirmation) — sans effet, aucune donnée modifiée." } as unknown as UIMessage["parts"][number]; }); return mutated ? { ...message, parts } : message; });
+  const terminal = new Set(["output-available", "output-error", "output-denied"]);
+  return messages.map((message) => {
+    if (message.role !== "assistant") return message;
+    let mutated = false;
+    const parts = message.parts.map((part) => {
+      const p = part as unknown as Record<string, unknown>;
+      if (typeof p.type !== "string" || !p.type.startsWith("tool-")) return part;
+      const state = typeof p.state === "string" ? p.state : "";
+      // An approval response is the continuation turn: keep it intact so
+      // convertToModelMessages can pass the approval back to streamText.
+      if (terminal.has(state) || state === "approval-responded") return part;
+      mutated = true;
+      return { ...p, state: "output-error", errorText: "Action annulée (conversation interrompue avant confirmation) — sans effet, aucune donnée modifiée." } as unknown as UIMessage["parts"][number];
+    });
+    return mutated ? { ...message, parts } : message;
+  });
 }
 
 export async function handleAiChat(request: Request) {
