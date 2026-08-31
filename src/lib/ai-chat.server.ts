@@ -14,11 +14,15 @@ const MAX_TEXT_CHARS = 400_000;
 class ChatError extends Error { constructor(readonly status: number, readonly code: string, message: string) { super(message); } }
 function fail(status: number, code: string, message: string): never { throw new ChatError(status, code, message); }
 function errorResponse(error: unknown, startedAt: number) {
-  const known = error instanceof ChatError;
-  const status = known ? known.status : 500;
-  const code = known ? known.code : "internal_error";
-  const message = known ? known.message : "Erreur serveur inattendue.";
-  console.error("[ai-chat] échec", { code, status, ms: Date.now() - startedAt, message });
+  if (error instanceof ChatError) {
+    const { status, code, message } = error;
+    console.error("[ai-chat] échec", { code, status, ms: Date.now() - startedAt, message });
+    return new Response(message, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Pace-Error-Code": code, "X-Pace-Duration-Ms": String(Date.now() - startedAt) } });
+  }
+  const status = 500;
+  const code = "internal_error";
+  const message = "Erreur serveur inattendue.";
+  console.error("[ai-chat] échec", { code, status, ms: Date.now() - startedAt, message, error: error instanceof Error ? error.message : "unknown" });
   return new Response(message, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Pace-Error-Code": code, "X-Pace-Duration-Ms": String(Date.now() - startedAt) } });
 }
 
@@ -61,27 +65,10 @@ async function mirrorAiFoodToNutritionState(client: Client, userId: string, inpu
   const day = input.log_date;
   const list = Array.isArray(itemsByDay[day]) ? itemsByDay[day] : [];
   if (list.some((item) => item && typeof item === "object" && item.id === input.id)) return;
-  itemsByDay[day] = [...list, {
-    id: input.id,
-    name: `${input.name} (${Math.round(input.grams)} g)`,
-    meal: input.meal,
-    kcal: input.kcal,
-    p: input.protein_g,
-    c: input.carbs_g,
-    f: input.fat_g,
-    fiber: input.fiber_g,
-    sugar: input.sugar_g,
-    sodium: input.sodium_mg,
-    qty: 1,
-  }];
+  itemsByDay[day] = [...list, { id: input.id, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, p: input.protein_g, c: input.carbs_g, f: input.fat_g, fiber: input.fiber_g, sugar: input.sugar_g, sodium: input.sodium_mg, qty: 1 }];
   const updatedAt = new Date().toISOString();
-  if (current) {
-    const { error } = await client.from("user_state").update({ value: itemsByDay as unknown as Json, updated_at: updatedAt }).eq("user_id", userId).eq("key", key);
-    if (error) throw error;
-  } else {
-    const { error } = await client.from("user_state").insert({ user_id: userId, key, value: itemsByDay as unknown as Json, updated_at: updatedAt });
-    if (error) throw error;
-  }
+  if (current) { const { error } = await client.from("user_state").update({ value: itemsByDay as unknown as Json, updated_at: updatedAt }).eq("user_id", userId).eq("key", key); if (error) throw error; }
+  else { const { error } = await client.from("user_state").insert({ user_id: userId, key, value: itemsByDay as unknown as Json, updated_at: updatedAt }); if (error) throw error; }
 }
 
 function coachTools(client: Client, userId: string, conversationId: string, permissions: AiPermissions) {
@@ -97,13 +84,8 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
       if (!permissions.nutrition) return { ok: false, message: "Pour effectuer cette action, veuillez accepter l’ajout de nourriture dans les paramètres, dans l’onglet IA des paramètres." };
       const { data: inserted, error } = await client.from("food_log").insert({ user_id: userId, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, protein_g: input.protein_g, carbs_g: input.carbs_g, fat_g: input.fat_g, fiber_g: input.fiber_g, sugar_g: input.sugar_g, sodium_mg: input.sodium_mg, source: "coach_ai" }).select("id,log_date").single();
       if (error || !inserted) { await logAction(client, userId, conversationId, "coach", "add_food", "Ajout nutrition", input, "failed"); return { ok: false, message: "Erreur base de données lors de l’ajout nutritionnel." }; }
-      try {
-        await mirrorAiFoodToNutritionState(client, userId, { id: inserted.id, log_date: inserted.log_date, ...input });
-      } catch (syncError) {
-        console.error("[ai-tool] synchronisation Nutrition impossible", syncError instanceof Error ? syncError.message : "unknown");
-        await logAction(client, userId, conversationId, "coach", "add_food_sync", "Synchronisation Nutrition", { ...input, food_log_id: inserted.id }, "failed");
-        return { ok: false, message: "L’aliment a été enregistré dans le journal serveur, mais l’affichage Nutrition n’a pas pu être synchronisé. Actualisez Nutrition et réessayez." };
-      }
+      try { await mirrorAiFoodToNutritionState(client, userId, { id: inserted.id, log_date: inserted.log_date, ...input }); }
+      catch (syncError) { console.error("[ai-tool] synchronisation Nutrition impossible", syncError instanceof Error ? syncError.message : "unknown"); await logAction(client, userId, conversationId, "coach", "add_food_sync", "Synchronisation Nutrition", { ...input, food_log_id: inserted.id }, "failed"); return { ok: false, message: "L’aliment a été enregistré dans le journal serveur, mais l’affichage Nutrition n’a pas pu être synchronisé. Actualisez Nutrition et réessayez." }; }
       await logAction(client, userId, conversationId, "coach", "add_food", `${input.name} ajouté`, { ...input, food_log_id: inserted.id }, "executed"); return { ok: true, message: `${input.name} ajouté au journal` };
     }) }),
     add_health_sample: tool({ description: "Enregistrer une mesure de santé comme le poids ou la masse grasse.", inputSchema: z.object({ type: z.string(), value: z.number() }), execute: withToolLogging("add_health_sample", async (input) => {
@@ -150,6 +132,11 @@ export async function handleAiChat(request: Request) {
     const messages = body.messages as UIMessage[]; const agentType = body.agentType; const ephemeral = body.ephemeral === true; const conversationId = body.conversationId; const newest = messages[messages.length - 1];
     if (newest && textOf(newest).length > MAX_TEXT_CHARS) fail(413, "message_too_long", `Message trop long : réduisez-le sous ${Math.round(MAX_TEXT_CHARS / 1000)} 000 caractères ou envoyez-le en plusieurs parties.`);
     const { client, userId } = await authenticatedClient(request);
+    if (agentType === "build") {
+      const { data: authUser } = await client.auth.getUser();
+      const email = authUser.user?.email?.toLowerCase();
+      if (email !== "mathieu.lequint@gmail.com") fail(403, "build_forbidden", "Build IA est réservé au compte administrateur autorisé.");
+    }
     if (!ephemeral) { const { data, error } = await client.from("ai_conversations").select("id").eq("id", conversationId).eq("user_id", userId).eq("agent_type", agentType).maybeSingle(); if (error) fail(503, "db_error", "Erreur base de données."); if (!data) fail(404, "conversation_not_found", "Cette conversation n’existe plus. Créez-en une nouvelle."); }
 
     const runtime = await getAiRuntimeConfig(client, userId, agentType);
@@ -161,8 +148,7 @@ export async function handleAiChat(request: Request) {
     const memoryBlock = summary ? `\n\n[MÉMOIRE DE LA CONVERSATION — résumé des échanges plus anciens]\n${summary}` : "";
     const instructions = agentType === "coach" ? `Tu es Coach IA, le coach personnel francophone de Pace. Tu utilises automatiquement les données autorisées ci-dessous sans redemander ce qui est déjà connu. Tu donnes des réponses précises, bienveillantes et actionnables. Quand l'utilisateur demande une modification, utilise l'outil approprié. Si une permission nécessaire est désactivée, explique que l’utilisateur doit l’activer dans Paramètres > Intelligence Artificielle > Permissions du Coach IA et n’affirme jamais que l’action a été effectuée. Après chaque outil, confirme clairement avec ✓ et la modification exacte. Données autorisées: ${JSON.stringify(dataContext)}. Niveau mémoire: ${preferences.memory_level}. Ne parle jamais du développement de Pace; redirige ces demandes vers BUILD IA.${memoryBlock}` : `Tu es BUILD IA, l'assistant de développement francophone de Pace. Tu transformes automatiquement les signalements en bugs, améliorations, fonctionnalités ou tâches structurées avec priorité. Tu n'es pas un coach santé et rediriges ces demandes vers Coach IA. Tu ne prétends jamais modifier le code source; tu peux analyser, cadrer et créer des éléments dans le centre Développement.${memoryBlock}`;
     const windowed = messages.length > RECENT_WINDOW ? messages.slice(-RECENT_WINDOW) : messages; const toolApproval = Object.fromEntries(Object.keys(tools).map((name) => { const permissionEnabled = name === "add_food" ? preferences.permissions.nutrition : name === "update_profile" || name === "add_health_sample" ? preferences.permissions.profile : true; return [name, permissionEnabled && preferences.confirm_actions ? "user-approval" : "not-applicable"]; })); const safeWindowed = closeDanglingToolCalls(windowed);
-    const result = streamText({ model: runtime.gateway(runtime.model), system: instructions, messages: await convertToModelMessages(safeWindowed), tools, toolApproval, stopWhen: stepCountIs(50), onError: ({ error }) => console.error("[ai-chat] erreur de flux", error instanceof Error ? error.message : "unknown") });
-    const sourceLabel = runtime.source === "byok" ? "Votre clé" : "Pace IA";
-    return result.toUIMessageStreamResponse({ originalMessages: messages, sendReasoning: true, headers: { "X-Pace-Prepare-Ms": String(Date.now() - startedAt), "X-Pace-AI-Source": sourceLabel, "X-Pace-AI-Provider": PROVIDER_LABELS[runtime.provider], "X-Pace-AI-Model": runtime.model }, onError: (error) => { const message = error instanceof Error ? error.message : String(error); console.error("[ai-chat] erreur de génération", { provider: runtime.provider, source: runtime.source, status: /429/.test(message) ? 429 : undefined }); if (/401|unauthorized|invalid.*key/i.test(message)) return "Clé API invalide."; if (/403|forbidden/i.test(message)) return "Cette clé n’a pas les permissions nécessaires."; if (/404|not.?found|model/i.test(message)) return "Modèle ou endpoint introuvable."; if (/429|rate.?limit/i.test(message)) return "Limite de requêtes atteinte chez votre fournisseur."; if (/5\d\d|server error/i.test(message)) return "Le fournisseur IA est temporairement indisponible."; if (/timeout|aborted|network|fetch failed/i.test(message)) return "Impossible de contacter le fournisseur."; return "Erreur de génération IA. Réessayez."; }, onFinish: async ({ responseMessage }) => { if (ephemeral) return; try { const text = responseMessage.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n"); const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", parts: responseMessage.parts as unknown as Json, plain_text: text, model_message_id: responseMessage.id }); if (error) console.error("[ai-chat] sauvegarde assistant impossible", error.message); await client.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", userId); const { data: conversation } = await client.from("ai_conversations").select("title").eq("id", conversationId).maybeSingle(); if (conversation?.title === "Nouvelle conversation") { const firstText = messages.flatMap((message) => message.parts).find((part) => part.type === "text"); if (firstText && firstText.type === "text") await client.from("ai_conversations").update({ title: firstText.text.trim().replace(/\s+/g, " ").slice(0, 52) }).eq("id", conversationId).eq("user_id", userId); } console.info("[ai-chat] terminé", { conversationId, agentType, source: runtime.source, provider: runtime.provider, model: runtime.model, ms: Date.now() - startedAt }); } catch (error) { console.error("[ai-chat] post-traitement échoué", error instanceof Error ? error.message : "unknown"); } } });
+    const result = streamText({ model: runtime.gateway(runtime.model), system: instructions, messages: await convertToModelMessages(safeWindowed), tools, toolApproval, stopWhen: stepCountIs(50), onError: ({ error }) => console.error("[ai-chat] erreur de streaming", error instanceof Error ? error.message : error) });
+    return result.toUIMessageStreamResponse({ headers: { "X-Pace-AI-Model": runtime.model, "X-Pace-AI-Provider": PROVIDER_LABELS[runtime.provider] ?? runtime.provider } });
   } catch (error) { return errorResponse(error, startedAt); }
 }
