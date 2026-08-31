@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, type UIMessage } from "ai";
+import { DefaultChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses, type UIMessage } from "ai";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -90,7 +90,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
     prepareSendMessagesRequest: ({ messages: all, body }) => ({ body: { ...body, messages: all.slice(-30) } }),
     body: { conversationId, agentType, ephemeral },
   }), [agentType, conversationId, ephemeral]);
-  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, onFinish: () => { clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => setFailure(describeChatError(chatError)) });
+  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses, onFinish: () => { clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => setFailure(describeChatError(chatError)) });
   const busy = status === "submitted" || status === "streaming";
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
