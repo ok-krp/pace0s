@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
       - name: Patch AI runtime
         shell: bash
         run: |
