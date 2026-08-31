@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { switchLocalAccountScope } from "@/lib/account-scope";
 
 type AuthCtx = {
   user: User | null;
@@ -16,13 +17,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
+    const syncAccountScope = (nextSession: Session | null) => {
+      const changed = switchLocalAccountScope(nextSession?.user.id ?? null);
+      if (changed && typeof window !== "undefined") {
+        window.location.reload();
+        return true;
+      }
+      return false;
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, nextSession) => {
+      if (syncAccountScope(nextSession)) return;
+      setSession(nextSession);
       setLoading(false);
     });
-    // Then existing session
+
     supabase.auth.getSession().then(({ data }) => {
+      if (syncAccountScope(data.session)) return;
       setSession(data.session);
       setLoading(false);
     });
