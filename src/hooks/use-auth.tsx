@@ -15,29 +15,31 @@ const Ctx = createContext<AuthCtx>({ user: null, session: null, loading: true, s
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [scopeReady, setScopeReady] = useState(false);
 
   useEffect(() => {
-    const syncAccountScope = (nextSession: Session | null) => {
-      const changed = switchLocalAccountScope(nextSession?.user.id ?? null);
-      if (changed && typeof window !== "undefined") {
-        window.location.reload();
-        return true;
-      }
-      return false;
+    let disposed = false;
+
+    const applySession = (nextSession: Session | null) => {
+      if (disposed) return;
+      switchLocalAccountScope(nextSession?.user.id ?? null);
+      setSession(nextSession);
+      setScopeReady(true);
+      setLoading(false);
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, nextSession) => {
-      if (syncAccountScope(nextSession)) return;
-      setSession(nextSession);
-      setLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      applySession(nextSession);
     });
 
     supabase.auth.getSession().then(({ data }) => {
-      if (syncAccountScope(data.session)) return;
-      setSession(data.session);
-      setLoading(false);
+      applySession(data.session);
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      disposed = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
@@ -45,11 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user: session?.user ?? null,
         session,
-        loading,
+        loading: loading || !scopeReady,
         signOut: async () => { await supabase.auth.signOut(); },
       }}
     >
-      {children}
+      {scopeReady ? children : null}
     </Ctx.Provider>
   );
 }
