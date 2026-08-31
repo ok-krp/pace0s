@@ -6,7 +6,7 @@ import { deleteAiProviderKey, getAiProviderSettings as getAiProviderSettingsServ
 import type { AiProvider } from "./ai-history.types";
 
 const providerSchema = z.enum(["openai", "anthropic", "gemini", "openrouter", "custom"]);
-const BUILD_ADMIN_EMAIL = "mathieu.lequint@gmail.com";
+export const BUILD_ADMIN_EMAIL = "mathieu.lequint@gmail.com";
 
 type AuthClaims = { email?: unknown };
 function assertBuildAccess(agentType: "coach" | "build", claims: unknown) {
@@ -22,7 +22,13 @@ export const updateAiConversation = createServerFn({ method: "POST" }).middlewar
 export const deleteAiConversation = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((data: unknown) => z.object({ id: z.string().uuid(), agentType: z.enum(["coach", "build"]).optional() }).parse(data)).handler(({ data, context }) => { assertBuildAccess(data.agentType ?? "coach", context.claims); return deleteConversationServer(context.supabase, context.userId, data.id); });
 export const getAiPreferences = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(({ context }) => getPreferencesServer(context.supabase, context.userId));
 export const saveAiPreferences = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((data: unknown) => z.object({ memory_level: z.enum(["none", "limited", "complete"]), permissions: z.record(z.boolean()), confirm_actions: z.boolean() }).parse(data)).handler(({ data, context }) => savePreferencesServer(context.supabase, context.userId, data));
-export const getAiProviderSettings = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(({ context }) => getAiProviderSettingsServer(context.supabase, context.userId));
+export const getAiProviderSettings = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(async ({ context }) => {
+  const settings = await getAiProviderSettingsServer(context.supabase, context.userId);
+  const claims = context.claims;
+  const email = typeof claims === "object" && claims !== null && "email" in claims ? String((claims as AuthClaims).email ?? "").trim().toLowerCase() : "";
+  if (email === BUILD_ADMIN_EMAIL) return settings;
+  return { ...settings, build: { ...settings.build, source: "pace" as const, provider: "gemini" as const, model: "gemini-3.6-flash", baseUrl: "", keyConfigured: false, keyLast4: "" } };
+});
 export const saveAiProviderSettingsFn = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((data: unknown) => z.object({ agentType: z.enum(["coach", "build"]), source: z.enum(["pace", "byok"]), provider: providerSchema, model: z.string().max(200), baseUrl: z.string().max(500).nullable().optional(), apiKey: z.string().max(1000).nullable().optional() }).parse(data)).handler(({ data, context }) => { assertBuildAccess(data.agentType, context.claims); return saveAiProviderSettings(context.supabase, context.userId, data); });
 export const deleteAiProviderKeyFn = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((data: unknown) => z.object({ provider: providerSchema }).parse(data)).handler(({ data, context }) => deleteAiProviderKey(context.supabase, context.userId, data.provider as AiProvider));
 export const testAiProviderFn = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((data: unknown) => z.object({ provider: providerSchema, model: z.string().max(200), baseUrl: z.string().max(500).nullable().optional(), apiKey: z.string().max(1000).nullable().optional() }).parse(data)).handler(({ data, context }) => testAiProvider(context.supabase, context.userId, data));
