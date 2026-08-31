@@ -52,6 +52,38 @@ function withToolLogging<Input, Output extends { ok: boolean; message: string }>
   return async (input: Input) => { const startedAt = Date.now(); console.info("[ai-tool] appelé", { name }); try { const output = await execute(input); console.info("[ai-tool] terminé", { name, ms: Date.now() - startedAt, ok: output.ok }); return output; } catch (error) { const message = error instanceof Error ? error.message : "Erreur inattendue"; console.error("[ai-tool] échec inattendu", { name, ms: Date.now() - startedAt, error: message }); return { ok: false, message: `Action interrompue par une erreur inattendue : ${message}` } as Output; } };
 }
 
+async function mirrorAiFoodToNutritionState(client: Client, userId: string, input: { id: string; log_date: string; name: string; meal: string; kcal: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number; sugar_g: number; sodium_mg: number; grams: number }) {
+  const key = "pace.nutrition.items";
+  const { data: current, error: readError } = await client.from("user_state").select("value").eq("user_id", userId).eq("key", key).maybeSingle();
+  if (readError) throw readError;
+  const raw = current?.value;
+  const itemsByDay: Record<string, Array<Record<string, unknown>>> = raw && typeof raw === "object" && !Array.isArray(raw) ? { ...(raw as Record<string, Array<Record<string, unknown>>>) } : {};
+  const day = input.log_date;
+  const list = Array.isArray(itemsByDay[day]) ? itemsByDay[day] : [];
+  if (list.some((item) => item && typeof item === "object" && item.id === input.id)) return;
+  itemsByDay[day] = [...list, {
+    id: input.id,
+    name: `${input.name} (${Math.round(input.grams)} g)`,
+    meal: input.meal,
+    kcal: input.kcal,
+    p: input.protein_g,
+    c: input.carbs_g,
+    f: input.fat_g,
+    fiber: input.fiber_g,
+    sugar: input.sugar_g,
+    sodium: input.sodium_mg,
+    qty: 1,
+  }];
+  const updatedAt = new Date().toISOString();
+  if (current) {
+    const { error } = await client.from("user_state").update({ value: itemsByDay as unknown as Json, updated_at: updatedAt }).eq("user_id", userId).eq("key", key);
+    if (error) throw error;
+  } else {
+    const { error } = await client.from("user_state").insert({ user_id: userId, key, value: itemsByDay as unknown as Json, updated_at: updatedAt });
+    if (error) throw error;
+  }
+}
+
 function coachTools(client: Client, userId: string, conversationId: string, permissions: AiPermissions) {
   return {
     update_profile: tool({ description: "Mettre à jour le poids, les objectifs ou les informations du profil Pace.", inputSchema: z.object({ weight_kg: z.number().nullable(), weight_goal_kg: z.number().nullable(), daily_calorie_goal: z.number().nullable(), daily_protein_goal: z.number().nullable(), daily_water_ml_goal: z.number().nullable(), training_goal: z.string().nullable() }), execute: withToolLogging("update_profile", async (input) => {
@@ -63,9 +95,16 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
     }) }),
     add_food: tool({ description: "Ajouter un repas ou aliment au journal nutritionnel avec estimation complète des macros.", inputSchema: z.object({ name: z.string(), meal: z.string(), kcal: z.number(), protein_g: z.number(), carbs_g: z.number(), fat_g: z.number(), fiber_g: z.number(), sugar_g: z.number(), sodium_mg: z.number(), grams: z.number() }), execute: withToolLogging("add_food", async (input) => {
       if (!permissions.nutrition) return { ok: false, message: "Pour effectuer cette action, veuillez accepter l’ajout de nourriture dans les paramètres, dans l’onglet IA des paramètres." };
-      const { error } = await client.from("food_log").insert({ user_id: userId, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, protein_g: input.protein_g, carbs_g: input.carbs_g, fat_g: input.fat_g, fiber_g: input.fiber_g, sugar_g: input.sugar_g, sodium_mg: input.sodium_mg, source: "coach_ai" });
-      if (error) { await logAction(client, userId, conversationId, "coach", "add_food", "Ajout nutrition", input, "failed"); return { ok: false, message: "Erreur base de données lors de l’ajout nutritionnel." }; }
-      await logAction(client, userId, conversationId, "coach", "add_food", `${input.name} ajouté`, input, "executed"); return { ok: true, message: `${input.name} ajouté au journal` };
+      const { data: inserted, error } = await client.from("food_log").insert({ user_id: userId, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, protein_g: input.protein_g, carbs_g: input.carbs_g, fat_g: input.fat_g, fiber_g: input.fiber_g, sugar_g: input.sugar_g, sodium_mg: input.sodium_mg, source: "coach_ai" }).select("id,log_date").single();
+      if (error || !inserted) { await logAction(client, userId, conversationId, "coach", "add_food", "Ajout nutrition", input, "failed"); return { ok: false, message: "Erreur base de données lors de l’ajout nutritionnel." }; }
+      try {
+        await mirrorAiFoodToNutritionState(client, userId, { id: inserted.id, log_date: inserted.log_date, ...input });
+      } catch (syncError) {
+        console.error("[ai-tool] synchronisation Nutrition impossible", syncError instanceof Error ? syncError.message : "unknown");
+        await logAction(client, userId, conversationId, "coach", "add_food_sync", "Synchronisation Nutrition", { ...input, food_log_id: inserted.id }, "failed");
+        return { ok: false, message: "L’aliment a été enregistré dans le journal serveur, mais l’affichage Nutrition n’a pas pu être synchronisé. Actualisez Nutrition et réessayez." };
+      }
+      await logAction(client, userId, conversationId, "coach", "add_food", `${input.name} ajouté`, { ...input, food_log_id: inserted.id }, "executed"); return { ok: true, message: `${input.name} ajouté au journal` };
     }) }),
     add_health_sample: tool({ description: "Enregistrer une mesure de santé comme le poids ou la masse grasse.", inputSchema: z.object({ type: z.string(), value: z.number() }), execute: withToolLogging("add_health_sample", async (input) => {
       if (!permissions.profile) return { ok: false, message: "Pour effectuer cette action, veuillez accepter la modification du profil dans les paramètres, dans l’onglet IA des paramètres." };
