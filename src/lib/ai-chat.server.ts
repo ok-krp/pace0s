@@ -126,14 +126,25 @@ function closeDanglingToolCalls(messages: UIMessage[]): UIMessage[] {
       const p = part as unknown as Record<string, unknown>;
       if (typeof p.type !== "string" || !p.type.startsWith("tool-")) return part;
       const state = typeof p.state === "string" ? p.state : "";
-      // An approval response is the continuation turn: keep it intact so
-      // convertToModelMessages can pass the approval back to streamText.
       if (terminal.has(state) || state === "approval-responded") return part;
       mutated = true;
       return { ...p, state: "output-error", errorText: "Action annulée (conversation interrompue avant confirmation) — sans effet, aucune donnée modifiée." } as unknown as UIMessage["parts"][number];
     });
     return mutated ? { ...message, parts } : message;
   });
+}
+
+function describeProviderStreamError(error: unknown) {
+  const candidate = error as { status?: unknown; statusCode?: unknown; response?: { status?: unknown }; cause?: { status?: unknown; statusCode?: unknown } } | null;
+  const rawStatus = candidate && typeof candidate === "object" ? candidate.status ?? candidate.statusCode ?? candidate.response?.status ?? candidate.cause?.status ?? candidate.cause?.statusCode : undefined;
+  const status = typeof rawStatus === "number" ? rawStatus : typeof rawStatus === "string" && /^\d+$/.test(rawStatus) ? Number(rawStatus) : 0;
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (status === 429 || /quota|rate limit|too many requests|free.?tier/i.test(message)) return "Quota IA atteint chez le fournisseur. Attendez quelques secondes ou utilisez une autre clé/fournisseur.";
+  if (status === 401 || /api key|unauthorized|authentication/i.test(message)) return "Clé API invalide ou expirée. Vérifiez la configuration du fournisseur IA.";
+  if (status === 403 || /forbidden|permission/i.test(message)) return "La clé IA n’a pas les permissions nécessaires.";
+  if (status === 404 || /model.*not found|endpoint.*not found|not found/i.test(message)) return "Modèle ou endpoint introuvable. Vérifiez le fournisseur et le modèle sélectionné.";
+  if (status >= 500) return "Le fournisseur IA est temporairement indisponible. Réessayez dans quelques instants.";
+  return "Le fournisseur IA n’a pas pu traiter la demande. Réessayez ou changez de fournisseur.";
 }
 
 export async function handleAiChat(request: Request) {
@@ -162,7 +173,7 @@ export async function handleAiChat(request: Request) {
     const memoryBlock = summary ? `\n\n[MÉMOIRE DE LA CONVERSATION — résumé des échanges plus anciens]\n${summary}` : "";
     const instructions = agentType === "coach" ? `Tu es Coach IA, le coach personnel francophone de Pace. Tu utilises automatiquement les données autorisées ci-dessous sans redemander ce qui est déjà connu. Tu donnes des réponses précises, bienveillantes et actionnables. Quand l'utilisateur demande une modification, utilise l'outil approprié. Si une permission nécessaire est désactivée, explique que l’utilisateur doit l’activer dans Paramètres > Intelligence Artificielle > Permissions du Coach IA et n’affirme jamais que l’action a été effectuée. Après chaque outil, confirme clairement avec ✓ et la modification exacte. Données autorisées: ${JSON.stringify(dataContext)}. Niveau mémoire: ${preferences.memory_level}. Ne parle jamais du développement de Pace; redirige ces demandes vers BUILD IA.${memoryBlock}` : `Tu es BUILD IA, l'assistant de développement francophone de Pace. Tu transformes automatiquement les signalements en bugs, améliorations, fonctionnalités ou tâches structurées avec priorité. Tu n'es pas un coach santé et rediriges ces demandes vers Coach IA. Tu ne prétends jamais modifier le code source; tu peux analyser, cadrer et créer des éléments dans le centre Développement.${memoryBlock}`;
     const windowed = messages.length > RECENT_WINDOW ? messages.slice(-RECENT_WINDOW) : messages; const toolApproval = Object.fromEntries(Object.keys(tools).map((name) => { const permissionEnabled = name === "add_food" ? preferences.permissions.nutrition : name === "update_profile" || name === "add_health_sample" ? preferences.permissions.profile : true; return [name, permissionEnabled && preferences.confirm_actions ? "user-approval" : "not-applicable"]; })); const safeWindowed = closeDanglingToolCalls(windowed);
-    const result = streamText({ model: runtime.gateway(runtime.model), system: instructions, messages: await convertToModelMessages(safeWindowed), tools, toolApproval, stopWhen: stepCountIs(50), onError: ({ error }) => console.error("[ai-chat] erreur de streaming", error instanceof Error ? error.message : error) });
-    return result.toUIMessageStreamResponse({ headers: { "X-Pace-AI-Model": runtime.model, "X-Pace-AI-Provider": PROVIDER_LABELS[runtime.provider] ?? runtime.provider } });
+    const result = streamText({ maxRetries: 0, model: runtime.gateway(runtime.model), system: instructions, messages: await convertToModelMessages(safeWindowed), tools, toolApproval, stopWhen: stepCountIs(50), onError: ({ error }) => console.error("[ai-chat] erreur de streaming", error instanceof Error ? error.message : error) });
+    return result.toUIMessageStreamResponse({ headers: { "X-Pace-AI-Model": runtime.model, "X-Pace-AI-Provider": PROVIDER_LABELS[runtime.provider] ?? runtime.provider }, onError: describeProviderStreamError });
   } catch (error) { return errorResponse(error, startedAt); }
 }
