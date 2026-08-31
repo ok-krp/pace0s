@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: npm ci
       - name: Patch AI runtime
         shell: bash
         run: |
@@ -21,7 +23,6 @@ jobs:
           if old not in s:
               raise SystemExit('runtime model selection pattern not found')
           p.write_text(s.replace(old, new, 1))
-          p = Path('src/lib/ai-provider.server.ts')
           s = p.read_text()
           old = 'if (status === 429) return { status: 429, message: "Limite de requêtes atteinte chez votre fournisseur" };'
           new = 'if (status === 429) return { status: 429, message: "Quota ou limite de requêtes atteint chez votre fournisseur IA. Vérifiez votre quota/facturation ou sélectionnez un autre fournisseur." };'
