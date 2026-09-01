@@ -16,48 +16,111 @@ async function persistAssistantMessage(request: Request, conversationId: string,
   const { data: userData, error: userError } = await auth.client.auth.getUser(auth.token);
   const userId = userData.user?.id;
   if (userError || !userId) return;
+
   const parts = [{ type: "text", text }] as unknown as Json;
-  const { data: existing } = await auth.client.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("model_message_id", messageId).maybeSingle();
+  const { data: existing, error: lookupError } = await auth.client
+    .from("ai_messages")
+    .select("id")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId)
+    .eq("model_message_id", messageId)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
   if (existing) return;
-  await auth.client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", parts, plain_text: text, model_message_id: messageId });
-  await auth.client.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", userId);
+
+  const { error: insertError } = await auth.client.from("ai_messages").insert({
+    conversation_id: conversationId,
+    user_id: userId,
+    role: "assistant",
+    parts,
+    plain_text: text,
+    model_message_id: messageId,
+  });
+  if (insertError) throw insertError;
+
+  const { error: conversationError } = await auth.client
+    .from("ai_conversations")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", conversationId)
+    .eq("user_id", userId);
+  if (conversationError) throw conversationError;
 }
 
-export async function persistAssistantFromUIStream(request: Request, response: Response, conversationId: string) {
+/**
+ * Persist the completed assistant UI stream before closing the response.
+ *
+ * The previous implementation used response.body.tee() and a fire-and-forget
+ * task. On Vercel/Nitro that task could be terminated as soon as the HTTP
+ * response finished, leaving the assistant message visible in the current UI
+ * but absent after a refresh. The TransformStream keeps the response streaming
+ * while making persistence part of the stream lifecycle and waits for the DB
+ * write before the response is considered complete.
+ */
+export function persistAssistantFromUIStream(request: Request, response: Response, conversationId: string) {
   if (!response.body || !conversationId) return response;
-  const [clientStream, auditStream] = response.body.tee();
-  void (async () => {
-    const reader = auditStream.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let messageId = "";
-    let text = "";
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let messageId = "";
+  let text = "";
+
+  const parseEvent = (event: string) => {
+    const dataLines = event
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trim());
+    if (!dataLines.length) return;
+
+    const raw = dataLines.join("\n");
+    if (raw === "[DONE]") return;
+
     try {
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const events = buffer.split(/\n\n/);
-        buffer = events.pop() ?? "";
-        for (const event of events) {
-          const dataLine = event.split(/\n/).find((line) => line.startsWith("data: "));
-          if (!dataLine) continue;
-          const raw = dataLine.slice(6).trim();
-          if (raw === "[DONE]") continue;
-          try {
-            const part = JSON.parse(raw) as { type?: string; messageId?: string; delta?: string };
-            if (part.type === "start" && part.messageId) messageId = part.messageId;
-            if (part.type === "text-delta" && typeof part.delta === "string") text += part.delta;
-            if (part.type === "finish" && messageId) await persistAssistantMessage(request, conversationId, messageId, text);
-          } catch { /* Ignore malformed/non-JSON stream lines. */ }
-        }
+      const part = JSON.parse(raw) as {
+        type?: string;
+        messageId?: string;
+        id?: string;
+        delta?: string;
+      };
+      if ((part.type === "start" || part.type === "start-step") && (part.messageId || part.id)) {
+        messageId = part.messageId ?? part.id ?? "";
       }
-      if (messageId) await persistAssistantMessage(request, conversationId, messageId, text);
-    } catch (error) {
-      console.error("[ai-chat] assistant persistence failed", error instanceof Error ? error.message : "unknown");
-    } finally {
-      reader.releaseLock();
+      if (part.type === "text-delta" && typeof part.delta === "string") {
+        text += part.delta;
+      }
+    } catch {
+      // Ignore non-JSON SSE frames; the client still receives them unchanged.
     }
-  })();
-  return new Response(clientStream, { status: response.status, statusText: response.statusText, headers: response.headers });
+  };
+
+  const stream = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      controller.enqueue(chunk);
+      buffer += decoder.decode(chunk, { stream: true });
+      const events = buffer.split(/\r?\n\r?\n/);
+      buffer = events.pop() ?? "";
+      for (const event of events) parseEvent(event);
+    },
+    async flush() {
+      buffer += decoder.decode();
+      if (buffer.trim()) parseEvent(buffer);
+      if (!text.trim()) return;
+      if (!messageId) messageId = `pace-${crypto.randomUUID()}`;
+
+      try {
+        await persistAssistantMessage(request, conversationId, messageId, text);
+      } catch (error) {
+        console.error("[ai-chat] assistant persistence failed", error instanceof Error ? error.message : "unknown");
+      }
+    },
+  });
+
+  response.body.pipeTo(stream.writable).catch((error) => {
+    console.error("[ai-chat] assistant stream forwarding failed", error instanceof Error ? error.message : "unknown");
+  });
+
+  return new Response(stream.readable, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
 }
