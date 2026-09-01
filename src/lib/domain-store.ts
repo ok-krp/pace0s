@@ -9,6 +9,7 @@ export type DomainRecord<T> = {
 
 const WRITE_EVENT = "pace.domain.write";
 const LOCAL_WRITE_EVENT = "pace.local.write";
+const REMOTE_WRITE_EVENT = "pace.remote.write";
 const STORAGE_PREFIX = "pace.domain.";
 
 function storageKey(domain: string) {
@@ -86,8 +87,6 @@ export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
       window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record } }));
       window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key: `pace.${domain}`, value } }));
 
-      // nutrition.items is the source of truth for the local-first nutrition domain.
-      // Keep its derived totals synchronized when legacy screens write items directly.
       if (domain === "nutrition.items") {
         const totals = recomputeNutritionTotals(value);
         const totalsRecord: DomainRecord<typeof totals> = {
@@ -125,9 +124,26 @@ export function useDomainState<T>(domain: string, fallback: T): [T, (next: T | (
         return detail.record;
       });
     };
+
+    const onRemoteWrite = (event: Event) => {
+      const detail = (event as CustomEvent<{ key: string; value: T }>).detail;
+      if (!detail) return;
+      const expectedKeys = new Set([`pace.${domain}`, `pace.domain.${domain}`]);
+      if (!expectedKeys.has(detail.key)) return;
+      const next = readDomain<T>(domain, fallback);
+      setRecord((current) => {
+        if (compareRecords(next, current) <= 0) return current;
+        return next;
+      });
+    };
+
     window.addEventListener(WRITE_EVENT, onWrite);
-    return () => window.removeEventListener(WRITE_EVENT, onWrite);
-  }, [domain]);
+    window.addEventListener(REMOTE_WRITE_EVENT, onRemoteWrite);
+    return () => {
+      window.removeEventListener(WRITE_EVENT, onWrite);
+      window.removeEventListener(REMOTE_WRITE_EVENT, onRemoteWrite);
+    };
+  }, [domain, fallback]);
 
   const set = useCallback((next: T | ((previous: T) => T)) => {
     setRecord((current) => {
