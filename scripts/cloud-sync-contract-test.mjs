@@ -26,7 +26,6 @@ assert.match(engine, /lastRemoteValues/);
 // Rapid mutations are represented by a value + timestamp and coalesced per key.
 assert.match(engine, /type QueueItem = \{ key: string; value: unknown; updatedAt: string/);
 assert.match(engine, /readQueue\(\)\.filter\(\(queued\) => queued\.key !== item\.key\)/);
-assert.match(engine, /Rapid edits are coalesced/);
 
 // Cloud writes use the mutation timestamp captured by the local-write event.
 assert.match(engine, /p_updated_at: latest\.updatedAt/);

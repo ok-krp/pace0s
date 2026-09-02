@@ -82,7 +82,16 @@ async function writeUserState(client: Client, userId: string, key: string, value
 
 function recomputeNutritionTotals(itemsByDay: Record<string, Array<Record<string, unknown>>>) {
   const totals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
-  for (const [day, list] of Object.entries(itemsByDay)) totals[day] = list.reduce((a, item) => ({ kcal: a.kcal + Number(item.kcal ?? 0), p: a.p + Number(item.p ?? 0), c: a.c + Number(item.c ?? 0), f: a.f + Number(item.f ?? 0) }), { kcal: 0, p: 0, c: 0, f: 0 });
+  for (const [day, list] of Object.entries(itemsByDay)) {
+    const total = { kcal: 0, p: 0, c: 0, f: 0 };
+    for (const item of list) {
+      total.kcal += Number(item.kcal ?? 0);
+      total.p += Number(item.p ?? 0);
+      total.c += Number(item.c ?? 0);
+      total.f += Number(item.f ?? 0);
+    }
+    totals[day] = total;
+  }
   return totals;
 }
 

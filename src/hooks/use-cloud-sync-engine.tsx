@@ -127,7 +127,8 @@ export function useCloudSyncEngineInternal() {
         if (!latest || latest.updatedAt !== item.updatedAt) return;
         let accepted: boolean | null = null;
         try {
-          const result = await (supabase.rpc as never)("upsert_user_state_if_newer", { p_user_id: user.id, p_key: latest.key, p_value: latest.value, p_updated_at: latest.updatedAt, p_updated_by: DEVICE_ID });
+          const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
+          const result = await rpc("upsert_user_state_if_newer", { p_user_id: user.id, p_key: latest.key, p_value: latest.value, p_updated_at: latest.updatedAt, p_updated_by: DEVICE_ID });
           if (result?.error) throw result.error;
           accepted = result?.data === true ? true : result?.data === false ? false : null;
         } catch {
