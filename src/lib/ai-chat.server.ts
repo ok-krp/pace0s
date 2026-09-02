@@ -11,6 +11,13 @@ type ChatBody = { messages?: unknown; conversationId?: unknown; agentType?: unkn
 const RECENT_WINDOW = 30;
 const MAX_TEXT_CHARS = 400_000;
 
+type SportExercise = { id: string; name: string; muscle: string; equipment?: string; notes?: string; defaultSets?: number; defaultReps?: number; defaultWeight?: number; restSec?: number };
+type SportProgramItem = { exerciseId: string; sets: number; reps: number; weight?: number; restSec?: number };
+type SportProgram = { id: string; name: string; emoji: string; days: number[]; items: SportProgramItem[] };
+type SportSessionSet = { reps: number; weight: number; done: boolean };
+type SportSessionExercise = { exerciseId: string; sets: SportSessionSet[]; note?: string };
+type SportSession = { id: string; date: string; programId?: string; name: string; startedAt: number; endedAt?: number; durationMin?: number; exercises: SportSessionExercise[]; notes?: string };
+
 class ChatError extends Error { constructor(readonly status: number, readonly code: string, message: string) { super(message); } }
 function fail(status: number, code: string, message: string): never { throw new ChatError(status, code, message); }
 function errorResponse(error: unknown, startedAt: number) {
@@ -19,11 +26,9 @@ function errorResponse(error: unknown, startedAt: number) {
     console.error("[ai-chat] échec", { code, status, ms: Date.now() - startedAt, message });
     return new Response(message, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Pace-Error-Code": code, "X-Pace-Duration-Ms": String(Date.now() - startedAt) } });
   }
-  const status = 500;
-  const code = "internal_error";
   const message = "Erreur serveur inattendue.";
-  console.error("[ai-chat] échec", { code, status, ms: Date.now() - startedAt, message, error: error instanceof Error ? error.message : "unknown" });
-  return new Response(message, { status, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Pace-Error-Code": code, "X-Pace-Duration-Ms": String(Date.now() - startedAt) } });
+  console.error("[ai-chat] échec", { code: "internal_error", status: 500, ms: Date.now() - startedAt, error: error instanceof Error ? error.message : "unknown" });
+  return new Response(message, { status: 500, headers: { "Content-Type": "text/plain; charset=utf-8", "X-Pace-Error-Code": "internal_error", "X-Pace-Duration-Ms": String(Date.now() - startedAt) } });
 }
 
 async function authenticatedClient(request: Request) {
@@ -35,7 +40,7 @@ async function authenticatedClient(request: Request) {
   const client = createClient<Database>(url, key, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false, autoRefreshToken: false } });
   const { data, error } = await client.auth.getUser(token);
   if (error || !data.user) fail(401, "auth_expired", "Authentification expirée : reconnectez-vous puis renvoyez votre message.");
-  return { client, userId: data.user!.id };
+  return { client, userId: data.user.id };
 }
 
 function textOf(message: UIMessage) { return message.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n"); }
@@ -45,6 +50,7 @@ async function contextForCoach(client: Client, userId: string, permissions: AiPe
   const jobs: Promise<void>[] = [];
   if (permissions.profile) jobs.push((async () => { const { data } = await client.from("profiles").select("display_name,age,sex,height_cm,weight_kg,weight_goal_kg,daily_calorie_goal,daily_protein_goal,daily_water_ml_goal,training_goal,activity_level").eq("user_id", userId).maybeSingle(); context.profile = data; })());
   if (permissions.nutrition) jobs.push((async () => { const today = new Date().toISOString().slice(0, 10); const { data } = await client.from("food_log").select("meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").eq("user_id", userId).eq("log_date", today).order("created_at"); context.todayNutrition = data; })());
+  if (permissions.sport) jobs.push((async () => { const { data } = await client.from("user_state").select("key,value").eq("user_id", userId).in("key", ["pace.sport.exercises", "pace.sport.programs", "pace.sport.sessions"]); context.sport = Object.fromEntries((data ?? []).map((row) => [row.key, row.value])); })());
   await Promise.all(jobs); return context;
 }
 
@@ -56,43 +62,84 @@ function withToolLogging<Input, Output extends { ok: boolean; message: string }>
   return async (input: Input) => { const startedAt = Date.now(); console.info("[ai-tool] appelé", { name }); try { const output = await execute(input); console.info("[ai-tool] terminé", { name, ms: Date.now() - startedAt, ok: output.ok }); return output; } catch (error) { const message = error instanceof Error ? error.message : "Erreur inattendue"; console.error("[ai-tool] échec inattendu", { name, ms: Date.now() - startedAt, error: message }); return { ok: false, message: `Action interrompue par une erreur inattendue : ${message}` } as Output; } };
 }
 
+async function readUserState(client: Client, userId: string, key: string): Promise<{ id?: string; value: unknown } | null> {
+  const { data, error } = await client.from("user_state").select("id,value").eq("user_id", userId).eq("key", key).maybeSingle();
+  if (error) throw error;
+  return data ? { id: data.id, value: data.value } : null;
+}
+
+async function writeUserState(client: Client, userId: string, key: string, value: unknown) {
+  const updatedAt = new Date().toISOString();
+  const current = await readUserState(client, userId, key);
+  if (current) {
+    const { error } = await client.from("user_state").update({ value: value as Json, updated_at: updatedAt, updated_by: "coach_ai" }).eq("user_id", userId).eq("key", key);
+    if (error) throw error;
+  } else {
+    const { error } = await client.from("user_state").insert({ user_id: userId, key, value: value as Json, updated_at: updatedAt, updated_by: "coach_ai" });
+    if (error) throw error;
+  }
+}
+
+function recomputeNutritionTotals(itemsByDay: Record<string, Array<Record<string, unknown>>>) {
+  const totals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
+  for (const [day, list] of Object.entries(itemsByDay)) totals[day] = list.reduce((a, item) => ({ kcal: a.kcal + Number(item.kcal ?? 0), p: a.p + Number(item.p ?? 0), c: a.c + Number(item.c ?? 0), f: a.f + Number(item.f ?? 0) }), { kcal: 0, p: 0, c: 0, f: 0 });
+  return totals;
+}
+
 async function mirrorAiFoodToNutritionState(client: Client, userId: string, input: { id: string; log_date: string; name: string; meal: string; kcal: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number; sugar_g: number; sodium_mg: number; grams: number }) {
-  const key = "pace.nutrition.items";
-  const { data: current, error: readError } = await client.from("user_state").select("value").eq("user_id", userId).eq("key", key).maybeSingle();
-  if (readError) throw readError;
+  const current = await readUserState(client, userId, "pace.nutrition.items");
   const raw = current?.value;
   const itemsByDay: Record<string, Array<Record<string, unknown>>> = raw && typeof raw === "object" && !Array.isArray(raw) ? { ...(raw as Record<string, Array<Record<string, unknown>>>) } : {};
   const day = input.log_date;
   const list = Array.isArray(itemsByDay[day]) ? itemsByDay[day] : [];
-  if (list.some((item) => item && typeof item === "object" && item.id === input.id)) return;
-  itemsByDay[day] = [...list, { id: input.id, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, p: input.protein_g, c: input.carbs_g, f: input.fat_g, fiber: input.fiber_g, sugar: input.sugar_g, sodium: input.sodium_mg, qty: 1 }];
-  const updatedAt = new Date().toISOString();
-  if (current) { const { error } = await client.from("user_state").update({ value: itemsByDay as unknown as Json, updated_at: updatedAt }).eq("user_id", userId).eq("key", key); if (error) throw error; }
-  else { const { error } = await client.from("user_state").insert({ user_id: userId, key, value: itemsByDay as unknown as Json, updated_at: updatedAt }); if (error) throw error; }
+  if (!list.some((item) => item && typeof item === "object" && item.id === input.id)) {
+    itemsByDay[day] = [...list, { id: input.id, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, p: input.protein_g, c: input.carbs_g, f: input.fat_g, fiber: input.fiber_g, sugar: input.sugar_g, sodium: input.sodium_mg, qty: 1 }];
+    await writeUserState(client, userId, "pace.nutrition.items", itemsByDay);
+  }
+  await writeUserState(client, userId, "pace.nutrition.totals", recomputeNutritionTotals(itemsByDay));
+}
+
+async function createSportExercise(client: Client, userId: string, input: SportExercise) {
+  const current = await readUserState(client, userId, "pace.sport.exercises");
+  const list = Array.isArray(current?.value) ? current!.value as SportExercise[] : [];
+  if (list.some((x) => x.id === input.id || x.name.trim().toLowerCase() === input.name.trim().toLowerCase())) return { created: false, id: list.find((x) => x.name.trim().toLowerCase() === input.name.trim().toLowerCase())?.id ?? input.id };
+  await writeUserState(client, userId, "pace.sport.exercises", [...list, input]);
+  return { created: true, id: input.id };
 }
 
 function coachTools(client: Client, userId: string, conversationId: string, permissions: AiPermissions) {
   return {
     update_profile: tool({ description: "Mettre à jour le poids, les objectifs ou les informations du profil Pace.", inputSchema: z.object({ weight_kg: z.number().nullable(), weight_goal_kg: z.number().nullable(), daily_calorie_goal: z.number().nullable(), daily_protein_goal: z.number().nullable(), daily_water_ml_goal: z.number().nullable(), training_goal: z.string().nullable() }), execute: withToolLogging("update_profile", async (input) => {
-      if (!permissions.profile) return { ok: false, message: "Pour effectuer cette action, veuillez accepter la modification du profil dans les paramètres, dans l’onglet IA des paramètres." };
+      if (!permissions.profile) return { ok: false, message: "Permission Profil désactivée." };
       const patch: Database["public"]["Tables"]["profiles"]["Update"] = { ...(input.weight_kg === null ? {} : { weight_kg: input.weight_kg }), ...(input.weight_goal_kg === null ? {} : { weight_goal_kg: input.weight_goal_kg }), ...(input.daily_calorie_goal === null ? {} : { daily_calorie_goal: input.daily_calorie_goal }), ...(input.daily_protein_goal === null ? {} : { daily_protein_goal: input.daily_protein_goal }), ...(input.daily_water_ml_goal === null ? {} : { daily_water_ml_goal: input.daily_water_ml_goal }), ...(input.training_goal === null ? {} : { training_goal: input.training_goal }) };
       const { error } = await client.from("profiles").update(patch).eq("user_id", userId);
       if (error) { await logAction(client, userId, conversationId, "coach", "update_profile", "Mise à jour du profil", input, "failed"); return { ok: false, message: "Erreur base de données lors de la mise à jour du profil." }; }
       await logAction(client, userId, conversationId, "coach", "update_profile", "Profil mis à jour", input, "executed"); return { ok: true, message: "Profil mis à jour" };
     }) }),
-    add_food: tool({ description: "Ajouter un repas ou aliment au journal nutritionnel avec estimation complète des macros.", inputSchema: z.object({ name: z.string(), meal: z.string(), kcal: z.number(), protein_g: z.number(), carbs_g: z.number(), fat_g: z.number(), fiber_g: z.number(), sugar_g: z.number(), sodium_mg: z.number(), grams: z.number() }), execute: withToolLogging("add_food", async (input) => {
-      if (!permissions.nutrition) return { ok: false, message: "Pour effectuer cette action, veuillez accepter l’ajout de nourriture dans les paramètres, dans l’onglet IA des paramètres." };
+    add_food: tool({ description: "Ajouter un aliment au journal nutritionnel avec toutes ses données nutritionnelles.", inputSchema: z.object({ name: z.string(), meal: z.string(), kcal: z.number(), protein_g: z.number(), carbs_g: z.number(), fat_g: z.number(), fiber_g: z.number(), sugar_g: z.number(), sodium_mg: z.number(), grams: z.number() }), execute: withToolLogging("add_food", async (input) => {
+      if (!permissions.nutrition) return { ok: false, message: "Permission Nutrition désactivée." };
       const { data: inserted, error } = await client.from("food_log").insert({ user_id: userId, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, protein_g: input.protein_g, carbs_g: input.carbs_g, fat_g: input.fat_g, fiber_g: input.fiber_g, sugar_g: input.sugar_g, sodium_mg: input.sodium_mg, source: "coach_ai" }).select("id,log_date").single();
       if (error || !inserted) { await logAction(client, userId, conversationId, "coach", "add_food", "Ajout nutrition", input, "failed"); return { ok: false, message: "Erreur base de données lors de l’ajout nutritionnel." }; }
-      try { await mirrorAiFoodToNutritionState(client, userId, { id: inserted.id, log_date: inserted.log_date, ...input }); }
-      catch (syncError) { console.error("[ai-tool] synchronisation Nutrition impossible", syncError instanceof Error ? syncError.message : "unknown"); await logAction(client, userId, conversationId, "coach", "add_food_sync", "Synchronisation Nutrition", { ...input, food_log_id: inserted.id }, "failed"); return { ok: false, message: "L’aliment a été enregistré dans le journal serveur, mais l’affichage Nutrition n’a pas pu être synchronisé. Actualisez Nutrition et réessayez." }; }
-      await logAction(client, userId, conversationId, "coach", "add_food", `${input.name} ajouté`, { ...input, food_log_id: inserted.id }, "executed"); return { ok: true, message: `${input.name} ajouté au journal` };
+      try { await mirrorAiFoodToNutritionState(client, userId, { id: inserted.id, log_date: inserted.log_date, ...input }); } catch (syncError) { await logAction(client, userId, conversationId, "coach", "add_food_sync", "Synchronisation Nutrition", { ...input, food_log_id: inserted.id }, "failed"); console.error("[ai-tool] sync Nutrition", syncError instanceof Error ? syncError.message : "unknown"); return { ok: false, message: "Aliment enregistré côté serveur, mais la synchronisation Nutrition a échoué." }; }
+      await logAction(client, userId, conversationId, "coach", "add_food", `${input.name} ajouté`, { ...input, food_log_id: inserted.id }, "executed"); return { ok: true, message: `${input.name} ajouté au journal Nutrition` };
     }) }),
     add_health_sample: tool({ description: "Enregistrer une mesure de santé comme le poids ou la masse grasse.", inputSchema: z.object({ type: z.string(), value: z.number() }), execute: withToolLogging("add_health_sample", async (input) => {
-      if (!permissions.profile) return { ok: false, message: "Pour effectuer cette action, veuillez accepter la modification du profil dans les paramètres, dans l’onglet IA des paramètres." };
+      if (!permissions.profile) return { ok: false, message: "Permission Profil désactivée." };
       const { error } = await client.from("health_samples").insert({ user_id: userId, type: input.type, value: input.value, source: "coach_ai" });
       if (error) { await logAction(client, userId, conversationId, "coach", "add_health_sample", "Mesure de santé", input, "failed"); return { ok: false, message: "Erreur base de données lors de l’enregistrement de la mesure." }; }
       await logAction(client, userId, conversationId, "coach", "add_health_sample", `${input.type} enregistré`, input, "executed"); return { ok: true, message: "Mesure enregistrée" };
+    }) }),
+    create_sport_exercise: tool({ description: "Créer directement un exercice dans Sport. Utiliser cet outil quand l'utilisateur demande un nouvel exercice.", inputSchema: z.object({ id: z.string().uuid(), name: z.string().min(1), muscle: z.string().min(1), equipment: z.string().optional(), notes: z.string().optional(), defaultSets: z.number().int().positive().optional(), defaultReps: z.number().int().positive().optional(), defaultWeight: z.number().nonnegative().optional(), restSec: z.number().int().nonnegative().optional() }), execute: withToolLogging("create_sport_exercise", async (input) => {
+      if (!permissions.sport) return { ok: false, message: "Permission Sport désactivée." };
+      const result = await createSportExercise(client, userId, input); await logAction(client, userId, conversationId, "coach", "create_sport_exercise", `${input.name} ${result.created ? "créé" : "déjà présent"}`, input, "executed"); return { ok: true, message: result.created ? `Exercice « ${input.name} » créé dans Sport.` : `Exercice « ${input.name} » déjà présent dans Sport.` };
+    }) }),
+    create_sport_program: tool({ description: "Créer directement un programme Sport à partir d'exercices existants. Si un exercice manque, crée-le d'abord avec create_sport_exercise.", inputSchema: z.object({ id: z.string().uuid(), name: z.string().min(1), emoji: z.string().min(1).max(8), days: z.array(z.number().int().min(0).max(6)).min(1), items: z.array(z.object({ exerciseId: z.string().uuid(), sets: z.number().int().positive(), reps: z.number().int().positive(), weight: z.number().nonnegative().optional(), restSec: z.number().int().nonnegative().optional() })).min(1) }), execute: withToolLogging("create_sport_program", async (input) => {
+      if (!permissions.sport) return { ok: false, message: "Permission Sport désactivée." };
+      const current = await readUserState(client, userId, "pace.sport.programs"); const list = Array.isArray(current?.value) ? current!.value as SportProgram[] : []; if (list.some((p) => p.id === input.id)) return { ok: true, message: `Programme « ${input.name} » déjà présent dans Sport.` }; const program: SportProgram = input; await writeUserState(client, userId, "pace.sport.programs", [...list, program]); await logAction(client, userId, conversationId, "coach", "create_sport_program", `Programme ${input.name} créé`, input, "executed"); return { ok: true, message: `Programme « ${input.name} » créé dans Sport.` };
+    }) }),
+    create_sport_session: tool({ description: "Créer une séance Sport enregistrée ou planifiée à partir d'un programme. À utiliser quand l'utilisateur demande de créer/ajouter une séance dans l'historique.", inputSchema: z.object({ id: z.string().uuid(), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), programId: z.string().uuid().optional(), name: z.string().min(1), startedAt: z.number().int().positive(), endedAt: z.number().int().positive().optional(), durationMin: z.number().nonnegative().optional(), exercises: z.array(z.object({ exerciseId: z.string().uuid(), sets: z.array(z.object({ reps: z.number().int().nonnegative(), weight: z.number().nonnegative(), done: z.boolean() })).min(1), note: z.string().optional() })), notes: z.string().optional() }), execute: withToolLogging("create_sport_session", async (input) => {
+      if (!permissions.sport) return { ok: false, message: "Permission Sport désactivée." };
+      const current = await readUserState(client, userId, "pace.sport.sessions"); const list = Array.isArray(current?.value) ? current!.value as SportSession[] : []; if (list.some((s) => s.id === input.id)) return { ok: true, message: `Séance « ${input.name} » déjà présente.` }; await writeUserState(client, userId, "pace.sport.sessions", [input, ...list]); await logAction(client, userId, conversationId, "coach", "create_sport_session", `Séance ${input.name} créée`, input, "executed"); return { ok: true, message: `Séance « ${input.name} » ajoutée dans Sport.` };
     }) }),
   };
 }
@@ -106,45 +153,39 @@ function buildTools(client: Client, userId: string, conversationId: string) {
 }
 
 async function rollingSummary(client: Client, userId: string, conversationId: string, gateway: AiGateway, model: string) {
-  const { data: conversation } = await client.from("ai_conversations").select("summary,summarized_count").eq("id", conversationId).eq("user_id", userId).maybeSingle();
-  if (!conversation) return "";
-  const previous = conversation.summary ?? ""; const done = conversation.summarized_count ?? 0;
-  const { count } = await client.from("ai_messages").select("id", { count: "exact", head: true }).eq("conversation_id", conversationId).eq("user_id", userId); const total = count ?? 0; const target = total - RECENT_WINDOW;
-  if (target <= done) return previous;
-  const { data: rows, error } = await client.from("ai_messages").select("role,plain_text").eq("conversation_id", conversationId).eq("user_id", userId).order("created_at").range(done, target - 1);
-  if (error || !rows?.length) return previous;
+  const { data: conversation } = await client.from("ai_conversations").select("summary,summarized_count").eq("id", conversationId).eq("user_id", userId).maybeSingle(); if (!conversation) return "";
+  const previous = conversation.summary ?? ""; const done = conversation.summarized_count ?? 0; const { count } = await client.from("ai_messages").select("id", { count: "exact", head: true }).eq("conversation_id", conversationId).eq("user_id", userId); const total = count ?? 0; const target = total - RECENT_WINDOW; if (target <= done) return previous;
+  const { data: rows, error } = await client.from("ai_messages").select("role,plain_text").eq("conversation_id", conversationId).eq("user_id", userId).order("created_at").range(done, target - 1); if (error || !rows?.length) return previous;
   const transcript = rows.map((row) => `${row.role === "user" ? "Utilisateur" : "Assistant"} : ${(row.plain_text ?? "").slice(0, 4000)}`).join("\n").slice(0, 120_000);
-  try { const result = streamText({ maxRetries: 0, model: gateway(model), messages: [{ role: "user", content: `Voici un résumé existant d'une conversation puis de nouveaux échanges à intégrer. Produis un résumé fusionné en français, factuel et dense (800 mots maximum), qui conserve : objectifs, décisions, préférences, chiffres, actions réalisées et informations personnelles utiles. Réponds uniquement par le résumé.\n\n[RÉSUMÉ EXISTANT]\n${previous || "(aucun)"}\n\n[NOUVEAUX ÉCHANGES]\n${transcript}` }] }); const summary = (await result.text).trim(); if (!summary) return previous; await client.from("ai_conversations").update({ summary, summarized_count: target }).eq("id", conversationId).eq("user_id", userId); return summary; } catch (error) { console.error("[ai-chat] résumé impossible", error instanceof Error ? error.message : "unknown"); return previous; }
+  try { const result = streamText({ maxRetries: 0, model: gateway(model), messages: [{ role: "user", content: `Fusionne ce résumé et ces échanges en français, factuel et dense (800 mots maximum). Conserve objectifs, décisions, préférences, chiffres et actions. Réponds uniquement par le résumé.\n\n[RÉSUMÉ]\n${previous || "(aucun)"}\n\n[ÉCHANGES]\n${transcript}` }] }); const summary = (await result.text).trim(); if (!summary) return previous; await client.from("ai_conversations").update({ summary, summarized_count: target }).eq("id", conversationId).eq("user_id", userId); return summary; } catch (error) { console.error("[ai-chat] résumé impossible", error instanceof Error ? error.message : "unknown"); return previous; }
 }
 
 function closeDanglingToolCalls(messages: UIMessage[]): UIMessage[] {
   const terminal = new Set(["output-available", "output-error", "output-denied"]);
-  return messages.map((message) => {
-    if (message.role !== "assistant") return message;
-    let mutated = false;
-    const parts = message.parts.map((part) => {
-      const p = part as unknown as Record<string, unknown>;
-      if (typeof p.type !== "string" || !p.type.startsWith("tool-")) return part;
-      const state = typeof p.state === "string" ? p.state : "";
-      if (terminal.has(state) || state === "approval-responded") return part;
-      mutated = true;
-      return { ...p, state: "output-error", errorText: "Action annulée (conversation interrompue avant confirmation) — sans effet, aucune donnée modifiée." } as unknown as UIMessage["parts"][number];
-    });
-    return mutated ? { ...message, parts } : message;
-  });
+  return messages.map((message) => { if (message.role !== "assistant") return message; let mutated = false; const parts = message.parts.map((part) => { const p = part as unknown as Record<string, unknown>; if (typeof p.type !== "string" || !p.type.startsWith("tool-")) return part; const state = typeof p.state === "string" ? p.state : ""; if (terminal.has(state) || state === "approval-responded") return part; mutated = true; return { ...p, state: "output-error", errorText: "Action annulée : la conversation a été interrompue avant confirmation." } as unknown as UIMessage["parts"][number]; }); return mutated ? { ...message, parts } : message; });
 }
 
 function describeProviderStreamError(error: unknown) {
-  const candidate = error as { status?: unknown; statusCode?: unknown; response?: { status?: unknown }; cause?: { status?: unknown; statusCode?: unknown } } | null;
+  const candidate = error as { status?: unknown; statusCode?: unknown; response?: { status?: unknown; headers?: Headers }; cause?: { status?: unknown; statusCode?: unknown } } | null;
   const rawStatus = candidate && typeof candidate === "object" ? candidate.status ?? candidate.statusCode ?? candidate.response?.status ?? candidate.cause?.status ?? candidate.cause?.statusCode : undefined;
   const status = typeof rawStatus === "number" ? rawStatus : typeof rawStatus === "string" && /^\d+$/.test(rawStatus) ? Number(rawStatus) : 0;
   const message = error instanceof Error ? error.message : String(error ?? "");
-  if (status === 429 || /quota|rate limit|too many requests|free.?tier/i.test(message)) return "Quota IA atteint chez le fournisseur. Attendez quelques secondes ou utilisez une autre clé/fournisseur.";
+  if (status === 429 || /quota|rate limit|too many requests|free.?tier|resource.?exhausted/i.test(message)) return "Quota du fournisseur IA atteint (limite de débit ou quota journalier). Ce n’est pas un quota de votre conversation. Réessayez plus tard ou utilisez une autre source IA.";
   if (status === 401 || /api key|unauthorized|authentication/i.test(message)) return "Clé API invalide ou expirée. Vérifiez la configuration du fournisseur IA.";
   if (status === 403 || /forbidden|permission/i.test(message)) return "La clé IA n’a pas les permissions nécessaires.";
   if (status === 404 || /model.*not found|endpoint.*not found|not found/i.test(message)) return "Modèle ou endpoint introuvable. Vérifiez le fournisseur et le modèle sélectionné.";
   if (status >= 500) return "Le fournisseur IA est temporairement indisponible. Réessayez dans quelques instants.";
   return "Le fournisseur IA n’a pas pu traiter la demande. Réessayez ou changez de fournisseur.";
+}
+
+async function persistAssistantMessage(client: Client, userId: string, conversationId: string, responseMessage: UIMessage) {
+  const modelMessageId = responseMessage.id;
+  if (!modelMessageId) return;
+  const { data: existing, error: lookupError } = await client.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("user_id", userId).eq("model_message_id", modelMessageId).maybeSingle();
+  if (lookupError) throw lookupError;
+  if (existing) return;
+  const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", parts: responseMessage.parts as unknown as Json, plain_text: textOf(responseMessage), model_message_id: modelMessageId });
+  if (error) throw error;
 }
 
 export async function handleAiChat(request: Request) {
@@ -155,25 +196,20 @@ export async function handleAiChat(request: Request) {
     if (typeof body.conversationId !== "string") fail(400, "no_conversation", "Conversation introuvable : ouvrez ou créez une conversation.");
     if (body.agentType !== "coach" && body.agentType !== "build") fail(400, "bad_agent", "Assistant inconnu.");
     const messages = body.messages as UIMessage[]; const agentType = body.agentType; const ephemeral = body.ephemeral === true; const conversationId = body.conversationId; const newest = messages[messages.length - 1];
-    if (newest && textOf(newest).length > MAX_TEXT_CHARS) fail(413, "message_too_long", `Message trop long : réduisez-le sous ${Math.round(MAX_TEXT_CHARS / 1000)} 000 caractères ou envoyez-le en plusieurs parties.`);
+    if (newest && textOf(newest).length > MAX_TEXT_CHARS) fail(413, "message_too_long", `Message trop long : réduisez-le sous ${Math.round(MAX_TEXT_CHARS / 1000)} 000 caractères.`);
     const { client, userId } = await authenticatedClient(request);
-    if (agentType === "build") {
-      const { data: authUser } = await client.auth.getUser();
-      const email = authUser.user?.email?.toLowerCase();
-      if (email !== "mathieu.lequint@gmail.com") fail(403, "build_forbidden", "Build IA est réservé au compte administrateur autorisé.");
-    }
+    if (agentType === "build") { const { data: authUser } = await client.auth.getUser(); if (authUser.user?.email?.toLowerCase() !== "mathieu.lequint@gmail.com") fail(403, "build_forbidden", "Build IA est réservé au compte administrateur autorisé."); }
     if (!ephemeral) { const { data, error } = await client.from("ai_conversations").select("id").eq("id", conversationId).eq("user_id", userId).eq("agent_type", agentType).maybeSingle(); if (error) fail(503, "db_error", "Erreur base de données."); if (!data) fail(404, "conversation_not_found", "Cette conversation n’existe plus. Créez-en une nouvelle."); }
-
-    const runtime = await getAiRuntimeConfig(client, userId, agentType);
-    const preferences = await getPreferencesServer(client, userId);
-    if (!ephemeral && newest?.role === "user") { const text = textOf(newest); const { data: exists } = await client.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("model_message_id", newest.id).maybeSingle(); if (!exists) { const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "user", parts: newest.parts as unknown as Json, plain_text: text, model_message_id: newest.id }); if (error) fail(503, "db_write_error", "Votre message n’a pas pu être enregistré."); } }
-
+    const runtime = await getAiRuntimeConfig(client, userId, agentType); const preferences = await getPreferencesServer(client, userId);
+    if (!ephemeral && newest?.role === "user") { const text = textOf(newest); const { data: exists } = await client.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("user_id", userId).eq("model_message_id", newest.id).maybeSingle(); if (!exists) { const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "user", parts: newest.parts as unknown as Json, plain_text: text, model_message_id: newest.id }); if (error) fail(503, "db_write_error", "Votre message n’a pas pu être enregistré."); } }
     const [dataContext, summary] = await Promise.all([agentType === "coach" ? contextForCoach(client, userId, preferences.permissions) : Promise.resolve({}), !ephemeral && preferences.memory_level !== "none" ? rollingSummary(client, userId, conversationId, runtime.gateway, runtime.model) : Promise.resolve("")]);
     const tools = agentType === "coach" ? coachTools(client, userId, conversationId, preferences.permissions) : buildTools(client, userId, conversationId);
-    const memoryBlock = summary ? `\n\n[MÉMOIRE DE LA CONVERSATION — résumé des échanges plus anciens]\n${summary}` : "";
-    const instructions = agentType === "coach" ? `Tu es Coach IA, le coach personnel francophone de Pace. Tu utilises automatiquement les données autorisées ci-dessous sans redemander ce qui est déjà connu. Tu donnes des réponses précises, bienveillantes et actionnables. Quand l'utilisateur demande une modification, utilise l'outil approprié. Si une permission nécessaire est désactivée, explique que l’utilisateur doit l’activer dans Paramètres > Intelligence Artificielle > Permissions du Coach IA et n’affirme jamais que l’action a été effectuée. Après chaque outil, confirme clairement avec ✓ et la modification exacte. Données autorisées: ${JSON.stringify(dataContext)}. Niveau mémoire: ${preferences.memory_level}. Ne parle jamais du développement de Pace; redirige ces demandes vers BUILD IA.${memoryBlock}` : `Tu es BUILD IA, l'assistant de développement francophone de Pace. Tu transformes automatiquement les signalements en bugs, améliorations, fonctionnalités ou tâches structurées avec priorité. Tu n'es pas un coach santé et rediriges ces demandes vers Coach IA. Tu ne prétends jamais modifier le code source; tu peux analyser, cadrer et créer des éléments dans le centre Développement.${memoryBlock}`;
-    const windowed = messages.length > RECENT_WINDOW ? messages.slice(-RECENT_WINDOW) : messages; const toolApproval = Object.fromEntries(Object.keys(tools).map((name) => { const permissionEnabled = name === "add_food" ? preferences.permissions.nutrition : name === "update_profile" || name === "add_health_sample" ? preferences.permissions.profile : true; return [name, permissionEnabled && preferences.confirm_actions ? "user-approval" : "not-applicable"]; })); const safeWindowed = closeDanglingToolCalls(windowed);
+    const memoryBlock = summary ? `\n\n[MÉMOIRE — résumé des échanges anciens]\n${summary}` : "";
+    const instructions = agentType === "coach" ? `Tu es Coach IA, le coach personnel francophone de Pace. Utilise les données autorisées sans redemander ce qui est déjà connu. Réponds précisément et actionnablement. Tu as accès aux outils Profil, Nutrition et Sport. Quand l'utilisateur demande de créer ou modifier un exercice, un programme ou une séance Sport, utilise les outils Sport : n'affirme jamais que tu n'as pas accès à Sport. Si un programme demande un exercice inexistant, crée d'abord l'exercice puis le programme. Si une permission est désactivée, explique-le et n'affirme jamais que l'action a été effectuée. Après chaque outil, confirme clairement la modification exacte. Données autorisées : ${JSON.stringify(dataContext)}. Niveau mémoire : ${preferences.memory_level}. Ne parle jamais du développement de Pace; redirige ces demandes vers BUILD IA.${memoryBlock}` : `Tu es BUILD IA, l'assistant de développement francophone de Pace. Transforme les signalements en bugs, améliorations, fonctionnalités ou tâches structurées. Tu ne prétends jamais modifier le code source; tu peux analyser, cadrer et créer des éléments dans Développement. Pour la santé, redirige vers Coach IA.${memoryBlock}`;
+    const windowed = messages.length > RECENT_WINDOW ? messages.slice(-RECENT_WINDOW) : messages;
+    const toolApproval = Object.fromEntries(Object.keys(tools).map((name) => { const permissionEnabled = name === "add_food" ? preferences.permissions.nutrition : ["update_profile", "add_health_sample"].includes(name) ? preferences.permissions.profile : ["create_sport_exercise", "create_sport_program", "create_sport_session"].includes(name) ? preferences.permissions.sport : true; return [name, permissionEnabled && preferences.confirm_actions ? "user-approval" : "not-applicable"]; }));
+    const safeWindowed = closeDanglingToolCalls(windowed);
     const result = streamText({ maxRetries: 0, model: runtime.gateway(runtime.model), system: instructions, messages: await convertToModelMessages(safeWindowed), tools, toolApproval, stopWhen: stepCountIs(50), onError: ({ error }) => console.error("[ai-chat] erreur de streaming", error instanceof Error ? error.message : error) });
-    return result.toUIMessageStreamResponse({ headers: { "X-Pace-AI-Model": runtime.model, "X-Pace-AI-Provider": PROVIDER_LABELS[runtime.provider] ?? runtime.provider }, onError: describeProviderStreamError });
+    return result.toUIMessageStreamResponse({ headers: { "X-Pace-AI-Model": runtime.model, "X-Pace-AI-Provider": PROVIDER_LABELS[runtime.provider] ?? runtime.provider }, onFinish: async ({ responseMessage }) => { if (ephemeral) return; try { await persistAssistantMessage(client, userId, conversationId, responseMessage); } catch (error) { console.error("[ai-chat] persistance assistant impossible", error instanceof Error ? error.message : "unknown"); } }, onError: describeProviderStreamError });
   } catch (error) { return errorResponse(error, startedAt); }
 }
