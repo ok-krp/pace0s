@@ -137,8 +137,12 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const [loaded, setLoaded] = useState(false);
   const valueRef = useRef<T>(initial);
   const hydratedRef = useRef(false);
+  const suppressPersistRef = useRef(false);
 
-  useEffect(() => { hydratedRef.current = false; }, [key]);
+  useEffect(() => {
+    hydratedRef.current = false;
+    suppressPersistRef.current = false;
+  }, [key]);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -149,6 +153,7 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   useEffect(() => { valueRef.current = value; }, [value]);
   useEffect(() => {
     if (!loaded) return;
+    if (suppressPersistRef.current) { suppressPersistRef.current = false; return; }
     if (!hydratedRef.current) { hydratedRef.current = true; return; }
     try {
       const serialized = JSON.stringify(value);
@@ -166,6 +171,7 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
       if (!detail || detail.key !== key) return;
+      suppressPersistRef.current = true;
       valueRef.current = detail.value as T;
       setValue(detail.value as T);
     };
