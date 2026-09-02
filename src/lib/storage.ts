@@ -80,7 +80,12 @@ function syncLatestOverloadRowsToTraining(value: unknown) {
     let programsChanged = false;
     for (const [exerciseId, rows] of Object.entries(overload)) {
       if (!Array.isArray(rows)) continue;
-      const latest = rows.find((row) => row?.source === "manual") ?? null;
+      const latest = rows
+        .filter((row) => row?.source === "manual" && Number.isFinite(Date.parse(row.date ?? "")))
+        .reduce<StoredOverloadRow | null>((current, row) => {
+          if (!current) return row;
+          return Date.parse(row.date ?? "") > Date.parse(current.date ?? "") ? row : current;
+        }, null);
       if (!latest) continue;
       const weight = Number(latest.weight ?? 0), reps = Number(latest.reps ?? 0), sets = Number(latest.sets ?? 0);
       if (![weight, reps, sets].every(Number.isFinite)) continue;
