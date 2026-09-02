@@ -8,7 +8,7 @@ const profileSync = await readFile("src/hooks/use-profile-realtime.ts", "utf8");
 const profileRoute = await readFile("src/routes/profile.tsx", "utf8");
 const goals = await readFile("src/hooks/use-user-goals.tsx", "utf8");
 const profileMigration = await readFile("supabase/migrations/20260821090000_profile_sync_hardening.sql", "utf8");
-const migrations = await readFile("supabase/migrations/20260820235000_sync_timestamp_trigger_fix.sql", "utf8");
+const migrations = await readFile("supabase/migrations/20260902092340_fix_event_driven_sync_timestamp_reconciliation.sql", "utf8");
 
 assert.equal(/setInterval\s*\(|setTimeout\s*\(/.test(engine), false, "sync engine must not poll with timers");
 assert.equal(engine.includes("location.reload"), false, "sync engine must not reload the app");
