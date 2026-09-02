@@ -20,13 +20,10 @@ export type NutritionItem = {
   qty: number;
 };
 
-const KEY_ITEMS = "pace.nutrition.items";
-const KEY_TOTALS = "pace.nutrition.totals";
 const DOMAIN_ITEMS = "nutrition.items";
-const DOMAIN_TOTALS = "nutrition.totals";
-
 type NutritionTotals = Record<string, { kcal: number; p: number; c: number; f: number }>;
 type NutritionMap = Record<string, NutritionItem[]>;
+const completedOperations = new Map<string, number>();
 
 export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
   const totals: NutritionTotals = {};
@@ -42,43 +39,36 @@ export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
 }
 
 function readNutritionItems(): NutritionMap {
-  const record = readDomain<NutritionMap>(DOMAIN_ITEMS, {});
-  if (Object.keys(record.value).length > 0) return record.value;
-  try {
-    const raw = localStorage.getItem(KEY_ITEMS);
-    return raw ? JSON.parse(raw) as NutritionMap : {};
-  } catch { return {}; }
+  return readDomain<NutritionMap>(DOMAIN_ITEMS, {}).value;
 }
 
-/** Repair derived totals without changing the source nutrition items. */
+/** Rebuild derived totals and repair an already-corrupted local nutrition state. */
 export function repairNutritionTotals(): void {
   if (typeof window === "undefined") return;
   const items = readNutritionItems();
   if (!Object.keys(items).length) return;
   writeDomain(DOMAIN_ITEMS, items);
-  writeDomain(DOMAIN_TOTALS, recomputeNutritionTotals(items));
-  // Keep the legacy keys during the migration for old screens and recovery.
-  try {
-    localStorage.setItem(KEY_ITEMS, JSON.stringify(items));
-    localStorage.setItem(KEY_TOTALS, JSON.stringify(recomputeNutritionTotals(items)));
-  } catch {}
 }
 
 repairNutritionTotals();
 
-export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }) {
-  const today = todayKey();
-  const it: NutritionItem = { id: crypto.randomUUID(), qty: 1, ...item };
-  const items = readNutritionItems();
-  const list: NutritionItem[] = [...(items[today] ?? []), it];
-  const nextItems = { ...items, [today]: list };
-  const totals = recomputeNutritionTotals(nextItems);
+export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, operationId?: string): boolean {
+  if (operationId) {
+    const previous = completedOperations.get(operationId);
+    if (previous && Date.now() - previous < 60_000) return false;
+    completedOperations.set(operationId, Date.now());
+    for (const [id, timestamp] of completedOperations) if (Date.now() - timestamp >= 60_000) completedOperations.delete(id);
+  }
 
+  const today = todayKey();
+  const it: NutritionItem = { id: crypto.randomUUID(), qty: item.qty ?? 1, ...item };
+  const items = readNutritionItems();
+  const list = [...(items[today] ?? []), it];
+  const nextItems = { ...items, [today]: list };
+
+  // writeDomain is the canonical write. It also derives nutrition.totals and
+  // emits a timestamped sync mutation so Cloud Sync cannot replay the write.
   writeDomain(DOMAIN_ITEMS, nextItems);
-  writeDomain(DOMAIN_TOTALS, totals);
-  try {
-    localStorage.setItem(KEY_ITEMS, JSON.stringify(nextItems));
-    localStorage.setItem(KEY_TOTALS, JSON.stringify(totals));
-  } catch {}
   window.dispatchEvent(new Event("pace.nutrition.changed"));
+  return true;
 }
