@@ -24,6 +24,11 @@ const DOMAIN_ITEMS = "nutrition.items";
 type NutritionTotals = Record<string, { kcal: number; p: number; c: number; f: number }>;
 type NutritionMap = Record<string, NutritionItem[]>;
 const completedOperations = new Map<string, number>();
+const recentAdds = new Map<string, number>();
+
+function addFingerprint(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }) {
+  return JSON.stringify({ name: item.name.trim(), meal: item.meal.trim(), kcal: Number(item.kcal || 0), p: Number(item.p || 0), c: Number(item.c || 0), f: Number(item.f || 0), fiber: Number(item.fiber || 0), sugar: Number(item.sugar || 0), sodium: Number(item.sodium || 0), qty: Number(item.qty ?? 1) });
+}
 
 export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
   const totals: NutritionTotals = {};
@@ -53,11 +58,18 @@ export function repairNutritionTotals(): void {
 repairNutritionTotals();
 
 export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, operationId?: string): boolean {
+  const now = Date.now();
   if (operationId) {
     const previous = completedOperations.get(operationId);
-    if (previous && Date.now() - previous < 60_000) return false;
-    completedOperations.set(operationId, Date.now());
-    for (const [id, timestamp] of completedOperations) if (Date.now() - timestamp >= 60_000) completedOperations.delete(id);
+    if (previous && now - previous < 60_000) return false;
+    completedOperations.set(operationId, now);
+    for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
+  } else {
+    const fingerprint = addFingerprint(item);
+    const previous = recentAdds.get(fingerprint);
+    if (previous && now - previous < 2_000) return false;
+    recentAdds.set(fingerprint, now);
+    for (const [key, timestamp] of recentAdds) if (now - timestamp >= 2_000) recentAdds.delete(key);
   }
 
   const today = todayKey();
