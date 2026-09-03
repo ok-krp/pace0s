@@ -48,6 +48,10 @@ begin
     raise exception 'forbidden';
   end if;
 
+  -- Serialize identical tool-call replays so two concurrent executions cannot
+  -- both reserve the key before either one records the food row.
+  perform pg_advisory_xact_lock(hashtextextended(v_key, 0));
+
   insert into public.ai_tool_idempotency(idempotency_key, user_id, conversation_id, tool_name)
   values (v_key, p_user_id, p_conversation_id, 'add_food')
   on conflict (idempotency_key) do nothing;
