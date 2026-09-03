@@ -152,79 +152,79 @@ export type Database = {
       }
       ai_preferences: {
         Row: {
+          build_ai_base_url: string | null
+          build_ai_model: string
+          build_ai_provider: string
+          build_ai_source: string
+          coach_ai_base_url: string | null
+          coach_ai_model: string
+          coach_ai_provider: string
+          coach_ai_source: string
           confirm_actions: boolean
           created_at: string
           memory_level: string
           permissions: Json
           updated_at: string
           user_id: string
-          coach_ai_source: string
-          coach_ai_provider: string
-          coach_ai_model: string
-          coach_ai_base_url: string | null
-          build_ai_source: string
-          build_ai_provider: string
-          build_ai_model: string
-          build_ai_base_url: string | null
         }
         Insert: {
+          build_ai_base_url?: string | null
+          build_ai_model?: string
+          build_ai_provider?: string
+          build_ai_source?: string
+          coach_ai_base_url?: string | null
+          coach_ai_model?: string
+          coach_ai_provider?: string
+          coach_ai_source?: string
           confirm_actions?: boolean
           created_at?: string
           memory_level?: string
           permissions?: Json
           updated_at?: string
           user_id: string
-          coach_ai_source?: string
-          coach_ai_provider?: string
-          coach_ai_model?: string
-          coach_ai_base_url?: string | null
-          build_ai_source?: string
-          build_ai_provider?: string
-          build_ai_model?: string
-          build_ai_base_url?: string | null
         }
         Update: {
+          build_ai_base_url?: string | null
+          build_ai_model?: string
+          build_ai_provider?: string
+          build_ai_source?: string
+          coach_ai_base_url?: string | null
+          coach_ai_model?: string
+          coach_ai_provider?: string
+          coach_ai_source?: string
           confirm_actions?: boolean
           created_at?: string
           memory_level?: string
           permissions?: Json
           updated_at?: string
           user_id?: string
-          coach_ai_source?: string
-          coach_ai_provider?: string
-          coach_ai_model?: string
-          coach_ai_base_url?: string | null
-          build_ai_source?: string
-          build_ai_provider?: string
-          build_ai_model?: string
-          build_ai_base_url?: string | null
         }
         Relationships: []
       }
       ai_provider_secrets: {
         Row: {
-          user_id: string
-          provider: string
+          created_at: string
           encrypted_api_key: string
           key_last4: string
-          created_at: string
+          provider: string
           updated_at: string
+          user_id: string
         }
         Insert: {
-          user_id: string
-          provider: string
+          created_at?: string
           encrypted_api_key: string
           key_last4?: string
-          created_at?: string
+          provider: string
           updated_at?: string
+          user_id: string
         }
         Update: {
-          user_id?: string
-          provider?: string
+          created_at?: string
           encrypted_api_key?: string
           key_last4?: string
-          created_at?: string
+          provider?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -291,7 +291,7 @@ export type Database = {
           protein_g: number
           sodium_mg: number | null
           source: string | null
-          sugar_g: string | null
+          sugar_g: number | null
           user_id: string
         }
         Insert: {
@@ -519,6 +519,7 @@ export type Database = {
           muscle_mass_goal_pct: number | null
           sex: string | null
           training_goal: string | null
+          training_sessions_goal: number
           updated_at: string
           user_id: string
           weight_goal_kg: number | null
@@ -539,6 +540,7 @@ export type Database = {
           muscle_mass_goal_pct?: number | null
           sex?: string | null
           training_goal?: string | null
+          training_sessions_goal?: number
           updated_at?: string
           user_id: string
           weight_goal_kg?: number | null
@@ -559,6 +561,7 @@ export type Database = {
           muscle_mass_goal_pct?: number | null
           sex?: string | null
           training_goal?: string | null
+          training_sessions_goal?: number
           updated_at?: string
           user_id?: string
           weight_goal_kg?: number | null
@@ -568,28 +571,28 @@ export type Database = {
       }
       push_subscriptions: {
         Row: {
+          created_at: string
           id: string
-          user_id: string
           onesignal_subscription_id: string
           platform: string
-          created_at: string
           updated_at: string
+          user_id: string
         }
         Insert: {
+          created_at?: string
           id?: string
-          user_id: string
           onesignal_subscription_id: string
           platform?: string
-          created_at?: string
           updated_at?: string
+          user_id: string
         }
         Update: {
+          created_at?: string
           id?: string
-          user_id?: string
           onesignal_subscription_id?: string
           platform?: string
-          created_at?: string
           updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -737,12 +740,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -753,7 +756,7 @@ export type Tables<
     ? R
     : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-      DefaultSchema["Views"])
+        DefaultSchema["Views"])
     ? (DefaultSchema["Tables"] &
         DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R
@@ -766,11 +769,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -791,11 +794,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -816,11 +819,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -833,11 +836,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
