@@ -1,0 +1,44 @@
+name: AI persistence hotfix
+
+on:
+  push:
+    branches: [fix/ai-chat-persistence-quota-fallback]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/ai-chat-persistence-quota-fallback
+          fetch-depth: 0
+      - name: Apply persistence fix
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/lib/ai-chat.server.ts')
+          s = p.read_text()
+          original = s
+          if 'consumeStream' not in s.splitlines()[1]:
+              s = s.replace('import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage, type ToolExecutionOptions } from "ai";', 'import { consumeStream, convertToModelMessages, stepCountIs, streamText, tool, type UIMessage, type ToolExecutionOptions } from "ai";')
+          old = 'return result.toUIMessageStreamResponse({ headers: { "X-Pace-AI-Model": runtime.model, "X-Pace-AI-Provider": PROVIDER_LABELS[runtime.provider] ?? runtime.provider }, onFinish: async ({ responseMessage }) => { if (ephemeral) return; try { await persistAssistantMessage(client, userId, conversationId, responseMessage); } catch (error) { console.error("[ai-chat] persistance assistant impossible", error instanceof Error ? error.message : "unknown"); } }, onError: describeProviderStreamError });'
+          new = 'return result.toUIMessageStreamResponse({ headers: { "X-Pace-AI-Model": runtime.model, "X-Pace-AI-Provider": PROVIDER_LABELS[runtime.provider] ?? runtime.provider }, onFinish: async ({ responseMessage, isAborted }) => { if (ephemeral) return; if (!responseMessage?.id || responseMessage.parts.length === 0) return; try { await persistAssistantMessage(client, userId, conversationId, responseMessage); if (isAborted) console.warn("[ai-chat] réponse assistant persistée après déconnexion client"); } catch (error) { console.error("[ai-chat] persistance assistant impossible", error instanceof Error ? error.message : "unknown"); } }, consumeSseStream: consumeStream, onError: describeProviderStreamError });'
+          if old in s:
+              s = s.replace(old, new)
+          if s == original:
+              print('NO_CHANGE')
+          else:
+              p.write_text(s)
+              print('PATCHED')
+      - name: Commit patch
+        shell: bash
+        run: |
+          if git diff --quiet; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/ai-chat.server.ts
+          git commit -m 'fix(ai): persist assistant messages across client disconnects'
+          git push origin HEAD:fix/ai-chat-persistence-quota-fallback
