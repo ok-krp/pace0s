@@ -20,13 +20,15 @@ export type NutritionItem = {
   qty: number;
 };
 
-const KEY_ITEMS = "pace.nutrition.items";
-const KEY_TOTALS = "pace.nutrition.totals";
 const DOMAIN_ITEMS = "nutrition.items";
-const DOMAIN_TOTALS = "nutrition.totals";
-
 type NutritionTotals = Record<string, { kcal: number; p: number; c: number; f: number }>;
 type NutritionMap = Record<string, NutritionItem[]>;
+const completedOperations = new Map<string, number>();
+const recentAdds = new Map<string, number>();
+
+function addFingerprint(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }) {
+  return JSON.stringify({ name: item.name.trim(), meal: item.meal.trim(), kcal: Number(item.kcal || 0), p: Number(item.p || 0), c: Number(item.c || 0), f: Number(item.f || 0), fiber: Number(item.fiber || 0), sugar: Number(item.sugar || 0), sodium: Number(item.sodium || 0), qty: Number(item.qty ?? 1) });
+}
 
 export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
   const totals: NutritionTotals = {};
@@ -42,43 +44,43 @@ export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
 }
 
 function readNutritionItems(): NutritionMap {
-  const record = readDomain<NutritionMap>(DOMAIN_ITEMS, {});
-  if (Object.keys(record.value).length > 0) return record.value;
-  try {
-    const raw = localStorage.getItem(KEY_ITEMS);
-    return raw ? JSON.parse(raw) as NutritionMap : {};
-  } catch { return {}; }
+  return readDomain<NutritionMap>(DOMAIN_ITEMS, {}).value;
 }
 
-/** Repair derived totals without changing the source nutrition items. */
+/** Rebuild derived totals and repair an already-corrupted local nutrition state. */
 export function repairNutritionTotals(): void {
   if (typeof window === "undefined") return;
   const items = readNutritionItems();
   if (!Object.keys(items).length) return;
   writeDomain(DOMAIN_ITEMS, items);
-  writeDomain(DOMAIN_TOTALS, recomputeNutritionTotals(items));
-  // Keep the legacy keys during the migration for old screens and recovery.
-  try {
-    localStorage.setItem(KEY_ITEMS, JSON.stringify(items));
-    localStorage.setItem(KEY_TOTALS, JSON.stringify(recomputeNutritionTotals(items)));
-  } catch {}
 }
 
 repairNutritionTotals();
 
-export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }) {
-  const today = todayKey();
-  const it: NutritionItem = { id: crypto.randomUUID(), qty: 1, ...item };
-  const items = readNutritionItems();
-  const list: NutritionItem[] = [...(items[today] ?? []), it];
-  const nextItems = { ...items, [today]: list };
-  const totals = recomputeNutritionTotals(nextItems);
+export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, operationId?: string): boolean {
+  const now = Date.now();
+  if (operationId) {
+    const previous = completedOperations.get(operationId);
+    if (previous && now - previous < 60_000) return false;
+    completedOperations.set(operationId, now);
+    for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
+  } else {
+    const fingerprint = addFingerprint(item);
+    const previous = recentAdds.get(fingerprint);
+    if (previous && now - previous < 2_000) return false;
+    recentAdds.set(fingerprint, now);
+    for (const [key, timestamp] of recentAdds) if (now - timestamp >= 2_000) recentAdds.delete(key);
+  }
 
+  const today = todayKey();
+  const it: NutritionItem = { id: crypto.randomUUID(), qty: item.qty ?? 1, ...item };
+  const items = readNutritionItems();
+  const list = [...(items[today] ?? []), it];
+  const nextItems = { ...items, [today]: list };
+
+  // writeDomain is the canonical write. It also derives nutrition.totals and
+  // emits a timestamped sync mutation so Cloud Sync cannot replay the write.
   writeDomain(DOMAIN_ITEMS, nextItems);
-  writeDomain(DOMAIN_TOTALS, totals);
-  try {
-    localStorage.setItem(KEY_ITEMS, JSON.stringify(nextItems));
-    localStorage.setItem(KEY_TOTALS, JSON.stringify(totals));
-  } catch {}
   window.dispatchEvent(new Event("pace.nutrition.changed"));
+  return true;
 }
