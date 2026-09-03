@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses, type UIMessage } from "ai";
+import { DefaultChatTransport, type UIMessage } from "ai";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -53,6 +53,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const autoApprovalKeyRef = useRef<string | null>(null);
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
@@ -90,7 +91,27 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
     prepareSendMessagesRequest: ({ messages: all, body }) => ({ body: { ...body, messages: all.slice(-30) } }),
     body: { conversationId, agentType, ephemeral },
   }), [agentType, conversationId, ephemeral]);
-  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses, onFinish: () => { clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => setFailure(describeChatError(chatError)) });
+  const sendAutomaticallyWhen = useMemo(() => ({ messages }: { messages: UIMessage[] }) => {
+    const last = messages.at(-1);
+    if (!last || last.role !== "assistant") return false;
+    const responses = last.parts
+      .filter((part) => {
+        const candidate = part as unknown as Record<string, unknown>;
+        const approval = candidate.approval;
+        return candidate.state === "approval-responded" && typeof approval === "object" && approval !== null && typeof (approval as Record<string, unknown>).id === "string";
+      })
+      .map((part) => {
+        const candidate = part as unknown as Record<string, unknown>;
+        const approval = candidate.approval as Record<string, unknown>;
+        return `${approval.id}:${approval.approved === true ? "approved" : "denied"}`;
+      });
+    if (responses.length === 0) return false;
+    const key = `${last.id}:${responses.join("|")}`;
+    if (autoApprovalKeyRef.current === key) return false;
+    autoApprovalKeyRef.current = key;
+    return true;
+  }, []);
+  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen, onFinish: () => { clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => setFailure(describeChatError(chatError)) });
   const busy = status === "submitted" || status === "streaming";
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
