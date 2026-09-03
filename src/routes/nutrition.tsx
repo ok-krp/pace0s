@@ -22,6 +22,7 @@ import { fetchProductByBarcode, type OFFProduct } from "@/lib/openfoodfacts";
 import { analyzeFoodPhoto } from "@/lib/nutrition-ai.functions";
 import { sumItems, type FoodAnalysis, type FoodItem } from "@/lib/nutrition-ai.shared";
 import { FoodAnalysisEditor } from "@/components/FoodAnalysisEditor";
+import { NutritionDailyAiChat } from "@/components/NutritionDailyAiChat";
 import { toast } from "sonner";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { supabase } from "@/integrations/supabase/client";
@@ -174,6 +175,7 @@ function NutritionPage() {
 
       {(currentTab === "nutrition" || currentTab === "recipes") && (
         <div className="fixed z-40 right-4 flex flex-col gap-3 bottom-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))] md:bottom-6">
+          {currentTab === "nutrition" && <NutritionDailyAiChat />}
           <button onClick={() => photoInputRef.current?.click()} aria-label="Analyser un repas par photo" className="glass-icon size-14 text-white bg-gradient-to-br from-fuchsia-500/70 to-purple-600/70 shadow-[var(--shadow-glow)] hover:scale-105 active:scale-95 transition">{busy ? <Loader2 className="size-6 animate-spin" /> : <Camera className="size-6" />}</button>
           <button onClick={() => setScanOpen(true)} aria-label="Scanner un code-barres" className="glass-icon size-14 text-white bg-gradient-to-br from-emerald-500/70 to-teal-600/70 shadow-[var(--shadow-glow)] hover:scale-105 active:scale-95 transition"><ScanBarcode className="size-6" /></button>
           <input ref={photoInputRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
