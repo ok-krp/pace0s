@@ -15,7 +15,7 @@ const visionSchema = z.object({ dish_name: z.string().min(1).max(300), items: z.
 function getGeminiModel() { const key = process.env.GEMINI_API_KEY; if (!key) throw new Error("L’IA Pace n’est pas configurée sur le serveur."); return createGoogleGenerativeAI({ apiKey: key })(AI_MODEL.replace(/^google\//, "")); }
 function storagePathForUser(userId: string, path: string) { const normalized = path.replace(/^\/+/, ""); if (!normalized || normalized.includes("..") || !normalized.startsWith(`${userId}/`)) throw new Error("Référence image invalide."); return normalized; }
 
-export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d: { storagePath: string; goal?: string; hint?: string }) => z.object({ storagePath: z.string().min(3).max(500), goal: z.string().max(300).optional(), hint: z.string().max(300).optional() }).parse(d)).handler(async ({ data, context }) => {
+export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((d: { storagePath: string; goal?: string; hint?: string }) => z.object({ storagePath: z.string().min(3).max(500), goal: z.string().max(300).optional(), hint: z.string().max(300).optional() }).parse(d)).handler(async ({ data, context }) => {
   const { data: consent, error: consentError } = await context.supabase.from("legal_consent").select("opts").eq("user_id", context.userId).eq("eula_version", LEGAL_VERSIONS.eula).eq("privacy_version", LEGAL_VERSIONS.privacy).maybeSingle();
   if (consentError) throw new Error(consentError.message);
   if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) return { error: "Consentement Analyse IA requis", result: null };
@@ -51,7 +51,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
   finally { await supabaseAdmin.storage.from(PHOTO_BUCKET).remove([path]).catch(() => undefined); }
 });
 
-export const nutritionAdvice = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).inputValidator((d: { summary: string }) => z.object({ summary: z.string().min(1).max(4000) }).parse(d)).handler(async ({ data, context }) => {
+export const nutritionAdvice = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((d: { summary: string }) => z.object({ summary: z.string().min(1).max(4000) }).parse(d)).handler(async ({ data, context }) => {
   const { data: consent, error: consentError } = await context.supabase.from("legal_consent").select("opts").eq("user_id", context.userId).eq("eula_version", LEGAL_VERSIONS.eula).eq("privacy_version", LEGAL_VERSIONS.privacy).maybeSingle();
   if (consentError) throw new Error(consentError.message);
   if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) return { advice: null, error: "Consentement Analyse IA requis" };
