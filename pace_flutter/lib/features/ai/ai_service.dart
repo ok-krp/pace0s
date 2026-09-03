@@ -27,9 +27,10 @@ class PaceAiService {
   static const _memoryKey = 'pace.ai.memory';
   static const _memoryEnabledKey = 'pace.settings.ai.memory';
   static const _confirmKey = 'pace.settings.ai.confirm_actions';
+  // Production AI endpoint. Override with --dart-define=PACE_AI_URL=... for a custom deployment.
   static const _aiUrl = String.fromEnvironment(
     'PACE_AI_URL',
-    defaultValue: 'https://pace0s.lovable.app/api/ai-chat',
+    defaultValue: 'https://pace0s.vercel.app/api/ai-chat',
   );
 
   SupabaseClient? get _client => auth.client;
