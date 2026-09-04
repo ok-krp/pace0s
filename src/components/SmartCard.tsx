@@ -105,7 +105,6 @@ function SmartCardBase({
               <motion.button
                 type="button"
                 onClick={handleQuickAdd}
-                whileTap={{ scale: 0.94 }}
                 transition={springSnap}
                 aria-label={quickLabel ?? `Ajouter ${metric.label}`}
                 className={`ml-auto glass-thin rounded-full pl-2 pr-3 py-1 text-[11px] font-medium flex items-center gap-1 ${interactiveRing}`}

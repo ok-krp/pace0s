@@ -91,7 +91,6 @@ function StatCardBase({
         animate={{ opacity: 1, y: 0 }}
         whileHover={{ y: -2, scale: 1.01 }}
         whileFocus={{ y: -2, scale: 1.01 }}
-        whileTap={{ scale: 0.97 }}
         transition={springSnap}
         aria-label={`${displayLabel} — ${hint ?? "ouvrir"}`}
         className={className}
