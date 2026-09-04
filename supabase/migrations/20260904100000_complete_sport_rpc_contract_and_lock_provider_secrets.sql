@@ -14,24 +14,19 @@ create or replace function public.sport_update_exercise(
   p_default_weight numeric default null,
   p_rest_sec integer default null
 )
-returns boolean
-language plpgsql
-security invoker
-set search_path = public
-as $$
+returns boolean language plpgsql security invoker set search_path = public as $$
 begin
   update public.sport_exercises
-  set name = coalesce(p_name, name), muscle = coalesce(p_muscle, muscle), equipment = p_equipment, notes = p_notes,
-      default_sets = p_default_sets, default_reps = p_default_reps, default_weight = p_default_weight,
-      rest_sec = p_rest_sec, updated_at = now()
-  where id = p_id and user_id = (select auth.uid());
-  return found;
+  set name=coalesce(p_name,name), muscle=coalesce(p_muscle,muscle), equipment=p_equipment, notes=p_notes,
+      default_sets=p_default_sets, default_reps=p_default_reps, default_weight=p_default_weight,
+      rest_sec=p_rest_sec, updated_at=now()
+  where id=p_id and user_id=(select auth.uid()); return found;
 end;
 $$;
 
 create or replace function public.sport_delete_exercise(p_id uuid)
 returns boolean language plpgsql security invoker set search_path = public as $$
-begin delete from public.sport_exercises where id = p_id and user_id = (select auth.uid()); return found; end;
+begin delete from public.sport_exercises where id=p_id and user_id=(select auth.uid()); return found; end;
 $$;
 
 create or replace function public.sport_update_program(p_id uuid, p_name text default null, p_emoji text default null, p_days integer[] default null)
@@ -66,7 +61,7 @@ revoke execute on function public.sport_update_program(uuid,text,text,integer[])
 revoke execute on function public.sport_delete_program(uuid) from public, anon;
 revoke execute on function public.sport_finish_workout(uuid,timestamptz,integer,text) from public, anon;
 revoke execute on function public.sport_delete_workout(uuid) from public, anon;
-grant execute on function public.sport_update_exercise(uuid,text,text,text,integer,integer,numeric,integer) to authenticated;
+grant execute on function public.sport_update_exercise(uuid,text,text,text,text,integer,integer,numeric,integer) to authenticated;
 grant execute on function public.sport_delete_exercise(uuid) to authenticated;
 grant execute on function public.sport_update_program(uuid,text,text,integer[]) to authenticated;
 grant execute on function public.sport_delete_program(uuid) to authenticated;
