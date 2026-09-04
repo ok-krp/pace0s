@@ -1,19 +1,22 @@
 name: Apply AI quota retry patch
 
 on:
-  push:
+  pull_request:
+    types: [opened, synchronize]
     branches:
-      - fix/ai-quota-retry
+      - main
 
 permissions:
   contents: write
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'chore: prepare AI quota retry patch'
+    if: github.event.pull_request.head.ref == 'fix/ai-quota-retry'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: fix/ai-quota-retry
       - name: Enable provider retry for transient AI failures
         run: |
           python - <<'PY'
@@ -28,6 +31,10 @@ jobs:
           PY
       - name: Commit patch
         run: |
+          if git diff --quiet -- src/lib/ai-chat.server.ts; then
+            echo 'Patch already applied.'
+            exit 0
+          fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add src/lib/ai-chat.server.ts
