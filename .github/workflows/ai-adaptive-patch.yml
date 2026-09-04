@@ -1,0 +1,116 @@
+name: Apply adaptive AI patch
+on:
+  push:
+    branches: [feat/local-ai-adaptive-fallback]
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch adaptive local AI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+
+          pkg = Path('package.json')
+          data = json.loads(pkg.read_text())
+          deps = data.setdefault('dependencies', {})
+          deps.setdefault('@huggingface/transformers', '^3.7.2')
+          pkg.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+
+          local = Path('src/lib/local-ai.ts')
+          local.parent.mkdir(parents=True, exist_ok=True)
+          local.write_text(r'''import { pipeline, type TextGenerationPipeline } from "@huggingface/transformers";
+
+const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
+const CACHE_KEY = "pace.local-ai.ready.v1";
+const MAX_NEW_TOKENS = 192;
+const LOCAL_DEADLINE_MS = 8_500;
+
+let generator: TextGenerationPipeline | null = null;
+let loading: Promise<TextGenerationPipeline> | null = null;
+
+export type LocalAiMessage = { role: "system" | "user" | "assistant"; content: string };
+
+export function localAiSupported() {
+  return typeof window !== "undefined" && "gpu" in navigator;
+}
+
+export function localAiReady() {
+  return localAiSupported() && localStorage.getItem(CACHE_KEY) === "1";
+}
+
+async function getGenerator() {
+  if (generator) return generator;
+  if (!loading) {
+    loading = pipeline("text-generation", MODEL_ID, { device: "webgpu", dtype: "q4f16" }) as Promise<TextGenerationPipeline>;
+  }
+  generator = await loading;
+  loading = null;
+  localStorage.setItem(CACHE_KEY, "1");
+  return generator;
+}
+
+export async function warmLocalAi() {
+  if (!localAiSupported()) return false;
+  try {
+    await getGenerator();
+    return true;
+  } catch {
+    loading = null;
+    localStorage.removeItem(CACHE_KEY);
+    return false;
+  }
+}
+
+export async function generateLocalAi(messages: LocalAiMessage[]) {
+  if (!localAiSupported() || !localAiReady()) return null;
+  const pipe = await getGenerator();
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), LOCAL_DEADLINE_MS);
+  try {
+    const output = await pipe(messages, {
+      max_new_tokens: MAX_NEW_TOKENS,
+      do_sample: false,
+      signal: controller.signal,
+    } as never);
+    const generated = output?.[0]?.generated_text;
+    if (Array.isArray(generated)) {
+      const last = generated.at(-1);
+      return typeof last?.content === "string" ? last.content.trim() : null;
+    }
+    return typeof generated === "string" ? generated.trim() : null;
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+''')
+
+          route = Path('src/routes/ai.$agentType.$conversationId.tsx')
+          text = route.read_text()
+          if 'from "@/lib/local-ai"' not in text:
+              text = text.replace('import { clearAiDebug, clearPendingMessage, describeChatError, getAiDebugEntries, isDebugEnabled, logAiDebug, readPendingMessage, savePendingMessage, setDebugEnabled, subscribeAiDebug } from "@/lib/ai-debug";', 'import { clearAiDebug, clearPendingMessage, describeChatError, getAiDebugEntries, isDebugEnabled, logAiDebug, readPendingMessage, savePendingMessage, setDebugEnabled, subscribeAiDebug } from "@/lib/ai-debug";\nimport { generateLocalAi, localAiReady, localAiSupported, warmLocalAi, type LocalAiMessage } from "@/lib/local-ai";')
+          marker = '  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({'
+          if marker in text and 'warmLocalAi()' not in text:
+              text = text.replace(marker, '  useEffect(() => { if (agentType === "coach" && localAiSupported()) void warmLocalAi(); }, [agentType]);\n' + marker)
+          old = '''    try {\n      if (file) {'''
+          new = '''    try {\n      const canUseLocal = agentType === "coach" && !file && localAiReady() && clean.length <= 4_000 && !/(ajoute|ajouter|supprime|supprimer|modifie|modifier|mets|mettre|crée|créer|enregistre|programme|séance|exercice|nutrition|repas|poids|objectif|calories|macro|scan|photo|bug|développement)/i.test(clean);\n      if (canUseLocal) {\n        const history: LocalAiMessage[] = [...messages.filter((m) => m.role === "user" || m.role === "assistant").slice(-8), { role: "user", content: messageText }].map((m) => ({ role: m.role, content: m.parts.filter((p) => p.type === "text").map((p) => ("text" in p ? p.text : "")).join("\\n") }));\n        const localResponse = await generateLocalAi([{ role: "system", content: "Tu es Pace, un coach sportif et nutritionnel concis. Réponds en français. Ne prétends jamais avoir modifié des données. Pour toute action sur le profil, la nutrition ou le sport, indique que l'action doit passer par PaceOS." }, ...history]);\n        if (localResponse) {\n          const now = new Date().toISOString();\n          const userId = (await supabase.auth.getUser()).data.user?.id;\n          if (userId && !ephemeral) {\n            const { error: localSaveError } = await supabase.from("ai_messages").insert([\n              { conversation_id: conversationId, user_id: userId, role: "user", plain_text: messageText, parts: [{ type: "text", text: messageText }] },\n              { conversation_id: conversationId, user_id: userId, role: "assistant", plain_text: localResponse, parts: [{ type: "text", text: localResponse }] },\n            ]);\n            if (localSaveError) throw localSaveError;\n            await supabase.from("ai_conversations").update({ updated_at: now }).eq("id", conversationId).eq("user_id", userId);\n          }\n          setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: messageText }] }, { id: crypto.randomUUID(), role: "assistant", parts: [{ type: "text", text: localResponse }] }]);\n          clearPendingMessage(conversationId);\n          return;\n        }\n      }\n      if (file) {'''
+          if old in text and 'canUseLocal' not in text:
+              text = text.replace(old, new, 1)
+          route.write_text(text)
+
+          wf = Path('.github/workflows/ai-adaptive-patch.yml')
+          wf.unlink()
+          PY
+          git config user.name "paceos-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add package.json src/lib/local-ai.ts src/routes/ai.$agentType.$conversationId.tsx .github/workflows/ai-adaptive-patch.yml
+          git commit -m "feat(ai): add adaptive local WebGPU coach fallback"
+          git push
