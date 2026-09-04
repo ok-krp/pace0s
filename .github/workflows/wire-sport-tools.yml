@@ -1,0 +1,90 @@
+name: Wire canonical Sport AI tools
+on:
+  push:
+    branches: [feat/sport-supabase-persistence]
+permissions:
+  contents: write
+jobs:
+  wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: feat/sport-supabase-persistence
+      - name: Patch ai-chat.server.ts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/lib/ai-chat.server.ts')
+          s = p.read_text()
+          if 'canonicalSportTools' not in s:
+              needle = 'import { getAiRuntimeConfig, type AiGateway, PROVIDER_LABELS } from "./ai-provider.server";'
+              s = s.replace(needle, needle + '\nimport { canonicalSportTools } from "./sport-ai-tools";')
+          old = 'const tools = agentType === "coach" ? coachTools(client, userId, conversationId, preferences.permissions) : buildTools(client, userId, conversationId);'
+          new = '''const tools = agentType === "coach"
+    ? {
+        ...coachTools(client, userId, conversationId, preferences.permissions),
+        ...canonicalSportTools(client, userId, preferences.permissions.sport, async (actionType, label, payload, status) => {
+          await logAction(client, userId, conversationId, "coach", actionType, label, payload, status);
+        }),
+      }
+    : buildTools(client, userId, conversationId);'''
+          if old in s:
+              s = s.replace(old, new)
+          elif '...canonicalSportTools(client, userId, preferences.permissions.sport' not in s:
+              raise SystemExit('tools registry anchor not found')
+          p.write_text(s)
+          PY
+      - name: Patch tool approval
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/lib/ai-chat.server.ts')
+          s = p.read_text()
+          marker = 'const toolApproval = Object.fromEntries(Object.keys(tools).map((name) => {'
+          start = s.find(marker)
+          if start < 0:
+              raise SystemExit('toolApproval anchor not found')
+          end = s.find('});', start)
+          if end < 0:
+              raise SystemExit('toolApproval end not found')
+          block = s[start:end+3]
+          if 'canonicalSportToolNames' not in block:
+              replacement = '''const canonicalSportToolNames = new Set(["create_exercise", "update_exercise", "delete_exercise", "create_program", "update_program", "add_exercise_to_program", "remove_exercise_from_program", "start_workout", "add_workout_exercise", "add_workout_set", "update_workout_set", "finish_workout", "get_workout_history", "get_exercise_progress"]);
+const toolApproval = Object.fromEntries(Object.keys(tools).map((name) => {
+  const permissionEnabled = ["create_sport_exercise", "create_sport_program", "create_sport_session"].includes(name) || canonicalSportToolNames.has(name) ? preferences.permissions.sport : name === "add_food" ? preferences.permissions.nutrition : name === "update_profile" || name === "add_health_sample" ? preferences.permissions.profile : true;
+  return [name, { requiresApproval: preferences.confirm_actions && permissionEnabled }];
+}));'''
+              s = s[:start] + replacement + s[end+3:]
+          p.write_text(s)
+          PY
+      - name: Clean unused imports in sport-ai-tools.ts
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('src/lib/sport-ai-tools.ts')
+          s = p.read_text()
+          s = s.replace('import type { Database, Json } from "@/integrations/supabase/types";', 'import type { Database } from "@/integrations/supabase/types";')
+          s = s.replace('  const denied = <Input,>() => logged<Input>("sport_permission", async () => ({ ok: false, message: "Permission Sport désactivée." }));\n', '')
+          p.write_text(s)
+          PY
+      - name: Typecheck and build
+        run: |
+          npm ci
+          npm run typecheck
+          npm run build
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/lib/ai-chat.server.ts src/lib/sport-ai-tools.ts
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "feat(sport): register canonical AI tools"
+          git push origin HEAD:feat/sport-supabase-persistence
+      - name: Remove temporary workflow
+        if: success()
+        run: |
+          git rm .github/workflows/wire-sport-tools.yml
+          git commit -m "chore(ci): remove temporary Sport wiring workflow"
+          git push origin HEAD:feat/sport-supabase-persistence
