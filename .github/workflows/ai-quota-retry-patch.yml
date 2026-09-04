@@ -1,0 +1,35 @@
+name: Apply AI quota retry patch
+
+on:
+  push:
+    branches:
+      - fix/ai-quota-retry
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'chore: prepare AI quota retry patch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable provider retry for transient AI failures
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/lib/ai-chat.server.ts')
+          text = path.read_text()
+          old = 'const safeWindowed = closeDanglingToolCalls(windowed); const result = streamText({ maxRetries: 0,'
+          new = 'const safeWindowed = closeDanglingToolCalls(windowed); const result = streamText({ maxRetries: 4,'
+          if old not in text:
+              raise SystemExit('Expected streamText configuration was not found; refusing to modify the file.')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/lib/ai-chat.server.ts
+          git commit -m 'fix(ai): retry transient provider quota failures'
+          git push
