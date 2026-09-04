@@ -23,7 +23,7 @@ type Program = { id: string; name: string; emoji: string; days: number[]; items:
 type SessionSet = { reps: number; weight: number; done: boolean };
 type SessionExercise = { exerciseId: string; sets: SessionSet[]; note?: string };
 type WorkoutSession = { id: string; date: string; programId?: string; name: string; startedAt: number; endedAt?: number; durationMin?: number; exercises: SessionExercise[]; notes?: string };
-const MUSCLES = ["Pectoraux", "Dos", "Épaules", "Biceps", "Triceps", "Quadriceps", "Ischios", "Fessiers", "Mollets", "Abdos", "Cardio", "Autre"];
+const MUSCLES = ["Pectoraux", "Dos", "Épaules", "Biceps", "Triceps", "Jambes", "Quadriceps", "Ischios", "Fessiers", "Mollets", "Abdos", "Cardio", "Autre"];
 const DAYS_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 function SportPage() {
   const [exs, setExs] = useLocalState<Exercise[]>("pace.sport.exercises", []); const [progs, setProgs] = useLocalState<Program[]>("pace.sport.programs", []); const [sessions, setSessions] = useLocalState<WorkoutSession[]>("pace.sport.sessions", []); const [active, setActive] = useLocalState<WorkoutSession | null>("pace.sport.active", null); const [tab, setTab] = useState("programs"); const [focusEx, setFocusEx] = useState<string | null>(null);
