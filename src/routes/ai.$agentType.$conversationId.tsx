@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createAiConversation, deleteAiConversation, getAiConversation, listAiConversations, updateAiConversation } from "@/lib/ai-history.functions";
 import type { AgentType, AiConversation } from "@/lib/ai-history.types";
 import { clearAiDebug, clearPendingMessage, describeChatError, getAiDebugEntries, isDebugEnabled, logAiDebug, readPendingMessage, savePendingMessage, setDebugEnabled, subscribeAiDebug } from "@/lib/ai-debug";
+import { generateLocalAi, getLocalAiProfile, localAiSupported, warmLocalAi, type LocalAiMessage } from "@/lib/local-ai";
 
 export const Route = createFileRoute("/ai/$agentType/$conversationId")({
   params: { parse: (params) => ({ agentType: params.agentType === "build" ? "build" as const : "coach" as const, conversationId: params.conversationId }) },
@@ -27,6 +28,7 @@ const SUGGESTIONS: Record<AgentType, string[]> = {
   build: ["Créer un bug : le scan se ferme trop tôt", "Proposer une amélioration pour le suivi du sommeil", "Structurer une fonctionnalité de planification des repas"],
 };
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const LOCAL_SAFE_QUERY = /^(?!.*\b(ajoute|ajouter|supprime|supprimer|modifie|modifier|mets|mettre|crée|créer|enregistre|programme|séance|exercice|nutrition|repas|poids|objectif|calories|macro|scan|photo|bug|développement|donnée|donnees|data)\b).{1,4000}$/is;
 
 function AiConversationPage() {
   const { agentType, conversationId } = Route.useParams();
@@ -116,6 +118,11 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
   useEffect(() => { if (error) setFailure(describeChatError(error)); }, [error]);
+  useEffect(() => {
+    if (agentType === "coach" && localAiSupported()) {
+      void warmLocalAi();
+    }
+  }, [agentType]);
 
   const chooseImage = (file: File | undefined) => {
     if (!file) return;
@@ -134,6 +141,36 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
     setFailure(null);
     if (!file) savePendingMessage(conversationId, messageText);
     try {
+      const localEligible = agentType === "coach" && !file && LOCAL_SAFE_QUERY.test(clean) && getLocalAiProfile() !== "cloud";
+      if (localEligible) {
+        const history: LocalAiMessage[] = messages
+          .filter((message) => message.role === "user" || message.role === "assistant")
+          .slice(-6)
+          .map((message) => ({
+            role: message.role,
+            content: message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n"),
+          }))
+          .filter((message) => message.content.trim().length > 0);
+        const localResponse = await generateLocalAi([
+          { role: "system", content: "Tu es Pace, un coach sportif et nutritionnel concis. Réponds en français. Tu ne modifies jamais les données et ne prétends jamais avoir effectué une action. Si une question demande une action, explique que l'action doit passer par PaceOS." },
+          ...history,
+          { role: "user", content: messageText },
+        ]);
+        if (localResponse) {
+          const userId = (await supabase.auth.getUser()).data.user?.id;
+          if (userId && !ephemeral) {
+            const { error: localSaveError } = await supabase.from("ai_messages").insert([
+              { conversation_id: conversationId, user_id: userId, role: "user", plain_text: messageText, parts: [{ type: "text", text: messageText }] },
+              { conversation_id: conversationId, user_id: userId, role: "assistant", plain_text: localResponse, parts: [{ type: "text", text: localResponse }] },
+            ]);
+            if (localSaveError) throw localSaveError;
+            await supabase.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", userId);
+          }
+          setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: messageText }] }, { id: crypto.randomUUID(), role: "assistant", parts: [{ type: "text", text: localResponse }] }]);
+          clearPendingMessage(conversationId);
+          return;
+        }
+      }
       if (file) {
         const files = new DataTransfer();
         files.items.add(file);
