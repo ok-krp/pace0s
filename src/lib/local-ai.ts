@@ -1,10 +1,15 @@
-import { pipeline, type TextGenerationPipeline } from "@huggingface/transformers";
+import { pipeline } from "@huggingface/transformers";
 
 const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
 const MODEL_REVISION = "main";
 const READY_KEY = "pace.local-ai.ready.v2";
 const LOCAL_DEADLINE_MS = 8_500;
 const MAX_NEW_TOKENS = 160;
+
+type LocalGeneratedText = string | Array<{ role?: string; content?: string }>;
+type LocalTextGenerator = {
+  (messages: LocalAiMessage[], options: { max_new_tokens: number; do_sample: boolean }): Promise<Array<{ generated_text?: LocalGeneratedText }>>;
+};
 
 export type LocalAiMessage = {
   role: "system" | "user" | "assistant";
@@ -13,8 +18,8 @@ export type LocalAiMessage = {
 
 export type LocalAiProfile = "fast" | "standard" | "cloud";
 
-let generator: TextGenerationPipeline | null = null;
-let loading: Promise<TextGenerationPipeline> | null = null;
+let generator: LocalTextGenerator | null = null;
+let loading: Promise<LocalTextGenerator> | null = null;
 
 function browserDeviceMemory() {
   const value = (navigator as Navigator & { deviceMemory?: number }).deviceMemory;
@@ -45,7 +50,7 @@ async function getGenerator() {
       device: "webgpu",
       dtype: "q4f16",
       revision: MODEL_REVISION,
-    }) as Promise<TextGenerationPipeline>;
+    }) as unknown as Promise<LocalTextGenerator>;
   }
   try {
     generator = await loading;
