@@ -22,7 +22,6 @@ export const interactiveMotion = {
   initial: { opacity: 0, y: 6 },
   animate: { opacity: 1, y: 0 },
   whileHover: { y: -1, scale: 1.015 },
-  whileTap: { scale: 0.97 },
   whileFocus: { scale: 1.01 },
   transition: springSoft,
 };
