@@ -29,7 +29,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
     if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Format image non autorisé.");
     const imageDataUrl = `data:${contentType};base64,${bytes.toString("base64")}`;
     const prompt = [PHOTO_INSTRUCTIONS, "IMPORTANT : identifie uniquement le plat, les aliments/composants et les grammes estimés. NE FOURNIS AUCUNE valeur kcal ou macro.", "Si le plat correspond à un plat connu, donne son nom canonique clairement (ex. Double Bacon Cheeseburger).", data.goal ? `Objectif : ${data.goal}.` : "", data.hint ? `Indice : ${data.hint}.` : "", "Réponds en JSON pur avec dish_name, items [{name,brand,grams}], health_score, quality, confidence, confidence_note, notes."].filter(Boolean).join("\n\n");
-    const { text } = await generateText({ model: getGeminiModel(), messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "image", image: imageDataUrl }] }] });
+    const { text } = await generateText({ model: getGeminiModel(), messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "file", data: imageDataUrl, mediaType: contentType }] }] });
     const parsed = visionSchema.safeParse(extractJson(text));
     if (!parsed.success) return { error: "Réponse IA invalide", result: null };
 
@@ -38,13 +38,13 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
       const grams = parsed.data.items.reduce((sum, item) => sum + item.grams, 0) || Number(dish.portion_g);
       const values = scaleDishReference(dish, grams);
       const macroKcal = 4 * values.protein_g + 4 * values.carbs_g + 9 * values.fat_g;
-      const delta = values.kcal ? Math.abs(macroKcal - values.kcal) / values.kcal * 100 : 0;
-      const result = foodAnalysisSchema.parse({ dish_name: dish.canonical_name, items: [{ name: dish.canonical_name, brand: null, grams, ...values }], health_score: parsed.data.health_score, quality: parsed.data.quality, confidence: Math.min(parsed.data.confidence, Number(dish.confidence)), confidence_note: `${parsed.data.confidence_note} Référence calibrée Pace : ${Math.round(Number(dish.confidence) * 100)} %.`, notes: `${parsed.data.notes} Valeurs issues d'une référence de plat calibrée, redimensionnée à la portion estimée.`, });
+      const result = foodAnalysisSchema.parse({ dish_name: dish.canonical_name, items: [{ name: dish.canonical_name, brand: null, grams, ...values }], health_score: parsed.data.health_score, quality: parsed.data.quality, confidence: Math.min(parsed.data.confidence, Number(dish.confidence)), confidence_note: `${parsed.data.confidence_note} Référence calibrée Pace : ${Math.round(Number(dish.confidence) * 100)} %.`, notes: `${parsed.data.notes} Valeurs issues d'une référence de plat calibrée, redimensionnée à la portion estimée.` });
       if (Math.abs(macroKcal - values.kcal) / Math.max(values.kcal, 1) > 0.1) return { error: "Référence nutritionnelle incohérente", result: null };
       return { error: null, result };
     }
 
     const nutrition = await calculateReferenceBasedNutrition(parsed.data.items.map(x => ({ name: x.name, grams: x.grams })));
+    if (nutrition.items.length === 0) return { error: "Aucun aliment identifiable avec une référence nutritionnelle fiable.", result: null };
     const result = foodAnalysisSchema.parse({ dish_name: parsed.data.dish_name, items: nutrition.items.map((x, i) => ({ name: x.name, brand: parsed.data.items[i]?.brand ?? null, grams: x.grams, kcal: x.kcal, protein_g: x.protein_g, carbs_g: x.carbs_g, fat_g: x.fat_g, fiber_g: x.fiber_g, sugar_g: x.sugar_g, sodium_mg: x.sodium_mg })), health_score: parsed.data.health_score, quality: parsed.data.quality, confidence: Math.min(parsed.data.confidence, nutrition.confidence || parsed.data.confidence), confidence_note: `${parsed.data.confidence_note} Références nutritionnelles : ${Math.round((nutrition.confidence || 0) * 100)} %.`, notes: `${parsed.data.notes}${nutrition.items.length < parsed.data.items.length ? " Certains aliments n’ont pas de référence nutritionnelle fiable et ont été exclus du calcul." : ""}` });
     return { error: null, result };
   } catch (e) { console.error("analyzeFoodPhoto error", e); return { error: e instanceof Error ? e.message : "Erreur IA", result: null }; }
