@@ -1,5 +1,6 @@
 -- Rebuild missing Sport exercise metadata from the user's own successful Sport
 -- action records. This repairs the pre-normalized state without deleting data.
+-- This file records the production-applied repair migration; it is not intended to be re-applied to production.
 with exercise_actions as (
   select distinct on (user_id, payload->>'id')
     user_id,
