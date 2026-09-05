@@ -40,25 +40,27 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
       if (existing) return { ok: true, id: existing.id, message: `Exercice « ${existing.name} » déjà présent dans Sport.` };
       const { error } = await client.from("sport_exercises").insert({ id, user_id: userId, name: input.name.trim(), muscle: input.muscle.trim(), equipment: input.equipment ?? null, notes: input.notes ?? null, default_sets: input.defaultSets ?? null, default_reps: input.defaultReps ?? null, default_weight: input.defaultWeight ?? null, rest_sec: input.restSec ?? null });
       if (error) { await logAction("create_exercise", `Échec création exercice ${input.name}`, input, "failed"); return { ok: false, message: "Création de l’exercice impossible." }; }
-      await logAction("create_exercise", `Exercice ${input.name} créé`, { ...input, id }, "executed"); return { ok: true, id, message: `Exercice « ${input.name} » créé dans Sport.` };
+      await logAction("create_exercise", `Exercice ${input.name} créé`, { ...input, id }, "executed");
+      return { ok: true, id, message: `Exercice « ${input.name} » créé dans Sport.` };
     }) });
 
   const updateExercise = tool({ description: "Modifier un exercice Sport existant appartenant à l'utilisateur.", inputSchema: exerciseSchema.extend({ id: z.string().uuid() }),
     execute: guard("update_exercise", async (input) => {
       const { data, error } = await client.rpc("sport_update_exercise", { p_id: input.id, p_name: input.name, p_muscle: input.muscle, p_equipment: input.equipment ?? null, p_notes: input.notes ?? null, p_default_sets: input.defaultSets ?? null, p_default_reps: input.defaultReps ?? null, p_default_weight: input.defaultWeight ?? null, p_rest_sec: input.restSec ?? null });
       if (error || data !== true) { await logAction("update_exercise", "Échec modification exercice", input, "failed"); return { ok: false, message: "Exercice introuvable ou modification refusée." }; }
-      await logAction("update_exercise", `Exercice ${input.name} modifié`, input, "executed"); return { ok: true, id: input.id, message: `Exercice « ${input.name} » modifié.` };
+      await logAction("update_exercise", `Exercice ${input.name} modifié`, input, "executed");
+      return { ok: true, id: input.id, message: `Exercice « ${input.name} » modifié.` };
     }) });
 
   const deleteExercise = tool({ description: "Supprimer un exercice Sport existant. Refuser si la base empêche la suppression par des dépendances.", inputSchema: z.object({ id: z.string().uuid() }),
     execute: guard("delete_exercise", async (input) => {
       const { data, error } = await client.rpc("sport_delete_exercise", { p_id: input.id });
       if (error || data !== true) { await logAction("delete_exercise", "Échec suppression exercice", input, "failed"); return { ok: false, message: "Exercice introuvable ou suppression refusée." }; }
-      await logAction("delete_exercise", "Exercice supprimé", input, "executed"); return { ok: true, id: input.id, message: "Exercice supprimé de Sport." };
+      await logAction("delete_exercise", "Exercice supprimé", input, "executed");
+      return { ok: true, id: input.id, message: "Exercice supprimé de Sport." };
     }) });
 
-  const createProgram = tool({ description: "Créer un programme Sport avec ses exercices et objectifs.",
-    inputSchema: z.object({ id: z.string().uuid().optional(), name: z.string().min(1), emoji: z.string().min(1).max(8).optional(), days: z.array(z.number().int().min(0).max(6)).default([]), items: z.array(z.object({ exerciseId: z.string().uuid(), sets: z.number().int().positive(), reps: z.number().int().positive(), weight: z.number().nonnegative().optional(), restSec: z.number().int().nonnegative().optional(), position: z.number().int().nonnegative().optional() })).default([]) }),
+  const createProgram = tool({ description: "Créer un programme Sport avec ses exercices et objectifs.", inputSchema: z.object({ id: z.string().uuid().optional(), name: z.string().min(1), emoji: z.string().min(1).max(8).optional(), days: z.array(z.number().int().min(0).max(6)).default([]), items: z.array(z.object({ exerciseId: z.string().uuid(), sets: z.number().int().positive(), reps: z.number().int().positive(), weight: z.number().nonnegative().optional(), restSec: z.number().int().nonnegative().optional(), position: z.number().int().nonnegative().optional() })).default([]) }),
     execute: guard("create_program", async (input) => {
       const id = input.id ?? uuid();
       const { data: existing } = await client.from("sport_programs").select("id,name").eq("user_id", userId).ilike("name", input.name.trim()).maybeSingle();
@@ -69,7 +71,8 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
         const { error: itemError } = await client.from("sport_program_items").insert(input.items.map((item: any, index: number) => ({ program_id: id, exercise_id: item.exerciseId, position: item.position ?? index, sets: item.sets, reps: item.reps, weight: item.weight ?? null, rest_sec: item.restSec ?? null })));
         if (itemError) { await client.from("sport_programs").delete().eq("id", id).eq("user_id", userId); await logAction("create_program", "Échec ajout exercices au programme", input, "failed"); return { ok: false, message: "Programme créé mais ses exercices n’ont pas pu être enregistrés; opération annulée." }; }
       }
-      await logAction("create_program", `Programme ${input.name} créé`, { ...input, id }, "executed"); return { ok: true, id, message: `Programme « ${input.name} » créé dans Sport.` };
+      await logAction("create_program", `Programme ${input.name} créé`, { ...input, id }, "executed");
+      return { ok: true, id, message: `Programme « ${input.name} » créé dans Sport.` };
     }) });
 
   const updateProgram = tool({ description: "Modifier le nom, l'emoji ou les jours d'un programme Sport.", inputSchema: z.object({ id: z.string().uuid(), name: z.string().min(1).optional(), emoji: z.string().min(1).max(8).optional(), days: z.array(z.number().int().min(0).max(6)).optional() }),
@@ -86,7 +89,8 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
       await logAction("delete_program", "Programme supprimé", input, "executed"); return { ok: true, id: input.id, message: "Programme supprimé de Sport." };
     }) });
 
-  const programItem = tool({ description: "Ajouter un exercice à un programme Sport, ou le retirer avec operation=remove.", inputSchema: z.object({ operation: z.enum(["add", "remove"]), programId: z.string().uuid(), exerciseId: z.string().uuid(), sets: z.number().int().positive().optional(), reps: z.number().int().positive().optional(), weight: z.number().nonnegative().optional(), restSec: z.number().int().nonnegative().optional(), position: z.number().int().nonnegative().optional() }),
+  const programItemSchema = z.object({ operation: z.enum(["add", "remove"]), programId: z.string().uuid(), exerciseId: z.string().uuid(), sets: z.number().int().positive().optional(), reps: z.number().int().positive().optional(), weight: z.number().nonnegative().optional(), restSec: z.number().int().nonnegative().optional(), position: z.number().int().nonnegative().optional() });
+  const programItem = tool({ description: "Ajouter un exercice à un programme Sport, ou le retirer avec operation=remove.", inputSchema: programItemSchema,
     execute: guard("program_item", async (input) => {
       if (input.operation === "remove") {
         const { error } = await client.from("sport_program_items").delete().eq("program_id", input.programId).eq("exercise_id", input.exerciseId);
@@ -102,6 +106,12 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
       if (error || !item) { await logAction("add_exercise_to_program", "Échec ajout exercice", input, "failed"); return { ok: false, message: "Ajout de l’exercice au programme impossible." }; }
       await logAction("add_exercise_to_program", "Exercice ajouté au programme", { ...input, id: item.id }, "executed"); return { ok: true, id: item.id, message: "Exercice ajouté au programme." };
     }) });
+
+  const addExerciseToProgram = tool({ description: "Ajouter un exercice à un programme Sport.", inputSchema: programItemSchema.pick({ programId: true, exerciseId: true, sets: true, reps: true, weight: true, restSec: true, position: true }),
+    execute: guard("add_exercise_to_program", async (input) => programItem.execute!({ operation: "add", ...input }, {} as ToolExecutionOptions<unknown>)) });
+
+  const removeExerciseFromProgram = tool({ description: "Retirer un exercice d'un programme Sport.", inputSchema: z.object({ programId: z.string().uuid(), exerciseId: z.string().uuid() }),
+    execute: guard("remove_exercise_from_program", async (input) => programItem.execute!({ operation: "remove", ...input }, {} as ToolExecutionOptions<unknown>)) });
 
   const startWorkout = tool({ description: "Démarrer et persister une séance Sport.", inputSchema: z.object({ id: z.string().uuid().optional(), programId: z.string().uuid().optional(), name: z.string().min(1), workoutDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(), startedAt: z.string().datetime().optional(), notes: z.string().optional() }),
     execute: guard("start_workout", async (input) => {
@@ -160,5 +170,41 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
       await logAction("finish_workout", "Séance terminée", input, "executed"); return { ok: true, id: input.id, message: "Séance Sport terminée." };
     }) });
 
-  return { createExercise, updateExercise, deleteExercise, createProgram, updateProgram, deleteProgram, programItem, startWorkout, addWorkoutExercise, addWorkoutSet, updateWorkoutSet, finishWorkout };
+  const getHistory = tool({ description: "Lire l'historique des séances Sport de l'utilisateur, avec exercices et séries.", inputSchema: z.object({ limit: z.number().int().positive().max(100).default(20), fromDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(), toDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional() }),
+    execute: guard("get_workout_history", async (input) => {
+      let query = client.from("sport_workout_sessions").select("id,program_id,name,workout_date,started_at,ended_at,duration_min,notes,sport_workout_exercises(id,exercise_id,position,note,sport_workout_sets(id,set_number,reps,weight,done))").eq("user_id", userId).order("workout_date", { ascending: false }).limit(input.limit);
+      if (input.fromDate) query = query.gte("workout_date", input.fromDate);
+      if (input.toDate) query = query.lte("workout_date", input.toDate);
+      const { data, error } = await query;
+      if (error) { await logAction("get_workout_history", "Échec lecture historique", input, "failed"); return { ok: false, message: "Lecture de l’historique Sport impossible." }; }
+      return { ok: true, data: data ?? [], message: `${(data ?? []).length} séance(s) trouvée(s).` };
+    }) });
+
+  const getProgress = tool({ description: "Lire la progression d'un exercice Sport: dernières séries et meilleur poids/répétitions.", inputSchema: z.object({ exerciseId: z.string().uuid(), limit: z.number().int().positive().max(100).default(20) }),
+    execute: guard("get_exercise_progress", async (input) => {
+      const { data, error } = await client.from("sport_workout_sets").select("id,set_number,reps,weight,done,created_at,sport_workout_exercises!inner(exercise_id,session_id,sport_workout_sessions!inner(id,name,workout_date,user_id))").eq("sport_workout_exercises.exercise_id", input.exerciseId).eq("sport_workout_exercises.sport_workout_sessions.user_id", userId).order("created_at", { ascending: false }).limit(input.limit);
+      if (error) { await logAction("get_exercise_progress", "Échec lecture progression", input, "failed"); return { ok: false, message: "Lecture de la progression impossible." }; }
+      const rows = data ?? [];
+      const bestWeight = rows.reduce((max, row) => Math.max(max, Number(row.weight ?? 0)), 0);
+      const bestRepsAtWeight = rows.reduce((best, row) => Number(row.weight ?? 0) > Number(best.weight ?? 0) || (Number(row.weight ?? 0) === Number(best.weight ?? 0) && Number(row.reps ?? 0) > Number(best.reps ?? 0)) ? row : best, rows[0] ?? null);
+      return { ok: true, data: { sets: rows, bestWeight, bestRepsAtWeight }, message: `${rows.length} série(s) de progression trouvée(s).` };
+    }) });
+
+  return {
+    create_exercise: createExercise,
+    update_exercise: updateExercise,
+    delete_exercise: deleteExercise,
+    create_program: createProgram,
+    update_program: updateProgram,
+    delete_program: deleteProgram,
+    add_exercise_to_program: addExerciseToProgram,
+    remove_exercise_from_program: removeExerciseFromProgram,
+    start_workout: startWorkout,
+    add_workout_exercise: addWorkoutExercise,
+    add_workout_set: addWorkoutSet,
+    update_workout_set: updateWorkoutSet,
+    finish_workout: finishWorkout,
+    get_workout_history: getHistory,
+    get_exercise_progress: getProgress,
+  };
 }
