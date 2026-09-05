@@ -78,16 +78,20 @@ function withDeadline<T>(promise: Promise<T>, timeoutMs: number) {
 
 export async function generateLocalAi(messages: LocalAiMessage[]) {
   if (!localAiSupported()) return null;
+  const startedAt = performance.now();
   try {
-    const pipe = await withDeadline(getGenerator(), LOCAL_DEADLINE_MS);
+    const remaining = () => Math.max(0, LOCAL_DEADLINE_MS - (performance.now() - startedAt));
+    const pipe = await withDeadline(getGenerator(), remaining());
     if (!pipe) return null;
 
+    const generationBudget = remaining();
+    if (generationBudget <= 0) return null;
     const output = await withDeadline(
       pipe(messages, {
         max_new_tokens: MAX_NEW_TOKENS,
         do_sample: false,
       }),
-      LOCAL_DEADLINE_MS,
+      generationBudget,
     );
     if (!output) return null;
 
