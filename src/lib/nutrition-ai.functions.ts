@@ -11,7 +11,9 @@ import { calculateReferenceBasedNutrition, findDishReference, scaleDishReference
 const PHOTO_BUCKET = "nutrition-ai";
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 const visionItemSchema = z.object({ name: z.string().min(1).max(200), brand: z.string().nullable().default(null), grams: z.number().min(0).max(50000) });
-const visionSchema = z.object({ dish_name: z.string().min(1).max(300), items: z.array(visionItemSchema).min(1).max(50), health_score: z.enum(["green", "orange", "red"]), quality: z.enum(["bulking", "cutting", "balanced", "treat"]), confidence: z.number().min(0).max(1), confidence_note: z.string().default(""), notes: z.string().default("") });
+// Vision may legitimately return no identifiable items. Keep that case valid so the
+// handler can return a controlled "no food identified" result instead of a 500.
+const visionSchema = z.object({ dish_name: z.string().min(1).max(300), items: z.array(visionItemSchema).max(50), health_score: z.enum(["green", "orange", "red"]), quality: z.enum(["bulking", "cutting", "balanced", "treat"]), confidence: z.number().min(0).max(1), confidence_note: z.string().default(""), notes: z.string().default("") });
 function getGeminiModel() { const key = process.env.GEMINI_API_KEY; if (!key) throw new Error("L’IA Pace n’est pas configurée sur le serveur."); return createGoogleGenerativeAI({ apiKey: key })(AI_MODEL.replace(/^google\//, "")); }
 function storagePathForUser(userId: string, path: string) { const normalized = path.replace(/^\/+/, ""); if (!normalized || normalized.includes("..") || !normalized.startsWith(`${userId}/`)) throw new Error("Référence image invalide."); return normalized; }
 
@@ -32,6 +34,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
     const { text } = await generateText({ model: getGeminiModel(), messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "file", data: imageDataUrl, mediaType: contentType }] }] });
     const parsed = visionSchema.safeParse(extractJson(text));
     if (!parsed.success) return { error: "Réponse IA invalide", result: null };
+    if (parsed.data.items.length === 0) return { error: "Aucun aliment identifiable sur cette photo.", result: null };
 
     const dish = await findDishReference(parsed.data.dish_name);
     if (dish && parsed.data.confidence >= 0.65) {
@@ -55,5 +58,5 @@ export const nutritionAdvice = createServerFn({ method: "POST" }).middleware([re
   const { data: consent, error: consentError } = await context.supabase.from("legal_consent").select("opts").eq("user_id", context.userId).eq("eula_version", LEGAL_VERSIONS.eula).eq("privacy_version", LEGAL_VERSIONS.privacy).maybeSingle();
   if (consentError) throw new Error(consentError.message);
   if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) return { advice: null, error: "Consentement Analyse IA requis" };
-  try { const { text } = await generateText({ model: getGeminiModel(), messages: [{ role: "user", content: `Tu es un coach nutrition. À partir du résumé ci-dessous, donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français, au format "• conseil". Pas de salutation, pas d'introduction. Ne recalcule jamais les macros dans ce texte : si des macros sont nécessaires, elles doivent provenir du Pace Nutrition Engine.\n\nRésumé :\n${data.summary}` }] }); return { advice: text, error: null }; } catch (e) { return { advice: null, error: e instanceof Error ? e.message : "Erreur IA" }; }
+  try { const { text } = await generateText({ model: getGeminiModel(), messages: [{ role: "user", content: `Tu es un coach nutrition. À partir du résumé ci-dessous, donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français, au format "• conseil". Pas de salutation, pas d’introduction. Ne recalcule jamais les macros dans ce texte : si des macros sont nécessaires, elles doivent provenir du Pace Nutrition Engine.\n\nRésumé :\n${data.summary}` }] }); return { advice: text, error: null }; } catch (e) { return { advice: null, error: e instanceof Error ? e.message : "Erreur IA" }; }
 });
