@@ -10,6 +10,9 @@ export default defineConfig({
   },
   plugins: [
     tanstackStart({
+      router: {
+        routeFileIgnorePattern: "(^|/)routeTree\\.gen\\.ts$",
+      },
       server: {
         entry: "server",
       },
