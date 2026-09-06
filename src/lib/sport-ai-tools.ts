@@ -108,10 +108,10 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
     }) });
 
   const addExerciseToProgram = tool({ description: "Ajouter un exercice à un programme Sport.", inputSchema: programItemSchema.pick({ programId: true, exerciseId: true, sets: true, reps: true, weight: true, restSec: true, position: true }),
-    execute: guard("add_exercise_to_program", async (input) => programItem.execute!({ operation: "add", ...input }, {} as ToolExecutionOptions<unknown>)) });
+    execute: guard("add_exercise_to_program", async (input) => programItem.execute!({ operation: "add", ...input }, {} as ToolExecutionOptions<any>) as Promise<Output>) });
 
   const removeExerciseFromProgram = tool({ description: "Retirer un exercice d'un programme Sport.", inputSchema: z.object({ programId: z.string().uuid(), exerciseId: z.string().uuid() }),
-    execute: guard("remove_exercise_from_program", async (input) => programItem.execute!({ operation: "remove", ...input }, {} as ToolExecutionOptions<unknown>)) });
+    execute: guard("remove_exercise_from_program", async (input) => programItem.execute!({ operation: "remove", ...input }, {} as ToolExecutionOptions<any>) as Promise<Output>) });
 
   const startWorkout = tool({ description: "Démarrer et persister une séance Sport.", inputSchema: z.object({ id: z.string().uuid().optional(), programId: z.string().uuid().optional(), name: z.string().min(1), workoutDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(), startedAt: z.string().datetime().optional(), notes: z.string().optional() }),
     execute: guard("start_workout", async (input) => {
