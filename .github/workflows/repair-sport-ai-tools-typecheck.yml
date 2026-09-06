@@ -1,0 +1,40 @@
+name: Repair Sport tool typecheck
+
+on:
+  push:
+    branches:
+      - fix/sport-ai-tools-typecheck
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Fix AI SDK execute typing
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("src/lib/sport-ai-tools.ts")
+          s = p.read_text()
+          s = s.replace('programItem.execute!({ operation: "add", ...input }, {} as ToolExecutionOptions<unknown>)', 'programItem.execute!({ operation: "add", ...input }, {} as ToolExecutionOptions<any>) as Promise<Output>')
+          s = s.replace('programItem.execute!({ operation: "remove", ...input }, {} as ToolExecutionOptions<unknown>)', 'programItem.execute!({ operation: "remove", ...input }, {} as ToolExecutionOptions<any>) as Promise<Output>')
+          p.write_text(s)
+          PY
+      - name: Commit repair
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git add src/lib/sport-ai-tools.ts
+          git commit -m "fix(ai): align Sport tool execute typing"
+          git push
