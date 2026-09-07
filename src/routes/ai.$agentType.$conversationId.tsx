@@ -139,7 +139,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
     autoApprovalKeyRef.current = key;
     return true;
   }, []);
-  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen, onFinish: (message) => { void persistClientAssistantMessage(conversationId, message).catch((saveError) => console.error("[ai-chat] persistance client impossible", saveError)); clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => setFailure(describeChatError(chatError)) });
+  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen, onFinish: ({ message }) => { void persistClientAssistantMessage(conversationId, message).catch((saveError) => console.error("[ai-chat] persistance client impossible", saveError)); clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => setFailure(describeChatError(chatError)) });
   const busy = status === "submitted" || status === "streaming";
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
