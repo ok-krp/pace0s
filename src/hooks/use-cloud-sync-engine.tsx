@@ -79,8 +79,9 @@ function unwrapNutritionValue(value: unknown) {
   return value;
 }
 
-function mergeNutritionRemoteValue(incomingValue: unknown) {
+function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false) {
   const incoming = unwrapNutritionValue(incomingValue);
+  if (authoritative) return sanitizeNutritionItems(incoming);
   const current = readDomain<Record<string, unknown>>("nutrition.items", {}).value;
   if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || !current || typeof current !== "object" || Array.isArray(current)) return sanitizeNutritionItems(incoming);
   const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
@@ -104,6 +105,10 @@ function mergeNutritionRemoteValue(incomingValue: unknown) {
   return sanitizeNutritionItems(merged);
 }
 
+function isAuthoritativeNutritionWriter(updatedBy: string | null | undefined) {
+  return updatedBy === "coach_ai" || updatedBy === "nutrition_state_repair";
+}
+
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
@@ -115,8 +120,8 @@ export function useCloudSyncEngineInternal() {
     const encoded = serialize(value);
     if (encoded !== undefined) lastRemoteValues.current[key] = encoded;
   };
-  const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string) => {
-    const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value) : value;
+  const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string, updatedBy?: string | null) => {
+    const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value, isAuthoritativeNutritionWriter(updatedBy)) : value;
     rememberRemote(key, safeValue);
     applyRemoteWrite(key, safeValue, updatedAt);
   };
@@ -135,21 +140,21 @@ export function useCloudSyncEngineInternal() {
       };
       let current = await selectCurrent();
       if (current && Date.parse(current.updated_at) >= Date.parse(updatedAt)) {
-        applyRemoteAndRemember(key, current.value, current.updated_at); markVersion(key, current.updated_at); return false;
+        applyRemoteAndRemember(key, current.value, current.updated_at, current.updated_by); markVersion(key, current.updated_at); return false;
       }
       if (current) {
         const { data, error } = await supabase.from("user_state").update({ value, updated_at: updatedAt, updated_by: DEVICE_ID } as never).eq("user_id", user.id).eq("key", key).lt("updated_at", updatedAt).select("key,value,updated_at,updated_by");
         if (error) throw error;
         if (data?.length) return true;
         current = await selectCurrent();
-        if (current) { applyRemoteAndRemember(key, current.value, current.updated_at); markVersion(key, current.updated_at); return false; }
+        if (current) { applyRemoteAndRemember(key, current.value, current.updated_at, current.updated_by); markVersion(key, current.updated_at); return false; }
       }
       const { error: insertError } = await supabase.from("user_state").insert({ user_id: user.id, key, value, updated_at: updatedAt, updated_by: DEVICE_ID } as never);
       if (!insertError) return true;
       if (!/duplicate|unique/i.test(insertError.message ?? "")) throw insertError;
       current = await selectCurrent();
       if (!current) throw insertError;
-      if (Date.parse(current.updated_at) >= Date.parse(updatedAt)) { applyRemoteAndRemember(key, current.value, current.updated_at); markVersion(key, current.updated_at); return false; }
+      if (Date.parse(current.updated_at) >= Date.parse(updatedAt)) { applyRemoteAndRemember(key, current.value, current.updated_at, current.updated_by); markVersion(key, current.updated_at); return false; }
       throw insertError;
     };
 
@@ -174,7 +179,7 @@ export function useCloudSyncEngineInternal() {
           const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", latest.key).limit(1);
           if (error) throw error;
           const row = data?.[0] as SyncRow | undefined;
-          if (row) { applyRemoteAndRemember(row.key, row.value, row.updated_at); markVersion(row.key, row.updated_at); }
+          if (row) { applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by); markVersion(row.key, row.updated_at); }
         } else {
           markVersion(latest.key, latest.updatedAt); localStorage.setItem("pace.__last_sync_at", latest.updatedAt);
         }
@@ -204,7 +209,7 @@ export function useCloudSyncEngineInternal() {
       if (queued && Date.parse(queued.updatedAt) >= remoteTime) return;
       const domain = readDomainRecord(row.key);
       if (domain && Date.parse(domain.updatedAt) >= remoteTime) return;
-      applyRemoteAndRemember(row.key, row.value, row.updated_at);
+      applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
       markVersion(row.key, row.updated_at);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
       setStatus("ok");
@@ -225,7 +230,7 @@ export function useCloudSyncEngineInternal() {
           const remoteTime = Date.parse(row.updated_at);
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           if (!Number.isFinite(remoteTime) || remoteTime <= localTime) continue;
-          applyRemoteAndRemember(key, row.value, row.updated_at);
+          applyRemoteAndRemember(key, row.value, row.updated_at, row.updated_by);
           meta[key] = row.updated_at;
           newest = newest && Date.parse(newest) > remoteTime ? newest : row.updated_at;
         }
