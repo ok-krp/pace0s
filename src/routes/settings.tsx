@@ -19,6 +19,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
 import { AiSettings } from "@/components/AiSettings";
+import { AiLocalModeSettings } from "@/components/AiLocalModeSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
 
 const NATIVE_ANDROID_APK_URL = "https://github.com/ok-krp/pace0s/releases/download/android-application-latest/app-debug.apk";
@@ -101,7 +102,7 @@ function SettingsPage() {
         <HealthSourcesSection />
         <WallpaperSettings />
         <Accordion type="multiple" className="space-y-3">
-          <AccordionItem value="ai" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium"><span className="flex items-center gap-2"><Brain className="size-4 text-primary" />Intelligence Artificielle</span></AccordionTrigger><AccordionContent className="pt-2"><AiSettings /></AccordionContent></AccordionItem>
+          <AccordionItem value="ai" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium"><span className="flex items-center gap-2"><Brain className="size-4 text-primary" />Intelligence Artificielle</span></AccordionTrigger><AccordionContent className="pt-2 space-y-3"><AiSettings /><AiLocalModeSettings /></AccordionContent></AccordionItem>
           <AccordionItem value="reminders" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Rappels & notifications</AccordionTrigger><AccordionContent className="pt-2 space-y-3"><RemindersSection /><ReminderDebugSection /></AccordionContent></AccordionItem>
           <AccordionItem value="mobilenav" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Navigation mobile</AccordionTrigger><AccordionContent className="pt-2"><MobileNavSettings /></AccordionContent></AccordionItem>
           <AccordionItem value="nutcols" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Colonnes Nutrition</AccordionTrigger><AccordionContent className="pt-2"><NutritionColsSettings /></AccordionContent></AccordionItem>
