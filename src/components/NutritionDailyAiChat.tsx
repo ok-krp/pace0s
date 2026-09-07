@@ -27,6 +27,26 @@ function localDayLabel(day: string) {
 }
 function recipeBaseName(name: string) { return name.replace(/^\s*[\p{Extended_Pictographic}\p{Emoji_Presentation}\s]+/u, "").replace(/\s*\(\s*\d+(?:[.,]\d+)?\s*g\s*\)\s*$/i, "").trim().toLowerCase(); }
 
+async function persistNutritionAssistantMessage(conversationId: string, message: UIMessage) {
+  if (message.role !== "assistant" || message.parts.length === 0) return;
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) return;
+  const { data: existing, error: lookupError } = await supabase.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("user_id", user.id).eq("model_message_id", message.id).maybeSingle();
+  if (lookupError) throw lookupError;
+  if (!existing) {
+    const { error } = await supabase.from("ai_messages").insert({
+      conversation_id: conversationId,
+      user_id: user.id,
+      role: "assistant",
+      parts: message.parts as unknown as never,
+      plain_text: message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n"),
+      model_message_id: message.id,
+    });
+    if (error) throw error;
+  }
+  await supabase.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", user.id);
+}
+
 export function NutritionDailyAiChat() {
   const [open, setOpen] = useState(false);
   const [day, setDay] = useState(todayKey());
@@ -71,7 +91,7 @@ function DailyChatSession({ conversationId, initialMessages, failure, setFailure
   const bottomRef = useRef<HTMLDivElement>(null); const inputRef = useRef<HTMLTextAreaElement>(null); const autoApprovalKeyRef = useRef<string | null>(null); const [input, setInput] = useState("");
   const transport = useMemo(() => new DefaultChatTransport({ api: "/api/ai-chat", fetch: async (url, init) => { const { data, error } = await supabase.auth.getSession(); if (error || !data.session) throw new Error("Authentification expirée : reconnectez-vous puis renvoyez votre message."); const headers = new Headers(init?.headers); headers.set("Authorization", `Bearer ${data.session.access_token}`); return fetch(url, { ...init, headers }); }, prepareSendMessagesRequest: ({ messages: all, body }) => ({ body: { ...body, messages: all.slice(-30) } }), body: { conversationId, agentType: "coach", ephemeral: false } }), [conversationId]);
   const sendAutomaticallyWhen = useMemo(() => ({ messages }: { messages: UIMessage[] }) => { const last = messages.at(-1); if (!last || last.role !== "assistant") return false; const responses = last.parts.filter((part) => { const candidate = part as unknown as Record<string, unknown>; const approval = candidate.approval; return candidate.state === "approval-responded" && typeof approval === "object" && approval !== null && typeof (approval as Record<string, unknown>).id === "string"; }).map((part) => { const approval = (part as unknown as Record<string, unknown>).approval as Record<string, unknown>; return `${approval.id}:${approval.approved === true ? "approved" : "denied"}`; }); if (!responses.length) return false; const key = `${last.id}:${responses.join("|")}`; if (autoApprovalKeyRef.current === key) return false; autoApprovalKeyRef.current = key; return true; }, []);
-  const { messages, sendMessage, status, addToolApprovalResponse } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen, onFinish: () => setFailure(null), onError: (error) => setFailure(describeChatError(error)) });
+  const { messages, sendMessage, status, addToolApprovalResponse } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen, onFinish: ({ message }) => { void persistNutritionAssistantMessage(conversationId, message).catch((saveError) => console.error("[ai-chat] persistance Nutrition impossible", saveError)); setFailure(null); }, onError: (error) => setFailure(describeChatError(error)) });
   const busy = status === "submitted" || status === "streaming";
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
   const send = async () => { const text = input.trim(); if (!text || busy) return; setInput(""); setFailure(null); try { await sendMessage({ text }); } catch (error) { setInput(text); setFailure(describeChatError(error)); } };
