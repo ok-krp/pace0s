@@ -3,6 +3,7 @@ import { pipeline } from "@huggingface/transformers";
 const MODEL_ID = "onnx-community/Qwen3-0.6B-ONNX";
 const MODEL_REVISION = "main";
 const READY_KEY = "pace.local-ai.ready.v2";
+const LOCAL_ENABLED_KEY = "pace.ai.local.enabled";
 const LOCAL_DEADLINE_MS = 8_500;
 const MAX_NEW_TOKENS = 160;
 
@@ -26,7 +27,7 @@ function browserDeviceMemory() {
   return typeof value === "number" ? value : 4;
 }
 
-export function getLocalAiProfile(): LocalAiProfile {
+function hardwareProfile(): Exclude<LocalAiProfile, "cloud"> | "cloud" {
   if (typeof window === "undefined" || !("gpu" in navigator)) return "cloud";
   const cores = navigator.hardwareConcurrency || 2;
   const memory = browserDeviceMemory();
@@ -35,16 +36,31 @@ export function getLocalAiProfile(): LocalAiProfile {
   return "cloud";
 }
 
+export function getLocalAiProfile(): LocalAiProfile {
+  if (typeof window === "undefined") return "cloud";
+  if (localStorage.getItem(LOCAL_ENABLED_KEY) !== "1") return "cloud";
+  return hardwareProfile();
+}
+
 export function localAiSupported() {
-  return getLocalAiProfile() !== "cloud";
+  return hardwareProfile() !== "cloud";
+}
+
+export function setLocalAiEnabled(enabled: boolean) {
+  if (enabled) localStorage.setItem(LOCAL_ENABLED_KEY, "1");
+  else {
+    localStorage.removeItem(LOCAL_ENABLED_KEY);
+    localStorage.removeItem(READY_KEY);
+  }
 }
 
 export function localAiReady() {
-  return localAiSupported() && localStorage.getItem(READY_KEY) === "1";
+  return getLocalAiProfile() !== "cloud" && localStorage.getItem(READY_KEY) === "1";
 }
 
 async function getGenerator() {
   if (generator) return generator;
+  if (!localAiSupported()) return null;
   if (!loading) {
     loading = pipeline("text-generation", MODEL_ID, {
       device: "webgpu",
@@ -62,8 +78,8 @@ async function getGenerator() {
 }
 
 export function warmLocalAi() {
-  if (!localAiSupported()) return Promise.resolve(false);
-  return getGenerator().then(() => true).catch(() => {
+  if (getLocalAiProfile() === "cloud") return Promise.resolve(false);
+  return getGenerator().then((value) => value !== null).catch(() => {
     localStorage.removeItem(READY_KEY);
     return false;
   });
@@ -77,7 +93,7 @@ function withDeadline<T>(promise: Promise<T>, timeoutMs: number) {
 }
 
 export async function generateLocalAi(messages: LocalAiMessage[]) {
-  if (!localAiSupported()) return null;
+  if (getLocalAiProfile() === "cloud") return null;
   const startedAt = performance.now();
   try {
     const remaining = () => Math.max(0, LOCAL_DEADLINE_MS - (performance.now() - startedAt));
