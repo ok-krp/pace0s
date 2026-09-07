@@ -49,6 +49,32 @@ function AiConversationPage() {
   return <ChatWorkspace key={`${agentType}-${conversationId}`} agentType={agentType} conversationId={conversationId} initialMessages={initialMessages} title={title} ephemeral={ephemeral} onEphemeralChange={setEphemeral} />;
 }
 
+async function persistClientAssistantMessage(conversationId: string, message: UIMessage) {
+  if (message.role !== "assistant" || message.parts.length === 0) return;
+  const user = (await supabase.auth.getUser()).data.user;
+  if (!user) return;
+  const { data: existing, error: lookupError } = await supabase
+    .from("ai_messages")
+    .select("id")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", user.id)
+    .eq("model_message_id", message.id)
+    .maybeSingle();
+  if (lookupError) throw lookupError;
+  if (!existing) {
+    const { error } = await supabase.from("ai_messages").insert({
+      conversation_id: conversationId,
+      user_id: user.id,
+      role: "assistant",
+      parts: message.parts as unknown as never,
+      plain_text: message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n"),
+      model_message_id: message.id,
+    });
+    if (error) throw error;
+  }
+  await supabase.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", user.id);
+}
+
 function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephemeral, onEphemeralChange }: { agentType: AgentType; conversationId: string; initialMessages: UIMessage[]; title: string; ephemeral: boolean; onEphemeralChange: (value: boolean) => void }) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -113,7 +139,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
     autoApprovalKeyRef.current = key;
     return true;
   }, []);
-  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen, onFinish: () => { clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => setFailure(describeChatError(chatError)) });
+  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen, onFinish: (message) => { void persistClientAssistantMessage(conversationId, message).catch((saveError) => console.error("[ai-chat] persistance client impossible", saveError)); clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => setFailure(describeChatError(chatError)) });
   const busy = status === "submitted" || status === "streaming";
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
