@@ -23,11 +23,13 @@ export const saveAiLocalSource = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: unknown) => z.object({ agentType: agentSchema, enabled: z.boolean() }).parse(data))
   .handler(async ({ data, context }) => {
-    const column = data.agentType === "coach" ? "coach_ai_source" : "build_ai_source";
     const value = data.enabled ? "local" : "pace";
+    const payload = data.agentType === "coach"
+      ? { user_id: context.userId, coach_ai_source: value }
+      : { user_id: context.userId, build_ai_source: value };
     const { error } = await context.supabase
       .from("ai_preferences")
-      .upsert({ user_id: context.userId, [column]: value }, { onConflict: "user_id" });
+      .upsert(payload, { onConflict: "user_id" });
     if (error) throw new Error("Impossible d’enregistrer le mode IA.");
     return { ok: true, source: value as "local" | "pace" };
   });
