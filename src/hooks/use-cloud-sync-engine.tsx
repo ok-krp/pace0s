@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
+import { readDomain, sanitizeNutritionItems } from "@/lib/domain-store";
 
 const PACE_PREFIX = "pace.";
 const INTERNAL_PREFIX = "pace.__";
@@ -71,6 +72,38 @@ function readDomainRecord(key: string): DomainRecord | null {
 }
 function serialize(value: unknown) { try { return JSON.stringify(value); } catch { return undefined; } }
 
+function unwrapNutritionValue(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.version === 1 && typeof candidate.updatedAt === "string" && typeof candidate.mutationId === "string" && "value" in candidate) return candidate.value;
+  return value;
+}
+
+function mergeNutritionRemoteValue(incomingValue: unknown) {
+  const incoming = unwrapNutritionValue(incomingValue);
+  const current = readDomain<Record<string, unknown>>("nutrition.items", {}).value;
+  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || !current || typeof current !== "object" || Array.isArray(current)) return sanitizeNutritionItems(incoming);
+  const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
+  for (const [day, rawIncoming] of Object.entries(incoming as Record<string, unknown>)) {
+    if (!Array.isArray(rawIncoming)) continue;
+    const local = Array.isArray(merged[day]) ? merged[day] as unknown[] : [];
+    const byId = new Set(local.map((item) => item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "").filter(Boolean));
+    const output = [...local];
+    for (const item of rawIncoming) {
+      const id = item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "";
+      if (id && byId.has(id)) {
+        const index = output.findIndex((existing) => existing && typeof existing === "object" && String((existing as Record<string, unknown>).id ?? "") === id);
+        if (index >= 0) output[index] = item;
+      } else {
+        output.push(item);
+        if (id) byId.add(id);
+      }
+    }
+    merged[day] = output;
+  }
+  return sanitizeNutritionItems(merged);
+}
+
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
@@ -83,7 +116,9 @@ export function useCloudSyncEngineInternal() {
     if (encoded !== undefined) lastRemoteValues.current[key] = encoded;
   };
   const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string) => {
-    rememberRemote(key, value); applyRemoteWrite(key, value, updatedAt);
+    const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value) : value;
+    rememberRemote(key, safeValue);
+    applyRemoteWrite(key, safeValue, updatedAt);
   };
 
   useEffect(() => {
