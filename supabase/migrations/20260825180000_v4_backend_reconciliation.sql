@@ -114,6 +114,9 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS training_goal text DEFAULT 
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS activity_level text DEFAULT 'moderate';
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS training_sessions_goal integer DEFAULT 3;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS updated_by text;
+-- Some historical/preview schemas do not contain these legacy columns. Add them before the compatibility backfill.
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS full_name text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url text;
 UPDATE public.profiles SET user_id = id WHERE user_id IS NULL;
 UPDATE public.profiles SET display_name = full_name WHERE display_name IS NULL AND full_name IS NOT NULL;
 UPDATE public.profiles SET email = u.email FROM auth.users u WHERE u.id = profiles.user_id AND profiles.email IS NULL;
