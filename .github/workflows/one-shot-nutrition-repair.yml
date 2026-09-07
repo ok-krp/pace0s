@@ -1,0 +1,97 @@
+name: One-shot Nutrition Repair
+
+on:
+  push:
+    branches:
+      - fix/nutrition-runtime-delete-intent
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.event.head_commit.message != 'chore(ai): repair nutrition runtime and delete intent'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Apply targeted repair
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p = Path('src/lib/ai-chat.server.ts')
+          s = p.read_text()
+
+          old = '''      try { await mirrorAiFoodToNutritionState(client, userId, inserted.log_date); } catch (syncError) {'''
+          new = '''      try { await mirrorAiFoodToNutritionState(client, userId, {
+            id: String(inserted.id),
+            log_date: String(inserted.log_date ?? day),
+            name: String(inserted.name ?? input.name),
+            meal: String(inserted.meal ?? input.meal),
+            kcal: Number(inserted.kcal ?? input.kcal),
+            protein_g: Number(inserted.protein_g ?? input.protein_g),
+            carbs_g: Number(inserted.carbs_g ?? input.carbs_g),
+            fat_g: Number(inserted.fat_g ?? input.fat_g),
+            fiber_g: Number(inserted.fiber_g ?? input.fiber_g),
+            sugar_g: Number(inserted.sugar_g ?? input.sugar_g),
+            sodium_mg: Number(inserted.sodium_mg ?? input.sodium_mg),
+            grams: Number(inserted.grams ?? input.grams),
+          }); } catch (syncError) {'''
+          if old not in s:
+              raise SystemExit('Nutrition sync call pattern not found')
+          s = s.replace(old, new, 1)
+
+          needle = '''      const operation = input.operation ?? "add";
+      const day = new Date().toISOString().slice(0, 10);'''
+          replacement = '''      const operation = input.operation ?? "add";
+      const day = new Date().toISOString().slice(0, 10);
+      const latestUserText = newest?.role === "user" ? textOf(newest) : "";
+      const normalizedUserText = latestUserText.normalize("NFD").replace(/\\p{Diacritic}/gu, "").toLocaleLowerCase("fr-FR");
+      const explicitWholeMealDelete = /\\b(?:supprime|supprimer|efface|effacer)\\s+(?:ce|le|la|mon|un)?\\s*repas(?:\\b|$)/u.test(normalizedUserText) && !/\\bne\\s+(?:supprime|supprimer|efface|effacer)\\b[^.!?]{0,120}\\bpas\\b/u.test(normalizedUserText);'''
+          if needle not in s:
+              raise SystemExit('Nutrition operation anchor not found')
+          s = s.replace(needle, replacement, 1)
+
+          needle = '''        if (operation === "delete") {
+          const { error } = await client.from("food_log").delete().eq("id", row.id).eq("user_id", userId);'''
+          replacement = '''        if (operation === "delete") {
+          if (!explicitWholeMealDelete) {
+            await logAction(client, userId, conversationId, "coach", "delete_food_blocked", "Suppression de repas refusée", { target_id: row.id, request: latestUserText }, "failed");
+            return { ok: false, message: "Suppression du repas refusée : l’utilisateur doit demander explicitement de supprimer le repas entier (par exemple « supprime ce repas »)." };
+          }
+          const { error } = await client.from("food_log").delete().eq("id", row.id).eq("user_id", userId);'''
+          if needle not in s:
+              raise SystemExit('Nutrition delete anchor not found')
+          s = s.replace(needle, replacement, 1)
+
+          p.write_text(s)
+          PY
+
+      - name: Verify targeted repair
+        shell: bash
+        run: |
+          grep -q 'mirrorAiFoodToNutritionState(client, userId, {' src/lib/ai-chat.server.ts
+          ! grep -q 'mirrorAiFoodToNutritionState(client, userId, inserted.log_date)' src/lib/ai-chat.server.ts
+          grep -q 'explicitWholeMealDelete' src/lib/ai-chat.server.ts
+          npm run typecheck
+          npm run build
+
+      - name: Commit repair and remove one-shot workflow
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm .github/workflows/one-shot-nutrition-repair.yml
+          git add src/lib/ai-chat.server.ts .github/workflows/one-shot-nutrition-repair.yml
+          git commit -m 'chore(ai): repair nutrition runtime and delete intent'
+          git push origin HEAD:fix/nutrition-runtime-delete-intent
