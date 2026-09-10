@@ -88,10 +88,22 @@ function DailyChat({ conversationId, day }: { conversationId: string; day: strin
 }
 
 function DailyChatSession({ conversationId, initialMessages, failure, setFailure }: { conversationId: string; initialMessages: UIMessage[]; failure: string | null; setFailure: (value: string | null) => void }) {
+  const [, setNutritionItems] = useDomainState<Record<string, MealItem[]>>("nutrition.items", {});
+  const [, setNutritionTotals] = useDomainState<Record<string, { kcal: number; p: number; c: number; f: number }>>("nutrition.totals", {});
   const bottomRef = useRef<HTMLDivElement>(null); const inputRef = useRef<HTMLTextAreaElement>(null); const autoApprovalKeyRef = useRef<string | null>(null); const [input, setInput] = useState("");
   const transport = useMemo(() => new DefaultChatTransport({ api: "/api/ai-chat", fetch: async (url, init) => { const { data, error } = await supabase.auth.getSession(); if (error || !data.session) throw new Error("Authentification expirée : reconnectez-vous puis renvoyez votre message."); const headers = new Headers(init?.headers); headers.set("Authorization", `Bearer ${data.session.access_token}`); return fetch(url, { ...init, headers }); }, prepareSendMessagesRequest: ({ messages: all, body }) => ({ body: { ...body, messages: all.slice(-30) } }), body: { conversationId, agentType: "coach", ephemeral: false } }), [conversationId]);
   const sendAutomaticallyWhen = useMemo(() => ({ messages }: { messages: UIMessage[] }) => { const last = messages.at(-1); if (!last || last.role !== "assistant") return false; const responses = last.parts.filter((part) => { const candidate = part as unknown as Record<string, unknown>; const approval = candidate.approval; return candidate.state === "approval-responded" && typeof approval === "object" && approval !== null && typeof (approval as Record<string, unknown>).id === "string"; }).map((part) => { const approval = (part as unknown as Record<string, unknown>).approval as Record<string, unknown>; return `${approval.id}:${approval.approved === true ? "approved" : "denied"}`; }); if (!responses.length) return false; const key = `${last.id}:${responses.join("|")}`; if (autoApprovalKeyRef.current === key) return false; autoApprovalKeyRef.current = key; return true; }, []);
-  const { messages, sendMessage, status, addToolApprovalResponse } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen, onFinish: ({ message }) => { void persistNutritionAssistantMessage(conversationId, message).catch((saveError) => console.error("[ai-chat] persistance Nutrition impossible", saveError)); setFailure(null); }, onError: (error) => setFailure(describeChatError(error)) });
+  const refreshCanonicalNutrition = async () => {
+    const user = (await supabase.auth.getUser()).data.user;
+    if (!user) return;
+    const { data, error } = await supabase.from("food_log").select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").eq("user_id", user.id).eq("log_date", todayKey()).order("created_at");
+    if (error) throw error;
+    const items = (data ?? []).map((row) => ({ id: row.id, name: row.name, meal: row.meal, kcal: Number(row.kcal ?? 0), p: Number(row.protein_g ?? 0), c: Number(row.carbs_g ?? 0), f: Number(row.fat_g ?? 0), fiber: Number(row.fiber_g ?? 0), sugar: Number(row.sugar_g ?? 0), sodium: Number(row.sodium_mg ?? 0), qty: 1 }));
+    setNutritionItems((current) => ({ ...current, [todayKey()]: items }));
+    setNutritionTotals((current) => ({ ...current, [todayKey()]: items.reduce((a, x) => ({ kcal: a.kcal + x.kcal, p: a.p + x.p, c: a.c + x.c, f: a.f + x.f }), { kcal: 0, p: 0, c: 0, f: 0 }) }));
+  };
+
+  const { messages, sendMessage, status, addToolApprovalResponse } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen, onFinish: ({ message }) => { void persistNutritionAssistantMessage(conversationId, message).then(() => refreshCanonicalNutrition()).catch((saveError) => console.error("[ai-chat] persistance/refresh Nutrition impossible", saveError)); setFailure(null); }, onError: (error) => setFailure(describeChatError(error)) });
   const busy = status === "submitted" || status === "streaming";
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
   const send = async () => { const text = input.trim(); if (!text || busy) return; setInput(""); setFailure(null); try { await sendMessage({ text }); } catch (error) { setInput(text); setFailure(describeChatError(error)); } };
