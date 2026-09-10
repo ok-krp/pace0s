@@ -1,0 +1,40 @@
+name: Fix sport archive typing
+
+on:
+  push:
+    branches: [feat/sport-archived-programs]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fix exact signature
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/routes/sport.tsx')
+          s = p.read_text()
+          old = 'setProgs: (v: Program[] | ((p: Program[]) => Program[]) => Program[])) => void'
+          new = 'setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void'
+          if s.count(old) != 1:
+              raise SystemExit(f'expected exactly one malformed signature, got {s.count(old)}')
+          p.write_text(s.replace(old, new))
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/routes/sport.tsx
+          git commit -m 'fix(sport): correct archive tab setter typing'
+          git push
+      - name: Remove one-time workflow
+        run: |
+          git rm .github/workflows/fix-sport-archive-signature.yml
+          git commit -m 'chore: remove one-time sport typing workflow'
+          git push
