@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Play, Pause, RotateCcw, Briefcase, Trash2, Plus, Check, StickyNote, ExternalLink } from "lucide-react";
+import { Play, Pause, RotateCcw, Briefcase, Plus, Check, StickyNote, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/Stat";
 import { useLocalState, lastNDays, fmtDay, todayKey } from "@/lib/storage";
 import { useDomainState } from "@/lib/domain-store";
@@ -22,18 +22,39 @@ function WorkPage() {
   const navigate = useNavigate();
   const [data, setData] = useLocalState<Record<string, number>>("pace.work.minutes", {});
   const [sessions, setSessions] = useLocalState<Array<{ id: string; date: string; cat: string; minutes: number }>>("pace.work.sessions", []);
-  const [cat, setCat] = useState("Business"); const [running, setRunning] = useState(false); const [seconds, setSeconds] = useState(0); const ref = useRef<number | null>(null);
+  const [cat, setCat] = useState("Business");
+  const [running, setRunning] = useState(false);
+  const [seconds, setSeconds] = useState(0);
+  const ref = useRef<number | null>(null);
   const [legacyHabits] = useLocalState<Habit[]>("pace.routine.list", [{ id: "h1", name: "Sport", emoji: "🏋️" }, { id: "h2", name: "Lecture", emoji: "📖" }, { id: "h3", name: "Méditation", emoji: "🧘" }, { id: "h4", name: "Douche froide", emoji: "❄️" }]);
   const [legacyDone] = useLocalState<Record<string, string[]>>("pace.routine.done", {});
   const [habits, setHabits] = useDomainState<Habit[]>("routine.list", legacyHabits);
   const [done, setDone] = useDomainState<Record<string, string[]>>("routine.done", legacyDone);
-  const [habitName, setHabitName] = useState(""); const [habitEmoji, setHabitEmoji] = useState("✨");
+  const [habitName, setHabitName] = useState("");
+  const [habitEmoji, setHabitEmoji] = useState("✨");
   const [notes] = useLocalState<Note[]>("pace.notes.list", []);
   const today = todayKey();
 
-  useEffect(() => { if (running) ref.current = window.setInterval(() => setSeconds((s) => s + 1), 1000); return () => { if (ref.current) clearInterval(ref.current); }; }, [running]);
-  const stop = () => { setRunning(false); if (seconds > 0) { const m = Math.max(1, Math.round(seconds / 60)); setData((p) => ({ ...p, [today]: (p[today] ?? 0) + m })); setSessions((p) => [{ id: crypto.randomUUID(), date: today, cat, minutes: m }, ...p].slice(0, 100)); } setSeconds(0); };
-  const days = lastNDays(14); const series = days.map((d) => ({ d: fmtDay(d).slice(0, 3), min: data[d] ?? 0 })); const totalMin = series.reduce((s, x) => s + x.min, 0); const avg = totalMin / 14; const todayMin = data[today] ?? 0;
+  useEffect(() => {
+    if (running) ref.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
+    return () => { if (ref.current) clearInterval(ref.current); };
+  }, [running]);
+
+  const stop = () => {
+    setRunning(false);
+    const completedMinutes = Math.floor(seconds / 60);
+    if (completedMinutes > 0) {
+      setData((p) => ({ ...p, [today]: (p[today] ?? 0) + completedMinutes }));
+      setSessions((p) => [{ id: crypto.randomUUID(), date: today, cat, minutes: completedMinutes }, ...p].slice(0, 100));
+    }
+    setSeconds(0);
+  };
+
+  const days = lastNDays(14);
+  const series = days.map((d) => ({ d: fmtDay(d).slice(0, 3), min: data[d] ?? 0 }));
+  const totalMin = series.reduce((s, x) => s + x.min, 0);
+  const avg = totalMin / 14;
+  const todayMin = data[today] ?? 0;
   const fmt = (s: number) => `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
   const todayDone = done[today] ?? [];
   const toggleHabit = (id: string) => setDone((p) => ({ ...p, [today]: (p[today] ?? []).includes(id) ? (p[today] ?? []).filter((x) => x !== id) : [...(p[today] ?? []), id] }));
@@ -46,7 +67,7 @@ function WorkPage() {
       <section className="glass-card p-5">
         <div className="flex items-center justify-between mb-4"><div><div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Travail</div><div className="font-display text-lg font-semibold mt-1">Concentration</div></div><Briefcase className="size-5 text-primary" /></div>
         <div className="grid grid-cols-3 gap-2 mb-4"><div className="glass-thin rounded-xl p-3"><div className="text-[10px] text-muted-foreground">Aujourd'hui</div><div className="font-semibold mt-1">{Math.floor(todayMin / 60)}h{todayMin % 60}</div></div><div className="glass-thin rounded-xl p-3"><div className="text-[10px] text-muted-foreground">Moy. 14j</div><div className="font-semibold mt-1">{Math.floor(avg / 60)}h{Math.round(avg % 60)}</div></div><div className="glass-thin rounded-xl p-3"><div className="text-[10px] text-muted-foreground">Total</div><div className="font-semibold mt-1">{Math.floor(totalMin / 60)}h</div></div></div>
-        <div className="rounded-2xl glass-thin p-5 flex flex-col items-center gap-4"><div className="font-display text-5xl font-semibold tabular-nums tracking-tight">{fmt(seconds)}</div><Select value={cat} onValueChange={setCat}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{CATS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select><div className="flex gap-2 w-full"><Button onClick={() => setRunning(!running)} className="rounded-xl flex-1">{running ? <><Pause className="size-4 mr-1" />Pause</> : <><Play className="size-4 mr-1" />Démarrer</>}</Button><Button onClick={stop} variant="secondary" className="rounded-xl"><RotateCcw className="size-4" /></Button></div></div>
+        <div className="rounded-2xl glass-thin p-5 flex flex-col items-center gap-4"><div className="font-display text-5xl font-semibold tabular-nums tracking-tight">{fmt(seconds)}</div><Select value={cat} onValueChange={setCat}><SelectTrigger className="w-full"><SelectValue /></SelectTrigger><SelectContent>{CATS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select><div className="flex gap-2 w-full"><Button onClick={() => setRunning(!running)} className="rounded-xl flex-1">{running ? <><Pause className="size-4 mr-1" />Pause</> : <><Play className="size-4 mr-1" />Démarrer</>}</Button><Button onClick={stop} variant="secondary" className="rounded-xl"><RotateCcw className="size-4" /></Button></div><span className="text-[11px] text-muted-foreground">1 minute enregistrée par tranche complète de 60 secondes.</span></div>
         {sessions.length > 0 && <div className="mt-4 space-y-1.5">{sessions.slice(0, 4).map((s) => <div key={s.id} className="flex justify-between text-xs px-1"><span>{s.cat} · {s.date}</span><span className="text-muted-foreground">{s.minutes} min</span></div>)}</div>}
       </section>
 
