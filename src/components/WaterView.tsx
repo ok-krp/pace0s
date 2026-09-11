@@ -30,7 +30,7 @@ export function WaterView() {
   };
 
   return (
-    <div className="rounded-2xl glass-card p-4 sm:p-5 flex h-full w-full max-w-[360px] mx-auto flex-col items-center">
+    <div className="rounded-2xl glass-card p-4 sm:p-5 flex h-full min-h-full w-full flex-col items-center">
       <Ring value={cur} max={goal} size={148} stroke={12} color="var(--chart-2)">
         <div className="text-center">
           <div className="font-display text-2xl font-semibold">{(cur / 1000).toFixed(1)}</div>
