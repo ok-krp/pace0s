@@ -27,6 +27,8 @@ import { toast } from "sonner";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { supabase } from "@/integrations/supabase/client";
 
+// Keep the legacy "water" value accepted so existing deep links remain valid.
+// It now resolves to the unified Nutrition view where hydration is embedded.
 const searchSchema = z.object({ tab: z.enum(["nutrition", "recipes", "water"]).optional() });
 
 export const Route = createFileRoute("/nutrition")({
@@ -49,7 +51,7 @@ const MAX_NUTRITION_PHOTO_BYTES = 8 * 1024 * 1024;
 
 function NutritionPage() {
   const { tab } = Route.useSearch();
-  const currentTab = tab ?? "nutrition";
+  const currentTab = tab === "recipes" ? "recipes" : "nutrition";
   const [scanOpen, setScanOpen] = useState(false);
   const [recallCount] = useLocalState<number>("pace.recalls.count", 0);
   const [pending, setPending] = useState<
@@ -152,11 +154,9 @@ function NutritionPage() {
           <TabsList className="rounded-full h-10">
             <TabsTrigger value="nutrition" asChild className="rounded-full px-5"><Link to="/nutrition" search={{ tab: "nutrition" }}>Nutrition</Link></TabsTrigger>
             <TabsTrigger value="recipes" asChild className="rounded-full px-5"><Link to="/nutrition" search={{ tab: "recipes" }}>Recettes</Link></TabsTrigger>
-            <TabsTrigger value="water" asChild className="rounded-full px-5"><Link to="/nutrition" search={{ tab: "water" }}>Eau</Link></TabsTrigger>
           </TabsList>
           <TabsContent value="nutrition" />
           <TabsContent value="recipes" />
-          <TabsContent value="water" />
         </Tabs>
       </div>
 
@@ -169,9 +169,17 @@ function NutritionPage() {
         <span className="text-[10px] uppercase tracking-wider text-muted-foreground/70 shrink-0">Ouvrir →</span>
       </Link>
 
-      {currentTab === "nutrition" && <NutritionLogView />}
+      {currentTab === "nutrition" && <>
+        <NutritionLogView />
+        <section className="mt-6 pb-8">
+          <div className="mb-3 px-1">
+            <div className="font-display text-lg font-semibold tracking-tight">Hydratation</div>
+            <div className="text-xs text-muted-foreground">Suivi de l'eau quotidien et historique 14 jours.</div>
+          </div>
+          <WaterView />
+        </section>
+      </>}
       {currentTab === "recipes" && <RecipesView />}
-      {currentTab === "water" && <WaterView />}
 
       {(currentTab === "nutrition" || currentTab === "recipes") && (
         <div className="fixed z-40 right-4 flex flex-col gap-3 bottom-[max(6rem,calc(env(safe-area-inset-bottom)+5.5rem))] md:bottom-6">
