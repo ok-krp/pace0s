@@ -12,3 +12,27 @@
   left: 50% !important;
   transform: translate(-50%, -50%) !important;
 }
+
+/* Daily Rhythm: compact textual breakdown instead of dot markers. */
+button[aria-label="Voir le détail du Daily Rhythm"] ul li {
+  gap: 0.45rem;
+}
+button[aria-label="Voir le détail du Daily Rhythm"] ul li > span {
+  display: none;
+}
+button[aria-label="Voir le détail du Daily Rhythm"] ul li::before {
+  content: "-";
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
+button[aria-label="Voir le détail du Daily Rhythm"] ul li > div > div:first-child {
+  display: inline;
+  font-weight: 600;
+}
+button[aria-label="Voir le détail du Daily Rhythm"] ul li > div > div:first-child::after {
+  content: ":";
+}
+button[aria-label="Voir le détail du Daily Rhythm"] ul li > div > div:nth-child(2) {
+  display: inline;
+  margin-left: 0.25rem;
+}
