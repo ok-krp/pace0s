@@ -5,8 +5,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", Inter, Figtree, ui-sans-serif, system-ui, sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, Outfit, ui-sans-serif, system-ui, sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Outfit", ui-sans-serif, system-ui, sans-serif;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -58,92 +58,476 @@
 }
 
 :root {
-  --radius: 0.75rem;
+  --radius: 1rem;
 
   --background: oklch(0.992 0.002 247);
   --foreground: oklch(0.16 0.025 260);
 
   --surface: oklch(1 0 0 / 0.34);
   --surface-elevated: oklch(1 0 0 / 0.52);
+
+  /* Surfaces are translucent so every control inherits the glass language. */
   --card: oklch(1 0 0 / 0.4);
   --card-foreground: oklch(0.16 0.025 260);
   --popover: oklch(1 0 0 / 0.88);
   --popover-foreground: oklch(0.16 0.025 260);
+
   --primary: oklch(0.55 0.21 258);
   --primary-foreground: oklch(0.99 0 0);
+
   --secondary: oklch(1 0 0 / 0.36);
   --secondary-foreground: oklch(0.2 0.03 260);
-  --muted: oklch(1 0 0 / 0.26);
-  --muted-foreground: oklch(0.44 0.02 260);
-  --accent: oklch(0.93 0.03 258 / 0.66);
-  --accent-foreground: oklch(0.22 0.03 258);
-  --border: oklch(0.2 0.03 260 / 0.10);
-  --input: oklch(1 0 0 / 0.38);
+
+  --muted: oklch(1 0 0 / 0.3);
+  --muted-foreground: oklch(0.42 0.02 257);
+
+  --accent: oklch(1 0 0 / 0.46);
+  --accent-foreground: oklch(0.2 0.03 260);
+
+  --destructive: oklch(0.62 0.22 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.68 0.16 155);
+  --warning: oklch(0.78 0.15 80);
+
+  --border: oklch(1 0 0 / 0.4);
+  --input: oklch(1 0 0 / 0.42);
   --ring: oklch(0.55 0.21 258);
-  --sidebar: oklch(0.99 0.002 247 / 0.70);
-  --sidebar-foreground: oklch(0.22 0.025 260);
+
+  --chart-1: oklch(0.55 0.21 258);
+  --chart-2: oklch(0.68 0.16 155);
+  --chart-3: oklch(0.78 0.15 80);
+  --chart-4: oklch(0.65 0.2 25);
+  --chart-5: oklch(0.6 0.18 300);
+
+  --sidebar: oklch(0.985 0.003 247);
+  --sidebar-foreground: oklch(0.25 0.025 260);
   --sidebar-primary: oklch(0.55 0.21 258);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.93 0.03 258 / 0.62);
-  --sidebar-accent-foreground: oklch(0.22 0.03 258);
-  --sidebar-border: oklch(0.2 0.03 260 / 0.09);
+  --sidebar-accent: oklch(0.95 0.01 250);
+  --sidebar-accent-foreground: oklch(0.25 0.03 260);
+  --sidebar-border: oklch(0.92 0.008 250);
   --sidebar-ring: oklch(0.55 0.21 258);
-  --chart-1: oklch(0.55 0.21 258);
-  --chart-2: oklch(0.55 0.21 258);
-  --chart-3: oklch(0.55 0.21 258);
-  --chart-4: oklch(0.55 0.21 258);
-  --chart-5: oklch(0.55 0.21 258);
-  --destructive: oklch(0.61 0.20 27);
-  --destructive-foreground: oklch(0.99 0 0);
-  --success: oklch(0.60 0.17 155);
-  --warning: oklch(0.67 0.15 80);
+
+  /* Liquid Glass — adaptive tint reacts to wallpaper (overridden per-wallpaper). */
+  --glass-tint: 255 255 255;       /* rgb triplet blended into surfaces */
+  --glass-tint-base: 0.13;
+  --glass-tint-strength: var(--glass-tint-base);  /* panel opacity — crystal, not acrylic */
+  /* Clear glass: just enough blur to soften, never frosted. */
+  --glass-blur: 9px;
+  --glass-blur-thin: 7px;
+  --glass-saturate: 150%;
+  --glass-radius: 26px;
+  --glass-radius-sm: 18px;
+  /* Fresnel / specular */
+  --glass-edge: 0.42;              /* rim light intensity */
+  --glass-sheen: 0.1;              /* specular sheen intensity */
+  --glass-sheen-x: 50%;            /* pointer position (set by use-glass-pointer) */
+  --glass-sheen-y: 0%;
+  /* Elevation — minimal, contact-first */
+  --glass-elev-1:
+    0 1px 1px oklch(0.2 0.04 260 / 0.03),
+    0 2px 5px -3px oklch(0.2 0.04 260 / 0.07);
+  --glass-elev-2:
+    0 1px 2px oklch(0.2 0.04 260 / 0.035),
+    0 8px 20px -14px oklch(0.2 0.04 260 / 0.10),
+    0 20px 44px -30px oklch(0.2 0.04 260 / 0.08);
+  --glass-elev-3:
+    0 2px 3px oklch(0.2 0.04 260 / 0.05),
+    0 14px 32px -18px oklch(0.2 0.04 260 / 0.14),
+    0 30px 70px -40px oklch(0.2 0.04 260 / 0.12);
+
+
+
+  /* Wallpaper — default premium abstract (Apple-inspired). */
+  --wallpaper:
+    radial-gradient(1200px 700px at -10% -10%, oklch(0.96 0.06 60 / 0.55), transparent 60%),
+    radial-gradient(1000px 700px at 110% 10%, oklch(0.94 0.05 240 / 0.5), transparent 60%),
+    radial-gradient(900px 800px at 50% 120%, oklch(0.95 0.04 200 / 0.4), transparent 60%),
+    linear-gradient(135deg, oklch(0.985 0.012 60) 0%, oklch(0.99 0.005 247) 50%, oklch(0.97 0.02 240) 100%);
 }
 
 .dark {
-  --background: oklch(0.17 0.012 255);
-  --foreground: oklch(0.97 0.004 250);
-  --surface: oklch(1 0 0 / 0.10);
-  --surface-elevated: oklch(1 0 0 / 0.14);
-  --card: oklch(1 0 0 / 0.11);
-  --card-foreground: oklch(0.97 0.004 250);
-  --popover: oklch(0.20 0.014 255 / 0.95);
-  --popover-foreground: oklch(0.97 0.004 250);
-  --primary: oklch(0.72 0.17 258);
-  --primary-foreground: oklch(0.16 0.012 255);
-  --secondary: oklch(1 0 0 / 0.12);
-  --secondary-foreground: oklch(0.97 0.004 250);
-  --muted: oklch(1 0 0 / 0.10);
-  --muted-foreground: oklch(0.80 0.01 250);
-  --accent: oklch(0.30 0.035 258 / 0.72);
-  --accent-foreground: oklch(0.98 0.004 250);
-  --border: oklch(1 0 0 / 0.11);
-  --input: oklch(1 0 0 / 0.12);
-  --ring: oklch(0.72 0.17 258);
-  --sidebar: oklch(0.18 0.012 255 / 0.78);
-  --sidebar-foreground: oklch(0.95 0.004 250);
-  --sidebar-primary: oklch(0.72 0.17 258);
-  --sidebar-primary-foreground: oklch(0.16 0.012 255);
-  --sidebar-accent: oklch(0.30 0.035 258 / 0.66);
-  --sidebar-accent-foreground: oklch(0.98 0.004 250);
-  --sidebar-border: oklch(1 0 0 / 0.10);
-  --sidebar-ring: oklch(0.72 0.17 258);
-  --chart-1: oklch(0.72 0.17 258);
-  --chart-2: oklch(0.72 0.17 258);
-  --chart-3: oklch(0.72 0.17 258);
-  --chart-4: oklch(0.72 0.17 258);
-  --chart-5: oklch(0.72 0.17 258);
-  --destructive: oklch(0.70 0.18 27);
-  --destructive-foreground: oklch(0.16 0.012 255);
-  --success: oklch(0.72 0.15 155);
-  --warning: oklch(0.78 0.14 80);
+  --background: oklch(0.13 0.015 260);
+  --foreground: oklch(0.99 0.002 247);
+  --surface: oklch(1 0 0 / 0.08);
+  --surface-elevated: oklch(1 0 0 / 0.12);
+  --card: oklch(1 0 0 / 0.09);
+  --card-foreground: oklch(0.99 0.002 247);
+  --popover: oklch(0.17 0.02 260 / 0.92);
+  --popover-foreground: oklch(0.99 0.002 247);
+  --primary: oklch(0.72 0.18 258);
+  --primary-foreground: oklch(0.13 0.015 260);
+  --secondary: oklch(1 0 0 / 0.1);
+  --secondary-foreground: oklch(0.99 0.002 247);
+  --muted: oklch(1 0 0 / 0.1);
+  /* Legibility on photographic wallpapers: keep secondary text high-contrast. */
+  --muted-foreground: oklch(0.84 0.012 250);
+  --accent: oklch(1 0 0 / 0.14);
+  --accent-foreground: oklch(0.99 0.002 247);
+  --destructive: oklch(0.72 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.78 0.16 155);
+  --warning: oklch(0.85 0.15 80);
+  --border: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.72 0.18 258);
+  --chart-1: oklch(0.7 0.18 258);
+  --chart-2: oklch(0.72 0.16 155);
+  --chart-3: oklch(0.8 0.15 80);
+  --chart-4: oklch(0.7 0.2 25);
+  --chart-5: oklch(0.65 0.18 300);
+  --sidebar: oklch(0.15 0.018 260);
+  --sidebar-foreground: oklch(0.95 0.005 247);
+  --sidebar-primary: oklch(0.7 0.18 258);
+  --sidebar-primary-foreground: oklch(0.13 0.015 260);
+  --sidebar-accent: oklch(0.22 0.02 260);
+  --sidebar-accent-foreground: oklch(0.97 0.005 247);
+  --sidebar-border: oklch(1 0 0 / 8%);
+  --sidebar-ring: oklch(0.7 0.18 258);
+
+  --glass-tint: 12 16 26;
+  --glass-tint-base: 0.26;
+  --glass-tint-strength: var(--glass-tint-base);
+  --glass-edge: 0.3;
+  --glass-sheen: 0.08;
+  --glass-elev-1:
+    0 1px 1px oklch(0 0 0 / 0.16),
+    0 2px 5px -3px oklch(0 0 0 / 0.26);
+  --glass-elev-2:
+    0 1px 2px oklch(0 0 0 / 0.2),
+    0 8px 20px -14px oklch(0 0 0 / 0.34),
+    0 20px 44px -30px oklch(0 0 0 / 0.28);
+  --glass-elev-3:
+    0 2px 3px oklch(0 0 0 / 0.24),
+    0 14px 32px -18px oklch(0 0 0 / 0.4),
+    0 30px 70px -40px oklch(0 0 0 / 0.32);
+
+
+  --wallpaper:
+    radial-gradient(1200px 700px at -10% -10%, oklch(0.28 0.08 250 / 0.6), transparent 60%),
+    radial-gradient(1000px 700px at 110% 10%, oklch(0.22 0.09 260 / 0.55), transparent 60%),
+    radial-gradient(900px 800px at 50% 120%, oklch(0.2 0.06 240 / 0.5), transparent 60%),
+    linear-gradient(135deg, oklch(0.13 0.02 260) 0%, oklch(0.14 0.03 255) 50%, oklch(0.16 0.05 245) 100%);
 }
 
-.text-emerald-500,.text-emerald-600,.text-green-500,.text-green-600 { color: var(--success) !important; }
-.text-amber-500,.text-amber-600,.text-yellow-500,.text-yellow-600 { color: var(--warning) !important; }
-.text-red-500,.text-red-600,.text-rose-500,.text-rose-600 { color: var(--destructive) !important; }
-.bg-emerald-500,.bg-emerald-600,.bg-green-500,.bg-green-600 { background-color: var(--success) !important; }
-.bg-amber-500,.bg-amber-600,.bg-yellow-500,.bg-yellow-600 { background-color: var(--warning) !important; }
-.bg-red-500,.bg-red-600,.bg-rose-500,.bg-rose-600 { background-color: var(--destructive) !important; }
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+  html, body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4, h5 {
+    font-family: var(--font-display);
+    letter-spacing: -0.022em;
+    font-weight: 600;
+  }
 
-[class*="from-red-"],[class*="from-orange-"],[class*="from-yellow-"],[class*="from-green-"],[class*="from-emerald-"],[class*="from-cyan-"],[class*="from-sky-"],[class*="from-blue-"],[class*="from-indigo-"],[class*="from-violet-"],[class*="from-purple-"],[class*="from-pink-"] { --tw-gradient-from: var(--primary) !important; }
-[class*="to-red-"],[class*="to-orange-"],[class*="to-yellow-"],[class*="to-green-"],[class*="to-emerald-"],[class*="to-cyan-"],[class*="to-sky-"],[class*="to-blue-"],[class*="to-indigo-"],[class*="to-violet-"],[class*="to-purple-"],[class*="to-pink-"] { --tw-gradient-to: var(--primary) !important; }
+  /* Custom Liquid Glass scrollbars — visible only on hover / interaction */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--foreground) 18%, transparent) transparent;
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--foreground) 14%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+    transition: background 0.2s ease;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--foreground) 32%, transparent);
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-corner { background: transparent; }
+
+  /* Native controls tuning */
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 30%, transparent);
+    color: var(--foreground);
+  }
+}
+
+@layer utilities {
+  .glass {
+    background: color-mix(in oklab, var(--surface-elevated) 70%, transparent);
+    backdrop-filter: blur(20px);
+  }
+  .stat-grad {
+    background: linear-gradient(135deg, var(--primary) 0%, oklch(0.7 0.2 280) 100%);
+  }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { scrollbar-width: none; }
+}
+
+/*
+ * Pace — wallpaper layer.
+ * Rendered as a single fixed, GPU-composited layer instead of
+ * `background-attachment: fixed`, which forces a full repaint of a
+ * high-resolution custom wallpaper on every scroll frame.
+ */
+.pace-bg {
+  position: relative;
+  isolation: isolate;
+}
+.pace-bg::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: var(--wallpaper);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transform: translateZ(0);
+  pointer-events: none;
+}
+
+
+/*
+ * Liquid Glass — Apple iOS 26 material.
+ *
+ * Design goals: polished crystal floating above the wallpaper.
+ *  - panel opacity 8–14% (`--glass-tint-strength`), adaptive to the wallpaper
+ *  - soft blur (no heavy frost), moderate saturation for refraction feel
+ *  - no hard borders: edge lighting is a masked 1px Fresnel gradient
+ *  - minimal, contact-first shadows
+ *
+ * Performance: backdrop-filter is never animated (only transform/opacity),
+ * `contain: paint` scopes the backdrop layer, `will-change` is applied only
+ * while the surface is actually being interacted with.
+ */
+@utility glass-card {
+  position: relative;
+  isolation: isolate;
+  background:
+    linear-gradient(180deg,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.035)) 0%,
+      rgb(var(--glass-tint) / var(--glass-tint-strength)) 46%,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.015)) 100%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-radius: var(--glass-radius);
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklab, white calc(var(--glass-edge) * 55%), transparent),
+    var(--glass-elev-2);
+  contain: paint;
+  transition: box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Fresnel rim — diffuse light along the edge, never a flat outline */
+.glass-card::before,
+[class*="glass-card"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    145deg,
+    color-mix(in oklab, white calc(var(--glass-edge) * 85%), transparent) 0%,
+    color-mix(in oklab, white calc(var(--glass-edge) * 14%), transparent) 34%,
+    transparent 58%,
+    color-mix(in oklab, white calc(var(--glass-edge) * 22%), transparent) 84%,
+    color-mix(in oklab, white calc(var(--glass-edge) * 55%), transparent) 100%
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Specular sheen + refraction wash — pointer-driven via CSS vars only */
+.glass-card::after,
+[class*="glass-card"]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(65% 60% at var(--glass-sheen-x) var(--glass-sheen-y),
+      rgb(255 255 255 / var(--glass-sheen)) 0%,
+      transparent 70%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+.dark .glass-card,
+.dark [class*="glass-card"] {
+  box-shadow:
+    inset 0 1px 0 0 color-mix(in oklab, white 7%, transparent),
+    var(--glass-elev-2);
+}
+
+/* Promote to its own layer only while the surface is interacted with. */
+.glass-card:hover,
+[class*="glass-card"]:hover,
+.glass-card:focus-within,
+[class*="glass-card"]:focus-within,
+.glass-thin:hover,
+.glass-thin:active,
+.glass-icon:hover,
+.glass-icon:active {
+  will-change: transform;
+}
+
+/* Alias */
+@utility liquid-glass {
+  background: rgb(var(--glass-tint) / var(--glass-tint-strength));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border-radius: var(--glass-radius);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, white calc(var(--glass-edge) * 40%), transparent);
+}
+
+/* Thin glass — buttons, pills, segmented controls, tooltips */
+@utility glass-thin {
+  position: relative;
+  background:
+    linear-gradient(180deg,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.08)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.02)) 100%);
+  backdrop-filter: blur(var(--glass-blur-thin)) saturate(var(--glass-saturate));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, white calc(var(--glass-edge) * 42%), transparent),
+    inset 0 1px 0 0 color-mix(in oklab, white calc(var(--glass-edge) * 60%), transparent),
+    var(--glass-elev-1);
+  color: var(--foreground);
+  contain: paint;
+  transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1),
+              background 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.glass-thin:hover {
+  background:
+    linear-gradient(180deg,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.14)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.05)) 100%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, white calc(var(--glass-edge) * 58%), transparent),
+    inset 0 1px 0 0 color-mix(in oklab, white calc(var(--glass-edge) * 80%), transparent),
+    var(--glass-elev-2);
+}
+.glass-thin:active {
+  transform: scale(0.97);
+  box-shadow:
+    inset 0 1px 3px 0 oklch(0.2 0.04 260 / 0.1),
+    var(--glass-elev-1);
+}
+
+/* Circular Liquid Glass icon button — for SF-symbol-style icons */
+@utility glass-icon {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.1)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-tint-strength) + 0.03)) 100%);
+  backdrop-filter: blur(var(--glass-blur-thin)) saturate(var(--glass-saturate));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklab, white calc(var(--glass-edge) * 45%), transparent),
+    inset 0 1px 0 0 color-mix(in oklab, white calc(var(--glass-edge) * 70%), transparent),
+    var(--glass-elev-1);
+  color: var(--foreground);
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+ * Long scrolling lists of glass tiles: let the compositor skip offscreen
+ * backdrop work entirely. Opt-in via `glass-virtualize` on the list wrapper.
+ */
+@utility glass-virtualize {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 220px;
+}
+
+/*
+ * Niveaux de « Qualité Glass » (data-glass sur <html>).
+ * Seuls blur / sheen / Fresnel changent : aucune règle de layout, de rayon
+ * ni de hiérarchie n'est touchée.
+ */
+[data-glass="balanced"] {
+  --glass-blur: 6px;
+  --glass-blur-thin: 4px;
+  --glass-saturate: 135%;
+  --glass-edge: 0.34;
+  --glass-sheen: 0.06;
+  --glass-tint-strength: calc(var(--glass-tint-base) + 0.02);
+}
+[data-glass="low"] {
+  --glass-blur: 0px;
+  --glass-blur-thin: 0px;
+  --glass-saturate: 110%;
+  --glass-edge: 0.24;
+  --glass-sheen: 0;
+  --glass-tint-strength: calc(var(--glass-tint-base) + 0.06);
+}
+[data-glass="low"] .glass-card,
+[data-glass="low"] [class*="glass-card"],
+[data-glass="low"] .glass-thin,
+[data-glass="low"] .glass-icon {
+  backdrop-filter: none;
+}
+[data-glass="low"] .glass-card::after,
+[data-glass="low"] [class*="glass-card"]::after { display: none; }
+
+/* Le reflet spéculaire ne s'anime que pendant une interaction pointeur. */
+.glass-card::after,
+[class*="glass-card"]::after { opacity: 0; transition: opacity 0.25s ease; }
+[data-glass-active] .glass-card::after,
+[data-glass-active] [class*="glass-card"]::after { opacity: 1; }
+
+/*
+ * Lisibilité adaptative : sur fond photo (wallpaper personnalisé), le texte et
+ * les bordures gagnent en contraste sans opacifier le verre.
+ */
+[data-wallpaper="custom"] {
+  --glass-edge: calc(0.42 + 0.12);
+  --border: oklch(1 0 0 / 0.55);
+}
+[data-wallpaper="custom"] .glass-card,
+[data-wallpaper="custom"] [class*="glass-card"],
+[data-wallpaper="custom"] .glass-thin {
+  text-shadow: 0 1px 2px oklch(0 0 0 / 0.16);
+}
+.dark[data-wallpaper="custom"] {
+  --muted-foreground: oklch(0.89 0.01 250);
+  --border: oklch(1 0 0 / 0.22);
+}
+.dark[data-wallpaper="custom"] .glass-card,
+.dark[data-wallpaper="custom"] [class*="glass-card"],
+.dark[data-wallpaper="custom"] .glass-thin {
+  text-shadow: 0 1px 3px oklch(0 0 0 / 0.5);
+}
+
+/* Reduced motion / low-power: drop the dynamic sheen, keep the material */
+@media (prefers-reduced-motion: reduce) {
+  /* On conserve l'apparence Liquid Glass : seul le reflet dynamique est figé. */
+  .glass-card::after,
+  [class*="glass-card"]::after {
+    opacity: 1;
+    transition: none;
+    background: radial-gradient(70% 60% at 50% 0%,
+      rgb(255 255 255 / calc(var(--glass-sheen) * 0.7)) 0%, transparent 70%);
+  }
+  .glass-card, [class*="glass-card"], .glass-thin, .glass-icon,
+  .glass-thin:hover, .glass-thin:active { transition: none; }
+  * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
+}
+
+
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
