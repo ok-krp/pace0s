@@ -3,6 +3,12 @@
  * slightly so the whole interface reads more precise and less bubbly.
  */
 
+:root {
+  --radius: 0.75rem;
+  --glass-radius: 16px;
+  --glass-radius-sm: 14px;
+}
+
 html:not(.dark) .glass,
 html:not(.dark) .glass-card,
 html:not(.dark) .glass-thin,
