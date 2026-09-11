@@ -1,0 +1,1 @@
+-- Migration history bridge: this version is already applied remotely.
