@@ -39,7 +39,7 @@ const Textarea = React.forwardRef<HTMLTextAreaElement, React.ComponentProps<"tex
       resize();
     }, [resize, value, defaultValue]);
 
-    const handleInput = (event: React.FormEvent<HTMLTextAreaElement>) => {
+    const handleInput = (event: React.InputEvent<HTMLTextAreaElement>) => {
       resize();
       onInput?.(event);
     };
