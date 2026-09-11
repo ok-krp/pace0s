@@ -1,7 +1,6 @@
-/* PaceOS — requested Glass card material.
- * White mode uses the requested translucent white surface.
- * Dark mode uses the requested translucent black surface.
- * Visual-only: no layout, navigation, data or interaction logic changes.
+/* PaceOS — restrained glass material.
+ * Keep the requested translucent surfaces, but reduce the corner radius
+ * slightly so the whole interface reads more precise and less bubbly.
  */
 
 html:not(.dark) .glass,
@@ -18,13 +17,13 @@ html.dark .card {
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-top: 1px solid rgba(255, 255, 255, 0.18) !important;
   border-left: 1px solid rgba(255, 255, 255, 0.12) !important;
-  border-radius: 20px !important;
+  border-radius: 16px !important;
   box-shadow:
     0 10px 20px -15px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
-    inset 0 -1px 2px 0 rgba(0, 0, 0, 0.4) !important;
-  backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
-  -webkit-backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.15),
+    inset 0 -1px 2px 0 rgba(0, 0, 0, 0.3) !important;
+  backdrop-filter: blur(5px) saturate(140%) brightness(0.95);
+  -webkit-backdrop-filter: blur(5px) saturate(140%) brightness(0.95);
   overflow: hidden;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
