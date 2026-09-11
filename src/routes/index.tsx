@@ -152,6 +152,23 @@ function Dashboard() {
     [addWater, navigate],
   );
 
+  const workoutCard = (
+    <motion.button type="button" onClick={() => navigate({ to: "/sport" })} whileHover={{ y: -2, scale: 1.008 }} transition={{ duration: 0.18 }} className="relative glass-card p-5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Sport du jour</div>
+        <Dumbbell className="size-5 shrink-0 text-primary" />
+      </div>
+      <div className="mt-2.5 flex items-end justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-display text-[28px] leading-none font-bold tracking-tight truncate">{todayWorkout ? todayWorkout.name : "Aucune séance"}</div>
+          <div className="mt-2 text-xs text-muted-foreground">{todayWorkout ? `${todayWorkout.exercises.length} exercices${todayWorkout.durationMin ? ` · ${todayWorkout.durationMin} min` : ""}` : "Aucune séance prévue/enregistrée aujourd'hui"}</div>
+        </div>
+      </div>
+      <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: "color-mix(in oklab, var(--foreground) 8%, transparent)" }}><div className="h-full rounded-full" style={{ width: todayWorkout ? "100%" : "0%", background: "var(--primary)" }} /></div>
+      <div className="mt-2.5 text-xs font-medium text-primary">{todayWorkout ? "Séance d'aujourd'hui · Voir →" : "Ouvrir Sport →"}</div>
+    </motion.button>
+  );
+
   return (
     <div>
       <PageHeader title={`${intel.greeting} 👋`} subtitle={todayLabel || "Aujourd’hui"} a11yLabel="Tableau de bord Pace" />
@@ -191,44 +208,23 @@ function Dashboard() {
             <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Flame className="size-4" /> Nutrition & hydratation</div>
             <button type="button" onClick={() => navigate({ to: "/nutrition" })} className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition">Détails →</button>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <button type="button" onClick={() => setDialog("kcal")} className="text-left rounded-xl glass-thin p-4 hover:opacity-90 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-              <Flame className="size-4 text-primary mb-2" />
-              <div className="text-[11px] text-muted-foreground">Calories</div>
-              <div className="font-display text-2xl font-semibold mt-1">{kcal.toLocaleString("fr-FR")}</div>
-              <div className="text-[10px] text-muted-foreground">/ {goals.kcal.toLocaleString("fr-FR")} kcal</div>
+          <div className="flex flex-col gap-1">
+            <button type="button" onClick={() => setDialog("kcal")} className="flex items-center gap-3 text-left rounded-xl glass-thin px-3 py-2.5 hover:opacity-90 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+              <span className="min-w-0 flex-1 text-sm">Calories : <strong>{kcal.toLocaleString("fr-FR")}</strong> / {goals.kcal.toLocaleString("fr-FR")} kcal</span>
+              <span aria-hidden="true" className="text-lg leading-none text-muted-foreground">+</span>
             </button>
-            <button type="button" onClick={() => setDialog("water")} className="text-left rounded-xl glass-thin p-4 hover:opacity-90 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
-              <Droplets className="size-4 text-primary mb-2" />
-              <div className="text-[11px] text-muted-foreground">Hydratation</div>
-              <div className="font-display text-2xl font-semibold mt-1">{(waterMl / 1000).toFixed(1)} L</div>
-              <div className="text-[10px] text-muted-foreground">/ {(goals.waterMl / 1000).toFixed(1)} L</div>
+            <button type="button" onClick={() => setDialog("water")} className="flex items-center gap-3 text-left rounded-xl glass-thin px-3 py-2.5 hover:opacity-90 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+              <span className="min-w-0 flex-1 text-sm">Hydratation : <strong>{(waterMl / 1000).toFixed(1)} L</strong> / {(goals.waterMl / 1000).toFixed(1)} L</span>
+              <span aria-hidden="true" className="text-lg leading-none text-muted-foreground">+</span>
             </button>
           </div>
         </div>
       </div>
-      <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
         {intel.metrics.filter((m) => m.key !== "kcal" && m.key !== "water").map((m) => {
           const q = quickFor(m.key);
-          return <SmartCard key={m.key} metric={m} icon={ICONS[m.key]} onOpen={q.open} onQuickAdd={q.add} quickLabel={q.label} />;
+          return <React.Fragment key={m.key}><SmartCard key={m.key} metric={m} icon={ICONS[m.key]} onOpen={q.open} onQuickAdd={q.add} quickLabel={q.label} />{m.key === "routine" && workoutCard}</React.Fragment>;
         })}
-      </motion.div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-        <motion.button type="button" onClick={() => navigate({ to: "/sport" })} whileHover={{ y: -2, scale: 1.008 }} transition={{ duration: 0.18 }} className="relative glass-card p-5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
-          <div className="flex items-start justify-between gap-2">
-            <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Sport du jour</div>
-            <div className="glass-icon size-8 shrink-0"><Dumbbell className="size-4" /></div>
-          </div>
-          <div className="mt-2.5 flex items-end justify-between gap-2">
-            <div className="min-w-0">
-              <div className="font-display text-[28px] leading-none font-bold tracking-tight truncate">{todayWorkout ? todayWorkout.name : "Aucune séance"}</div>
-              <div className="mt-2 text-xs text-muted-foreground">{todayWorkout ? `${todayWorkout.exercises.length} exercices${todayWorkout.durationMin ? ` · ${todayWorkout.durationMin} min` : ""}` : "Aucune séance prévue/enregistrée aujourd'hui"}</div>
-            </div>
-            <Dumbbell className="size-5 shrink-0 text-primary" />
-          </div>
-          <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: "color-mix(in oklab, var(--foreground) 8%, transparent)" }}><div className="h-full rounded-full" style={{ width: todayWorkout ? "100%" : "0%", background: "var(--primary)" }} /></div>
-          <div className="mt-2.5 text-xs font-medium text-primary">{todayWorkout ? "Séance d'aujourd'hui · Voir →" : "Ouvrir Sport →"}</div>
-        </motion.button>
       </div>
       {(health.steps > 0 || health.kcalActive > 0) && (
         <div className="grid grid-cols-3 gap-4 mb-4">
@@ -239,7 +235,7 @@ function Dashboard() {
       )}
       {weightSeries.length > 1 && (
         <button type="button" onClick={() => setDialog("weight")} className="w-full text-left rounded-2xl glass-card p-5 hover:shadow-[var(--shadow-card)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
-          <div className="flex items-center justify-between mb-3"><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider"><Dumbbell className="size-3 inline mr-1" /> Évolution du poids</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Peser →</div></div>
+          <div className="flex items-center justify-between mb-3"><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider"><Scale className="size-3 inline mr-1" /> Évolution du poids</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Peser →</div></div>
           <ResponsiveContainer width="100%" height={140}><LineChart data={weightSeries}><XAxis dataKey="d" hide /><YAxis hide domain={["dataMin - 1", "dataMax + 1"]} /><Tooltip contentStyle={liquidTooltipStyle} /><Line type="monotone" dataKey="w" stroke="var(--primary)" strokeWidth={2.5} dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} connectNulls={false} /></LineChart></ResponsiveContainer>
         </button>
       )}
