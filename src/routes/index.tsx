@@ -2,16 +2,15 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { liquidTooltipStyle, liquidDot } from "@/lib/chart-style";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Moon, Droplets, Dumbbell, Briefcase, Wallet, TrendingUp, Flame, CheckCircle2, Scale, Sparkles, Footprints, Activity } from "lucide-react";
-import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, Area, AreaChart } from "recharts";
+import { Moon, Droplets, Dumbbell, Briefcase, Wallet, Flame, CheckCircle2, Scale, Sparkles, Footprints, Activity } from "lucide-react";
+import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PageHeader, StatCard } from "@/components/Stat";
-import { useLocalState, lastNDays, fmtDay, todayKey } from "@/lib/storage";
+import { useLocalState, lastNDays, todayKey } from "@/lib/storage";
 import { useUserGoals } from "@/hooks/use-user-goals";
 import { useHealthToday } from "@/hooks/use-health";
 import { DashboardDialogs, type DashDialog } from "@/components/DashboardDialogs";
 import { DailyRhythmRing, type RhythmMetric } from "@/components/DailyRhythmRing";
 import { DailyInsight } from "@/components/DailyInsight";
-import { WeeklyHabits } from "@/components/WeeklyHabits";
 import { SmartCard } from "@/components/SmartCard";
 import { buildIntel, statusColor, type ModuleKey } from "@/lib/insights";
 import { toast } from "sonner";
@@ -112,8 +111,6 @@ function Dashboard() {
   const routineDoneCount = (routines[today] ?? []).length;
   const routineTotal = allRoutines.length || 1;
   const workMin = work[today] ?? 0;
-  const todaySpend = tx.filter((t) => t.date === today && t.amount < 0).reduce((s, t) => s + -t.amount, 0);
-  const todayIncome = tx.filter((t) => t.date === today && t.amount > 0).reduce((s, t) => s + t.amount, 0);
 
   const rhythmMetrics: RhythmMetric[] = useMemo(
     () => [
@@ -124,17 +121,6 @@ function Dashboard() {
       { key: "focus", label: "Focus", value: workMin, max: 240, unit: "min", from: "oklch(0.72 0.15 20)", to: "oklch(0.52 0.2 258)" },
     ],
     [sleepH, waterMl, kcal, routineDoneCount, routineTotal, workMin, goals.waterMl, goals.kcal],
-  );
-
-  const trend = useMemo(
-    () =>
-      days.map((d) => ({
-        day: fmtDay(d).slice(0, 3),
-        sommeil: sleep[d]?.hours ?? 0,
-        eau: (water[d] ?? 0) / 1000,
-        kcal: nutrition[d]?.kcal ?? 0,
-      })),
-    [days, sleep, water, nutrition],
   );
 
   const weightSeries = useMemo(
@@ -212,29 +198,6 @@ function Dashboard() {
           <StatCard label={kcal - health.kcalActive >= 0 ? "Surplus" : "Déficit"} value={Math.abs(kcal - health.kcalActive)} unit="kcal" icon={<Flame className="size-4" />} onClick={() => setDialog("kcal")} hint="Détail" />
         </div>
       )}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <div className="lg:col-span-2 rounded-2xl glass-card p-5">
-          <div className="flex items-center justify-between mb-3"><div><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tendance 7 jours</div><div className="font-display text-lg font-semibold mt-0.5">Sommeil & hydratation</div></div></div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={trend}>
-              <defs>
-                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} /><stop offset="100%" stopColor="var(--primary)" stopOpacity={0} /></linearGradient>
-                <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.3} /><stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} /></linearGradient>
-              </defs>
-              <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} /><YAxis hide /><Tooltip contentStyle={liquidTooltipStyle} />
-              <Area type="monotone" dataKey="sommeil" stroke="var(--primary)" strokeWidth={2} fill="url(#g1)" dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} connectNulls={false} />
-              <Area type="monotone" dataKey="eau" stroke="var(--chart-2)" strokeWidth={2} fill="url(#g2)" dot={liquidDot("var(--chart-2")} activeDot={{ r: 5 }} connectNulls={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-        <button type="button" onClick={() => navigate({ to: "/finance" })} className="text-left rounded-2xl glass-card p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
-          <div className="flex items-center justify-between mb-3"><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Finances du jour</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Ouvrir →</div></div>
-          <div className="flex items-center gap-2 text-[color:var(--success)]"><TrendingUp className="size-4" /><span className="font-display text-2xl font-semibold">+{todayIncome.toFixed(0)}€</span></div>
-          <div className="flex items-center gap-2 text-destructive mt-2"><Wallet className="size-4" /><span className="font-display text-2xl font-semibold">-{todaySpend.toFixed(0)}€</span></div>
-          <div className="border-t border-border mt-4 pt-3 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">Net</span><span className={`font-medium ${todayIncome - todaySpend >= 0 ? "text-[color:var(--success)]" : "text-destructive"}`}>{(todayIncome - todaySpend).toFixed(2)}€</span></div></div>
-        </button>
-      </div>
-      <WeeklyHabits routines={routines} total={allRoutines.length} />
       {weightSeries.length > 1 && (
         <button type="button" onClick={() => setDialog("weight")} className="w-full text-left rounded-2xl glass-card p-5 hover:shadow-[var(--shadow-card)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
           <div className="flex items-center justify-between mb-3"><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider"><Dumbbell className="size-3 inline mr-1" /> Évolution du poids</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Peser →</div></div>
