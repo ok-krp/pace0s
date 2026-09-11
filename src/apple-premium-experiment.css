@@ -1,159 +1,39 @@
-/* PaceOS — premium glass visual direction.
+/* PaceOS — white-mode card treatment only.
+ * Dark mode is intentionally untouched.
  * Visual-only: no layout, navigation, data or interaction logic changes.
  */
 
-:root {
-  --apple-bg: oklch(0.985 0.003 250);
-  --apple-surface: rgba(255, 255, 255, 0.03);
-  --apple-surface-strong: rgba(255, 255, 255, 0.06);
-  --apple-ink: oklch(0.18 0.018 255);
-  --apple-muted: oklch(0.47 0.018 255);
-  --apple-blue: oklch(0.58 0.18 255);
-  --apple-line: rgba(255, 255, 255, 0.08);
-  --apple-shadow: 0 10px 20px -15px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.2), inset 0 -1px 2px 0 rgba(0, 0, 0, 0.4);
-  --apple-shadow-hover: 0 14px 28px -16px rgba(0, 0, 0, 0.58), inset 0 1px 0 0 rgba(255, 255, 255, 0.24), inset 0 -1px 2px 0 rgba(0, 0, 0, 0.42);
-}
-
-.dark {
-  --apple-bg: oklch(0.10 0.008 255);
-  --apple-surface-strong: rgba(255, 255, 255, 0.08);
-  --apple-ink: oklch(0.97 0.004 250);
-  --apple-muted: oklch(0.78 0.012 250);
-  --apple-blue: oklch(0.74 0.16 255);
-  --apple-line: rgba(255, 255, 255, 0.08);
-}
-
-html,
-body {
-  background: var(--apple-bg);
-  color: var(--apple-ink);
-  letter-spacing: -0.006em;
-}
-
-body {
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
-}
-
-h1, h2, h3, h4, h5 {
-  letter-spacing: -0.032em !important;
-  font-weight: 600 !important;
-}
-
-/* Core PaceOS glass material — matches the requested DA. */
-.glass,
-.glass-card,
-.glass-thin,
-[data-slot="card"],
-.card {
+html:not(.dark) .glass,
+html:not(.dark) .glass-card,
+html:not(.dark) .glass-thin,
+html:not(.dark) [data-slot="card"],
+html:not(.dark) .card {
   position: relative;
-  background: rgba(255, 255, 255, 0.03) !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.18) !important;
-  border-left: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  border: 1px solid rgba(20, 30, 50, 0.10) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.92) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.82) !important;
   border-radius: 20px !important;
-  box-shadow: var(--apple-shadow) !important;
-  backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
-  -webkit-backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
+  box-shadow:
+    0 10px 24px -18px rgba(15, 23, 42, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    inset 0 -1px 2px rgba(15, 23, 42, 0.06) !important;
+  backdrop-filter: blur(8px) saturate(125%);
+  -webkit-backdrop-filter: blur(8px) saturate(125%);
   overflow: hidden;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.glass:hover,
-.glass-card:hover,
-.glass-thin:hover,
-[data-slot="card"]:hover,
-.card:hover {
-  box-shadow: var(--apple-shadow-hover) !important;
-}
-
-button,
-[role="button"],
-input,
-textarea,
-select {
-  font-family: inherit;
-}
-
-button,
-[role="button"] {
-  transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
-}
-
-input,
-textarea,
-select {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-  background: rgba(255, 255, 255, 0.03) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), inset 0 -1px 2px rgba(0, 0, 0, 0.24) !important;
-  backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
-  -webkit-backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
-}
-
-input:focus,
-textarea:focus,
-select:focus {
-  border-color: color-mix(in oklab, var(--apple-blue) 48%, transparent) !important;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--apple-blue) 13%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
-}
-
-.bg-primary {
-  background-color: var(--apple-blue) !important;
-}
-
-.text-primary,
-.text-blue-500,
-.text-blue-600,
-.text-sky-500,
-.text-sky-600 {
-  color: var(--apple-blue) !important;
-}
-
-.border-primary,
-.border-blue-500,
-.border-blue-600 {
-  border-color: color-mix(in oklab, var(--apple-blue) 52%, transparent) !important;
-}
-
-[role="dialog"],
-[data-radix-popper-content-wrapper] > * {
-  border-color: rgba(255, 255, 255, 0.10) !important;
-  background: rgba(255, 255, 255, 0.06) !important;
-  box-shadow: 0 24px 80px -36px rgba(0, 0, 0, 0.42) !important;
-  backdrop-filter: blur(8px) saturate(140%);
-  -webkit-backdrop-filter: blur(8px) saturate(140%);
-}
-
-nav,
-aside,
-[data-sidebar="sidebar"] {
-  border-color: rgba(255, 255, 255, 0.08) !important;
-}
-
-.bg-gradient-to-r,
-.bg-gradient-to-l,
-.bg-gradient-to-b,
-.bg-gradient-to-t {
-  background-image: none !important;
-}
-
-.bg-black\/80 { background-color: rgba(0, 0, 0, 0.38) !important; }
-.bg-black\/95 { background-color: rgba(0, 0, 0, 0.72) !important; }
-
-::selection {
-  background: color-mix(in oklab, var(--apple-blue) 24%, transparent);
-}
-
-:focus-visible {
-  outline: 2px solid color-mix(in oklab, var(--apple-blue) 62%, transparent) !important;
-  outline-offset: 2px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
+html:not(.dark) .glass:hover,
+html:not(.dark) .glass-card:hover,
+html:not(.dark) .glass-thin:hover,
+html:not(.dark) [data-slot="card"]:hover,
+html:not(.dark) .card:hover {
+  border-color: rgba(20, 30, 50, 0.14) !important;
+  box-shadow:
+    0 16px 32px -20px rgba(15, 23, 42, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    inset 0 -1px 2px rgba(15, 23, 42, 0.07) !important;
 }
