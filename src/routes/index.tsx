@@ -38,6 +38,7 @@ export const Route = createFileRoute("/")({
 type SleepEntry = { hours: number };
 type Day<T> = Record<string, T>;
 type WorkoutSessionSummary = { id: string; date: string; name: string; durationMin?: number; exercises: unknown[] };
+type WorkoutProgramSummary = { id: string; name: string; days: number[]; isArchived?: boolean; items?: unknown[] };
 
 const ICONS: Record<ModuleKey, React.ReactNode> = {
   sleep: <Moon className="size-4" />,
@@ -74,8 +75,10 @@ function Dashboard() {
   const [tx] = useLocalState<Array<{ date: string; amount: number; cat: string }>>("pace.tx", []);
   const [weights] = useLocalState<Day<{ w: number }>>("pace.weight", {});
   const [sessions] = useLocalState<WorkoutSessionSummary[]>("pace.sport.sessions", []);
+  const [programs] = useLocalState<WorkoutProgramSummary[]>("pace.sport.programs", []);
 
   const today = todayKey();
+  const todayDow = new Date().getDay();
   const days = useMemo(() => lastNDays(7), []);
 
   useEffect(() => {
@@ -113,7 +116,9 @@ function Dashboard() {
   const routineDoneCount = (routines[today] ?? []).length;
   const routineTotal = allRoutines.length || 1;
   const workMin = work[today] ?? 0;
-  const todayWorkout = sessions.find((s) => s.date === today);
+  const recordedWorkout = sessions.find((s) => s.date === today);
+  const scheduledWorkout = programs.find((p) => !p.isArchived && p.days.includes(todayDow));
+  const todayWorkout = recordedWorkout ?? (scheduledWorkout ? { id: scheduledWorkout.id, date: today, name: scheduledWorkout.name, exercises: scheduledWorkout.items ?? [] } : undefined);
 
   const rhythmMetrics: RhythmMetric[] = useMemo(
     () => [
@@ -223,7 +228,7 @@ function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
         {intel.metrics.filter((m) => m.key !== "kcal" && m.key !== "water").map((m) => {
           const q = quickFor(m.key);
-          return <React.Fragment key={m.key}><SmartCard key={m.key} metric={m} icon={ICONS[m.key]} onOpen={q.open} onQuickAdd={q.add} quickLabel={q.label} />{m.key === "routine" && workoutCard}</React.Fragment>;
+          return <div key={m.key} className="contents"><SmartCard metric={m} icon={ICONS[m.key]} onOpen={q.open} onQuickAdd={q.add} quickLabel={q.label} />{m.key === "routine" && workoutCard}</div>;
         })}
       </div>
       {(health.steps > 0 || health.kcalActive > 0) && (
