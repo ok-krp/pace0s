@@ -1,0 +1,40 @@
+/* PaceOS UI refinement: Inter + flatter glass/icon treatment. */
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --radius: 0.75rem;
+  --glass-radius: 16px;
+  --glass-radius-sm: 12px;
+}
+
+.dark {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+.glass-icon {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-radius: 0 !important;
+}
+
+.glass-card,
+.glass-thin,
+[data-slot="card"],
+.card {
+  border-radius: 16px !important;
+}
+
+/* Numeric KPI values remain visually dominant. */
+.tabular-nums,
+[data-kpi-value="true"] {
+  font-weight: 700;
+}
+
+/* The dashboard's compact action controls remain rectangular rather than pill-shaped. */
+.glass-thin.rounded-full {
+  border-radius: 10px !important;
+}

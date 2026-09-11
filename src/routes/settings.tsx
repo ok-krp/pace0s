@@ -21,6 +21,7 @@ import { WallpaperSettings } from "@/components/WallpaperSettings";
 import { AiSettings } from "@/components/AiSettings";
 import { AiLocalModeSettings } from "@/components/AiLocalModeSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
+import { DailyPrioritySettings } from "@/components/DailyPrioritySettings";
 
 const NATIVE_ANDROID_APK_URL = "https://github.com/ok-krp/pace0s/releases/download/android-application-latest/app-debug.apk";
 
@@ -29,79 +30,33 @@ export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
-function setThemeColor(dark: boolean) {
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#111722" : "#f8fafc");
-}
+function setThemeColor(dark: boolean) { document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#111722" : "#f8fafc"); }
 
 function SettingsPage() {
   const [dark, setDark] = useState(false);
   const push = usePush();
   const [sending, setSending] = useState(false);
   const sendTest = useServerFn(sendTestNotification);
-
-  const handleTogglePush = async (v: boolean) => {
-    try { if (v) await push.enable(); else await push.disable(); }
-    catch (e) { console.error(e); toast.error((e as Error).message || "Impossible de modifier les notifications"); }
-  };
-
-  const handleSendTest = async () => {
-    setSending(true);
-    try {
-      const res = await sendTest({ data: { title: "Test Pace", message: "Notification reçue avec succès 🎉" } });
-      if (res.ok) toast.success(`Notification envoyée (${res.recipients} appareil${res.recipients === 1 ? "" : "s"})`);
-      else toast.error(`Échec : ${res.error}`);
-    } catch (e) { toast.error((e as Error).message); }
-    finally { setSending(false); }
-  };
-
-  useEffect(() => {
-    const stored = localStorage.getItem("pace.dark") === "1";
-    setDark(stored);
-    document.documentElement.classList.toggle("dark", stored);
-    setThemeColor(stored);
-  }, []);
-
-  const downloadNativeAndroidApp = () => {
-    window.open(NATIVE_ANDROID_APK_URL, "_blank", "noopener,noreferrer");
-    toast.success("Téléchargement de l'application Android Pace lancé.");
-  };
-
-  const toggleDark = (v: boolean) => {
-    setDark(v);
-    document.documentElement.classList.toggle("dark", v);
-    localStorage.setItem("pace.dark", v ? "1" : "0");
-    setThemeColor(v);
-  };
-
-  const exportData = () => {
-    const data: Record<string, unknown> = {};
-    Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => { try { data[k] = JSON.parse(localStorage.getItem(k) ?? "null"); } catch {} });
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob); const a = document.createElement("a");
-    a.href = url; a.download = `lifetracker-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url);
-    toast.success("Export téléchargé");
-  };
-
-  const reset = () => {
-    if (!confirm("Réinitialiser TOUTES vos données ?")) return;
-    Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k));
-    toast.success("Données effacées");
-    setTimeout(() => location.reload(), 600);
-  };
+  const handleTogglePush = async (v: boolean) => { try { if (v) await push.enable(); else await push.disable(); } catch (e) { console.error(e); toast.error((e as Error).message || "Impossible de modifier les notifications"); } };
+  const handleSendTest = async () => { setSending(true); try { const res = await sendTest({ data: { title: "Test Pace", message: "Notification reçue avec succès 🎉" } }); if (res.ok) toast.success(`Notification envoyée (${res.recipients} appareil${res.recipients === 1 ? "" : "s"})`); else toast.error(`Échec : ${res.error}`); } catch (e) { toast.error((e as Error).message); } finally { setSending(false); } };
+  useEffect(() => { const stored = localStorage.getItem("pace.dark") === "1"; setDark(stored); document.documentElement.classList.toggle("dark", stored); setThemeColor(stored); }, []);
+  const downloadNativeAndroidApp = () => { window.open(NATIVE_ANDROID_APK_URL, "_blank", "noopener,noreferrer"); toast.success("Téléchargement de l'application Android Pace lancé."); };
+  const toggleDark = (v: boolean) => { setDark(v); document.documentElement.classList.toggle("dark", v); localStorage.setItem("pace.dark", v ? "1" : "0"); setThemeColor(v); };
+  const exportData = () => { const data: Record<string, unknown> = {}; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => { try { data[k] = JSON.parse(localStorage.getItem(k) ?? "null"); } catch {} }); const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `lifetracker-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); toast.success("Export téléchargé"); };
+  const reset = () => { if (!confirm("Réinitialiser TOUTES vos données ?")) return; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k)); toast.success("Données effacées"); setTimeout(() => location.reload(), 600); };
 
   return (
     <div>
       <PageHeader title="Paramètres" subtitle="Personnalisez votre expérience." />
       <div className="space-y-3">
         <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} /></Row>
-        <Row icon={<Bell className="size-4" />} label="Notifications push" desc={push.error ? push.error : push.permission === "denied" ? "Bloquées dans le navigateur — autorisez-les depuis l'icône à gauche de l'URL, puis rechargez la page" : push.permission === "unsupported" ? "Non supporté sur ce navigateur" : !push.ready ? "Initialisation…" : "Rappels hydratation, routine, sommeil"}>
-          <Switch checked={push.subscribed} onCheckedChange={handleTogglePush} disabled={!!push.error || !push.ready || push.permission === "denied" || push.permission === "unsupported"} />
-        </Row>
+        <Row icon={<Bell className="size-4" />} label="Notifications push" desc={push.error ? push.error : push.permission === "denied" ? "Bloquées dans le navigateur — autorisez-les depuis l'icône à gauche de l'URL, puis rechargez la page" : push.permission === "unsupported" ? "Non supporté sur ce navigateur" : !push.ready ? "Initialisation…" : "Rappels hydratation, routine, sommeil"}><Switch checked={push.subscribed} onCheckedChange={handleTogglePush} disabled={!!push.error || !push.ready || push.permission === "denied" || push.permission === "unsupported"} /></Row>
         <Row icon={<Send className="size-4" />} label="Envoyer une notification de test" desc="Vérifiez que tout fonctionne sur cet appareil"><Button variant="secondary" size="sm" onClick={handleSendTest} disabled={sending || !push.subscribed} className="rounded-xl">{sending ? "Envoi…" : "Tester"}</Button></Row>
         <BleDeviceManager />
         <HealthSourcesSection />
         <WallpaperSettings />
         <Accordion type="multiple" className="space-y-3">
+          <AccordionItem value="daily-priorities" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Priorités quotidiennes</AccordionTrigger><AccordionContent className="pt-2"><DailyPrioritySettings /></AccordionContent></AccordionItem>
           <AccordionItem value="ai" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium"><span className="flex items-center gap-2"><Brain className="size-4 text-primary" />Intelligence Artificielle</span></AccordionTrigger><AccordionContent className="pt-2 space-y-3"><AiSettings /><AiLocalModeSettings /></AccordionContent></AccordionItem>
           <AccordionItem value="reminders" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Rappels & notifications</AccordionTrigger><AccordionContent className="pt-2 space-y-3"><RemindersSection /><ReminderDebugSection /></AccordionContent></AccordionItem>
           <AccordionItem value="mobilenav" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Navigation mobile</AccordionTrigger><AccordionContent className="pt-2"><MobileNavSettings /></AccordionContent></AccordionItem>
@@ -110,11 +65,7 @@ function SettingsPage() {
           <AccordionItem value="cloud" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Synchronisation Cloud</AccordionTrigger><AccordionContent className="pt-2"><CloudSyncSettings /></AccordionContent></AccordionItem>
           <AccordionItem value="privacy" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Confidentialité & Données</AccordionTrigger><AccordionContent className="pt-2"><PrivacyDataSection /></AccordionContent></AccordionItem>
         </Accordion>
-        <div className="rounded-2xl glass-card p-4 flex items-center gap-4">
-          <div className="size-10 rounded-xl bg-muted grid place-items-center text-foreground"><Smartphone className="size-4" /></div>
-          <div className="flex-1 min-w-0"><div className="font-medium">Application</div><div className="text-xs text-muted-foreground">Téléchargez l'application native PaceOS pour Android.</div></div>
-          <Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger l’application</Button>
-        </div>
+        <div className="rounded-2xl glass-card p-4 flex items-center gap-4"><div className="size-10 rounded-xl bg-muted grid place-items-center text-foreground"><Smartphone className="size-4" /></div><div className="flex-1 min-w-0"><div className="font-medium">Application</div><div className="text-xs text-muted-foreground">Téléchargez l'application native PaceOS pour Android.</div></div><Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger l’application</Button></div>
         <Row icon={<Download className="size-4" />} label="Exporter les données locales" desc="JSON des préférences stockées sur cet appareil"><Button variant="secondary" size="sm" onClick={exportData} className="rounded-xl">Exporter</Button></Row>
         <Row icon={<Trash2 className="size-4" />} label="Réinitialiser cet appareil" desc="Efface uniquement les données locales"><Button variant="destructive" size="sm" onClick={reset} className="rounded-xl">Effacer</Button></Row>
       </div>
