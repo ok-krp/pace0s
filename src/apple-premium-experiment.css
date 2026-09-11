@@ -1,5 +1,6 @@
-/* PaceOS — white-mode card treatment only.
- * Dark mode is intentionally untouched.
+/* PaceOS — requested Glass card material.
+ * White mode uses the requested translucent white surface.
+ * Dark mode uses the requested translucent black surface.
  * Visual-only: no layout, navigation, data or interaction logic changes.
  */
 
@@ -7,33 +8,39 @@ html:not(.dark) .glass,
 html:not(.dark) .glass-card,
 html:not(.dark) .glass-thin,
 html:not(.dark) [data-slot="card"],
-html:not(.dark) .card {
+html:not(.dark) .card,
+html.dark .glass,
+html.dark .glass-card,
+html.dark .glass-thin,
+html.dark [data-slot="card"],
+html.dark .card {
   position: relative;
-  background: rgba(255, 255, 255, 0.72) !important;
-  border: 1px solid rgba(20, 30, 50, 0.10) !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.92) !important;
-  border-left: 1px solid rgba(255, 255, 255, 0.82) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.12) !important;
   border-radius: 20px !important;
   box-shadow:
-    0 10px 24px -18px rgba(15, 23, 42, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.88),
-    inset 0 -1px 2px rgba(15, 23, 42, 0.06) !important;
-  backdrop-filter: blur(8px) saturate(125%);
-  -webkit-backdrop-filter: blur(8px) saturate(125%);
+    0 10px 20px -15px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.2),
+    inset 0 -1px 2px 0 rgba(0, 0, 0, 0.4) !important;
+  backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
+  -webkit-backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
   overflow: hidden;
-  transition: box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
-    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-html:not(.dark) .glass:hover,
-html:not(.dark) .glass-card:hover,
-html:not(.dark) .glass-thin:hover,
-html:not(.dark) [data-slot="card"]:hover,
-html:not(.dark) .card:hover {
-  border-color: rgba(20, 30, 50, 0.14) !important;
-  box-shadow:
-    0 16px 32px -20px rgba(15, 23, 42, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.94),
-    inset 0 -1px 2px rgba(15, 23, 42, 0.07) !important;
+html:not(.dark) .glass,
+html:not(.dark) .glass-card,
+html:not(.dark) .glass-thin,
+html:not(.dark) [data-slot="card"],
+html:not(.dark) .card {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+html.dark .glass,
+html.dark .glass-card,
+html.dark .glass-thin,
+html.dark [data-slot="card"],
+html.dark .card {
+  background: rgba(0, 0, 0, 0.15) !important;
 }
