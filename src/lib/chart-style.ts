@@ -48,7 +48,7 @@ if (typeof window !== "undefined") {
       const todayDow = new Date().getDay();
       const { data, error } = await (supabase as any)
         .from("sport_programs")
-        .select("id,name,days,is_archived,sport_program_items(id)")
+        .select("id,name,emoji,days,is_archived,sport_program_items(id,exercise_id,sets,reps,weight,rest_sec,position)")
         .eq("is_archived", false);
       if (error || !Array.isArray(data)) return;
 
@@ -65,15 +65,26 @@ if (typeof window !== "undefined") {
       for (const row of data) {
         if (!row || typeof row.id !== "string") continue;
         const existing = byId.get(row.id) ?? {};
+        const remoteItems = Array.isArray(row.sport_program_items)
+          ? row.sport_program_items
+              .slice()
+              .sort((a: { position?: number }, b: { position?: number }) => Number(a.position ?? 0) - Number(b.position ?? 0))
+              .map((item: { exercise_id: string; sets: number; reps: number; weight?: number | null; rest_sec?: number | null }) => ({
+                exerciseId: item.exercise_id,
+                sets: item.sets,
+                reps: item.reps,
+                ...(item.weight == null ? {} : { weight: Number(item.weight) }),
+                ...(item.rest_sec == null ? {} : { restSec: item.rest_sec }),
+              }))
+          : [];
         byId.set(row.id, {
           ...existing,
           id: row.id,
           name: row.name,
+          emoji: row.emoji ?? existing.emoji ?? "🏋️",
           days: Array.isArray(row.days) ? row.days : [],
           isArchived: Boolean(row.is_archived),
-          items: Array.isArray(row.sport_program_items)
-            ? row.sport_program_items.map((item: { id: string }) => item)
-            : (Array.isArray(existing.items) ? existing.items : []),
+          items: remoteItems.length > 0 ? remoteItems : (Array.isArray(existing.items) ? existing.items : []),
         });
       }
 
