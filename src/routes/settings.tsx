@@ -13,7 +13,6 @@ import { ReminderDebugSection } from "@/components/ReminderDebugSection";
 import { MobileNavSettings } from "@/components/MobileNavSettings";
 import { NutritionColsSettings } from "@/components/NutritionColsSettings";
 import { FinanceLockSettings } from "@/components/FinanceLockSettings";
-import { CloudSyncSettings } from "@/components/CloudSyncSettings";
 import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
@@ -46,33 +45,61 @@ function SettingsPage() {
   const reset = () => { if (!confirm("Réinitialiser TOUTES vos données ?")) return; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k)); toast.success("Données effacées"); setTimeout(() => location.reload(), 600); };
 
   return (
-    <div>
-      <PageHeader title="Paramètres" subtitle="Personnalisez votre expérience." />
-      <div className="space-y-3">
-        <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} /></Row>
-        <Row icon={<Bell className="size-4" />} label="Notifications push" desc={push.error ? push.error : push.permission === "denied" ? "Bloquées dans le navigateur — autorisez-les depuis l'icône à gauche de l'URL, puis rechargez la page" : push.permission === "unsupported" ? "Non supporté sur ce navigateur" : !push.ready ? "Initialisation…" : "Rappels hydratation, routine, sommeil"}><Switch checked={push.subscribed} onCheckedChange={handleTogglePush} disabled={!!push.error || !push.ready || push.permission === "denied" || push.permission === "unsupported"} /></Row>
-        <Row icon={<Send className="size-4" />} label="Envoyer une notification de test" desc="Vérifiez que tout fonctionne sur cet appareil"><Button variant="secondary" size="sm" onClick={handleSendTest} disabled={sending || !push.subscribed} className="rounded-xl">{sending ? "Envoi…" : "Tester"}</Button></Row>
-        <BleDeviceManager />
-        <HealthSourcesSection />
-        <WallpaperSettings />
-        <Accordion type="multiple" className="space-y-3">
-          <AccordionItem value="daily-priorities" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Priorités quotidiennes</AccordionTrigger><AccordionContent className="pt-2"><DailyPrioritySettings /></AccordionContent></AccordionItem>
-          <AccordionItem value="ai" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium"><span className="flex items-center gap-2"><Brain className="size-4 text-primary" />Intelligence Artificielle</span></AccordionTrigger><AccordionContent className="pt-2 space-y-3"><AiSettings /><AiLocalModeSettings /></AccordionContent></AccordionItem>
-          <AccordionItem value="reminders" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Rappels & notifications</AccordionTrigger><AccordionContent className="pt-2 space-y-3"><RemindersSection /><ReminderDebugSection /></AccordionContent></AccordionItem>
-          <AccordionItem value="mobilenav" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Navigation mobile</AccordionTrigger><AccordionContent className="pt-2"><MobileNavSettings /></AccordionContent></AccordionItem>
-          <AccordionItem value="nutcols" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Colonnes Nutrition</AccordionTrigger><AccordionContent className="pt-2"><NutritionColsSettings /></AccordionContent></AccordionItem>
-          <AccordionItem value="finlock" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Verrou Finance</AccordionTrigger><AccordionContent className="pt-2"><FinanceLockSettings /></AccordionContent></AccordionItem>
-          <AccordionItem value="cloud" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Synchronisation Cloud</AccordionTrigger><AccordionContent className="pt-2"><CloudSyncSettings /></AccordionContent></AccordionItem>
-          <AccordionItem value="privacy" className="rounded-2xl glass-card px-4"><AccordionTrigger className="text-sm font-medium">Confidentialité & Données</AccordionTrigger><AccordionContent className="pt-2"><PrivacyDataSection /></AccordionContent></AccordionItem>
-        </Accordion>
-        <div className="rounded-2xl glass-card p-4 flex items-center gap-4"><div className="size-10 rounded-xl bg-muted grid place-items-center text-foreground"><Smartphone className="size-4" /></div><div className="flex-1 min-w-0"><div className="font-medium">Application</div><div className="text-xs text-muted-foreground">Téléchargez l'application native PaceOS pour Android.</div></div><Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger l’application</Button></div>
-        <Row icon={<Download className="size-4" />} label="Exporter les données locales" desc="JSON des préférences stockées sur cet appareil"><Button variant="secondary" size="sm" onClick={exportData} className="rounded-xl">Exporter</Button></Row>
-        <Row icon={<Trash2 className="size-4" />} label="Réinitialiser cet appareil" desc="Efface uniquement les données locales"><Button variant="destructive" size="sm" onClick={reset} className="rounded-xl">Effacer</Button></Row>
+    <div className="settings-page">
+      <PageHeader title="Paramètres" subtitle="Tout au même endroit, sans empiler les cartes." />
+      <style>{`\n        .settings-panel > .settings-group + .settings-group { border-top: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-group { padding: 10px 8px; }\n        .settings-group-title { padding: 4px 8px 7px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-foreground); }\n        .settings-row { min-height: 52px; border-radius: 12px; }\n        .settings-row:hover { background: color-mix(in oklab, var(--foreground) 4%, transparent); }\n        .settings-accordion > [data-slot=accordion-item] { border-bottom: 0; }\n        .settings-accordion [data-slot=accordion-trigger] { min-height: 44px; padding: 8px; font-size: 14px; font-weight: 500; }\n        .settings-panel .glass-card { background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 12px !important; }\n        .settings-panel .glass-card::before, .settings-panel .glass-card::after { display: none !important; }\n      `}</style>
+      <div className="glass-card rounded-3xl p-3 sm:p-5 settings-panel">
+        <section className="settings-group">
+          <div className="settings-group-title">Apparence & appareil</div>
+          <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} /></Row>
+          <Row icon={<Smartphone className="size-4" />} label="Application Android" desc="Télécharger la version native de PaceOS"><Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger</Button></Row>
+          <WallpaperSettings />
+        </section>
+
+        <section className="settings-group">
+          <div className="settings-group-title">Santé & appareils</div>
+          <BleDeviceManager />
+          <HealthSourcesSection />
+        </section>
+
+        <section className="settings-group">
+          <div className="settings-group-title">Notifications</div>
+          <Row icon={<Bell className="size-4" />} label="Notifications push" desc={push.error ? push.error : push.permission === "denied" ? "Bloquées dans le navigateur — autorisez-les depuis l'icône à gauche de l'URL, puis rechargez la page" : push.permission === "unsupported" ? "Non supporté sur ce navigateur" : !push.ready ? "Initialisation…" : "Rappels hydratation, routine, sommeil"}><Switch checked={push.subscribed} onCheckedChange={handleTogglePush} disabled={!!push.error || !push.ready || push.permission === "denied" || push.permission === "unsupported"} /></Row>
+          <Row icon={<Send className="size-4" />} label="Notification de test" desc="Vérifiez que les notifications fonctionnent sur cet appareil"><Button variant="secondary" size="sm" onClick={handleSendTest} disabled={sending || !push.subscribed} className="rounded-xl">{sending ? "Envoi…" : "Tester"}</Button></Row>
+          <Accordion type="multiple" className="settings-accordion">
+            <AccordionItem value="reminders"><AccordionTrigger>Rappels & automatisations</AccordionTrigger><AccordionContent className="pt-2 space-y-3"><RemindersSection /><ReminderDebugSection /></AccordionContent></AccordionItem>
+          </Accordion>
+        </section>
+
+        <section className="settings-group">
+          <div className="settings-group-title">Personnalisation</div>
+          <Accordion type="multiple" className="settings-accordion">
+            <AccordionItem value="daily-priorities"><AccordionTrigger>Priorités quotidiennes</AccordionTrigger><AccordionContent className="pt-2"><DailyPrioritySettings /></AccordionContent></AccordionItem>
+            <AccordionItem value="mobilenav"><AccordionTrigger>Navigation mobile</AccordionTrigger><AccordionContent className="pt-2"><MobileNavSettings /></AccordionContent></AccordionItem>
+            <AccordionItem value="nutcols"><AccordionTrigger>Colonnes Nutrition</AccordionTrigger><AccordionContent className="pt-2"><NutritionColsSettings /></AccordionContent></AccordionItem>
+            <AccordionItem value="finlock"><AccordionTrigger>Verrou Finance</AccordionTrigger><AccordionContent className="pt-2"><FinanceLockSettings /></AccordionContent></AccordionItem>
+          </Accordion>
+        </section>
+
+        <section className="settings-group">
+          <div className="settings-group-title flex items-center gap-2"><Brain className="size-4 text-primary" /> Intelligence artificielle</div>
+          <div className="settings-inline"><AiSettings /></div>
+          <div className="settings-inline"><AiLocalModeSettings /></div>
+        </section>
+
+        <section className="settings-group">
+          <div className="settings-group-title">Données & confidentialité</div>
+          <Accordion type="multiple" className="settings-accordion">
+            <AccordionItem value="privacy"><AccordionTrigger>Confidentialité & données du compte</AccordionTrigger><AccordionContent className="pt-2"><PrivacyDataSection /></AccordionContent></AccordionItem>
+          </Accordion>
+          <Row icon={<Download className="size-4" />} label="Exporter les préférences locales" desc="JSON des préférences stockées sur cet appareil"><Button variant="secondary" size="sm" onClick={exportData} className="rounded-xl">Exporter</Button></Row>
+          <Row icon={<Trash2 className="size-4" />} label="Réinitialiser cet appareil" desc="Efface uniquement les données locales"><Button variant="destructive" size="sm" onClick={reset} className="rounded-xl">Effacer</Button></Row>
+        </section>
       </div>
     </div>
   );
 }
 
 function Row({ icon, label, desc, children }: { icon: React.ReactNode; label: string; desc: string; children: React.ReactNode }) {
-  return <div className="flex items-center gap-4 rounded-2xl glass-card p-4"><div className="size-10 rounded-xl bg-muted grid place-items-center text-foreground">{icon}</div><div className="flex-1 min-w-0"><div className="font-medium">{label}</div><div className="text-xs text-muted-foreground">{desc}</div></div>{children}</div>;
+  return <div className="settings-row flex items-center gap-3 px-2 py-3"><div className="size-8 shrink-0 grid place-items-center text-muted-foreground">{icon}</div><div className="flex-1 min-w-0"><div className="font-medium text-sm">{label}</div><div className="text-xs text-muted-foreground leading-relaxed">{desc}</div></div>{children}</div>;
 }
