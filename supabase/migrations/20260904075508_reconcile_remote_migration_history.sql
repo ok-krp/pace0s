@@ -1,0 +1,2 @@
+-- Migration history bridge: this version is already applied remotely.
+-- The equivalent schema changes are represented by the canonical local migrations.
