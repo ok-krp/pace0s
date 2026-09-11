@@ -47,6 +47,7 @@ function SettingsPage() {
   return (
     <div className="settings-page">
       <PageHeader title="Paramètres" subtitle="Tout au même endroit, sans empiler les cartes." />
+      <style>{`\n        .settings-panel > .settings-group + .settings-group { border-top: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-group { padding: 10px 8px; }\n        .settings-group-title { padding: 4px 8px 7px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-foreground); }\n        .settings-row { min-height: 52px; border-radius: 12px; }\n        .settings-row:hover { background: color-mix(in oklab, var(--foreground) 4%, transparent); }\n        .settings-accordion > [data-slot=accordion-item] { border-bottom: 0; }\n        .settings-accordion [data-slot=accordion-trigger] { min-height: 44px; padding: 8px; font-size: 14px; font-weight: 500; }\n        .settings-panel .glass-card { background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 12px !important; }\n        .settings-panel .glass-card::before, .settings-panel .glass-card::after { display: none !important; }\n      `}</style>
       <div className="glass-card rounded-3xl p-3 sm:p-5 settings-panel">
         <section className="settings-group">
           <div className="settings-group-title">Apparence & appareil</div>
