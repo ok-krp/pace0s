@@ -30,37 +30,37 @@ export function WaterView() {
   };
 
   return (
-    <div className="rounded-2xl glass-card p-6 flex flex-col items-center">
-      <Ring value={cur} max={goal} size={180} stroke={14} color="var(--chart-2)">
+    <div className="rounded-2xl glass-card p-4 sm:p-5 flex h-full w-full max-w-[360px] mx-auto flex-col items-center">
+      <Ring value={cur} max={goal} size={148} stroke={12} color="var(--chart-2)">
         <div className="text-center">
-          <div className="font-display text-3xl font-semibold">{(cur / 1000).toFixed(1)}</div>
+          <div className="font-display text-2xl font-semibold">{(cur / 1000).toFixed(1)}</div>
           <div className="text-xs text-muted-foreground">/ {(goal / 1000).toFixed(1)} L</div>
         </div>
       </Ring>
-      <div className="mt-5 flex flex-wrap justify-center gap-2">
+      <div className="mt-4 flex flex-wrap justify-center gap-1.5">
         {[150, 250, 500].map((v) => (
-          <Button key={v} variant="secondary" onClick={() => add(v)} className="rounded-xl">
+          <Button key={v} variant="secondary" onClick={() => add(v)} className="rounded-xl h-8 px-2.5 text-xs">
             <Plus className="size-3 mr-1" /> {v} ml
           </Button>
         ))}
-        <Button variant="ghost" onClick={() => add(-250)} className="rounded-xl"><Minus className="size-3" /></Button>
+        <Button variant="ghost" onClick={() => add(-250)} className="rounded-xl h-8 w-8 p-0"><Minus className="size-3" /></Button>
       </div>
-      <div className="mt-4 w-full flex gap-2">
+      <div className="mt-3 w-full flex gap-1.5">
         <Input type="number" inputMode="decimal" placeholder="Quantité" value={manual}
           onChange={(e) => setManual(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") addManual(); }}
-          className="flex-1" />
+          className="h-9 flex-1 min-w-0 text-sm" />
         <Select value={unit} onValueChange={(v) => setUnit(v as Unit)}>
-          <SelectTrigger className="w-20"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-9 w-[4.25rem] text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ml">ml</SelectItem>
             <SelectItem value="cl">cl</SelectItem>
             <SelectItem value="L">L</SelectItem>
           </SelectContent>
         </Select>
-        <Button onClick={addManual} className="rounded-xl">OK</Button>
+        <Button onClick={addManual} className="rounded-xl h-9 px-3 text-xs">OK</Button>
       </div>
-      <div className="text-xs text-muted-foreground mt-3">Objectif : {(goal / 1000).toFixed(2)} L</div>
+      <div className="text-xs text-muted-foreground mt-2">Objectif : {(goal / 1000).toFixed(2)} L</div>
     </div>
   );
 }

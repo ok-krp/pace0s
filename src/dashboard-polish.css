@@ -6,11 +6,15 @@
   -webkit-backdrop-filter: none !important;
 }
 
-/* Keep the command/search and dashboard detail dialogs centered on desktop. */
+/* Center every Radix dialog against the viewport, including the command palette. */
 [data-radix-dialog-content] {
-  top: 50% !important;
-  left: 50% !important;
-  transform: translate(-50%, -50%) !important;
+  inset: 0 !important;
+  margin: auto !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  transform: none !important;
 }
 
 /* Daily Rhythm: compact textual breakdown instead of dot markers. */
