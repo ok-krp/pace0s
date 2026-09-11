@@ -1,29 +1,26 @@
-/* PaceOS — Apple-inspired premium visual experiment.
+/* PaceOS — premium glass visual direction.
  * Visual-only: no layout, navigation, data or interaction logic changes.
  */
 
 :root {
   --apple-bg: oklch(0.985 0.003 250);
-  --apple-surface: oklch(1 0 0 / 0.72);
-  --apple-surface-strong: oklch(1 0 0 / 0.84);
+  --apple-surface: rgba(255, 255, 255, 0.03);
+  --apple-surface-strong: rgba(255, 255, 255, 0.06);
   --apple-ink: oklch(0.18 0.018 255);
   --apple-muted: oklch(0.47 0.018 255);
   --apple-blue: oklch(0.58 0.18 255);
-  --apple-line: oklch(0.18 0.018 255 / 0.09);
-  --apple-shadow: 0 1px 2px oklch(0.18 0.02 255 / 0.04), 0 12px 36px -24px oklch(0.18 0.02 255 / 0.20);
-  --apple-shadow-hover: 0 2px 4px oklch(0.18 0.02 255 / 0.06), 0 18px 44px -24px oklch(0.18 0.02 255 / 0.22);
+  --apple-line: rgba(255, 255, 255, 0.08);
+  --apple-shadow: 0 10px 20px -15px rgba(0, 0, 0, 0.5), inset 0 1px 0 0 rgba(255, 255, 255, 0.2), inset 0 -1px 2px 0 rgba(0, 0, 0, 0.4);
+  --apple-shadow-hover: 0 14px 28px -16px rgba(0, 0, 0, 0.58), inset 0 1px 0 0 rgba(255, 255, 255, 0.24), inset 0 -1px 2px 0 rgba(0, 0, 0, 0.42);
 }
 
 .dark {
-  --apple-bg: oklch(0.14 0.012 255);
-  --apple-surface: oklch(0.22 0.014 255 / 0.68);
-  --apple-surface-strong: oklch(0.24 0.016 255 / 0.82);
+  --apple-bg: oklch(0.10 0.008 255);
+  --apple-surface-strong: rgba(255, 255, 255, 0.08);
   --apple-ink: oklch(0.97 0.004 250);
   --apple-muted: oklch(0.78 0.012 250);
   --apple-blue: oklch(0.74 0.16 255);
-  --apple-line: oklch(1 0 0 / 0.10);
-  --apple-shadow: 0 1px 2px oklch(0 0 0 / 0.18), 0 18px 42px -28px oklch(0 0 0 / 0.42);
-  --apple-shadow-hover: 0 2px 4px oklch(0 0 0 / 0.22), 0 22px 52px -26px oklch(0 0 0 / 0.50);
+  --apple-line: rgba(255, 255, 255, 0.08);
 }
 
 html,
@@ -38,32 +35,38 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Typography: calm hierarchy, tighter display rhythm. */
 h1, h2, h3, h4, h5 {
   letter-spacing: -0.032em !important;
   font-weight: 600 !important;
 }
 
-/* Cards and elevated surfaces: translucent, quiet, contact-first. */
-[data-slot="card"],
-.card,
+/* Core PaceOS glass material — intentionally matches the requested DA. */
 .glass,
 .glass-card,
-.glass-thin {
-  border-color: var(--apple-line) !important;
+.glass-thin,
+[data-slot="card"],
+.card {
+  position: relative;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.18) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.12) !important;
+  border-radius: 20px !important;
   box-shadow: var(--apple-shadow) !important;
-  background-color: var(--apple-surface) !important;
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
+  -webkit-backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
+  overflow: hidden;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.glass:hover,
+.glass-card:hover,
+.glass-thin:hover,
 [data-slot="card"]:hover,
-.card:hover,
-.glass-card:hover {
+.card:hover {
   box-shadow: var(--apple-shadow-hover) !important;
 }
 
-/* Controls: restrained radius, no heavy outlines, single blue action language. */
 button,
 [role="button"],
 input,
@@ -77,29 +80,23 @@ button,
   transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
 }
 
-button:not([data-variant="ghost"]),
-[role="button"]:not([data-variant="ghost"]) {
-  box-shadow: 0 1px 2px oklch(0.18 0.02 255 / 0.05);
-}
-
 input,
 textarea,
 select {
-  border-color: var(--apple-line) !important;
-  background: var(--apple-surface) !important;
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.34) !important;
-  backdrop-filter: blur(14px) saturate(135%);
-  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20), inset 0 -1px 2px rgba(0, 0, 0, 0.24) !important;
+  backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
+  -webkit-backdrop-filter: blur(4px) saturate(140%) brightness(0.95);
 }
 
 input:focus,
 textarea:focus,
 select:focus {
   border-color: color-mix(in oklab, var(--apple-blue) 48%, transparent) !important;
-  box-shadow: 0 0 0 3px color-mix(in oklab, var(--apple-blue) 13%, transparent), inset 0 1px 0 oklch(1 0 0 / 0.34) !important;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--apple-blue) 13%, transparent), inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
 }
 
-/* Primary actions stay blue; avoid decorative color competition. */
 .bg-primary {
   background-color: var(--apple-blue) !important;
 }
@@ -118,24 +115,21 @@ select:focus {
   border-color: color-mix(in oklab, var(--apple-blue) 52%, transparent) !important;
 }
 
-/* Dialogs / popovers: lighter than the page, with a precise floating-material feel. */
 [role="dialog"],
 [data-radix-popper-content-wrapper] > * {
-  border-color: var(--apple-line) !important;
-  background: var(--apple-surface-strong) !important;
-  box-shadow: 0 24px 80px -36px oklch(0.12 0.02 255 / 0.34) !important;
-  backdrop-filter: blur(24px) saturate(145%);
-  -webkit-backdrop-filter: blur(24px) saturate(145%);
+  border-color: rgba(255, 255, 255, 0.10) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  box-shadow: 0 24px 80px -36px rgba(0, 0, 0, 0.42) !important;
+  backdrop-filter: blur(8px) saturate(140%);
+  -webkit-backdrop-filter: blur(8px) saturate(140%);
 }
 
-/* Sidebar/navigation: visually recede until needed. */
 nav,
 aside,
 [data-sidebar="sidebar"] {
-  border-color: var(--apple-line) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
-/* Remove visual noise from decorative gradients while preserving semantic states. */
 .bg-gradient-to-r,
 .bg-gradient-to-l,
 .bg-gradient-to-b,
@@ -143,11 +137,9 @@ aside,
   background-image: none !important;
 }
 
-/* Softer modal scrims instead of near-black overlays. */
-.bg-black\/80 { background-color: oklch(0.08 0.01 255 / 0.38) !important; }
-.bg-black\/95 { background-color: oklch(0.08 0.01 255 / 0.72) !important; }
+.bg-black\/80 { background-color: rgba(0, 0, 0, 0.38) !important; }
+.bg-black\/95 { background-color: rgba(0, 0, 0, 0.72) !important; }
 
-/* Selection and focus are intentionally subtle. */
 ::selection {
   background: color-mix(in oklab, var(--apple-blue) 24%, transparent);
 }
@@ -157,7 +149,6 @@ aside,
   outline-offset: 2px;
 }
 
-/* Keep motion polished but respect reduced-motion preferences. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
