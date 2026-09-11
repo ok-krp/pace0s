@@ -114,7 +114,6 @@ function Dashboard() {
   const routineTotal = allRoutines.length || 1;
   const workMin = work[today] ?? 0;
   const todayWorkout = sessions.find((s) => s.date === today);
-  const recentWorkout = todayWorkout ?? sessions[0];
 
   const rhythmMetrics: RhythmMetric[] = useMemo(
     () => [
@@ -214,20 +213,23 @@ function Dashboard() {
           return <SmartCard key={m.key} metric={m} icon={ICONS[m.key]} onOpen={q.open} onQuickAdd={q.add} quickLabel={q.label} />;
         })}
       </motion.div>
-      <button type="button" onClick={() => navigate({ to: "/sport" })} className="w-full text-left glass-card p-5 md:p-6 mb-4 hover:shadow-[var(--shadow-card)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="shrink-0"><Dumbbell className="size-5" /></div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">Entraînement</div>
-              <div className="font-display text-lg font-semibold mt-1 truncate">{recentWorkout ? recentWorkout.name : "Aucun entraînement enregistré"}</div>
-              <div className="text-xs text-muted-foreground mt-1">{todayWorkout ? "Séance d'aujourd'hui" : recentWorkout ? `Dernière séance · ${recentWorkout.date}` : "Clique pour voir tes programmes et démarrer une séance"}</div>
-            </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        <motion.button type="button" onClick={() => navigate({ to: "/sport" })} whileHover={{ y: -2, scale: 1.008 }} transition={{ duration: 0.18 }} className="relative glass-card p-5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Sport du jour</div>
+            <div className="glass-icon size-8 shrink-0"><Dumbbell className="size-4" /></div>
           </div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 shrink-0">Voir →</div>
-        </div>
-        {recentWorkout && <div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl glass-thin p-3"><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Exercices</div><div className="font-semibold mt-1">{recentWorkout.exercises.length}</div></div><div className="rounded-xl glass-thin p-3"><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Durée</div><div className="font-semibold mt-1">{recentWorkout.durationMin ? `${recentWorkout.durationMin} min` : "En cours / —"}</div></div></div>}
-      </button>
+          <div className="mt-2.5 flex items-end justify-between gap-2">
+            <div className="min-w-0">
+              <div className="font-display text-[28px] leading-none font-bold tracking-tight truncate">{todayWorkout ? todayWorkout.name : "Aucune séance"}</div>
+              <div className="mt-2 text-xs text-muted-foreground">{todayWorkout ? `${todayWorkout.exercises.length} exercices${todayWorkout.durationMin ? ` · ${todayWorkout.durationMin} min` : ""}` : "Aucune séance prévue/enregistrée aujourd'hui"}</div>
+            </div>
+            <Dumbbell className="size-5 shrink-0 text-primary" />
+          </div>
+          <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: "color-mix(in oklab, var(--foreground) 8%, transparent)" }}><div className="h-full rounded-full" style={{ width: todayWorkout ? "100%" : "0%", background: "var(--primary)" }} /></div>
+          <div className="mt-2.5 text-xs font-medium text-primary">{todayWorkout ? "Séance d'aujourd'hui · Voir →" : "Ouvrir Sport →"}</div>
+        </motion.button>
+      </div>
       {(health.steps > 0 || health.kcalActive > 0) && (
         <div className="grid grid-cols-3 gap-4 mb-4">
           <StatCard label="Pas" value={health.steps.toLocaleString()} icon={<Footprints className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" />
