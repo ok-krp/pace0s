@@ -37,6 +37,7 @@ export const Route = createFileRoute("/")({
 
 type SleepEntry = { hours: number };
 type Day<T> = Record<string, T>;
+type WorkoutSessionSummary = { id: string; date: string; name: string; durationMin?: number; exercises: unknown[] };
 
 const ICONS: Record<ModuleKey, React.ReactNode> = {
   sleep: <Moon className="size-4" />,
@@ -72,6 +73,7 @@ function Dashboard() {
   const [work] = useLocalState<Day<number>>("pace.work.minutes", {});
   const [tx] = useLocalState<Array<{ date: string; amount: number; cat: string }>>("pace.tx", []);
   const [weights] = useLocalState<Day<{ w: number }>>("pace.weight", {});
+  const [sessions] = useLocalState<WorkoutSessionSummary[]>("pace.sport.sessions", []);
 
   const today = todayKey();
   const days = useMemo(() => lastNDays(7), []);
@@ -111,6 +113,8 @@ function Dashboard() {
   const routineDoneCount = (routines[today] ?? []).length;
   const routineTotal = allRoutines.length || 1;
   const workMin = work[today] ?? 0;
+  const todayWorkout = sessions.find((s) => s.date === today);
+  const recentWorkout = todayWorkout ?? sessions[0];
 
   const rhythmMetrics: RhythmMetric[] = useMemo(
     () => [
@@ -183,14 +187,47 @@ function Dashboard() {
             <ul className="w-full max-w-sm space-y-2">{intel.rhythmLines.map((l) => <li key={l.label} className="flex items-start gap-2.5"><span className="mt-1.5 size-1.5 rounded-full shrink-0" style={{ background: statusColor[l.status] }} /><div className="min-w-0"><div className="text-[13px] font-medium leading-tight">{l.label}</div><div className="text-[11px] text-muted-foreground leading-snug">{l.text}</div></div></li>)}</ul>
           </div>
         </motion.button>
-        <SmartCard metric={intel.metrics.find((m) => m.key === "kcal")!} icon={ICONS.kcal} onOpen={() => setDialog("kcal")} onQuickAdd={() => setDialog("kcal")} quickLabel="Repas" />
+        <div className="glass-card p-5 md:p-6 flex flex-col justify-between gap-5">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Flame className="size-4" /> Nutrition & hydratation</div>
+            <button type="button" onClick={() => navigate({ to: "/nutrition" })} className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition">Détails →</button>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <button type="button" onClick={() => setDialog("kcal")} className="text-left rounded-xl glass-thin p-4 hover:opacity-90 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+              <Flame className="size-4 text-primary mb-2" />
+              <div className="text-[11px] text-muted-foreground">Calories</div>
+              <div className="font-display text-2xl font-semibold mt-1">{kcal.toLocaleString("fr-FR")}</div>
+              <div className="text-[10px] text-muted-foreground">/ {goals.kcal.toLocaleString("fr-FR")} kcal</div>
+            </button>
+            <button type="button" onClick={() => setDialog("water")} className="text-left rounded-xl glass-thin p-4 hover:opacity-90 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+              <Droplets className="size-4 text-primary mb-2" />
+              <div className="text-[11px] text-muted-foreground">Hydratation</div>
+              <div className="font-display text-2xl font-semibold mt-1">{(waterMl / 1000).toFixed(1)} L</div>
+              <div className="text-[10px] text-muted-foreground">/ {(goals.waterMl / 1000).toFixed(1)} L</div>
+            </button>
+          </div>
+        </div>
       </div>
       <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-        {intel.metrics.filter((m) => m.key !== "kcal").map((m) => {
+        {intel.metrics.filter((m) => m.key !== "kcal" && m.key !== "water").map((m) => {
           const q = quickFor(m.key);
           return <SmartCard key={m.key} metric={m} icon={ICONS[m.key]} onOpen={q.open} onQuickAdd={q.add} quickLabel={q.label} />;
         })}
       </motion.div>
+      <button type="button" onClick={() => navigate({ to: "/sport" })} className="w-full text-left glass-card p-5 md:p-6 mb-4 hover:shadow-[var(--shadow-card)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="shrink-0"><Dumbbell className="size-5" /></div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground">Entraînement</div>
+              <div className="font-display text-lg font-semibold mt-1 truncate">{recentWorkout ? recentWorkout.name : "Aucun entraînement enregistré"}</div>
+              <div className="text-xs text-muted-foreground mt-1">{todayWorkout ? "Séance d'aujourd'hui" : recentWorkout ? `Dernière séance · ${recentWorkout.date}` : "Clique pour voir tes programmes et démarrer une séance"}</div>
+            </div>
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/70 shrink-0">Voir →</div>
+        </div>
+        {recentWorkout && <div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl glass-thin p-3"><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Exercices</div><div className="font-semibold mt-1">{recentWorkout.exercises.length}</div></div><div className="rounded-xl glass-thin p-3"><div className="text-[10px] uppercase tracking-wider text-muted-foreground">Durée</div><div className="font-semibold mt-1">{recentWorkout.durationMin ? `${recentWorkout.durationMin} min` : "En cours / —"}</div></div></div>}
+      </button>
       {(health.steps > 0 || health.kcalActive > 0) && (
         <div className="grid grid-cols-3 gap-4 mb-4">
           <StatCard label="Pas" value={health.steps.toLocaleString()} icon={<Footprints className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" />
