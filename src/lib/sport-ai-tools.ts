@@ -190,6 +190,12 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
       return { ok: true, data: { sets: rows, bestWeight, bestRepsAtWeight }, message: `${rows.length} série(s) de progression trouvée(s).` };
     }) });
 
+  const legacySportTool = (name: string, canonicalName: string) => tool({
+    description: `Outil Sport legacy ${name} désactivé. Utiliser exclusivement ${canonicalName}, qui écrit dans les tables Sport normalisées.`,
+    inputSchema: z.record(z.string(), z.unknown()),
+    execute: guard(name, async () => ({ ok: false, message: `L’outil Sport legacy « ${name} » est désactivé. Utilisez ${canonicalName}.` })),
+  });
+
   return {
     create_exercise: createExercise,
     update_exercise: updateExercise,
@@ -206,5 +212,8 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
     finish_workout: finishWorkout,
     get_workout_history: getHistory,
     get_exercise_progress: getProgress,
+    create_sport_exercise: legacySportTool("create_sport_exercise", "create_exercise"),
+    create_sport_program: legacySportTool("create_sport_program", "create_program"),
+    create_sport_session: legacySportTool("create_sport_session", "start_workout"),
   };
 }
