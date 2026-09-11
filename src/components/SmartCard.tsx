@@ -17,6 +17,7 @@ function SmartCardBase({ metric, icon, onOpen, onQuickAdd, quickLabel }: { metri
   const hasDirectQuick = metric.key === "routine" || metric.key === "focus";
   const handleQuickAdd = hasDirectQuick ? () => setDirectQuickOpen(true) : onQuickAdd;
   return (<>
+    <style>{`.pace-dashboard-no-icon-box .glass-icon { background: transparent !important; border-color: transparent !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }`}</style>
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} whileHover={{ y: -2, scale: 1.008 }} transition={springSnap} className="relative glass-card p-5 will-change-transform" layout="position">
       <button type="button" onClick={onOpen} aria-label={`${metric.label} — voir le détail`} className={`text-left w-full ${interactiveRing} rounded-2xl`}>
         <div className="flex items-start justify-between gap-2"><div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">{metric.label}</div><div className="shrink-0 mt-0.5" style={{ color }}>{icon}</div></div>
