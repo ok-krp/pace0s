@@ -4,7 +4,7 @@ import { Check, ChevronDown, CirclePlus, Copy, ListChecks, Plus, ShoppingCart, T
 import { PageHeader } from "@/components/Stat";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useLocalState } from "@/lib/storage";
+import { useDomainState } from "@/lib/domain-store";
 
 export const Route = createFileRoute("/courses")({
   head: () => ({ meta: [{ title: "Courses — Pace" }, { name: "description", content: "Organisez les courses de la semaine, les quantités et les achats à faire." }] }),
@@ -17,7 +17,7 @@ const CATEGORIES: GroceryCategory[] = ["Fruits & légumes", "Protéines", "Fécu
 const STARTER: GroceryItem[] = [];
 
 function CoursesPage() {
-  const [items, setItems] = useLocalState<GroceryItem[]>("pace.courses.items", STARTER);
+  const [items, setItems] = useDomainState<GroceryItem[]>("courses.items", STARTER);
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [category, setCategory] = useState<GroceryCategory>("Autre");
@@ -105,8 +105,8 @@ function CoursesPage() {
             <div className="mt-2 text-xs text-muted-foreground">{done}/{items.length} cochés</div>
           </section>
           <section className="glass-card rounded-3xl p-5">
-            <div className="flex items-center gap-2 mb-2"><Copy className="size-4 text-primary" /><h2 className="font-semibold text-sm">Prochaine évolution</h2></div>
-            <p className="text-xs text-muted-foreground leading-relaxed">Pace pourra générer automatiquement la liste depuis les repas planifiés, déduire les ingrédients déjà disponibles et regrouper les achats par magasin.</p>
+            <div className="flex items-center gap-2 mb-2"><Copy className="size-4 text-primary" /><h2 className="font-semibold text-sm">Automatisation prête</h2></div>
+            <p className="text-xs text-muted-foreground leading-relaxed">La liste est maintenant stockée via le store de domaine Pace, avec identifiant de mutation et compatibilité avec la synchronisation locale/distante. La prochaine couche peut agréger repas, recettes et garde-manger sans refaire le modèle de données.</p>
             <div className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground"><ChevronDown className="size-3" /> Préparation pour l'assistant IA</div>
           </section>
         </aside>
