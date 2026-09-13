@@ -1,4 +1,4 @@
-import { todayKey } from "@/lib/storage";
+import { todayKey, onLocalWrite } from "@/lib/storage";
 import { writeDomain, readDomain } from "@/lib/domain-store";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -67,16 +67,7 @@ export async function persistNutritionItem(
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Session utilisateur indisponible.");
 
-  const meta = {
-    client_nutrients: {
-      sat: item.sat ?? null,
-      salt: item.salt ?? null,
-      iron: item.iron ?? null,
-      calcium: item.calcium ?? null,
-      vitC: item.vitC ?? null,
-    },
-  };
-
+  const meta = { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } };
   const { data, error } = await supabase.from("food_log").insert({
     user_id: user.id,
     log_date: todayKey(),
@@ -92,27 +83,8 @@ export async function persistNutritionItem(
     source,
     meta,
   }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
-
   if (error || !data) throw new Error(error?.message ?? "Enregistrement nutritionnel impossible.");
-
-  return {
-    id: data.id,
-    name: data.name,
-    meal: data.meal,
-    kcal: Number(data.kcal ?? 0),
-    p: Number(data.protein_g ?? 0),
-    c: Number(data.carbs_g ?? 0),
-    f: Number(data.fat_g ?? 0),
-    fiber: Number(data.fiber_g ?? 0),
-    sugar: Number(data.sugar_g ?? 0),
-    sodium: Number(data.sodium_mg ?? 0),
-    sat: item.sat,
-    salt: item.salt,
-    iron: item.iron,
-    calcium: item.calcium,
-    vitC: item.vitC,
-    qty: item.qty ?? 1,
-  };
+  return { id: data.id, name: data.name, meal: data.meal, kcal: Number(data.kcal ?? 0), p: Number(data.protein_g ?? 0), c: Number(data.carbs_g ?? 0), f: Number(data.fat_g ?? 0), fiber: Number(data.fiber_g ?? 0), sugar: Number(data.sugar_g ?? 0), sodium: Number(data.sodium_mg ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1 };
 }
 
 export async function deletePersistedNutritionItem(id: string): Promise<void> {
@@ -120,6 +92,84 @@ export async function deletePersistedNutritionItem(id: string): Promise<void> {
   if (userError || !user) throw new Error("Session utilisateur indisponible.");
   const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
   if (error) throw new Error(error.message);
+}
+
+function nutritionRows(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [] as Array<{ id: string; day: string; item: NutritionItem }>;
+  const rows: Array<{ id: string; day: string; item: NutritionItem }> = [];
+  for (const [day, list] of Object.entries(value as Record<string, unknown>)) {
+    if (!Array.isArray(list)) continue;
+    for (const raw of list) {
+      if (!raw || typeof raw !== "object" || Array.isArray(raw)) continue;
+      const item = raw as NutritionItem;
+      if (typeof item.id === "string" && item.id) rows.push({ id: item.id, day, item });
+    }
+  }
+  return rows;
+}
+
+let lastBridgedNutrition = readNutritionItems();
+let nutritionBridgeRunning = false;
+
+async function bridgeLocalNutritionToFoodLog(value: unknown) {
+  if (nutritionBridgeRunning || typeof window === "undefined") return;
+  nutritionBridgeRunning = true;
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const nextRows = nutritionRows(value);
+    const previousRows = nutritionRows(lastBridgedNutrition);
+    const previousIds = new Set(previousRows.map((row) => row.id));
+    const nextIds = new Set(nextRows.map((row) => row.id));
+    const { data: existing, error: selectError } = await supabase.from("food_log").select("id").eq("user_id", user.id);
+    if (selectError) throw selectError;
+    const existingIds = new Set((existing ?? []).map((row) => row.id));
+
+    for (const { id, day, item } of nextRows) {
+      const payload = {
+        id,
+        user_id: user.id,
+        log_date: day,
+        meal: item.meal,
+        name: item.name,
+        kcal: Number(item.kcal || 0),
+        protein_g: Number(item.p || 0),
+        carbs_g: Number(item.c || 0),
+        fat_g: Number(item.f || 0),
+        fiber_g: Number(item.fiber || 0),
+        sugar_g: Number(item.sugar || 0),
+        sodium_mg: Number(item.sodium || 0),
+        source: existingIds.has(id) ? undefined : "manual",
+        meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } },
+      };
+      if (existingIds.has(id)) {
+        const { source: _source, ...update } = payload;
+        const { error } = await supabase.from("food_log").update(update).eq("id", id).eq("user_id", user.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("food_log").insert(payload);
+        if (error) throw error;
+      }
+    }
+
+    for (const id of previousIds) {
+      if (nextIds.has(id)) continue;
+      const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
+      if (error) throw error;
+    }
+    lastBridgedNutrition = value && typeof value === "object" && !Array.isArray(value) ? value as NutritionMap : {};
+  } catch (error) {
+    console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
+  } finally {
+    nutritionBridgeRunning = false;
+  }
+}
+
+if (typeof window !== "undefined") {
+  onLocalWrite((key, value) => {
+    if (key !== "pace.nutrition.items") return;
+    void bridgeLocalNutritionToFoodLog(value);
+  });
 }
 
 export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, operationId?: string): boolean {
@@ -142,9 +192,6 @@ export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty
   const items = readNutritionItems();
   const list = [...(items[today] ?? []), it];
   const nextItems = { ...items, [today]: list };
-
-  // writeDomain remains the canonical local/sync write. The Nutrition UI uses
-  // persistNutritionItem before this function so food_log and user_state stay aligned.
   writeDomain(DOMAIN_ITEMS, nextItems);
   window.dispatchEvent(new Event("pace.nutrition.changed"));
   return true;
