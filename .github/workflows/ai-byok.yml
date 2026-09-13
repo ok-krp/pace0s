@@ -19,7 +19,10 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - run: npm run lint
+      # TanStack Router generates src/routeTree.gen.ts during the Vite build.
+      # Generate it before TypeScript validates createFileRoute(...).
+      - name: Generate route tree and build production bundle
+        run: npm run build
       - run: npm run typecheck
-      - run: npm run build
       - name: Verify BYOK security policy
         run: node scripts/test-byok-security.mjs
