@@ -21,11 +21,10 @@ export function MobileNavSettings() {
           {NAV_DEFAULT_ORDER.map((key) => {
             const it = NAV_REGISTRY[key];
             const checked = visible.includes(key);
-            const locked = key === "/" || key === "/settings";
             const Icon = it.icon;
             return (
-              <label key={key} className={`flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm ${locked ? "opacity-60" : "hover:bg-muted/50 cursor-pointer"}`}>
-                <Checkbox checked={checked || locked} disabled={locked} onCheckedChange={() => toggleVisible(key)} />
+              <label key={key} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer">
+                <Checkbox checked={checked} onCheckedChange={() => toggleVisible(key)} />
                 <Icon className="size-4 text-muted-foreground" />
                 <span className="truncate">{it.label}</span>
               </label>
