@@ -77,11 +77,10 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
       const toolCallId = options.toolCallId; if (!toolCallId) return { ok: false, message: "Identifiant d’action IA manquant : l’ajout est refusé pour éviter un doublon." };
       const components = input.components ?? [];
       const meta = components.length ? ({ ai_components: components, ai_aggregated: true } as Json) : undefined;
-      const { data, error } = await (client as any).rpc("insert_coach_ai_food_idempotent", { p_user_id: userId, p_conversation_id: conversationId, p_tool_call_id: toolCallId, p_name: input.name, p_meal: input.meal, p_kcal: input.kcal, p_protein_g: input.protein_g, p_carbs_g: input.carbs_g, p_fat_g: input.fat_g, p_fiber_g: input.fiber_g, p_sugar_g: input.sugar_g, p_sodium_mg: input.sodium_mg, p_grams: input.grams });
+      const { data, error } = await (client as any).rpc("insert_coach_ai_food_idempotent_v2", { p_user_id: userId, p_conversation_id: conversationId, p_tool_call_id: toolCallId, p_name: input.name, p_meal: input.meal, p_kcal: input.kcal, p_protein_g: input.protein_g, p_carbs_g: input.carbs_g, p_fat_g: input.fat_g, p_fiber_g: input.fiber_g, p_sugar_g: input.sugar_g, p_sodium_mg: input.sodium_mg, p_grams: input.grams, p_meta: meta ?? null });
       const inserted = Array.isArray(data) ? data[0] : data;
       if (error || !inserted?.id) { await logAction(client, userId, conversationId, "coach", "add_food", "Ajout nutrition", { ...input, toolCallId }, "failed"); return { ok: false, message: "Erreur base de données lors de l’ajout nutritionnel." }; }
       if (inserted.inserted !== false) {
-        if (meta) { const { error: metaError } = await client.from("food_log").update({ meta }).eq("id", inserted.id).eq("user_id", userId); if (metaError) console.error("[ai-tool] meta food", metaError.message); }
         const { data: same } = await client.from("food_log").select("id,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta,log_date,meal").eq("user_id", userId).eq("log_date", day).eq("meal", input.meal).eq("source", "coach_ai").neq("id", inserted.id).order("created_at", { ascending: true }).limit(20);
         const duplicate = (same ?? []).find((row) => normalizeFoodName(row.name) === normalizeFoodName(input.name));
         if (duplicate) {
