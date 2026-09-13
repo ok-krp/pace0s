@@ -42,6 +42,20 @@
   isolation: auto !important;
 }
 
+/* Rectangular thin-glass controls inside a surface are controls, not another panel.
+   Keep true pill controls (.rounded-full) visually intact. */
+.glass-card .glass-thin:not(.rounded-full),
+[data-slot="card"] .glass-thin:not(.rounded-full),
+.card .glass-thin:not(.rounded-full),
+:is([class*="bg-card"], [class*="bg-surface"], [class*="bg-secondary"], [class*="bg-muted"], [class*="bg-accent"], [class*="bg-input"], [class*="bg-popover"]) .glass-thin:not(.rounded-full) {
+  background: transparent !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+}
+
 /* Remove dark utility backgrounds from nested surfaces across the entire app.
    Only descendants of an existing card/glass surface are affected; standalone
    controls and page-level backgrounds keep their intended styling. */
@@ -71,7 +85,7 @@
 .glass-card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::before,
 .glass-card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::after,
 [data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::before,
-[data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::after,
+[data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"])::after,
 .card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::before,
 .card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::after {
   display: none !important;
