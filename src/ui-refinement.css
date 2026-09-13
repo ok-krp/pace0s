@@ -85,7 +85,7 @@
 /* Remove all nested decorative rims/sheen as well. */
 .glass-card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::before,
 .glass-card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::after,
-[data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::before,
+[data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"])::before,
 [data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"])::after,
 .card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::before,
 .card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::after {
@@ -111,4 +111,96 @@
 /* The dashboard's compact action controls remain rectangular rather than pill-shaped. */
 .glass-thin.rounded-full {
   border-radius: 10px !important;
+}
+
+/* Reference layout: Notes occupy the large left column; Focus sits above Routine. */
+@media (min-width: 1024px) {
+  .work-page > .grid {
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .work-page > .grid > section:nth-child(1) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .work-page > .grid > section:nth-child(2) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .work-page > .grid > section:nth-child(3) {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* Dashboard nutrition/hydration card: taller, clearer rows and explicit quick-add affordances. */
+@media (min-width: 1024px) {
+  body .grid.grid-cols-1.lg\:grid-cols-3.gap-4.mb-4 > .glass-card:nth-child(2) {
+    min-height: 100%;
+    padding: 1.5rem !important;
+    gap: 1rem;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-3.gap-4.mb-4 > .glass-card:nth-child(2) > div:nth-child(2) {
+    gap: 0.75rem;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-3.gap-4.mb-4 > .glass-card:nth-child(2) > div:nth-child(2) > button {
+    min-height: 72px;
+    padding: 0.85rem 1rem !important;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-3.gap-4.mb-4 > .glass-card:nth-child(2) > div:nth-child(2) > button > span[aria-hidden="true"] {
+    font-size: 0 !important;
+    min-width: 88px;
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--primary) 16%, transparent);
+    color: var(--primary);
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-3.gap-4.mb-4 > .glass-card:nth-child(2) > div:nth-child(2) > button > span[aria-hidden="true"]::after {
+    content: "Ajout rapide";
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+}
+
+/* Nutrition page: give the meals the dominant workspace and compress hydration. */
+@media (min-width: 1024px) {
+  body .grid.grid-cols-1.lg\:grid-cols-2.gap-4.items-stretch {
+    grid-template-columns: minmax(0, 5fr) minmax(210px, 2fr) !important;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-2.gap-4.items-stretch > section:nth-child(2) .glass-card {
+    padding: 0.9rem !important;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-2.gap-4.items-stretch > section:nth-child(2) .glass-card > :first-child {
+    transform: scale(0.84);
+    transform-origin: top center;
+    margin-bottom: -1.1rem;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-2.gap-4.items-stretch > section:nth-child(2) .glass-card > :nth-child(2) {
+    margin-top: 0.25rem;
+  }
+}
+
+/* The nutrition assistant launcher is an icon, not another card/square. */
+button[aria-label="Décrire ce que j’ai mangé aujourd’hui"] {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-radius: 0 !important;
 }
