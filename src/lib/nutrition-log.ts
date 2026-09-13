@@ -34,21 +34,13 @@ function addFingerprint(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number
 export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
   const totals: NutritionTotals = {};
   for (const [day, list] of Object.entries(items)) {
-    totals[day] = list.reduce((a, x) => ({
-      kcal: a.kcal + Number(x.kcal || 0),
-      p: a.p + Number(x.p || 0),
-      c: a.c + Number(x.c || 0),
-      f: a.f + Number(x.f || 0),
-    }), { kcal: 0, p: 0, c: 0, f: 0 });
+    totals[day] = list.reduce((a, x) => ({ kcal: a.kcal + Number(x.kcal || 0), p: a.p + Number(x.p || 0), c: a.c + Number(x.c || 0), f: a.f + Number(x.f || 0) }), { kcal: 0, p: 0, c: 0, f: 0 });
   }
   return totals;
 }
 
-function readNutritionItems(): NutritionMap {
-  return readDomain<NutritionMap>(DOMAIN_ITEMS, {}).value;
-}
+function readNutritionItems(): NutritionMap { return readDomain<NutritionMap>(DOMAIN_ITEMS, {}).value; }
 
-/** Rebuild derived totals and repair an already-corrupted local nutrition state. */
 export function repairNutritionTotals(): void {
   if (typeof window === "undefined") return;
   const items = readNutritionItems();
@@ -60,29 +52,11 @@ repairNutritionTotals();
 
 type PersistedNutritionSource = "manual" | "barcode" | "photo_ai";
 
-export async function persistNutritionItem(
-  item: Omit<NutritionItem, "id" | "qty"> & { qty?: number },
-  source: PersistedNutritionSource = "manual",
-): Promise<NutritionItem> {
+export async function persistNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, source: PersistedNutritionSource = "manual"): Promise<NutritionItem> {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Session utilisateur indisponible.");
-
   const meta = { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } };
-  const { data, error } = await supabase.from("food_log").insert({
-    user_id: user.id,
-    log_date: todayKey(),
-    meal: item.meal,
-    name: item.name,
-    kcal: item.kcal,
-    protein_g: item.p,
-    carbs_g: item.c,
-    fat_g: item.f,
-    fiber_g: item.fiber ?? 0,
-    sugar_g: item.sugar ?? 0,
-    sodium_mg: item.sodium ?? 0,
-    source,
-    meta,
-  }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
+  const { data, error } = await supabase.from("food_log").insert({ user_id: user.id, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source, meta }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
   if (error || !data) throw new Error(error?.message ?? "Enregistrement nutritionnel impossible.");
   return { id: data.id, name: data.name, meal: data.meal, kcal: Number(data.kcal ?? 0), p: Number(data.protein_g ?? 0), c: Number(data.carbs_g ?? 0), f: Number(data.fat_g ?? 0), fiber: Number(data.fiber_g ?? 0), sugar: Number(data.sugar_g ?? 0), sodium: Number(data.sodium_mg ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1 };
 }
@@ -124,24 +98,8 @@ async function bridgeLocalNutritionToFoodLog(value: unknown) {
     const { data: existing, error: selectError } = await supabase.from("food_log").select("id").eq("user_id", user.id);
     if (selectError) throw selectError;
     const existingIds = new Set((existing ?? []).map((row) => row.id));
-
     for (const { id, day, item } of nextRows) {
-      const payload = {
-        id,
-        user_id: user.id,
-        log_date: day,
-        meal: item.meal,
-        name: item.name,
-        kcal: Number(item.kcal || 0),
-        protein_g: Number(item.p || 0),
-        carbs_g: Number(item.c || 0),
-        fat_g: Number(item.f || 0),
-        fiber_g: Number(item.fiber || 0),
-        sugar_g: Number(item.sugar || 0),
-        sodium_mg: Number(item.sodium || 0),
-        source: existingIds.has(id) ? undefined : "manual",
-        meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } },
-      };
+      const payload = { id, user_id: user.id, log_date: day, meal: item.meal, name: item.name, kcal: Number(item.kcal || 0), protein_g: Number(item.p || 0), carbs_g: Number(item.c || 0), fat_g: Number(item.f || 0), fiber_g: Number(item.fiber || 0), sugar_g: Number(item.sugar || 0), sodium_mg: Number(item.sodium || 0), source: existingIds.has(id) ? undefined : "manual", meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } } };
       if (existingIds.has(id)) {
         const { source: _source, ...update } = payload;
         const { error } = await supabase.from("food_log").update(update).eq("id", id).eq("user_id", user.id);
@@ -151,7 +109,6 @@ async function bridgeLocalNutritionToFoodLog(value: unknown) {
         if (error) throw error;
       }
     }
-
     for (const id of previousIds) {
       if (nextIds.has(id)) continue;
       const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
@@ -170,6 +127,7 @@ if (typeof window !== "undefined") {
     if (key !== "pace.nutrition.items") return;
     void bridgeLocalNutritionToFoodLog(value);
   });
+  void bridgeLocalNutritionToFoodLog(lastBridgedNutrition);
 }
 
 export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, operationId?: string): boolean {
@@ -186,7 +144,6 @@ export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty
     recentAdds.set(fingerprint, now);
     for (const [key, timestamp] of recentAdds) if (now - timestamp >= 2_000) recentAdds.delete(key);
   }
-
   const today = todayKey();
   const it: NutritionItem = { id: crypto.randomUUID(), qty: item.qty ?? 1, ...item };
   const items = readNutritionItems();
