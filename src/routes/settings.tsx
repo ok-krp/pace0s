@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Moon, Sun, Download, Trash2, Bell, Send, Brain, Smartphone } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader } from "@/components/Stat";
 import { Button } from "@/components/ui/button";
@@ -47,7 +47,7 @@ function SettingsPage() {
   return (
     <div className="settings-page">
       <PageHeader title="Paramètres" subtitle="Tout au même endroit, sans empiler les cartes." />
-      <style>{`\n        .settings-panel { overflow: hidden; }\n        .settings-accordion > [data-slot=accordion-item] { border-bottom: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-accordion > [data-slot=accordion-item]:last-child { border-bottom: 0; }\n        .settings-accordion [data-slot=accordion-trigger] { min-height: 56px; padding: 10px 8px; font-size: 14px; font-weight: 600; }\n        .settings-accordion [data-slot=accordion-content] > div { padding: 4px 8px 16px; }\n        .settings-row { min-height: 52px; border-radius: 12px; }\n        .settings-row:hover { background: color-mix(in oklab, var(--foreground) 4%, transparent); }\n        .settings-panel .glass-card, .settings-panel .glass-thin { background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-color: color-mix(in oklab, var(--foreground) 8%, transparent) !important; }\n        .settings-panel .glass-card::before, .settings-panel .glass-card::after, .settings-panel .glass-thin::before, .settings-panel .glass-thin::after { display: none !important; }\n      `}</style>
+      <style>{`\n        .settings-panel { overflow: hidden; }\n        .settings-accordion > [data-slot=accordion-item] { border-bottom: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-accordion > [data-slot=accordion-item]:last-child { border-bottom: 0; }\n        .settings-accordion [data-slot=accordion-trigger] { min-height: 56px; padding: 10px 8px; font-size: 14px; font-weight: 700; }\n        .settings-accordion [data-slot=accordion-trigger][data-state=open] { text-decoration-line: underline; text-underline-offset: 4px; text-decoration-thickness: 1px; }\n        .settings-accordion [data-slot=accordion-content] > div { padding: 4px 8px 16px; }\n        .settings-row { min-height: 52px; border-radius: 12px; }\n        .settings-row:hover { background: color-mix(in oklab, var(--foreground) 4%, transparent); }\n        .settings-panel .glass-card, .settings-panel .glass-thin { background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-color: color-mix(in oklab, var(--foreground) 8%, transparent) !important; }\n        .settings-panel .glass-card::before, .settings-panel .glass-card::after, .settings-panel .glass-thin::before, .settings-panel .glass-thin::after { display: none !important; }\n      `}</style>
       <div className="glass-card rounded-3xl p-3 sm:p-5 settings-panel">
         <Accordion type="multiple" className="settings-accordion">
           <AccordionItem value="appearance">
@@ -111,6 +111,6 @@ function SettingsPage() {
   );
 }
 
-function Row({ icon, label, desc, children }: { icon: React.ReactNode; label: string; desc: string; children: React.ReactNode }) {
+function Row({ icon, label, desc, children }: { icon: ReactNode; label: string; desc: string; children: ReactNode }) {
   return <div className="settings-row flex items-center gap-3 px-2 py-3"><div className="size-8 shrink-0 grid place-items-center text-muted-foreground">{icon}</div><div className="flex-1 min-w-0"><div className="font-medium text-sm">{label}</div><div className="text-xs text-muted-foreground leading-relaxed">{desc}</div></div>{children}</div>;
 }
