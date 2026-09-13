@@ -1,5 +1,6 @@
 import { todayKey } from "@/lib/storage";
-import { readDomain, writeDomain } from "@/lib/domain-store";
+import { writeDomain, readDomain } from "@/lib/domain-store";
+import { supabase } from "@/integrations/supabase/client";
 
 export type NutritionItem = {
   id: string;
@@ -57,6 +58,70 @@ export function repairNutritionTotals(): void {
 
 repairNutritionTotals();
 
+type PersistedNutritionSource = "manual" | "barcode" | "photo_ai";
+
+export async function persistNutritionItem(
+  item: Omit<NutritionItem, "id" | "qty"> & { qty?: number },
+  source: PersistedNutritionSource = "manual",
+): Promise<NutritionItem> {
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Session utilisateur indisponible.");
+
+  const meta = {
+    client_nutrients: {
+      sat: item.sat ?? null,
+      salt: item.salt ?? null,
+      iron: item.iron ?? null,
+      calcium: item.calcium ?? null,
+      vitC: item.vitC ?? null,
+    },
+  };
+
+  const { data, error } = await supabase.from("food_log").insert({
+    user_id: user.id,
+    log_date: todayKey(),
+    meal: item.meal,
+    name: item.name,
+    kcal: item.kcal,
+    protein_g: item.p,
+    carbs_g: item.c,
+    fat_g: item.f,
+    fiber_g: item.fiber ?? 0,
+    sugar_g: item.sugar ?? 0,
+    sodium_mg: item.sodium ?? 0,
+    source,
+    meta,
+  }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
+
+  if (error || !data) throw new Error(error?.message ?? "Enregistrement nutritionnel impossible.");
+
+  return {
+    id: data.id,
+    name: data.name,
+    meal: data.meal,
+    kcal: Number(data.kcal ?? 0),
+    p: Number(data.protein_g ?? 0),
+    c: Number(data.carbs_g ?? 0),
+    f: Number(data.fat_g ?? 0),
+    fiber: Number(data.fiber_g ?? 0),
+    sugar: Number(data.sugar_g ?? 0),
+    sodium: Number(data.sodium_mg ?? 0),
+    sat: item.sat,
+    salt: item.salt,
+    iron: item.iron,
+    calcium: item.calcium,
+    vitC: item.vitC,
+    qty: item.qty ?? 1,
+  };
+}
+
+export async function deletePersistedNutritionItem(id: string): Promise<void> {
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Session utilisateur indisponible.");
+  const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
+  if (error) throw new Error(error.message);
+}
+
 export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, operationId?: string): boolean {
   const now = Date.now();
   if (operationId) {
@@ -78,8 +143,8 @@ export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty
   const list = [...(items[today] ?? []), it];
   const nextItems = { ...items, [today]: list };
 
-  // writeDomain is the canonical write. It also derives nutrition.totals and
-  // emits a timestamped sync mutation so Cloud Sync cannot replay the write.
+  // writeDomain remains the canonical local/sync write. The Nutrition UI uses
+  // persistNutritionItem before this function so food_log and user_state stay aligned.
   writeDomain(DOMAIN_ITEMS, nextItems);
   window.dispatchEvent(new Event("pace.nutrition.changed"));
   return true;
