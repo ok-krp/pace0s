@@ -80,12 +80,10 @@ function syncLatestOverloadRowsToTraining(value: unknown) {
     let programsChanged = false;
     for (const [exerciseId, rows] of Object.entries(overload)) {
       if (!Array.isArray(rows)) continue;
-      const latest = rows
-        .filter((row) => row?.source === "manual" && Number.isFinite(Date.parse(row.date ?? "")))
-        .reduce<StoredOverloadRow | null>((current, row) => {
-          if (!current) return row;
-          return Date.parse(row.date ?? "") > Date.parse(current.date ?? "") ? row : current;
-        }, null);
+      const latest = rows.filter((row) => row?.source === "manual" && Number.isFinite(Date.parse(row.date ?? ""))).reduce<StoredOverloadRow | null>((current, row) => {
+        if (!current) return row;
+        return Date.parse(row.date ?? "") > Date.parse(current.date ?? "") ? row : current;
+      }, null);
       if (!latest) continue;
       const weight = Number(latest.weight ?? 0), reps = Number(latest.reps ?? 0), sets = Number(latest.sets ?? 0);
       if (![weight, reps, sets].every(Number.isFinite)) continue;
@@ -132,22 +130,35 @@ function applyRemoteDomainRecord(domain: string, value: unknown, updatedAt: stri
   } catch {}
 }
 
+function mergeRecipeCustomRemote(value: unknown): unknown[] | null {
+  if (!Array.isArray(value)) return null;
+  try {
+    const rawLocal = localStorage.getItem("pace.recipes.custom");
+    const local = rawLocal ? JSON.parse(rawLocal) : [];
+    if (!Array.isArray(local)) return value;
+    const byId = new Map<string, unknown>();
+    for (const item of local) {
+      if (item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string") byId.set((item as Record<string, unknown>).id as string, item);
+    }
+    const merged = [...value];
+    const remoteIds = new Set<string>();
+    for (const item of value) {
+      if (item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string") remoteIds.add((item as Record<string, unknown>).id as string);
+    }
+    for (const [id, item] of byId) if (!remoteIds.has(id)) merged.push(item);
+    return merged;
+  } catch { return value; }
+}
+
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
   const valueRef = useRef<T>(initial);
   const hydratedRef = useRef(false);
   const suppressPersistRef = useRef(false);
-
+  useEffect(() => { hydratedRef.current = false; suppressPersistRef.current = false; }, [key]);
   useEffect(() => {
-    hydratedRef.current = false;
-    suppressPersistRef.current = false;
-  }, [key]);
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw !== null) { const parsed = JSON.parse(raw) as T; valueRef.current = parsed; setValue(parsed); }
-    } catch {}
+    try { const raw = localStorage.getItem(key); if (raw !== null) { const parsed = JSON.parse(raw) as T; valueRef.current = parsed; setValue(parsed); } } catch {}
     setLoaded(true);
   }, [key]);
   useEffect(() => { valueRef.current = value; }, [value]);
@@ -156,73 +167,45 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     if (suppressPersistRef.current) { suppressPersistRef.current = false; return; }
     if (!hydratedRef.current) { hydratedRef.current = true; return; }
     try {
-      const serialized = JSON.stringify(value);
-      const previous = localStorage.getItem(key);
-      if (previous === serialized) return;
+      const serialized = JSON.stringify(value); const previous = localStorage.getItem(key); if (previous === serialized) return;
       localStorage.setItem(key, serialized);
       if (key === "pace.sport.overload") syncLatestOverloadRowsToTraining(value);
-      const updatedAt = new Date().toISOString();
-      const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
+      const updatedAt = new Date().toISOString(); const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
       window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, { detail: { key, value, updatedAt, mutationId } }));
     } catch {}
   }, [key, value, loaded]);
-
   useEffect(() => {
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
       if (!detail || detail.key !== key) return;
       suppressPersistRef.current = true;
-      valueRef.current = detail.value as T;
-      setValue(detail.value as T);
+      const next = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(detail.value) : detail.value;
+      valueRef.current = next as T;
+      setValue(next as T);
     };
     window.addEventListener(REMOTE_WRITE_EVENT, onRemote);
     return () => window.removeEventListener(REMOTE_WRITE_EVENT, onRemote);
   }, [key]);
-
-  const set = useCallback((next: T | ((p: T) => T)) => {
-    const resolved = typeof next === "function" ? (next as (p: T) => T)(valueRef.current) : next;
-    valueRef.current = resolved;
-    setValue(resolved);
-  }, []);
+  const set = useCallback((next: T | ((p: T) => T)) => { const resolved = typeof next === "function" ? (next as (p: T) => T)(valueRef.current) : next; valueRef.current = resolved; setValue(resolved); }, []);
   return [value, set];
 }
 
 export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  const safeValue = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(value) ?? value : value;
+  try { localStorage.setItem(key, JSON.stringify(safeValue)); } catch {}
   if (updatedAt) {
-    if (key.startsWith("pace.domain.")) applyRemoteDomainRecord(key.slice("pace.domain.".length), value, updatedAt);
-    else if (key.startsWith(NEW_PREFIX)) applyRemoteDomainRecord(key.slice(NEW_PREFIX.length), value, updatedAt);
+    if (key.startsWith("pace.domain.")) applyRemoteDomainRecord(key.slice("pace.domain.".length), safeValue, updatedAt);
+    else if (key.startsWith(NEW_PREFIX)) applyRemoteDomainRecord(key.slice(NEW_PREFIX.length), safeValue, updatedAt);
   }
-  window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value } }));
+  window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value: safeValue } }));
 }
 
 export function onLocalWrite(handler: (key: string, value: unknown, updatedAt?: string, mutationId?: string) => void): () => void {
-  const listener = (e: Event) => {
-    const detail = (e as CustomEvent<LocalWriteDetail>).detail;
-    if (detail) handler(detail.key, detail.value, detail.updatedAt, detail.mutationId);
-  };
-  window.addEventListener(LOCAL_WRITE_EVENT, listener);
-  return () => window.removeEventListener(LOCAL_WRITE_EVENT, listener);
+  const listener = (e: Event) => { const detail = (e as CustomEvent<LocalWriteDetail>).detail; if (detail) handler(detail.key, detail.value, detail.updatedAt, detail.mutationId); };
+  window.addEventListener(LOCAL_WRITE_EVENT, listener); return () => window.removeEventListener(LOCAL_WRITE_EVENT, listener);
 }
 
-export const todayKey = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-
-export function lastNDays(n: number): string[] {
-  const out: string[] = []; const d = new Date();
-  for (let i = n - 1; i >= 0; i--) { const x = new Date(d); x.setDate(d.getDate() - i); out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`); }
-  return out;
-}
-
-function parseLocalDate(iso: string) {
-  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!match) return new Date(iso);
-  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-}
-
-export function fmtDay(iso: string) {
-  const d = parseLocalDate(iso);
-  return d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" });
-}
+export const todayKey = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+export function lastNDays(n: number): string[] { const out: string[] = []; const d = new Date(); for (let i = n - 1; i >= 0; i--) { const x = new Date(d); x.setDate(d.getDate() - i); out.push(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`); } return out; }
+function parseLocalDate(iso: string) { const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso); if (!match) return new Date(iso); return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])); }
+export function fmtDay(iso: string) { const d = parseLocalDate(iso); return d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" }); }
