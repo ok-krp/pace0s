@@ -28,7 +28,8 @@
   border-radius: 16px !important;
 }
 
-/* A card is the surface. Any card-like descendant must not create another surface. */
+/* A card is the surface. Any card-like descendant must not create another surface.
+   Its border is intentionally preserved as the only secondary visual treatment. */
 .glass-card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"]),
 [data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"]),
 .card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"]) {
@@ -37,7 +38,7 @@
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   box-shadow: none !important;
-  border: 0 !important;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent) !important;
   border-radius: 0 !important;
   isolation: auto !important;
 }
@@ -53,7 +54,7 @@
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
   box-shadow: none !important;
-  border-color: transparent !important;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent) !important;
 }
 
 /* Remove dark utility backgrounds from nested surfaces across the entire app.
@@ -65,7 +66,7 @@
   background: transparent !important;
   background-image: none !important;
   box-shadow: none !important;
-  border-color: transparent !important;
+  border-color: color-mix(in srgb, currentColor 14%, transparent) !important;
 }
 
 /* Card components use semantic Tailwind surfaces (bg-card/bg-secondary/etc.)
@@ -76,7 +77,7 @@
   background: transparent !important;
   background-image: none !important;
   box-shadow: none !important;
-  border-color: transparent !important;
+  border-color: color-mix(in srgb, currentColor 14%, transparent) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
