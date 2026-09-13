@@ -47,7 +47,7 @@ function SettingsPage() {
   return (
     <div className="settings-page">
       <PageHeader title="Paramètres" subtitle="Tout au même endroit, sans empiler les cartes." />
-      <style>{`\n        .settings-panel { overflow: hidden; }\n        .settings-accordion > [data-slot=accordion-item] { border-bottom: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-accordion > [data-slot=accordion-item]:last-child { border-bottom: 0; }\n        .settings-accordion [data-slot=accordion-trigger] { min-height: 56px; padding: 10px 8px; font-size: 14px; font-weight: 600; }\n        .settings-accordion [data-slot=accordion-content] > div { padding: 4px 8px 16px; }\n        .settings-row { min-height: 52px; border-radius: 12px; }\n        .settings-row:hover { background: color-mix(in oklab, var(--foreground) 4%, transparent); }\n        .settings-panel .glass-card, .settings-panel .glass-thin { background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-color: color-mix(in oklab, var(--foreground) 8%, transparent) !important; }\n        .settings-panel .glass-card::before, .settings-panel .glass-card::after, .settings-panel .glass-thin::before, .settings-panel .glass-thin::after { display: none !important; }\n      `}</style>
+      <style>{`\n        .settings-panel { overflow: hidden; }\n        .settings-accordion > [data-slot=accordion-item] { border-bottom: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-accordion > [data-slot=accordion-item]:last-child { border-bottom: 0; }\n        .settings-accordion [data-slot=accordion-trigger] { min-height: 56px; padding: 10px 8px; font-size: 14px; font-weight: 600; }\n        .settings-accordion [data-slot=accordion-content] > div { padding: 4px 8px 16px; }\n        .settings-row { min-height: 52px; border-radius: 12px; }\n        .settings-row:hover { background: color-mix(in oklab, var(--foreground) 4%, transparent); }\n        .settings-panel .glass-card, .settings-panel .glass-thin { background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-color: color-mix(in oklab, var(--foreground) 8%, transparent) !important; }\n        .settings-panel .glass-card::before, .settings-panel .glass-card::after, .settings-panel .glass-thin::before, .settings-panel .glass-thin::after { display: none !important; }\n        .settings-subsection { padding-top: 14px; }\n        .settings-subsection + .settings-subsection { margin-top: 14px; border-top: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-subtitle { margin-bottom: 10px; font-size: 12px; font-weight: 600; color: var(--muted-foreground); }\n      `}</style>
       <div className="glass-card rounded-3xl p-3 sm:p-5 settings-panel">
         <Accordion type="multiple" className="settings-accordion">
           <AccordionItem value="appearance">
@@ -58,45 +58,31 @@ function SettingsPage() {
               <WallpaperSettings />
             </AccordionContent>
           </AccordionItem>
-
           <AccordionItem value="health">
             <AccordionTrigger>Santé & appareils</AccordionTrigger>
-            <AccordionContent>
-              <BleDeviceManager />
-              <HealthSourcesSection />
-            </AccordionContent>
+            <AccordionContent><BleDeviceManager /><HealthSourcesSection /></AccordionContent>
           </AccordionItem>
-
           <AccordionItem value="notifications">
             <AccordionTrigger>Notifications</AccordionTrigger>
             <AccordionContent>
               <Row icon={<Bell className="size-4" />} label="Notifications push" desc={push.error ? push.error : push.permission === "denied" ? "Bloquées dans le navigateur — autorisez-les depuis l'icône à gauche de l'URL, puis rechargez la page" : push.permission === "unsupported" ? "Non supporté sur ce navigateur" : !push.ready ? "Initialisation…" : "Rappels hydratation, routine, sommeil"}><Switch checked={push.subscribed} onCheckedChange={handleTogglePush} disabled={!!push.error || !push.ready || push.permission === "denied" || push.permission === "unsupported"} /></Row>
               <Row icon={<Send className="size-4" />} label="Notification de test" desc="Vérifiez que les notifications fonctionnent sur cet appareil"><Button variant="secondary" size="sm" onClick={handleSendTest} disabled={sending || !push.subscribed} className="rounded-xl">{sending ? "Envoi…" : "Tester"}</Button></Row>
-              <Accordion type="multiple" className="settings-accordion mt-2">
-                <AccordionItem value="reminders"><AccordionTrigger>Rappels & automatisations</AccordionTrigger><AccordionContent><RemindersSection /><ReminderDebugSection /></AccordionContent></AccordionItem>
-              </Accordion>
+              <div className="settings-subsection"><div className="settings-subtitle">Rappels & automatisations</div><RemindersSection /><ReminderDebugSection /></div>
             </AccordionContent>
           </AccordionItem>
-
           <AccordionItem value="personalization">
             <AccordionTrigger>Personnalisation</AccordionTrigger>
             <AccordionContent>
-              <Accordion type="multiple" className="settings-accordion">
-                <AccordionItem value="daily-priorities"><AccordionTrigger>Priorités quotidiennes</AccordionTrigger><AccordionContent><DailyPrioritySettings /></AccordionContent></AccordionItem>
-                <AccordionItem value="mobilenav"><AccordionTrigger>Navigation mobile</AccordionTrigger><AccordionContent><MobileNavSettings /></AccordionContent></AccordionItem>
-                <AccordionItem value="nutcols"><AccordionTrigger>Colonnes Nutrition</AccordionTrigger><AccordionContent><NutritionColsSettings /></AccordionContent></AccordionItem>
-                <AccordionItem value="finlock"><AccordionTrigger>Verrou Finance</AccordionTrigger><AccordionContent><FinanceLockSettings /></AccordionContent></AccordionItem>
-              </Accordion>
+              <div className="settings-subsection"><div className="settings-subtitle">Priorités quotidiennes</div><DailyPrioritySettings /></div>
+              <div className="settings-subsection"><div className="settings-subtitle">Navigation mobile</div><MobileNavSettings /></div>
+              <div className="settings-subsection"><div className="settings-subtitle">Colonnes Nutrition</div><NutritionColsSettings /></div>
+              <div className="settings-subsection"><div className="settings-subtitle">Verrou Finance</div><FinanceLockSettings /></div>
             </AccordionContent>
           </AccordionItem>
-
           <AccordionItem value="ai">
             <AccordionTrigger><span className="flex items-center gap-2"><Brain className="size-4 text-primary" /> Intelligence artificielle</span></AccordionTrigger>
-            <AccordionContent>
-              <div className="space-y-5"><AiSettings /><AiLocalModeSettings /></div>
-            </AccordionContent>
+            <AccordionContent><div className="space-y-5"><AiSettings /><AiLocalModeSettings /></div></AccordionContent>
           </AccordionItem>
-
           <AccordionItem value="privacy">
             <AccordionTrigger>Données & confidentialité</AccordionTrigger>
             <AccordionContent>

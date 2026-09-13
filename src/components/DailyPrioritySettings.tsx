@@ -43,7 +43,7 @@ export function DailyPrioritySettings() {
         const value = priorities[item.key] ?? DAILY_PRIORITY_DEFAULTS[item.key];
         const enabled = value !== "off";
         return (
-          <div key={item.key} className="flex items-center gap-3 glass-card p-3.5">
+          <div key={item.key} className="flex items-center gap-3 border-b border-border/60 py-3 last:border-b-0">
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium">{item.label}</div>
               <div className="text-xs text-muted-foreground">{item.description}</div>
