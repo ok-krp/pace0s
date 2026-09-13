@@ -7,9 +7,8 @@ export function NutritionColsSettings() {
     setCols((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
   };
   return (
-    <div className="rounded-2xl glass-card p-5">
-      <div className="font-display text-lg font-semibold mb-1">Nutrition — colonnes affichées</div>
-      <div className="text-xs text-muted-foreground mb-4">Choisissez les nutriments à suivre dans l'onglet Nutrition.</div>
+    <div className="space-y-3">
+      <div className="text-xs text-muted-foreground">Choisissez les nutriments à suivre dans l'onglet Nutrition.</div>
       <div className="grid grid-cols-2 gap-2">
         {NUT_COLS.map((c) => {
           const checked = cols.includes(c.key);
