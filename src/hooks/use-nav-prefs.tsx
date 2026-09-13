@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useLocalState } from "@/lib/storage";
 
 export type NavItemKey =
@@ -11,13 +12,21 @@ export function useNavPrefs() {
   const [order, setOrder] = useLocalState<NavItemKey[]>("pace.mobile.nav.order", NAV_DEFAULT_ORDER);
   const [bottom, setBottom] = useLocalState<NavItemKey[]>("pace.mobile.nav.bottom", BOTTOM_DEFAULT);
   const [visible, setVisible] = useLocalState<NavItemKey[]>("pace.mobile.nav.visible", NAV_DEFAULT_ORDER);
+  const [notesNavMigrated, setNotesNavMigrated] = useLocalState<boolean>("pace.notes.nav.migrated", false);
   const cleanOrder = clean(order); const cleanBottom = clean(bottom); const cleanVisible = clean(visible);
   const fullOrder = [...cleanOrder, ...NAV_DEFAULT_ORDER.filter((x) => !cleanOrder.includes(x))];
-  const visibleWithRestoredNotes = cleanVisible.length ? [...cleanVisible, "/notes"].filter((x, i, arr) => arr.indexOf(x) === i) : NAV_DEFAULT_ORDER;
+  useEffect(() => {
+    if (notesNavMigrated) return;
+    setVisible((prev) => {
+      const src = clean(prev);
+      return src.includes("/notes") ? src : [...src, "/notes"];
+    });
+    setNotesNavMigrated(true);
+  }, [notesNavMigrated, setNotesNavMigrated, setVisible]);
   const move = (from: number, to: number) => setOrder((prev) => { const src = clean(prev); const next = [...src]; const [item] = next.splice(from, 1); if (item !== undefined) next.splice(to, 0, item); return next; });
   const toggleBottom = (key: NavItemKey) => setBottom((prev) => { const src = clean(prev); return src.includes(key) ? src.filter((x) => x !== key) : [...src, key]; });
   const toggleVisible = (key: NavItemKey) => setVisible((prev) => { const src = clean(prev); if (src.includes(key) && src.length <= 1) return src; return src.includes(key) ? src.filter((x) => x !== key) : [...src, key]; });
-  const visibleSet = new Set(visibleWithRestoredNotes);
+  const visibleSet = new Set(cleanVisible.length ? cleanVisible : NAV_DEFAULT_ORDER);
   const visibleOrder = fullOrder.filter((k) => k === "/" || k === "/settings" || visibleSet.has(k));
-  return { order: fullOrder, visibleOrder, setOrder, bottom: cleanBottom, toggleBottom, move, visible: visibleWithRestoredNotes, toggleVisible };
+  return { order: fullOrder, visibleOrder, setOrder, bottom: cleanBottom, toggleBottom, move, visible: cleanVisible, toggleVisible };
 }
