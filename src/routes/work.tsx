@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Play, Pause, RotateCcw, Briefcase, Plus, Check, StickyNote, ExternalLink } from "lucide-react";
+import { Play, Pause, RotateCcw, Briefcase, Plus, Check, StickyNote } from "lucide-react";
 import { PageHeader } from "@/components/Stat";
 import { useLocalState, lastNDays, fmtDay, todayKey } from "@/lib/storage";
 import { useDomainState } from "@/lib/domain-store";
@@ -80,8 +80,7 @@ function WorkPage() {
 
       <section className="glass-card p-5">
         <div className="flex items-center justify-between mb-4"><div><div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Notes</div><div className="font-display text-lg font-semibold mt-1">Dernières notes</div></div><StickyNote className="size-5 text-primary" /></div>
-        <div className="space-y-2">{recentNotes.length === 0 ? <div className="text-sm text-muted-foreground py-6 text-center">Aucune note pour le moment.</div> : recentNotes.map((n) => <button key={n.id} onClick={() => navigate({ to: "/notes" })} className="w-full text-left rounded-xl glass-thin p-3 hover:opacity-90 transition"><div className="flex items-center gap-2"><StickyNote className="size-3.5 text-primary shrink-0" /><span className="font-medium text-sm truncate">{n.title || "Sans titre"}</span></div><div className="text-xs text-muted-foreground truncate mt-1">{textPreview(n.html) || "Note vide"}</div></button>)}</div>
-        <Button variant="secondary" onClick={() => navigate({ to: "/notes" })} className="w-full rounded-xl mt-4"><ExternalLink className="size-4 mr-1" />Ouvrir les notes</Button>
+        <div className="space-y-2">{recentNotes.length === 0 ? <div className="text-sm text-muted-foreground py-6 text-center">Aucune note pour le moment.</div> : recentNotes.map((n) => <button key={n.id} onClick={() => navigate({ to: "/work" })} className="w-full text-left rounded-xl glass-thin p-3 hover:opacity-90 transition"><div className="flex items-center gap-2"><StickyNote className="size-3.5 text-primary shrink-0" /><span className="font-medium text-sm truncate">{n.title || "Sans titre"}</span></div><div className="text-xs text-muted-foreground truncate mt-1">{textPreview(n.html) || "Note vide"}</div></button>)}</div>
       </section>
     </div>
   </div>;
