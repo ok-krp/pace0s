@@ -47,54 +47,65 @@ function SettingsPage() {
   return (
     <div className="settings-page">
       <PageHeader title="Paramètres" subtitle="Tout au même endroit, sans empiler les cartes." />
-      <style>{`\n        .settings-panel > .settings-group + .settings-group { border-top: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-group { padding: 10px 8px; }\n        .settings-group-title { padding: 4px 8px 7px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted-foreground); }\n        .settings-row { min-height: 52px; border-radius: 12px; }\n        .settings-row:hover { background: color-mix(in oklab, var(--foreground) 4%, transparent); }\n        .settings-accordion > [data-slot=accordion-item] { border-bottom: 0; }\n        .settings-accordion [data-slot=accordion-trigger] { min-height: 44px; padding: 8px; font-size: 14px; font-weight: 500; }\n        .settings-panel .glass-card { background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-radius: 12px !important; }\n        .settings-panel .glass-card::before, .settings-panel .glass-card::after { display: none !important; }\n      `}</style>
+      <style>{`\n        .settings-panel { overflow: hidden; }\n        .settings-accordion > [data-slot=accordion-item] { border-bottom: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-accordion > [data-slot=accordion-item]:last-child { border-bottom: 0; }\n        .settings-accordion [data-slot=accordion-trigger] { min-height: 56px; padding: 10px 8px; font-size: 14px; font-weight: 600; }\n        .settings-accordion [data-slot=accordion-content] > div { padding: 4px 8px 16px; }\n        .settings-row { min-height: 52px; border-radius: 12px; }\n        .settings-row:hover { background: color-mix(in oklab, var(--foreground) 4%, transparent); }\n        .settings-panel .glass-card, .settings-panel .glass-thin { background: transparent !important; box-shadow: none !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; border-color: color-mix(in oklab, var(--foreground) 8%, transparent) !important; }\n        .settings-panel .glass-card::before, .settings-panel .glass-card::after, .settings-panel .glass-thin::before, .settings-panel .glass-thin::after { display: none !important; }\n      `}</style>
       <div className="glass-card rounded-3xl p-3 sm:p-5 settings-panel">
-        <section className="settings-group">
-          <div className="settings-group-title">Apparence & appareil</div>
-          <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} /></Row>
-          <Row icon={<Smartphone className="size-4" />} label="Application Android" desc="Télécharger la version native de PaceOS"><Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger</Button></Row>
-          <WallpaperSettings />
-        </section>
+        <Accordion type="multiple" className="settings-accordion">
+          <AccordionItem value="appearance">
+            <AccordionTrigger>Apparence & appareil</AccordionTrigger>
+            <AccordionContent>
+              <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} /></Row>
+              <Row icon={<Smartphone className="size-4" />} label="Application Android" desc="Télécharger la version native de PaceOS"><Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger</Button></Row>
+              <WallpaperSettings />
+            </AccordionContent>
+          </AccordionItem>
 
-        <section className="settings-group">
-          <div className="settings-group-title">Santé & appareils</div>
-          <BleDeviceManager />
-          <HealthSourcesSection />
-        </section>
+          <AccordionItem value="health">
+            <AccordionTrigger>Santé & appareils</AccordionTrigger>
+            <AccordionContent>
+              <BleDeviceManager />
+              <HealthSourcesSection />
+            </AccordionContent>
+          </AccordionItem>
 
-        <section className="settings-group">
-          <div className="settings-group-title">Notifications</div>
-          <Row icon={<Bell className="size-4" />} label="Notifications push" desc={push.error ? push.error : push.permission === "denied" ? "Bloquées dans le navigateur — autorisez-les depuis l'icône à gauche de l'URL, puis rechargez la page" : push.permission === "unsupported" ? "Non supporté sur ce navigateur" : !push.ready ? "Initialisation…" : "Rappels hydratation, routine, sommeil"}><Switch checked={push.subscribed} onCheckedChange={handleTogglePush} disabled={!!push.error || !push.ready || push.permission === "denied" || push.permission === "unsupported"} /></Row>
-          <Row icon={<Send className="size-4" />} label="Notification de test" desc="Vérifiez que les notifications fonctionnent sur cet appareil"><Button variant="secondary" size="sm" onClick={handleSendTest} disabled={sending || !push.subscribed} className="rounded-xl">{sending ? "Envoi…" : "Tester"}</Button></Row>
-          <Accordion type="multiple" className="settings-accordion">
-            <AccordionItem value="reminders"><AccordionTrigger>Rappels & automatisations</AccordionTrigger><AccordionContent className="pt-2 space-y-3"><RemindersSection /><ReminderDebugSection /></AccordionContent></AccordionItem>
-          </Accordion>
-        </section>
+          <AccordionItem value="notifications">
+            <AccordionTrigger>Notifications</AccordionTrigger>
+            <AccordionContent>
+              <Row icon={<Bell className="size-4" />} label="Notifications push" desc={push.error ? push.error : push.permission === "denied" ? "Bloquées dans le navigateur — autorisez-les depuis l'icône à gauche de l'URL, puis rechargez la page" : push.permission === "unsupported" ? "Non supporté sur ce navigateur" : !push.ready ? "Initialisation…" : "Rappels hydratation, routine, sommeil"}><Switch checked={push.subscribed} onCheckedChange={handleTogglePush} disabled={!!push.error || !push.ready || push.permission === "denied" || push.permission === "unsupported"} /></Row>
+              <Row icon={<Send className="size-4" />} label="Notification de test" desc="Vérifiez que les notifications fonctionnent sur cet appareil"><Button variant="secondary" size="sm" onClick={handleSendTest} disabled={sending || !push.subscribed} className="rounded-xl">{sending ? "Envoi…" : "Tester"}</Button></Row>
+              <Accordion type="multiple" className="settings-accordion mt-2">
+                <AccordionItem value="reminders"><AccordionTrigger>Rappels & automatisations</AccordionTrigger><AccordionContent><RemindersSection /><ReminderDebugSection /></AccordionContent></AccordionItem>
+              </Accordion>
+            </AccordionContent>
+          </AccordionItem>
 
-        <section className="settings-group">
-          <div className="settings-group-title">Personnalisation</div>
-          <Accordion type="multiple" className="settings-accordion">
-            <AccordionItem value="daily-priorities"><AccordionTrigger>Priorités quotidiennes</AccordionTrigger><AccordionContent className="pt-2"><DailyPrioritySettings /></AccordionContent></AccordionItem>
-            <AccordionItem value="mobilenav"><AccordionTrigger>Navigation mobile</AccordionTrigger><AccordionContent className="pt-2"><MobileNavSettings /></AccordionContent></AccordionItem>
-            <AccordionItem value="nutcols"><AccordionTrigger>Colonnes Nutrition</AccordionTrigger><AccordionContent className="pt-2"><NutritionColsSettings /></AccordionContent></AccordionItem>
-            <AccordionItem value="finlock"><AccordionTrigger>Verrou Finance</AccordionTrigger><AccordionContent className="pt-2"><FinanceLockSettings /></AccordionContent></AccordionItem>
-          </Accordion>
-        </section>
+          <AccordionItem value="personalization">
+            <AccordionTrigger>Personnalisation</AccordionTrigger>
+            <AccordionContent>
+              <Accordion type="multiple" className="settings-accordion">
+                <AccordionItem value="daily-priorities"><AccordionTrigger>Priorités quotidiennes</AccordionTrigger><AccordionContent><DailyPrioritySettings /></AccordionContent></AccordionItem>
+                <AccordionItem value="mobilenav"><AccordionTrigger>Navigation mobile</AccordionTrigger><AccordionContent><MobileNavSettings /></AccordionContent></AccordionItem>
+                <AccordionItem value="nutcols"><AccordionTrigger>Colonnes Nutrition</AccordionTrigger><AccordionContent><NutritionColsSettings /></AccordionContent></AccordionItem>
+                <AccordionItem value="finlock"><AccordionTrigger>Verrou Finance</AccordionTrigger><AccordionContent><FinanceLockSettings /></AccordionContent></AccordionItem>
+              </Accordion>
+            </AccordionContent>
+          </AccordionItem>
 
-        <section className="settings-group">
-          <div className="settings-group-title flex items-center gap-2"><Brain className="size-4 text-primary" /> Intelligence artificielle</div>
-          <div className="settings-inline"><AiSettings /></div>
-          <div className="settings-inline"><AiLocalModeSettings /></div>
-        </section>
+          <AccordionItem value="ai">
+            <AccordionTrigger><span className="flex items-center gap-2"><Brain className="size-4 text-primary" /> Intelligence artificielle</span></AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-5"><AiSettings /><AiLocalModeSettings /></div>
+            </AccordionContent>
+          </AccordionItem>
 
-        <section className="settings-group">
-          <div className="settings-group-title">Données & confidentialité</div>
-          <Accordion type="multiple" className="settings-accordion">
-            <AccordionItem value="privacy"><AccordionTrigger>Confidentialité & données du compte</AccordionTrigger><AccordionContent className="pt-2"><PrivacyDataSection /></AccordionContent></AccordionItem>
-          </Accordion>
-          <Row icon={<Download className="size-4" />} label="Exporter les préférences locales" desc="JSON des préférences stockées sur cet appareil"><Button variant="secondary" size="sm" onClick={exportData} className="rounded-xl">Exporter</Button></Row>
-          <Row icon={<Trash2 className="size-4" />} label="Réinitialiser cet appareil" desc="Efface uniquement les données locales"><Button variant="destructive" size="sm" onClick={reset} className="rounded-xl">Effacer</Button></Row>
-        </section>
+          <AccordionItem value="privacy">
+            <AccordionTrigger>Données & confidentialité</AccordionTrigger>
+            <AccordionContent>
+              <PrivacyDataSection />
+              <Row icon={<Download className="size-4" />} label="Exporter les préférences locales" desc="JSON des préférences stockées sur cet appareil"><Button variant="secondary" size="sm" onClick={exportData} className="rounded-xl">Exporter</Button></Row>
+              <Row icon={<Trash2 className="size-4" />} label="Réinitialiser cet appareil" desc="Efface uniquement les données locales"><Button variant="destructive" size="sm" onClick={reset} className="rounded-xl">Effacer</Button></Row>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </div>
   );
