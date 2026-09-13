@@ -28,12 +28,10 @@
   border-radius: 16px !important;
 }
 
-/* Prevent visual card-on-card stacking: nested panels inherit the parent surface. */
-.glass-card .glass-card,
-.glass-card [data-slot="card"],
-.glass-card .card,
-.glass-card .liquid-glass,
-.glass-card [class~="liquid-glass"] {
+/* A card is the surface. Any card-like descendant must not create another surface. */
+.glass-card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"]),
+[data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"]),
+.card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"]) {
   background: transparent !important;
   background-image: none !important;
   backdrop-filter: none !important;
@@ -44,15 +42,13 @@
   isolation: auto !important;
 }
 
-/* Remove decorative nested glass rims/sheen when a panel sits inside another panel. */
-.glass-card .glass-card::before,
-.glass-card .glass-card::after,
-.glass-card [data-slot="card"]::before,
-.glass-card [data-slot="card"]::after,
-.glass-card .card::before,
-.glass-card .card::after,
-.glass-card .liquid-glass::before,
-.glass-card .liquid-glass::after {
+/* Remove all nested decorative rims/sheen as well. */
+.glass-card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::before,
+.glass-card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::after,
+[data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::before,
+[data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::after,
+.card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::before,
+.card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::after {
   display: none !important;
 }
 
