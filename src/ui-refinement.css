@@ -28,6 +28,34 @@
   border-radius: 16px !important;
 }
 
+/* Prevent visual card-on-card stacking: nested panels inherit the parent surface. */
+.glass-card .glass-card,
+.glass-card [data-slot="card"],
+.glass-card .card,
+.glass-card .liquid-glass,
+.glass-card [class~="liquid-glass"] {
+  background: transparent !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  isolation: auto !important;
+}
+
+/* Remove decorative nested glass rims/sheen when a panel sits inside another panel. */
+.glass-card .glass-card::before,
+.glass-card .glass-card::after,
+.glass-card [data-slot="card"]::before,
+.glass-card [data-slot="card"]::after,
+.glass-card .card::before,
+.glass-card .card::after,
+.glass-card .liquid-glass::before,
+.glass-card .liquid-glass::after {
+  display: none !important;
+}
+
 /* Numeric KPI values remain visually dominant. */
 .tabular-nums,
 [data-kpi-value="true"] {
