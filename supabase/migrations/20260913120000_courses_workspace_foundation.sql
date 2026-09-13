@@ -74,48 +74,36 @@ alter table public.pantry_items force row level security;
 
 create policy "workspace members can read workspaces"
   on public.workspaces for select
-  using (exists (
+  using (owner_user_id = auth.uid() or exists (
     select 1 from public.workspace_members wm
     where wm.workspace_id = workspaces.id and wm.user_id = auth.uid()
-  ) or owner_user_id = auth.uid());
+  ));
 
 create policy "owners can create workspaces"
   on public.workspaces for insert
   with check (owner_user_id = auth.uid());
 
-create policy "workspace admins can update workspaces"
+create policy "workspace owners can update workspaces"
   on public.workspaces for update
-  using (owner_user_id = auth.uid() or exists (
-    select 1 from public.workspace_members wm
-    where wm.workspace_id = workspaces.id and wm.user_id = auth.uid() and wm.role = 'admin'
-  ))
-  with check (owner_user_id = auth.uid() or exists (
-    select 1 from public.workspace_members wm
-    where wm.workspace_id = workspaces.id and wm.user_id = auth.uid() and wm.role = 'admin'
-  ));
+  using (owner_user_id = auth.uid())
+  with check (owner_user_id = auth.uid());
 
-create policy "members can read membership"
+create policy "members can read their membership or owners can list members"
   on public.workspace_members for select
   using (user_id = auth.uid() or exists (
-    select 1 from public.workspace_members wm
-    where wm.workspace_id = workspace_members.workspace_id and wm.user_id = auth.uid() and wm.role in ('owner', 'admin')
+    select 1 from public.workspaces w
+    where w.id = workspace_members.workspace_id and w.owner_user_id = auth.uid()
   ));
 
-create policy "workspace admins manage membership"
+create policy "workspace owners manage membership"
   on public.workspace_members for all
   using (exists (
     select 1 from public.workspaces w
     where w.id = workspace_members.workspace_id and w.owner_user_id = auth.uid()
-  ) or exists (
-    select 1 from public.workspace_members wm
-    where wm.workspace_id = workspace_members.workspace_id and wm.user_id = auth.uid() and wm.role = 'admin'
   ))
   with check (exists (
     select 1 from public.workspaces w
     where w.id = workspace_members.workspace_id and w.owner_user_id = auth.uid()
-  ) or exists (
-    select 1 from public.workspace_members wm
-    where wm.workspace_id = workspace_members.workspace_id and wm.user_id = auth.uid() and wm.role = 'admin'
   ));
 
 create policy "members manage grocery lists"
