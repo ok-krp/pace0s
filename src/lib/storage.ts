@@ -130,11 +130,11 @@ function applyRemoteDomainRecord(domain: string, value: unknown, updatedAt: stri
   } catch {}
 }
 
-function mergeRecipeCustomRemote(value: unknown): unknown[] | null {
+function mergeRecipeCustomRemote(value: unknown, localValue?: unknown): unknown[] | null {
   if (!Array.isArray(value)) return null;
   try {
-    const rawLocal = localStorage.getItem("pace.recipes.custom");
-    const local = rawLocal ? JSON.parse(rawLocal) : [];
+    const rawLocal = localValue !== undefined ? localValue : localStorage.getItem("pace.recipes.custom");
+    const local = typeof rawLocal === "string" ? JSON.parse(rawLocal) : rawLocal ?? [];
     if (!Array.isArray(local)) return value;
     const byId = new Map<string, unknown>();
     for (const item of local) {
@@ -179,14 +179,26 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
       if (!detail || detail.key !== key) return;
       suppressPersistRef.current = true;
-      const next = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(detail.value) : detail.value;
+      const next = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(detail.value, valueRef.current) : detail.value;
       valueRef.current = next as T;
       setValue(next as T);
     };
     window.addEventListener(REMOTE_WRITE_EVENT, onRemote);
     return () => window.removeEventListener(REMOTE_WRITE_EVENT, onRemote);
   }, [key]);
-  const set = useCallback((next: T | ((p: T) => T)) => { const resolved = typeof next === "function" ? (next as (p: T) => T)(valueRef.current) : next; valueRef.current = resolved; setValue(resolved); }, []);
+  const set = useCallback((next: T | ((p: T) => T)) => {
+    const resolved = typeof next === "function" ? (next as (p: T) => T)(valueRef.current) : next;
+    valueRef.current = resolved;
+    if (key === "pace.recipes.custom" && typeof window !== "undefined") {
+      try {
+        localStorage.setItem(key, JSON.stringify(resolved));
+        const updatedAt = new Date().toISOString();
+        const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
+        window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, { detail: { key, value: resolved, updatedAt, mutationId } }));
+      } catch {}
+    }
+    setValue(resolved);
+  }, [key]);
   return [value, set];
 }
 
