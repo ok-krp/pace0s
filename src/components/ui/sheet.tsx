@@ -7,7 +7,37 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-const Sheet = SheetPrimitive.Root;
+const AI_HISTORY_STORAGE_KEY = "pace.ai.mobile-history-open";
+
+const Sheet = (props: React.ComponentProps<typeof SheetPrimitive.Root>) => {
+  const isAiRoute = typeof window !== "undefined" && window.location.pathname.startsWith("/ai/");
+  const isControlled = props.open !== undefined;
+  const [restoreOpen, setRestoreOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!isAiRoute || !isControlled) return;
+    try {
+      setRestoreOpen(window.sessionStorage.getItem(AI_HISTORY_STORAGE_KEY) === "1");
+    } catch {
+      setRestoreOpen(false);
+    }
+  }, [isAiRoute, isControlled]);
+
+  const open = isAiRoute && isControlled && restoreOpen ? true : props.open;
+  const onOpenChange = (nextOpen: boolean) => {
+    if (isAiRoute && isControlled) {
+      try {
+        window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, nextOpen ? "1" : "0");
+      } catch {
+        // Storage can be unavailable in privacy-restricted contexts.
+      }
+      setRestoreOpen(nextOpen);
+    }
+    props.onOpenChange?.(nextOpen);
+  };
+
+  return <SheetPrimitive.Root {...props} open={open} onOpenChange={onOpenChange} />;
+};
 const SheetTrigger = SheetPrimitive.Trigger;
 const SheetClose = SheetPrimitive.Close;
 const SheetPortal = SheetPrimitive.Portal;
@@ -18,7 +48,7 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-[9990] pointer-events-none bg-background/15 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-[70] bg-slate-900/15 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className,
     )}
     {...props}
@@ -28,14 +58,14 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  "fixed z-[9991] isolate gap-4 border-border/60 bg-background/92 text-foreground p-4 shadow-[0_24px_70px_rgba(15,23,42,0.18)] pointer-events-auto transition ease-in-out data-[state=closed]:duration-200 data-[state=open]:duration-300 data-[state=open]:animate-in data-[state=closed]:animate-out [&_.glass-card]:bg-background/70 [&_.glass-thin]:bg-background/55",
+  "fixed z-[80] gap-4 border border-border/45 bg-[rgb(var(--glass-tint)/var(--glass-tint-strength))] supports-[backdrop-filter]:backdrop-blur-[var(--glass-blur)] supports-[backdrop-filter]:backdrop-saturate-[var(--glass-saturate)] p-6 shadow-[var(--glass-elev-3)] transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
   {
     variants: {
       side: {
         top: "inset-x-0 top-0 rounded-b-[32px] rounded-t-none data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom: "inset-x-0 bottom-0 rounded-t-[32px] rounded-b-none data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-        left: "inset-y-0 left-0 h-[100dvh] w-[min(88vw,360px)] rounded-r-[28px] rounded-l-none border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left",
-        right: "inset-y-0 right-0 h-[100dvh] w-[min(88vw,360px)] rounded-l-[28px] rounded-r-none border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right",
+        left: "inset-y-0 left-0 h-full w-3/4 rounded-r-[32px] rounded-l-none data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
+        right: "inset-y-0 right-0 h-full w-3/4 rounded-l-[32px] rounded-r-none data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
       },
     },
     defaultVariants: {
@@ -52,18 +82,38 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
-  <SheetPortal>
-    <SheetOverlay />
-    <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
-      <SheetPrimitive.Close className="absolute right-4 top-4 z-[9992] rounded-sm text-muted-foreground opacity-80 ring-offset-background transition-opacity hover:text-foreground hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-muted">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Fermer</span>
-      </SheetPrimitive.Close>
-      {children}
-    </SheetPrimitive.Content>
-  </SheetPortal>
-));
+>(({ side = "right", className, children, ...props }, ref) => {
+  const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (typeof window === "undefined" || !window.location.pathname.startsWith("/ai/")) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("[data-sheet-close]")) {
+      try { window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, "0"); } catch { /* noop */ }
+      return;
+    }
+    try { window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, "1"); } catch { /* noop */ }
+  };
+
+  return (
+    <SheetPortal>
+      <SheetOverlay />
+      <SheetPrimitive.Content
+        ref={ref}
+        className={cn(sheetVariants({ side }), className)}
+        onClickCapture={handleClickCapture}
+        {...props}
+      >
+        <SheetPrimitive.Close
+          data-sheet-close
+          className="absolute right-4 top-4 z-10 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary"
+        >
+          <X className="h-4 w-4" />
+          <span className="sr-only">Fermer</span>
+        </SheetPrimitive.Close>
+        {children}
+      </SheetPrimitive.Content>
+    </SheetPortal>
+  );
+});
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -80,7 +130,7 @@ const SheetTitle = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Title>
 >(({ className, ...props }, ref) => (
-  <SheetPrimitive.Title ref={ref} className={cn("text-lg font-semibold", className)} {...props} />
+  <SheetPrimitive.Title ref={ref} className={cn("text-lg font-semibold text-foreground", className)} {...props} />
 ));
 SheetTitle.displayName = SheetPrimitive.Title.displayName;
 
