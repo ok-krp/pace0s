@@ -58,7 +58,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  "fixed z-[80] gap-4 border border-border/45 bg-[rgb(var(--glass-tint)/var(--glass-tint-strength))] supports-[backdrop-filter]:backdrop-blur-[var(--glass-blur)] supports-[backdrop-filter]:backdrop-saturate-[var(--glass-saturate)] p-6 shadow-[var(--glass-elev-3)] transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+  "fixed z-[80] pointer-events-auto gap-4 border border-border/45 bg-[rgb(var(--glass-tint)/var(--glass-tint-strength))] supports-[backdrop-filter]:backdrop-blur-[var(--glass-blur)] supports-[backdrop-filter]:backdrop-saturate-[var(--glass-saturate)] p-6 shadow-[var(--glass-elev-3)] transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
   {
     variants: {
       side: {
@@ -82,15 +82,39 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => {
+>(({ side = "right", className, children, onPointerDownCapture, onClickCapture, ...props }, ref) => {
+  const handlePointerDownCapture = (event: React.PointerEvent<HTMLDivElement>) => {
+    onPointerDownCapture?.(event);
+    if (event.defaultPrevented) return;
+    if (typeof window !== "undefined" && window.location.pathname.startsWith("/ai/")) {
+      // Keep Radix's dismiss layer from treating a title/button press inside
+      // the AI history drawer as an outside interaction during navigation.
+      event.stopPropagation();
+      try {
+        window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, "1");
+      } catch {
+        // Storage can be unavailable in privacy-restricted contexts.
+      }
+    }
+  };
+
   const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
+    onClickCapture?.(event);
     if (typeof window === "undefined" || !window.location.pathname.startsWith("/ai/")) return;
     const target = event.target as HTMLElement | null;
     if (target?.closest("[data-sheet-close]")) {
-      try { window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, "0"); } catch { /* noop */ }
+      try {
+        window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, "0");
+      } catch {
+        // noop
+      }
       return;
     }
-    try { window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, "1"); } catch { /* noop */ }
+    try {
+      window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, "1");
+    } catch {
+      // noop
+    }
   };
 
   return (
@@ -99,6 +123,7 @@ const SheetContent = React.forwardRef<
       <SheetPrimitive.Content
         ref={ref}
         className={cn(sheetVariants({ side }), className)}
+        onPointerDownCapture={handlePointerDownCapture}
         onClickCapture={handleClickCapture}
         {...props}
       >
