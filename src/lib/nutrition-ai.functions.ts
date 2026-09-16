@@ -10,9 +10,7 @@ import { calculateReferenceBasedNutrition, findDishReference, scaleDishReference
 
 const PHOTO_BUCKET = "nutrition-ai";
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
-const visionItemSchema = z.object({ name: z.string().min(1).max(200), brand: z.string().nullable().default(null), grams: z.number().min(0).max(50000) });
-// Vision may legitimately return no identifiable items. Keep that case valid so the
-// handler can return a controlled "no food identified" result instead of a 500.
+const visionItemSchema = z.object({ name: z.string().min(1).max(200), brand: z.string().nullable().default(null), grams: z.number().min(0).max(50000), kcal: z.number().min(0).max(20000), protein_g: z.number().min(0).max(1000), carbs_g: z.number().min(0).max(1000), fat_g: z.number().min(0).max(1000), fiber_g: z.number().min(0).max(500), sugar_g: z.number().min(0).max(500), sodium_mg: z.number().min(0).max(10000) });
 const visionSchema = z.object({ dish_name: z.string().min(1).max(300), items: z.array(visionItemSchema).max(50), health_score: z.enum(["green", "orange", "red"]), quality: z.enum(["bulking", "cutting", "balanced", "treat"]), confidence: z.number().min(0).max(1), confidence_note: z.string().default(""), notes: z.string().default("") });
 function getGeminiModel() { const key = process.env.GEMINI_API_KEY; if (!key) throw new Error("L’IA Pace n’est pas configurée sur le serveur."); return createGoogleGenerativeAI({ apiKey: key })(AI_MODEL.replace(/^google\//, "")); }
 function storagePathForUser(userId: string, path: string) { const normalized = path.replace(/^\/+/, ""); if (!normalized || normalized.includes("..") || !normalized.startsWith(`${userId}/`)) throw new Error("Référence image invalide."); return normalized; }
@@ -30,7 +28,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
     const contentType = file.type || "image/jpeg";
     if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Format image non autorisé.");
     const imageDataUrl = `data:${contentType};base64,${bytes.toString("base64")}`;
-    const prompt = [PHOTO_INSTRUCTIONS, "IMPORTANT : identifie uniquement le plat, les aliments/composants et les grammes estimés. NE FOURNIS AUCUNE valeur kcal ou macro.", "Si le plat correspond à un plat connu, donne son nom canonique clairement (ex. Double Bacon Cheeseburger).", data.goal ? `Objectif : ${data.goal}.` : "", data.hint ? `Indice : ${data.hint}.` : "", "Réponds en JSON pur avec dish_name, items [{name,brand,grams}], health_score, quality, confidence, confidence_note, notes."].filter(Boolean).join("\n\n");
+    const prompt = [PHOTO_INSTRUCTIONS, "IMPORTANT : fais d'abord un inventaire exhaustif des composants visibles. N'en omets aucun, même si la portion est petite ou l'identification imparfaite.", "Si le plat correspond à un plat connu, donne son nom canonique clairement.", data.goal ? `Objectif : ${data.goal}.` : "", data.hint ? `Indice : ${data.hint}.` : "", "Réponds en JSON pur avec dish_name, items [{name,brand,grams,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg}], health_score, quality, confidence, confidence_note, notes."].filter(Boolean).join("\n\n");
     const { text } = await generateText({ model: getGeminiModel(), messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "file", data: imageDataUrl, mediaType: contentType }] }] });
     const parsed = visionSchema.safeParse(extractJson(text));
     if (!parsed.success) return { error: "Réponse IA invalide", result: null };
@@ -47,8 +45,14 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
     }
 
     const nutrition = await calculateReferenceBasedNutrition(parsed.data.items.map(x => ({ name: x.name, grams: x.grams })));
-    if (nutrition.items.length === 0) return { error: "Aucun aliment identifiable avec une référence nutritionnelle fiable.", result: null };
-    const result = foodAnalysisSchema.parse({ dish_name: parsed.data.dish_name, items: nutrition.items.map((x, i) => ({ name: x.name, brand: parsed.data.items[i]?.brand ?? null, grams: x.grams, kcal: x.kcal, protein_g: x.protein_g, carbs_g: x.carbs_g, fat_g: x.fat_g, fiber_g: x.fiber_g, sugar_g: x.sugar_g, sodium_mg: x.sodium_mg })), health_score: parsed.data.health_score, quality: parsed.data.quality, confidence: Math.min(parsed.data.confidence, nutrition.confidence || parsed.data.confidence), confidence_note: `${parsed.data.confidence_note} Références nutritionnelles : ${Math.round((nutrition.confidence || 0) * 100)} %.`, notes: `${parsed.data.notes}${nutrition.items.length < parsed.data.items.length ? " Certains aliments n’ont pas de référence nutritionnelle fiable et ont été exclus du calcul." : ""}` });
+    const referenceByName = new Map(nutrition.items.map((item) => [item.name.trim().toLocaleLowerCase("fr-FR"), item]));
+    const completeItems = parsed.data.items.map((visionItem) => {
+      const reference = referenceByName.get(visionItem.name.trim().toLocaleLowerCase("fr-FR"));
+      if (reference) return { name: reference.name, brand: visionItem.brand, grams: reference.grams, kcal: reference.kcal, protein_g: reference.protein_g, carbs_g: reference.carbs_g, fat_g: reference.fat_g, fiber_g: reference.fiber_g, sugar_g: reference.sugar_g, sodium_mg: reference.sodium_mg };
+      return { name: visionItem.name, brand: visionItem.brand, grams: visionItem.grams, kcal: Math.round(visionItem.kcal), protein_g: Math.round(visionItem.protein_g * 10) / 10, carbs_g: Math.round(visionItem.carbs_g * 10) / 10, fat_g: Math.round(visionItem.fat_g * 10) / 10, fiber_g: Math.round(visionItem.fiber_g * 10) / 10, sugar_g: Math.round(visionItem.sugar_g * 10) / 10, sodium_mg: Math.round(visionItem.sodium_mg * 10) / 10 };
+    });
+    const referenceCount = parsed.data.items.filter((item) => referenceByName.has(item.name.trim().toLocaleLowerCase("fr-FR"))).length;
+    const result = foodAnalysisSchema.parse({ dish_name: parsed.data.dish_name, items: completeItems, health_score: parsed.data.health_score, quality: parsed.data.quality, confidence: Math.min(parsed.data.confidence, nutrition.confidence || parsed.data.confidence), confidence_note: `${parsed.data.confidence_note} ${referenceCount}/${parsed.data.items.length} aliments calibrés par les références Pace.`.trim(), notes: `${parsed.data.notes}${referenceCount < parsed.data.items.length ? " Les aliments sans référence Pace sont conservés avec une estimation visuelle au lieu d’être supprimés." : ""}` });
     return { error: null, result };
   } catch (e) { console.error("analyzeFoodPhoto error", e); return { error: e instanceof Error ? e.message : "Erreur IA", result: null }; }
   finally { await supabaseAdmin.storage.from(PHOTO_BUCKET).remove([path]).catch(() => undefined); }
