@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Component, memo, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import { AlertTriangle, Archive, Bot, Brain, Check, ChevronRight, Clock3, Code2, History, ImagePlus, Loader2, Menu, MoreHorizontal, Plus, RefreshCw, Send, Sparkles, Star, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -30,6 +30,16 @@ const SUGGESTIONS: Record<AgentType, string[]> = {
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const LOCAL_SAFE_QUERY = /^(?!.*\b(ajoute|ajouter|supprime|supprimer|modifie|modifier|mets|mettre|crée|créer|enregistre|programme|séance|exercice|nutrition|repas|poids|objectif|calories|macro|scan|photo|bug|développement|donnée|donnees|data)\b).{1,4000}$/is;
 
+class AiChatErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error("[AiChatErrorBoundary]", error, info.componentStack); }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return <div className="h-full min-h-0 grid place-items-center p-6"><div className="glass-card max-w-md w-full p-6 text-center"><AlertTriangle className="size-6 text-destructive mx-auto" /><h2 className="font-display text-lg font-semibold mt-3">Le chat IA a rencontré un problème</h2><p className="text-sm text-muted-foreground mt-2">La conversation reste intacte. Vous pouvez relancer le chat sans faire tomber le reste de Pace.</p><Button className="mt-4" onClick={() => this.setState({ error: null })}><RefreshCw className="size-4 mr-2" />Relancer le chat</Button></div></div>;
+  }
+}
+
 function AiConversationPage() {
   const { agentType, conversationId } = Route.useParams();
   const navigate = useNavigate();
@@ -46,34 +56,25 @@ function AiConversationPage() {
     }).catch((error) => toast.error(error instanceof Error ? error.message : "Conversation inaccessible"));
   }, [agentType, conversationId, getConversation, navigate]);
   if (!initialMessages) return <div className="min-h-[60vh] grid place-items-center"><Loader2 className="size-6 animate-spin text-primary" /></div>;
-  return <ChatWorkspace key={`${agentType}-${conversationId}`} agentType={agentType} conversationId={conversationId} initialMessages={initialMessages} title={title} ephemeral={ephemeral} onEphemeralChange={setEphemeral} />;
+  return <AiChatErrorBoundary><ChatWorkspace key={`${agentType}-${conversationId}`} agentType={agentType} conversationId={conversationId} initialMessages={initialMessages} title={title} ephemeral={ephemeral} onEphemeralChange={setEphemeral} /></AiChatErrorBoundary>;
 }
 
 async function persistClientAssistantMessage(conversationId: string, message: UIMessage) {
   if (message.role !== "assistant" || message.parts.length === 0) return;
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) return;
-  const { data: existing, error: lookupError } = await supabase
-    .from("ai_messages")
-    .select("id")
-    .eq("conversation_id", conversationId)
-    .eq("user_id", user.id)
-    .eq("model_message_id", message.id)
-    .maybeSingle();
+  const { data: existing, error: lookupError } = await supabase.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("user_id", user.id).eq("model_message_id", message.id).maybeSingle();
   if (lookupError) throw lookupError;
   if (!existing) {
-    const { error } = await supabase.from("ai_messages").insert({
-      conversation_id: conversationId,
-      user_id: user.id,
-      role: "assistant",
-      parts: message.parts as unknown as never,
-      plain_text: message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n"),
-      model_message_id: message.id,
-    });
+    const { error } = await supabase.from("ai_messages").insert({ conversation_id: conversationId, user_id: user.id, role: "assistant", parts: message.parts as unknown as never, plain_text: message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n"), model_message_id: message.id });
     if (error) throw error;
   }
   await supabase.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", user.id);
 }
+
+const MemoizedMarkdown = memo(function MemoizedMarkdown({ children }: { children: string }) {
+  return <ReactMarkdown>{children}</ReactMarkdown>;
+});
 
 function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephemeral, onEphemeralChange }: { agentType: AgentType; conversationId: string; initialMessages: UIMessage[]; title: string; ephemeral: boolean; onEphemeralChange: (value: boolean) => void }) {
   const navigate = useNavigate();
@@ -84,6 +85,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
   const autoApprovalKeyRef = useRef<string | null>(null);
   const [input, setInput] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [pendingUserText, setPendingUserText] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const transport = useMemo(() => new DefaultChatTransport({
     api: "/api/ai-chat",
@@ -112,9 +114,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
         const described = describeChatError(fetchError);
         logAiDebug({ phase: "erreur", message: described, durationMs: ms });
         throw fetchError instanceof Error ? new Error(described) : new Error(described);
-      } finally {
-        clearTimeout(timeout);
-      }
+      } finally { clearTimeout(timeout); }
     },
     prepareSendMessagesRequest: ({ messages: all, body }) => ({ body: { ...body, messages: all.slice(-30) } }),
     body: { conversationId, agentType, ephemeral },
@@ -122,46 +122,27 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
   const sendAutomaticallyWhen = useMemo(() => ({ messages }: { messages: UIMessage[] }) => {
     const last = messages.at(-1);
     if (!last || last.role !== "assistant") return false;
-    const responses = last.parts
-      .filter((part) => {
-        const candidate = part as unknown as Record<string, unknown>;
-        const approval = candidate.approval;
-        return candidate.state === "approval-responded" && typeof approval === "object" && approval !== null && typeof (approval as Record<string, unknown>).id === "string";
-      })
-      .map((part) => {
-        const candidate = part as unknown as Record<string, unknown>;
-        const approval = candidate.approval as Record<string, unknown>;
-        return `${approval.id}:${approval.approved === true ? "approved" : "denied"}`;
-      });
+    const responses = last.parts.filter((part) => { const candidate = part as unknown as Record<string, unknown>; const approval = candidate.approval; return candidate.state === "approval-responded" && typeof approval === "object" && approval !== null && typeof (approval as Record<string, unknown>).id === "string"; }).map((part) => { const candidate = part as unknown as Record<string, unknown>; const approval = candidate.approval as Record<string, unknown>; return `${approval.id}:${approval.approved === true ? "approved" : "denied"}`; });
     if (responses.length === 0) return false;
     const key = `${last.id}:${responses.join("|")}`;
     if (autoApprovalKeyRef.current === key) return false;
     autoApprovalKeyRef.current = key;
     return true;
   }, []);
-  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen, onFinish: ({ message }) => { void persistClientAssistantMessage(conversationId, message).catch((saveError) => console.error("[ai-chat] persistance client impossible", saveError)); clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => setFailure(describeChatError(chatError)) });
+  const { messages, sendMessage, status, error, addToolApprovalResponse, setMessages } = useChat({ id: conversationId, messages: initialMessages, transport, experimental_throttle: 60, sendAutomaticallyWhen, onResponse: () => { logAiDebug({ phase: "réception", message: "HTTP response reçue" }); }, onFinish: ({ message }) => { setPendingUserText(null); void persistClientAssistantMessage(conversationId, message).catch((saveError) => console.error("[ai-chat] persistance client impossible", saveError)); clearPendingMessage(conversationId); setFailure(null); inputRef.current?.focus(); }, onError: (chatError) => { setPendingUserText(null); setFailure(describeChatError(chatError)); } });
   const busy = status === "submitted" || status === "streaming";
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status, pendingUserText]);
   useEffect(() => { if (error) setFailure(describeChatError(error)); }, [error]);
-  useEffect(() => {
-    if (agentType === "coach" && localAiSupported()) {
-      void warmLocalAi();
-    }
-  }, [agentType]);
+  useEffect(() => { if (agentType === "coach" && localAiSupported()) void warmLocalAi(); }, [agentType]);
 
-  const chooseImage = (file: File | undefined) => {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) { toast.error("Sélectionnez une image."); return; }
-    if (file.size > MAX_IMAGE_BYTES) { toast.error("L’image doit faire au maximum 5 Mo."); return; }
-    setSelectedImage(file);
-    setFailure(null);
-  };
+  const chooseImage = (file: File | undefined) => { if (!file) return; if (!file.type.startsWith("image/")) { toast.error("Sélectionnez une image."); return; } if (file.size > MAX_IMAGE_BYTES) { toast.error("L’image doit faire au maximum 5 Mo."); return; } setSelectedImage(file); setFailure(null); };
 
   const send = async (text = input, file = selectedImage) => {
     const clean = text.trim();
     if ((!clean && !file) || busy) return;
     const messageText = clean || "Analyse cette image.";
+    setPendingUserText(messageText);
     setInput("");
     setSelectedImage(null);
     setFailure(null);
@@ -169,78 +150,47 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
     try {
       const localEligible = agentType === "coach" && !file && LOCAL_SAFE_QUERY.test(clean) && getLocalAiProfile() !== "cloud";
       if (localEligible) {
-        const history: LocalAiMessage[] = messages
-          .filter((message) => message.role === "user" || message.role === "assistant")
-          .slice(-6)
-          .map((message) => ({
-            role: message.role,
-            content: message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n"),
-          }))
-          .filter((message) => message.content.trim().length > 0);
-        const localResponse = await generateLocalAi([
-          { role: "system", content: "Tu es Pace, un coach sportif et nutritionnel concis. Réponds en français. Tu ne modifies jamais les données et ne prétends jamais avoir effectué une action. Si une question demande une action, explique que l'action doit passer par PaceOS." },
-          ...history,
-          { role: "user", content: messageText },
-        ]);
+        const history: LocalAiMessage[] = messages.filter((message) => message.role === "user" || message.role === "assistant").slice(-6).map((message) => ({ role: message.role, content: message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n") })).filter((message) => message.content.trim().length > 0);
+        const localResponse = await generateLocalAi([{ role: "system", content: "Tu es Pace, un coach sportif et nutritionnel concis. Réponds en français. Tu ne modifies jamais les données et ne prétends jamais avoir effectué une action. Si une question demande une action, explique que l'action doit passer par PaceOS." }, ...history, { role: "user", content: messageText }]);
         if (localResponse) {
           const userId = (await supabase.auth.getUser()).data.user?.id;
           if (userId && !ephemeral) {
-            const { error: localSaveError } = await supabase.from("ai_messages").insert([
-              { conversation_id: conversationId, user_id: userId, role: "user", plain_text: messageText, parts: [{ type: "text", text: messageText }] },
-              { conversation_id: conversationId, user_id: userId, role: "assistant", plain_text: localResponse, parts: [{ type: "text", text: localResponse }] },
-            ]);
+            const { error: localSaveError } = await supabase.from("ai_messages").insert([{ conversation_id: conversationId, user_id: userId, role: "user", plain_text: messageText, parts: [{ type: "text", text: messageText }] }, { conversation_id: conversationId, user_id: userId, role: "assistant", plain_text: localResponse, parts: [{ type: "text", text: localResponse }] }]);
             if (localSaveError) throw localSaveError;
             await supabase.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", userId);
           }
           setMessages((current) => [...current, { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: messageText }] }, { id: crypto.randomUUID(), role: "assistant", parts: [{ type: "text", text: localResponse }] }]);
           clearPendingMessage(conversationId);
+          setPendingUserText(null);
           return;
         }
       }
-      if (file) {
-        const files = new DataTransfer();
-        files.items.add(file);
-        await sendMessage({ text: messageText, files: files.files });
-      } else {
-        await sendMessage({ text: messageText });
-      }
+      if (file) { const files = new DataTransfer(); files.items.add(file); await sendMessage({ text: messageText, files: files.files }); }
+      else await sendMessage({ text: messageText });
       if (!file) clearPendingMessage(conversationId);
     } catch (sendError) {
+      setPendingUserText(null);
       if (file) setSelectedImage(file);
       setFailure(describeChatError(sendError));
-    } finally {
-      inputRef.current?.focus();
-    }
+    } finally { inputRef.current?.focus(); }
   };
-  const retryPending = useMemo(() => () => {
-    const pending = readPendingMessage(conversationId);
-    if (pending && !busy) void send(pending);
-  }, [busy, conversationId]);
-  useEffect(() => {
-    const onOnline = () => retryPending();
-    window.addEventListener("online", onOnline);
-    return () => window.removeEventListener("online", onOnline);
-  }, [retryPending]);
-  const switchAgent = async (next: AgentType) => {
-    if (next === agentType) return;
-    const { data } = await supabase.from("ai_conversations").select("id").eq("agent_type", next).eq("is_archived", false).order("updated_at", { ascending: false }).limit(1).maybeSingle();
-    let id = data?.id;
-    if (!id) { const user = (await supabase.auth.getUser()).data.user; if (!user) return; const { data: created, error: createError } = await supabase.from("ai_conversations").insert({ agent_type: next, user_id: user.id }).select("id").single(); if (createError) { toast.error(createError.message); return; } id = created.id; }
-    await navigate({ to: "/ai/$agentType/$conversationId", params: { agentType: next, conversationId: id } });
-  };
+  const retryPending = useMemo(() => () => { const pending = readPendingMessage(conversationId); if (pending && !busy) void send(pending); }, [busy, conversationId]);
+  useEffect(() => { const onOnline = () => retryPending(); window.addEventListener("online", onOnline); return () => window.removeEventListener("online", onOnline); }, [retryPending]);
+  const switchAgent = async (next: AgentType) => { if (next === agentType) return; const { data } = await supabase.from("ai_conversations").select("id").eq("agent_type", next).eq("is_archived", false).order("updated_at", { ascending: false }).limit(1).maybeSingle(); let id = data?.id; if (!id) { const user = (await supabase.auth.getUser()).data.user; if (!user) return; const { data: created, error: createError } = await supabase.from("ai_conversations").insert({ agent_type: next, user_id: user.id }).select("id").single(); if (createError) { toast.error(createError.message); return; } id = created.id; } await navigate({ to: "/ai/$agentType/$conversationId", params: { agentType: next, conversationId: id } }); };
   const toggleEphemeral = (value: boolean) => { onEphemeralChange(value); setMessages([]); toast(value ? "Chat éphémère activé" : "Historique synchronisé activé"); };
 
   return <div className="h-[calc(100dvh-7rem)] md:h-[calc(100dvh-5rem)] flex gap-3 overflow-hidden">
     <section className="flex-1 min-w-0 flex flex-col glass-card rounded-[24px] overflow-hidden">
       <header className="shrink-0 px-3 sm:px-5 py-3 border-b border-border/60 flex items-center gap-3">
-        <div className="md:hidden"><Sheet><SheetTrigger asChild><Button variant="ghost" size="icon"><Menu className="size-4" /></Button></SheetTrigger><SheetContent side="right" className="w-[86vw] p-4"><ConversationHistory activeId={conversationId} agentType={agentType} /></SheetContent></Sheet></div>
+        <div className="md:hidden"><Sheet><SheetTrigger asChild><Button variant="ghost" size="icon" aria-label="Ouvrir les conversations"><Menu className="size-4" /></Button></SheetTrigger><SheetContent side="left" className="w-[min(88vw,360px)] p-4"><ConversationHistory activeId={conversationId} agentType={agentType} /></SheetContent></Sheet></div>
         <div className="flex rounded-xl glass-thin p-1"><Button size="sm" variant={agentType === "coach" ? "default" : "ghost"} onClick={() => void switchAgent("coach")}><Brain className="size-4 mr-1.5" />Coach IA</Button><Button size="sm" variant={agentType === "build" ? "default" : "ghost"} onClick={() => void switchAgent("build")}><Code2 className="size-4 mr-1.5" />BUILD IA</Button></div>
         <div className="min-w-0 flex-1 hidden sm:block"><div className="text-sm font-medium truncate">{ephemeral ? "Chat éphémère" : title}</div><div className="text-[11px] text-muted-foreground">{agentType === "coach" ? "Suivi personnel & actions santé" : "Bugs, idées & développement"}</div></div>
         <div className="flex items-center gap-2"><Clock3 className="size-3.5 text-muted-foreground" /><span className="hidden lg:inline text-xs text-muted-foreground">Éphémère</span><Switch checked={ephemeral} onCheckedChange={toggleEphemeral} /></div>
       </header>
       <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-6 py-5 space-y-5">
-        {messages.length === 0 && <EmptyState agentType={agentType} onPick={(text) => void send(text)} />}
+        {messages.length === 0 && !pendingUserText && <EmptyState agentType={agentType} onPick={(text) => void send(text)} />}
         {messages.map((message) => <MessageBubble key={message.id} message={message} onApproval={(id, approved) => addToolApprovalResponse({ id, approved })} />)}
+        {pendingUserText && !messages.some((message) => message.role === "user" && message.parts.some((part) => part.type === "text" && part.text === pendingUserText)) && <div className="flex gap-3 justify-end"><div className="max-w-[88%] sm:max-w-[78%] rounded-2xl bg-primary text-primary-foreground px-4 py-2.5"><div className="text-sm leading-relaxed">{pendingUserText}</div></div></div>}
         {status === "submitted" && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" />Réflexion en cours…</div>}
         {failure && <div className="glass-card rounded-2xl p-3 text-sm border border-destructive/40"><div className="flex items-start gap-2"><AlertTriangle className="size-4 text-destructive mt-0.5 shrink-0" /><div className="min-w-0 flex-1"><div className="font-medium text-destructive">Envoi impossible</div><div className="text-muted-foreground mt-1 break-words">{failure}</div><div className="flex gap-2 mt-3"><Button size="sm" variant="outline" onClick={retryPending} disabled={busy}><RefreshCw className="size-3.5 mr-1" />Réessayer</Button><Button size="sm" variant="ghost" onClick={() => setFailure(null)}>Ignorer</Button></div></div></div></div>}
         <div ref={bottomRef} />
@@ -250,14 +200,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
         <div className="glass-thin rounded-2xl p-2 flex items-end gap-2">
           <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" onChange={(event) => { chooseImage(event.target.files?.[0]); event.currentTarget.value = ""; }} />
           <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(event) => { chooseImage(event.target.files?.[0]); event.currentTarget.value = ""; }} />
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label="Ajouter une photo" disabled={busy}><ImagePlus className="size-5" /></Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="top">
-              <DropdownMenuItem onSelect={() => cameraInputRef.current?.click()}><ImagePlus className="size-4" />Prendre une photo</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => galleryInputRef.current?.click()}><Plus className="size-4" />Choisir dans la galerie</DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setSelectedImage(null)} disabled={!selectedImage}><X className="size-4" />Annuler</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon" variant="ghost" aria-label="Ajouter une photo" disabled={busy}><ImagePlus className="size-5" /></Button></DropdownMenuTrigger><DropdownMenuContent align="start" side="top"><DropdownMenuItem onSelect={() => cameraInputRef.current?.click()}><ImagePlus className="size-4" />Prendre une photo</DropdownMenuItem><DropdownMenuItem onSelect={() => galleryInputRef.current?.click()}><Plus className="size-4" />Choisir dans la galerie</DropdownMenuItem><DropdownMenuItem onSelect={() => setSelectedImage(null)} disabled={!selectedImage}><X className="size-4" />Annuler</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
           <Textarea ref={inputRef} autoFocus value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={selectedImage ? "Décrivez ce que Pace doit analyser…" : agentType === "coach" ? "Parlez de votre journée ou demandez une action…" : "Décrivez un bug, une idée ou une fonctionnalité…"} rows={1} className="min-h-11 max-h-40 resize-none border-0 bg-transparent focus-visible:ring-0" />
           <Button size="icon" onClick={() => void send()} disabled={(!input.trim() && !selectedImage) || busy} aria-label="Envoyer">{busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</Button>
         </div>
@@ -270,7 +213,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
 
 function EmptyState({ agentType, onPick }: { agentType: AgentType; onPick: (text: string) => void }) { const Icon = agentType === "coach" ? Brain : Code2; return <div className="max-w-xl mx-auto pt-12 text-center"><span className="glass-icon size-14 mx-auto"><Icon className="size-6 text-primary" /></span><h1 className="font-display text-2xl font-semibold mt-4">{agentType === "coach" ? "Votre coach connaît votre Pace" : "Construisons Pace intelligemment"}</h1><p className="text-sm text-muted-foreground mt-2">{agentType === "coach" ? "Analyse, conseils et actions directes sur vos données autorisées." : "Transformez vos retours en éléments de développement structurés."}</p><div className="mt-6 grid gap-2 text-left">{SUGGESTIONS[agentType].map((suggestion) => <Button key={suggestion} variant="outline" className="h-auto justify-between text-left py-3 whitespace-normal" onClick={() => onPick(suggestion)}><span>{suggestion}</span><ChevronRight className="size-4 shrink-0" /></Button>)}</div></div>; }
 
-function MessageBubble({ message, onApproval }: { message: UIMessage; onApproval: (id: string, approved: boolean) => void }) { const assistant = message.role === "assistant"; return <div className={`flex gap-3 ${assistant ? "justify-start" : "justify-end"}`}>{assistant && <span className="glass-icon size-8 shrink-0"><Bot className="size-4 text-primary" /></span>}<div className={`max-w-[88%] sm:max-w-[78%] space-y-2 ${assistant ? "" : "rounded-2xl bg-primary text-primary-foreground px-4 py-2.5"}`}>{message.parts.map((part, index) => { if (part.type === "text") return <div key={index} className="text-sm leading-relaxed [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5"><ReactMarkdown>{part.text}</ReactMarkdown></div>; if (part.type === "file") return part.mediaType.startsWith("image/") ? <img key={index} src={part.url} alt={part.filename ?? "Image jointe"} className="max-w-full rounded-xl max-h-72 object-contain" /> : null; if (part.type === "reasoning") return <details key={index} className="text-xs text-muted-foreground glass-thin rounded-xl px-3 py-2"><summary className="cursor-pointer">Raisonnement</summary><div className="mt-2 whitespace-pre-wrap">{part.text}</div></details>; if (part.type.startsWith("tool-")) return <ToolPart key={index} part={part as unknown as Record<string, unknown>} onApproval={onApproval} />; return null; })}</div></div>; }
+function MessageBubble({ message, onApproval }: { message: UIMessage; onApproval: (id: string, approved: boolean) => void }) { const assistant = message.role === "assistant"; return <div className={`flex gap-3 ${assistant ? "justify-start" : "justify-end"}`}>{assistant && <span className="glass-icon size-8 shrink-0"><Bot className="size-4 text-primary" /></span>}<div className={`max-w-[88%] sm:max-w-[78%] space-y-2 ${assistant ? "" : "rounded-2xl bg-primary text-primary-foreground px-4 py-2.5"}`}>{message.parts.map((part, index) => { if (part.type === "text") return <div key={index} className="text-sm leading-relaxed [&_p]:my-1 [&_ul]:list-disc [&_ul]:pl-5"><MemoizedMarkdown>{part.text}</MemoizedMarkdown></div>; if (part.type === "file") return part.mediaType.startsWith("image/") ? <img key={index} src={part.url} alt={part.filename ?? "Image jointe"} className="max-w-full rounded-xl max-h-72 object-contain" /> : null; if (part.type === "reasoning") return <details key={index} className="text-xs text-muted-foreground glass-thin rounded-xl px-3 py-2"><summary className="cursor-pointer">Raisonnement</summary><div className="mt-2 whitespace-pre-wrap">{part.text}</div></details>; if (part.type.startsWith("tool-")) return <ToolPart key={index} part={part as unknown as Record<string, unknown>} onApproval={onApproval} />; return null; })}</div></div>; }
 
 function ToolPart({ part, onApproval }: { part: Record<string, unknown>; onApproval: (id: string, approved: boolean) => void }) { const state = typeof part.state === "string" ? part.state : ""; const approval = typeof part.approval === "object" && part.approval ? part.approval as Record<string, unknown> : null; const toolName = typeof part.type === "string" ? part.type.replace("tool-", "").replaceAll("_", " ") : "action"; if (state === "approval-requested" && approval && approval.isAutomatic !== true && typeof approval.id === "string") return <div className="glass-card rounded-2xl p-3 text-sm"><div className="font-medium">Autoriser : {toolName} ?</div><div className="flex gap-2 mt-3"><Button size="sm" onClick={() => onApproval(approval.id as string, true)}><Check className="size-3.5 mr-1" />Confirmer</Button><Button size="sm" variant="outline" onClick={() => onApproval(approval.id as string, false)}><X className="size-3.5 mr-1" />Refuser</Button></div></div>; const success = state === "output-available"; return <div className="glass-thin rounded-xl px-3 py-2 flex items-center gap-2 text-xs"><span className={`size-5 rounded-full grid place-items-center ${success ? "bg-emerald-500/15 text-emerald-500" : "bg-muted text-muted-foreground"}`}>{success ? <Check className="size-3" /> : <Loader2 className="size-3 animate-spin" />}</span><span className="capitalize">{toolName}</span></div>; }
 
@@ -282,13 +225,8 @@ function ConversationHistory({ activeId, agentType }: { activeId: string; agentT
   return <div className="h-full flex flex-col"><div className="flex items-center justify-between px-1 pb-3"><div className="font-medium flex items-center gap-2"><History className="size-4" />Conversations</div><Button size="icon" variant="ghost" onClick={() => void newConversation()} aria-label="Nouvelle conversation"><Plus className="size-4" /></Button></div><div className="flex-1 min-h-0 overflow-y-auto space-y-1">{rows.map((row) => <div key={row.id} className={`group flex items-center rounded-xl ${row.id === activeId ? "bg-primary/10 text-foreground" : "hover:bg-muted/50 text-muted-foreground"}`}><Button variant="ghost" className="flex-1 min-w-0 justify-start font-normal" onClick={() => void navigate({ to: "/ai/$agentType/$conversationId", params: { agentType, conversationId: row.id } })}>{row.is_starred && <Star className="size-3.5 fill-current text-amber-500 shrink-0" />}<span className="truncate">{row.title}</span></Button><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-8 opacity-60 group-hover:opacity-100"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={async () => { await update({ data: { id: row.id, isStarred: !row.is_starred } }); await refresh(); }}><Star />{row.is_starred ? "Retirer des favoris" : "Ajouter aux favoris"}</DropdownMenuItem><DropdownMenuItem onClick={async () => { await update({ data: { id: row.id, isArchived: true } }); await refresh(); }}><Archive />Archiver</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={async () => { await remove({ data: { id: row.id } }); const remaining = rows.filter((item) => item.id !== row.id); if (row.id === activeId) { const next = remaining[0] ?? await create({ data: { agentType } }); await navigate({ to: "/ai/$agentType/$conversationId", params: { agentType, conversationId: next.id } }); } else await refresh(); }}><Trash2 />Supprimer</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>)}</div><Button variant="outline" className="mt-3" onClick={() => void navigate({ to: "/ai-activity" })}><Sparkles className="size-4 mr-2" />Historique des actions</Button></div>;
 }
 function DebugPanel() {
-  const [, force] = useState(0);
-  const [enabled, setEnabled] = useState(false);
-  useEffect(() => {
-    setEnabled(isDebugEnabled());
-    const unsubscribe = subscribeAiDebug(() => { setEnabled(isDebugEnabled()); force((value) => value + 1); });
-    return () => { unsubscribe(); };
-  }, []);
+  const [, force] = useState(0); const [enabled, setEnabled] = useState(false);
+  useEffect(() => { setEnabled(isDebugEnabled()); const unsubscribe = subscribeAiDebug(() => { setEnabled(isDebugEnabled()); force((value) => value + 1); }); return () => { unsubscribe(); }; }, []);
   if (!enabled) return null;
   const entries = getAiDebugEntries();
   return <div className="mt-2 glass-thin rounded-xl p-2 max-h-40 overflow-y-auto text-[10px] font-mono"><div className="flex items-center justify-between pb-1"><span className="font-medium">Journal de débogage</span><Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={clearAiDebug}>Vider</Button></div>{entries.length === 0 ? <div className="text-muted-foreground">Aucune requête enregistrée.</div> : entries.map((entry) => <div key={entry.id} className={entry.phase === "erreur" ? "text-destructive" : "text-muted-foreground"}>{new Date(entry.at).toLocaleTimeString("fr-FR")} · {entry.phase} · {entry.message}{entry.durationMs === undefined ? "" : ` · ${entry.durationMs} ms`}{entry.detail ? ` · ${entry.detail}` : ""}</div>)}</div>;
