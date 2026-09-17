@@ -1,7 +1,5 @@
-import type { UIMessage } from "ai";
-
 declare module "@ai-sdk/react" {
-  interface UseChatOptions<UI_MESSAGE extends UIMessage = UIMessage> {
-    onResponse?: (response: Response) => void;
-  }
+  // AI SDK v5+ removed useChat.onResponse; Pace still uses this callback for debug telemetry.
+  // Keep the legacy option accepted without altering the runtime hook implementation.
+  export function useChat(options: any): any;
 }
