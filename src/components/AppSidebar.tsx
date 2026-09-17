@@ -1,4 +1,4 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { memo, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { LayoutDashboard, Moon, Apple, Scale, Briefcase, Calendar, Wallet, Settings, Sparkles, User as UserIcon, Menu, Dumbbell, AlertTriangle, ChevronDown, Wrench, History, Search, Watch, ShoppingCart } from "lucide-react";
@@ -44,28 +44,29 @@ const getNavItem = (key: string) => NAV_REGISTRY[key as NavItemKey];
 const NavLink = memo(function NavLink({
   to,
   active,
-  onNavigate,
+  mobileNative = false,
 }: {
   to: NavItemKey;
   active: boolean;
-  onNavigate?: () => void;
+  mobileNative?: boolean;
 }) {
   const it = getNavItem(to);
-  const navigate = useNavigate();
   if (!it) return null;
   const Icon = it.icon;
   const className = `group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-[background,box-shadow,color] duration-300 ${interactiveRing} ${active ? "text-foreground font-medium bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)+0.16))] shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_calc(var(--glass-edge)*55%),transparent),0_0_0_1px_color-mix(in_oklab,var(--primary)_14%,transparent),0_6px_18px_-12px_color-mix(in_oklab,var(--primary)_50%,transparent)]" : "text-muted-foreground hover:text-foreground hover:bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.5))]"}`;
 
-  const handleClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (!onNavigate) return;
-    event.preventDefault();
-    void navigate({ to }).then(() => onNavigate());
-  };
+  if (mobileNative) {
+    return (
+      <a href={to} data-nav-to={to} className={className}>
+        <Icon className={`size-4 shrink-0 ${active ? "text-primary" : ""}`} />
+        <span>{it.label}</span>
+      </a>
+    );
+  }
 
   return (
     <MotionLink
       to={to}
-      onClick={handleClick}
       whileHover={{ x: 2 }}
       transition={springSnap}
       className={className}
@@ -76,7 +77,7 @@ const NavLink = memo(function NavLink({
   );
 });
 
-function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) {
+function GroupedNav({ currentPath, mobileNative = false }: { currentPath: string; mobileNative?: boolean }) {
   const [openMap, setOpenMap] = useLocalState<Record<string, boolean>>("pace.sidebar.groups", {
     assistant: true,
     nutrition: true,
@@ -88,8 +89,8 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
   const visibleSet = new Set(visibleOrder);
 
   return (
-    <nav className="flex flex-col gap-0.5">
-      <NavLink to="/" active={currentPath === "/"} onNavigate={onNavigate} />
+    <nav className="flex flex-col gap-0.5" aria-label="Navigation principale">
+      <NavLink to="/" active={currentPath === "/"} mobileNative={mobileNative} />
       {GROUPS.map((g) => {
         const items = g.items.filter((to) => visibleSet.has(to));
         if (!items.length) return null;
@@ -110,7 +111,7 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
             </CollapsibleTrigger>
             <CollapsibleContent className="flex flex-col gap-0.5 mt-0.5">
               {items.map((to) => (
-                <NavLink key={to} to={to} active={currentPath === to} onNavigate={onNavigate} />
+                <NavLink key={to} to={to} active={currentPath === to} mobileNative={mobileNative} />
               ))}
             </CollapsibleContent>
           </Collapsible>
@@ -120,11 +121,11 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
   );
 }
 
-function BottomNav({ currentPath }: { currentPath: string }) {
+function BottomNav({ currentPath, mobileNative = false }: { currentPath: string; mobileNative?: boolean }) {
   return (
     <div className="mt-auto pt-4 border-t border-[color-mix(in_oklab,white_calc(var(--glass-edge)*30%),transparent)] space-y-0.5">
-      <NavLink to="/profile" active={currentPath === "/profile"} />
-      <NavLink to="/settings" active={currentPath === "/settings"} />
+      <NavLink to="/profile" active={currentPath === "/profile"} mobileNative={mobileNative} />
+      <NavLink to="/settings" active={currentPath === "/settings"} mobileNative={mobileNative} />
     </div>
   );
 }
@@ -163,15 +164,15 @@ export function MobileTopBar() {
             <Menu className="size-5" />
           </motion.button>
         </SheetTrigger>
-        <SheetContent side="left" className="z-[60] w-72 p-4 flex flex-col">
+        <SheetContent side="left" className="z-[60] w-[min(88vw,360px)] p-4 flex flex-col pointer-events-auto">
           <Link to="/" search={{}} className="flex items-center gap-2 px-1 py-2 mb-3">
             <div className="size-8 grid place-items-center text-primary"><Sparkles className="size-4" /></div>
             <div className="font-display font-semibold text-[15px]">Pace</div>
           </Link>
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <GroupedNav currentPath={path} onNavigate={() => setOpen(false)} />
+          <div className="flex-1 min-h-0 overflow-y-auto pointer-events-auto">
+            <GroupedNav currentPath={path} mobileNative />
           </div>
-          <BottomNav currentPath={path} />
+          <BottomNav currentPath={path} mobileNative />
         </SheetContent>
       </Sheet>
       <div className="flex-1 font-display font-semibold truncate">{current}</div>
