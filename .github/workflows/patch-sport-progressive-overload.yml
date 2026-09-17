@@ -45,7 +45,7 @@ jobs:
       const increment = Math.max(1.25, Math.min(baseWeight * 0.05, baseWeight * 0.10));
       const nextWeight = canIncreaseLoad ? Math.round((baseWeight + increment) * 2) / 2 : baseWeight;
       const nextReps = canIncreaseLoad ? baseReps : Math.min(baseReps + 2, Math.max(baseReps, pf.reps + 1));
-      const label = canIncreaseLoad ? `${nextWeight} kg × ${nextReps} × ${baseSets}` : `${nextWeight} kg × ${nextReps} × ${baseSets}`;
+      const label = `${nextWeight} kg × ${nextReps} × ${baseSets}`;
       nextTargets.set(exerciseId, { weight: nextWeight, reps: nextReps, sets: baseSets, label });
     }
     setExs((p) => p.map((e) => { const target = nextTargets.get(e.id); return target ? { ...e, defaultWeight: target.weight, defaultReps: target.reps, defaultSets: target.sets } : e; }));
