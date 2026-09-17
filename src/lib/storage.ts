@@ -237,7 +237,7 @@ export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string
       if (domain && !domain.startsWith("domain.")) applyRemoteDomainRecord(domain, safeValue, updatedAt);
     }
   }
-  window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: canonicalDomain ? `pace.${canonicalDomain}` : key, value: safeValue } }));
+  window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: canonicalDomain ? storageKey : key, value: safeValue } }));
 }
 
 export function onLocalWrite(handler: (key: string, value: unknown, updatedAt?: string, mutationId?: string) => void): () => void {
