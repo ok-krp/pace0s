@@ -218,14 +218,26 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   return [value, set];
 }
 
+function canonicalDomainFromRemoteKey(key: string): string | null {
+  if (!key.startsWith("pace.domain.")) return null;
+  let domain = key.slice("pace.domain.".length);
+  while (domain.startsWith("domain.")) domain = domain.slice("domain.".length);
+  return domain || null;
+}
+
 export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
   const safeValue = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(value) ?? value : value;
-  try { localStorage.setItem(key, JSON.stringify(safeValue)); } catch {}
+  const canonicalDomain = canonicalDomainFromRemoteKey(key);
+  const storageKey = canonicalDomain ? `pace.domain.${canonicalDomain}` : key;
+  try { localStorage.setItem(storageKey, JSON.stringify(canonicalDomain ? safeValue : safeValue)); } catch {}
   if (updatedAt) {
-    if (key.startsWith("pace.domain.")) applyRemoteDomainRecord(key.slice("pace.domain.".length), safeValue, updatedAt);
-    else if (key.startsWith(NEW_PREFIX)) applyRemoteDomainRecord(key.slice(NEW_PREFIX.length), safeValue, updatedAt);
+    if (canonicalDomain) applyRemoteDomainRecord(canonicalDomain, safeValue, updatedAt);
+    else if (key.startsWith(NEW_PREFIX)) {
+      const domain = key.slice(NEW_PREFIX.length);
+      if (domain && !domain.startsWith("domain.")) applyRemoteDomainRecord(domain, safeValue, updatedAt);
+    }
   }
-  window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value: safeValue } }));
+  window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: canonicalDomain ? `pace.${canonicalDomain}` : key, value: safeValue } }));
 }
 
 export function onLocalWrite(handler: (key: string, value: unknown, updatedAt?: string, mutationId?: string) => void): () => void {
