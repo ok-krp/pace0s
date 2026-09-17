@@ -22,7 +22,6 @@ begin
         or current_value->'value'->>'mutationId' is null;
       current_value := jsonb_set(current_value, '{value}', current_value->'value'->'value', true);
     end loop;
-
     if current_value is distinct from item.value then
       update public.user_state
       set value = current_value,
