@@ -49,9 +49,31 @@ function SportPage() {
     setSessions((p) => [final, ...p]); setActive(null);
     const perf = new Map<string, { weight: number; reps: number; sets: number }>();
     final.exercises.forEach((se) => { const done = se.sets.filter((s) => s.done); if (!done.length) return; const best = done.reduce((a, b) => (b.weight > a.weight ? b : a)); perf.set(se.exerciseId, { weight: best.weight, reps: best.reps, sets: done.length }); });
-    setExs((p) => p.map((e) => { const pf = perf.get(e.id); return pf ? { ...e, defaultWeight: pf.weight, defaultReps: pf.reps, defaultSets: pf.sets } : e; }));
-    setProgs((p) => p.map((prog) => ({ ...prog, items: prog.items.map((it) => { const pf = perf.get(it.exerciseId); return pf ? { ...it, weight: pf.weight, reps: pf.reps, sets: pf.sets } : it; }) })));
-    toast.success(`Séance terminée — ${final.durationMin} min`);
+    const previousSessions = [final, ...sessions];
+    const nextTargets = new Map<string, { weight: number; reps: number; sets: number; label: string }>();
+    for (const [exerciseId, pf] of perf) {
+      const ex = exs.find((item) => item.id === exerciseId);
+      const programItem = progs.flatMap((program) => program.items).find((item) => item.exerciseId === exerciseId);
+      const baseWeight = programItem?.weight ?? ex?.defaultWeight ?? pf.weight;
+      const baseReps = programItem?.reps ?? ex?.defaultReps ?? pf.reps;
+      const baseSets = programItem?.sets ?? ex?.defaultSets ?? pf.sets;
+      const recent = previousSessions.filter((session) => session.id !== final.id && session.exercises.some((item) => item.exerciseId === exerciseId)).slice(0, 1);
+      const prior = recent[0]?.exercises.find((item) => item.exerciseId === exerciseId)?.sets.filter((set) => set.done) ?? [];
+      const latestOverTarget = pf.reps >= baseReps + 2;
+      const previousOverTarget = prior.length > 0 && prior.every((set) => set.reps >= baseReps + 2);
+      const equipment = (ex?.equipment ?? "").toLowerCase();
+      const bodyweight = /poids du corps|sans matériel|bodyweight|traction|dips/i.test(equipment);
+      const canIncreaseLoad = !bodyweight && baseWeight > 0 && latestOverTarget && previousOverTarget;
+      const increment = Math.max(1.25, Math.min(baseWeight * 0.05, baseWeight * 0.10));
+      const nextWeight = canIncreaseLoad ? Math.round((baseWeight + increment) * 2) / 2 : baseWeight;
+      const nextReps = canIncreaseLoad ? baseReps : Math.min(baseReps + 2, Math.max(baseReps, pf.reps + 1));
+      const label = `${nextWeight} kg × ${nextReps} × ${baseSets}`;
+      nextTargets.set(exerciseId, { weight: nextWeight, reps: nextReps, sets: baseSets, label });
+    }
+    setExs((p) => p.map((e) => { const target = nextTargets.get(e.id); return target ? { ...e, defaultWeight: target.weight, defaultReps: target.reps, defaultSets: target.sets } : e; }));
+    setProgs((p) => p.map((prog) => ({ ...prog, items: prog.items.map((it) => { const target = nextTargets.get(it.exerciseId); return target ? { ...it, weight: target.weight, reps: target.reps, sets: target.sets } : it; }) })));
+    const preview = [...nextTargets.values()].slice(0, 4).map((target) => target.label).join(" · ");
+    toast.success(`Séance terminée — ${final.durationMin} min`, { description: preview ? `Prochaine séance : ${preview}` : "Objectifs de la prochaine séance mis à jour." });
   };
   const cancelSession = () => { if (!confirm("Abandonner la séance en cours ?")) return; setActive(null); };
   const last7 = lastNDays(7); const sessionsThisWeek = sessions.filter((s) => last7.includes(s.date)); const daysActive = new Set(sessionsThisWeek.map((s) => s.date)).size;
