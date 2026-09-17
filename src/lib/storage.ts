@@ -150,6 +150,12 @@ function mergeRecipeCustomRemote(value: unknown, localValue?: unknown): unknown[
   } catch { return value; }
 }
 
+function hasCompatibleTopLevelShape<T>(parsed: unknown, initial: T): parsed is T {
+  if (Array.isArray(initial)) return Array.isArray(parsed);
+  if (initial !== null && typeof initial === "object") return !!parsed && typeof parsed === "object" && !Array.isArray(parsed);
+  return typeof parsed === typeof initial;
+}
+
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
@@ -158,7 +164,16 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const suppressPersistRef = useRef(false);
   useEffect(() => { hydratedRef.current = false; suppressPersistRef.current = false; }, [key]);
   useEffect(() => {
-    try { const raw = localStorage.getItem(key); if (raw !== null) { const parsed = JSON.parse(raw) as T; valueRef.current = parsed; setValue(parsed); } } catch {}
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw !== null) {
+        const parsed: unknown = JSON.parse(raw);
+        if (hasCompatibleTopLevelShape(parsed, initial)) {
+          valueRef.current = parsed as T;
+          setValue(parsed as T);
+        }
+      }
+    } catch {}
     setLoaded(true);
   }, [key]);
   useEffect(() => { valueRef.current = value; }, [value]);
@@ -180,6 +195,7 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
       if (!detail || detail.key !== key) return;
       suppressPersistRef.current = true;
       const next = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(detail.value, valueRef.current) : detail.value;
+      if (!hasCompatibleTopLevelShape(next, initial)) return;
       valueRef.current = next as T;
       setValue(next as T);
     };
