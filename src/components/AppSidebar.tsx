@@ -2,7 +2,6 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { memo, useState } from "react";
 import { motion } from "framer-motion";
 import { LayoutDashboard, Moon, Apple, Scale, Briefcase, Calendar, Wallet, Settings, Sparkles, User as UserIcon, Menu, Dumbbell, AlertTriangle, ChevronDown, Wrench, History, Search, Watch, ShoppingCart } from "lucide-react";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useNavPrefs, type NavItemKey } from "@/hooks/use-nav-prefs";
 import { useLocalState } from "@/lib/storage";
@@ -17,5 +16,67 @@ const NavLink = memo(function NavLink({ to, active }: { to: NavItemKey; active: 
 function GroupedNav({ currentPath }: { currentPath: string }) { const [openMap, setOpenMap] = useLocalState<Record<string, boolean>>("pace.sidebar.groups", { assistant: true, nutrition: true, activite: true, finance: true }); const [recallCount] = useLocalState<number>("pace.recalls.count", 0); const { visibleOrder } = useNavPrefs(); const visibleSet = new Set(visibleOrder); return <nav className="flex flex-col gap-0.5"><NavLink to="/" active={currentPath === "/"} />{GROUPS.map((g) => { const items = g.items.filter((to) => visibleSet.has(to)); if (!items.length) return null; const hasActive = items.includes(currentPath as NavItemKey); const open = openMap[g.id] ?? hasActive; return <Collapsible key={g.id} open={open} onOpenChange={(v) => setOpenMap((p) => ({ ...p, [g.id]: v }))} className="mt-3 pt-3 border-t border-[color-mix(in_oklab,white_calc(var(--glass-edge)*30%),transparent)]"><CollapsibleTrigger className={`w-full flex items-center justify-between px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground rounded-md transition-colors duration-300 ${interactiveRing}`}><span>{g.label}</span><motion.span animate={{ rotate: open ? 180 : 0 }} transition={springSoft} className="inline-flex"><ChevronDown className="size-3" /></motion.span></CollapsibleTrigger><CollapsibleContent className="flex flex-col gap-0.5 mt-0.5">{items.map((to) => <NavLink key={to} to={to} active={currentPath === to} />)}</CollapsibleContent></Collapsible>; })}</nav>; }
 function BottomNav({ currentPath }: { currentPath: string }) { return <div className="mt-auto pt-4 border-t border-[color-mix(in_oklab,white_calc(var(--glass-edge)*30%),transparent)] space-y-0.5"><NavLink to="/profile" active={currentPath === "/profile"} /><NavLink to="/settings" active={currentPath === "/settings"} /></div>; }
 export function AppSidebar() { const path = useRouterState({ select: (s) => s.location.pathname }); return <aside className="fixed left-3 top-3 bottom-3 z-[100] hidden md:flex w-72 min-h-0 flex-none flex-col overflow-hidden px-3 py-5 glass-card rounded-[20px] isolate"><Link to="/" search={{}} className="flex-none flex items-center gap-2 px-3 py-2 mb-4"><div className="size-8 grid place-items-center text-primary"><Sparkles className="size-4" /></div><div><div className="font-display font-semibold text-[15px] tracking-tight">Pace</div><div className="text-[11px] text-muted-foreground -mt-0.5">centre de contrôle</div></div></Link><button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} className="flex-none flex items-center gap-2 px-3 py-2 mb-3 rounded-md glass-thin text-sm text-muted-foreground hover:text-foreground transition"><Search className="size-3.5" /><span className="flex-1 text-left">Rechercher…</span><kbd className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-mono">⌘K</kbd></button><div className="flex-1 min-h-0 overflow-y-auto overscroll-contain"><GroupedNav currentPath={path} /></div><BottomNav currentPath={path} /><div className="flex-none px-3 pt-3 text-[11px] text-muted-foreground">v2 · cloud sync</div></aside>; }
-export function MobileTopBar() { const [open, setOpen] = useState(false); const path = useRouterState({ select: (s) => s.location.pathname }); const current = getNavItem(path)?.label ?? "Pace"; return <header className="md:hidden sticky top-0 z-50 flex items-center gap-2 mx-3 mt-[max(0.5rem,env(safe-area-inset-top))] mb-1 px-3 py-2 glass-card rounded-[18px]"><Sheet open={open} onOpenChange={setOpen}><SheetTrigger asChild><motion.button whileHover={{ scale: 1.05 }} transition={springSnap} className={`relative z-[70] size-10 will-change-transform ${interactiveRing}`} aria-label="Menu"><Menu className="size-5" /></motion.button></SheetTrigger><SheetContent side="left" className="z-[60] w-72 p-4 flex flex-col"><Link to="/" search={{}} className="flex items-center gap-2 px-1 py-2 mb-3"><div className="size-8 grid place-items-center text-primary"><Sparkles className="size-4" /></div><div className="font-display font-semibold text-[15px]">Pace</div></Link><div className="flex-1 min-h-0 overflow-y-auto"><GroupedNav currentPath={path} /></div><BottomNav currentPath={path} /></SheetContent></Sheet><div className="flex-1 font-display font-semibold truncate">{current}</div><button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} aria-label="Rechercher" className={`size-10 will-change-transform ${interactiveRing}`}><Search className="size-4" /></button></header>; }
+export function MobileTopBar() {
+  const [open, setOpen] = useState(false);
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const current = getNavItem(path)?.label ?? "Pace";
+
+  return (
+    <header className="md:hidden sticky top-0 z-[120] flex items-center gap-2 mx-3 mt-[max(0.5rem,env(safe-area-inset-top))] mb-1 px-3 py-2 glass-card rounded-[18px]">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className={\`relative z-[130] size-10 \${interactiveRing}\`}
+        aria-label="Menu"
+        aria-expanded={open}
+      >
+        <Menu className="size-5" />
+      </button>
+
+      {open ? (
+        <>
+          <button
+            type="button"
+            aria-label="Fermer le menu"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 z-[110] bg-black/20 md:hidden"
+          />
+          <aside
+            className="fixed left-3 top-3 bottom-3 z-[120] flex w-[min(18rem,calc(100vw-1.5rem))] min-h-0 flex-col overflow-hidden px-3 py-5 glass-card rounded-[20px] isolate md:hidden"
+            style={{ pointerEvents: "auto", touchAction: "pan-y" }}
+          >
+            <div className="flex-none flex items-center justify-between px-3 py-2 mb-4">
+              <a
+                href="/"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2"
+                style={{ pointerEvents: "auto", touchAction: "manipulation" }}
+              >
+                <div className="size-8 grid place-items-center text-primary"><Sparkles className="size-4" /></div>
+                <div>
+                  <div className="font-display font-semibold text-[15px] tracking-tight">Pace</div>
+                  <div className="text-[11px] text-muted-foreground -mt-0.5">centre de contrôle</div>
+                </div>
+              </a>
+              <button type="button" onClick={() => setOpen(false)} className={\`\${interactiveRing}\`} aria-label="Fermer">
+                <span className="text-lg leading-none">×</span>
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+              <GroupedNav currentPath={path} />
+            </div>
+            <BottomNav currentPath={path} />
+            <div className="flex-none px-3 pt-3 text-[11px] text-muted-foreground">v2 · cloud sync</div>
+          </aside>
+        </>
+      ) : null}
+
+      <div className="flex-1 font-display font-semibold truncate">{current}</div>
+      <button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} aria-label="Rechercher" className={\`size-10 \${interactiveRing}\`}>
+        <Search className="size-4" />
+      </button>
+    </header>
+  );
+}
+
 export function MobileTabBar() { const path = useRouterState({ select: (s) => s.location.pathname }); const { bottom } = useNavPrefs(); if (!bottom.length) return null; return <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 pointer-events-none"><div className="glass-card pointer-events-auto mx-auto max-w-md px-2 py-1.5"><div className="flex gap-1 overflow-x-auto scrollbar-none">{bottom.map((to) => { const it = getNavItem(to); if (!it) return null; const active = path === to; const Icon = it.icon; const className = `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-md text-[10px] shrink-0 min-w-[58px] will-change-transform ${interactiveRing} ${active ? "text-primary bg-[color-mix(in_oklab,var(--primary)_14%,transparent)]" : "text-muted-foreground hover:text-foreground"}`; return <MotionLink key={to} href={to} whileHover={{ y: -2, scale: 1.05 }} transition={springSnap} className={className}><Icon className="size-5 shrink-0" /><span className="truncate max-w-full">{it.label}</span></MotionLink>; })}</div></div></nav>; }
