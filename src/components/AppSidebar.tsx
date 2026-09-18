@@ -39,13 +39,13 @@ export function MobileTopBar() {
             type="button"
             aria-label="Fermer le menu"
             onClick={() => setOpen(false)}
-            className="fixed inset-0 z-[110] bg-black/20 md:hidden"
+            className="fixed inset-0 z-[110] bg-black/35 backdrop-blur-[2px] md:hidden"
           />
           <aside
-            className="fixed left-3 top-3 bottom-3 z-[120] flex w-[min(18rem,calc(100vw-1.5rem))] min-h-0 flex-col overflow-hidden px-3 py-5 glass-card rounded-[20px] isolate md:hidden"
+            className="fixed left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[120] flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 px-3 py-4 shadow-2xl backdrop-blur-2xl md:hidden"
             style={{ pointerEvents: "auto", touchAction: "pan-y" }}
           >
-            <div className="flex-none flex items-center justify-between px-3 py-2 mb-4">
+            <div className="sticky top-0 z-10 flex-none flex items-center justify-between px-3 py-2 mb-2 bg-slate-950/75 backdrop-blur-xl rounded-2xl">
               <a
                 href="/"
                 onClick={() => setOpen(false)}
@@ -54,19 +54,26 @@ export function MobileTopBar() {
               >
                 <div className="size-8 grid place-items-center text-primary"><Sparkles className="size-4" /></div>
                 <div>
-                  <div className="font-display font-semibold text-[15px] tracking-tight">Pace</div>
-                  <div className="text-[11px] text-muted-foreground -mt-0.5">centre de contrôle</div>
+                  <div className="font-display font-semibold text-[15px] tracking-tight text-white">Pace</div>
+                  <div className="text-[11px] text-white/65 -mt-0.5">centre de contrôle</div>
                 </div>
               </a>
-              <button type="button" onClick={() => setOpen(false)} className={`${interactiveRing}`} aria-label="Fermer">
+              <button type="button" onClick={() => setOpen(false)} className={`${interactiveRing} text-white/85`} aria-label="Fermer">
                 <span className="text-lg leading-none">×</span>
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+
+            <div
+              className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain touch-pan-y pr-1 pb-4"
+              style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
+            >
               <GroupedNav currentPath={path} />
             </div>
-            <BottomNav currentPath={path} />
-            <div className="flex-none px-3 pt-3 text-[11px] text-muted-foreground">v2 · cloud sync</div>
+
+            <div className="flex-none pt-3">
+              <BottomNav currentPath={path} />
+              <div className="px-3 pt-3 text-[11px] text-white/50">v2 · cloud sync</div>
+            </div>
           </aside>
         </>
       ) : null}
