@@ -26,7 +26,7 @@ export function MobileTopBar() {
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
-        className={\`relative z-[130] size-10 \${interactiveRing}\`}
+        className={`relative z-[130] size-10 ${interactiveRing}`}
         aria-label="Menu"
         aria-expanded={open}
       >
@@ -58,7 +58,7 @@ export function MobileTopBar() {
                   <div className="text-[11px] text-muted-foreground -mt-0.5">centre de contrôle</div>
                 </div>
               </a>
-              <button type="button" onClick={() => setOpen(false)} className={\`\${interactiveRing}\`} aria-label="Fermer">
+              <button type="button" onClick={() => setOpen(false)} className={`${interactiveRing}`} aria-label="Fermer">
                 <span className="text-lg leading-none">×</span>
               </button>
             </div>
@@ -72,7 +72,7 @@ export function MobileTopBar() {
       ) : null}
 
       <div className="flex-1 font-display font-semibold truncate">{current}</div>
-      <button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} aria-label="Rechercher" className={\`size-10 \${interactiveRing}\`}>
+      <button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} aria-label="Rechercher" className={`size-10 ${interactiveRing}`}>
         <Search className="size-4" />
       </button>
     </header>
