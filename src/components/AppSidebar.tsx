@@ -1,8 +1,7 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { memo, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { LayoutDashboard, Moon, Apple, Scale, Briefcase, Calendar, Wallet, Settings, Sparkles, User as UserIcon, Menu, Dumbbell, AlertTriangle, ChevronDown, Wrench, History, Search, Watch, ShoppingCart } from "lucide-react";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useNavPrefs, type NavItemKey } from "@/hooks/use-nav-prefs";
 import { useLocalState } from "@/lib/storage";
@@ -57,7 +56,16 @@ const NavLink = memo(function NavLink({
 
   if (mobileNative) {
     return (
-      <a href={to} data-nav-to={to} className={className}>
+      <a
+        href={to}
+        data-nav-to={to}
+        className={className}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          void navigate({ to });
+        }}
+      >
         <Icon className={`size-4 shrink-0 ${active ? "text-primary" : ""}`} />
         <span>{it.label}</span>
       </a>
@@ -151,32 +159,97 @@ export function AppSidebar() {
 export function MobileTopBar() {
   const [open, setOpen] = useState(false);
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
   const current = getNavItem(path)?.label ?? "Pace";
+
   useEffect(() => {
     if (open) setOpen(false);
   }, [path]);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  const goTo = (to: NavItemKey) => {
+    setOpen(false);
+    void navigate({ to });
+  };
+
   return (
     <header className="md:hidden sticky top-0 z-50 flex items-center gap-2 mx-3 mt-[max(0.5rem,env(safe-area-inset-top))] mb-1 px-3 py-2 glass-card rounded-[18px]">
-      <Sheet open={open} onOpenChange={setOpen}>
-        <SheetTrigger asChild>
-          <motion.button whileHover={{ scale: 1.05 }} transition={springSnap} className={`relative z-[70] size-10 will-change-transform ${interactiveRing}`} aria-label="Menu">
-            <Menu className="size-5" />
-          </motion.button>
-        </SheetTrigger>
-        <SheetContent side="left" className="z-[60] w-[min(88vw,360px)] p-4 flex flex-col pointer-events-auto">
-          <Link to="/" search={{}} className="flex items-center gap-2 px-1 py-2 mb-3">
-            <div className="size-8 grid place-items-center text-primary"><Sparkles className="size-4" /></div>
-            <div className="font-display font-semibold text-[15px]">Pace</div>
-          </Link>
-          <div className="flex-1 min-h-0 overflow-y-auto pointer-events-auto">
-            <GroupedNav currentPath={path} mobileNative />
-          </div>
-          <BottomNav currentPath={path} mobileNative />
-        </SheetContent>
-      </Sheet>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={`relative z-[70] size-10 will-change-transform ${interactiveRing}`}
+        aria-label="Ouvrir le menu"
+        aria-expanded={open}
+        aria-controls="pace-mobile-sidebar"
+      >
+        <Menu className="size-5" />
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-[1000]" role="presentation">
+          <button
+            type="button"
+            aria-label="Fermer le menu"
+            className="absolute inset-0 bg-slate-950/20 backdrop-blur-[2px]"
+            onClick={() => setOpen(false)}
+          />
+          <aside
+            id="pace-mobile-sidebar"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation principale"
+            className="absolute inset-y-0 left-0 z-[1001] flex h-[100dvh] w-[min(88vw,360px)] flex-col overflow-hidden rounded-r-[28px] border-r border-white/20 bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)+0.04))] p-4 shadow-[var(--glass-elev-3)] backdrop-blur-[var(--glass-blur)] backdrop-saturate-[var(--glass-saturate)]"
+          >
+            <div className="flex-none flex items-center justify-between gap-2 px-1 py-1 mb-3">
+              <button
+                type="button"
+                onClick={() => goTo("/")}
+                className="flex min-w-0 flex-1 items-center gap-2 py-1 text-left"
+              >
+                <div className="size-8 grid place-items-center text-primary"><Sparkles className="size-4" /></div>
+                <div className="min-w-0">
+                  <div className="font-display font-semibold text-[15px]">Pace</div>
+                  <div className="text-[11px] text-muted-foreground">centre de contrôle</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className={`glass-icon size-9 shrink-0 ${interactiveRing}`}
+                aria-label="Fermer le menu"
+              >
+                <span className="text-xl leading-none" aria-hidden="true">×</span>
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pointer-events-auto pr-1">
+              <GroupedNav currentPath={path} mobileNative />
+            </div>
+
+            <div className="flex-none">
+              <BottomNav currentPath={path} mobileNative />
+            </div>
+          </aside>
+        </div>
+      )}
+
       <div className="flex-1 font-display font-semibold truncate">{current}</div>
-      <button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} aria-label="Rechercher" className={`size-10 will-change-transform ${interactiveRing}`}><Search className="size-4" /></button>
+      <button
+        type="button"
+        onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))}
+        aria-label="Rechercher"
+        className={`size-10 will-change-transform ${interactiveRing}`}
+      >
+        <Search className="size-4" />
+      </button>
     </header>
   );
 }
