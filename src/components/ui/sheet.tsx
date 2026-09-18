@@ -48,7 +48,7 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-[70] bg-slate-900/15 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-[90] bg-slate-900/15 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className,
     )}
     {...props}
@@ -58,7 +58,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  "fixed z-[80] pointer-events-auto gap-4 border border-border/45 bg-[rgb(var(--glass-tint)/var(--glass-tint-strength))] supports-[backdrop-filter]:backdrop-blur-[var(--glass-blur)] supports-[backdrop-filter]:backdrop-saturate-[var(--glass-saturate)] p-6 shadow-[var(--glass-elev-3)] transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+  "fixed z-[100] pointer-events-auto isolate gap-4 border border-border/45 bg-[rgb(var(--glass-tint)/var(--glass-tint-strength))] supports-[backdrop-filter]:backdrop-blur-[var(--glass-blur)] supports-[backdrop-filter]:backdrop-saturate-[var(--glass-saturate)] p-6 shadow-[var(--glass-elev-3)] transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
   {
     variants: {
       side: {
@@ -98,7 +98,7 @@ const SheetContent = React.forwardRef<
     }
   };
 
-  const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
+  const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {\n    const target = event.target as HTMLElement | null;\n    if (target?.closest("a[href]")) {\n      // Radix must not reinterpret an internal navigation click as an outside click.\n      // The default browser navigation is intentionally preserved.\n      event.stopPropagation();\n      return;\n    }
     onClickCapture?.(event);
     if (typeof window === "undefined" || !window.location.pathname.startsWith("/ai/")) return;
     const target = event.target as HTMLElement | null;
