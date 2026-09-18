@@ -41,7 +41,7 @@ export function MobileTopBar() {
             onClick={() => setOpen(false)}
             className="fixed inset-0 z-[110] bg-black/20 md:hidden"
           />
-          <aside className="fixed left-3 top-3 bottom-3 z-[120] flex w-[calc(100vw-6rem)] max-w-72 min-h-0 flex-col overflow-hidden px-3 py-5 glass-card rounded-[20px] isolate md:hidden">
+          <aside className="fixed left-3 top-3 bottom-3 z-[120] flex w-[min(88vw,20rem)] max-w-[calc(100vw-1.5rem)] min-h-0 flex-col overflow-hidden px-3 py-5 rounded-[20px] bg-[rgb(var(--glass-tint)/0.26)] backdrop-blur-[5px] shadow-[0_24px_70px_-24px_rgb(0_0_0_/0.35),inset_0_1px_0_0_rgb(255_255_255_/0.18)] isolate md:hidden">
             <div className="flex-none flex items-center justify-between px-3 py-2 mb-4">
               <Link
                 to="/"
@@ -60,7 +60,7 @@ export function MobileTopBar() {
               </button>
             </div>
 
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain touch-pan-y pr-1 pb-4" style={{ WebkitOverflowScrolling: "touch" }}>
               <GroupedNav currentPath={path} />
             </div>
 
