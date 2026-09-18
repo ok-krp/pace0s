@@ -7,39 +7,12 @@ import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-const AI_HISTORY_STORAGE_KEY = "pace.ai.mobile-history-open";
+const Sheet = SheetPrimitive.Root;
 
-const Sheet = (props: React.ComponentProps<typeof SheetPrimitive.Root>) => {
-  const isAiRoute = typeof window !== "undefined" && window.location.pathname.startsWith("/ai/");
-  const isControlled = props.open !== undefined;
-  const [restoreOpen, setRestoreOpen] = React.useState(false);
-
-  React.useEffect(() => {
-    if (!isAiRoute || !isControlled) return;
-    try {
-      setRestoreOpen(window.sessionStorage.getItem(AI_HISTORY_STORAGE_KEY) === "1");
-    } catch {
-      setRestoreOpen(false);
-    }
-  }, [isAiRoute, isControlled]);
-
-  const open = isAiRoute && isControlled && restoreOpen ? true : props.open;
-  const onOpenChange = (nextOpen: boolean) => {
-    if (isAiRoute && isControlled) {
-      try {
-        window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, nextOpen ? "1" : "0");
-      } catch {
-        // Storage can be unavailable in privacy-restricted contexts.
-      }
-      setRestoreOpen(nextOpen);
-    }
-    props.onOpenChange?.(nextOpen);
-  };
-
-  return <SheetPrimitive.Root {...props} open={open} onOpenChange={onOpenChange} />;
-};
 const SheetTrigger = SheetPrimitive.Trigger;
+
 const SheetClose = SheetPrimitive.Close;
+
 const SheetPortal = SheetPrimitive.Portal;
 
 const SheetOverlay = React.forwardRef<
@@ -48,7 +21,7 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
     className={cn(
-      "fixed inset-0 z-[90] bg-slate-900/15 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+      "fixed inset-0 z-50 bg-slate-900/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className,
     )}
     {...props}
@@ -58,7 +31,7 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
-  "fixed z-[100] pointer-events-auto isolate gap-4 border border-border/45 bg-[rgb(var(--glass-tint)/var(--glass-tint-strength))] supports-[backdrop-filter]:backdrop-blur-[var(--glass-blur)] supports-[backdrop-filter]:backdrop-saturate-[var(--glass-saturate)] p-6 shadow-[var(--glass-elev-3)] transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+  "fixed z-50 gap-4 glass-card p-6 transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
   {
     variants: {
       side: {
@@ -82,63 +55,18 @@ interface SheetContentProps
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
   SheetContentProps
->(({ side = "right", className, children, onPointerDownCapture, onClickCapture, ...props }, ref) => {
-  const handlePointerDownCapture = (event: React.PointerEvent<HTMLDivElement>) => {
-    onPointerDownCapture?.(event);
-    if (event.defaultPrevented) return;
-    if (typeof window !== "undefined" && window.location.pathname.startsWith("/ai/")) {
-      // Keep Radix's dismiss layer from treating a title/button press inside
-      // the AI history drawer as an outside interaction during navigation.
-      event.stopPropagation();
-      try {
-        window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, "1");
-      } catch {
-        // Storage can be unavailable in privacy-restricted contexts.
-      }
-    }
-  };
-
-  const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {\n    const target = event.target as HTMLElement | null;\n    if (target?.closest("a[href]")) {\n      // Radix must not reinterpret an internal navigation click as an outside click.\n      // The default browser navigation is intentionally preserved.\n      event.stopPropagation();\n      return;\n    }
-    onClickCapture?.(event);
-    if (typeof window === "undefined" || !window.location.pathname.startsWith("/ai/")) return;
-    const target = event.target as HTMLElement | null;
-    if (target?.closest("[data-sheet-close]")) {
-      try {
-        window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, "0");
-      } catch {
-        // noop
-      }
-      return;
-    }
-    try {
-      window.sessionStorage.setItem(AI_HISTORY_STORAGE_KEY, "1");
-    } catch {
-      // noop
-    }
-  };
-
-  return (
-    <SheetPortal>
-      <SheetOverlay />
-      <SheetPrimitive.Content
-        ref={ref}
-        className={cn(sheetVariants({ side }), className)}
-        onPointerDownCapture={handlePointerDownCapture}
-        onClickCapture={handleClickCapture}
-        {...props}
-      >
-        <SheetPrimitive.Close
-          data-sheet-close
-          className="absolute right-4 top-4 z-10 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary"
-        >
-          <X className="h-4 w-4" />
-          <span className="sr-only">Fermer</span>
-        </SheetPrimitive.Close>
-        {children}
-      </SheetPrimitive.Content>
-    </SheetPortal>
-  );
-});
+>(({ side = "right", className, children, ...props }, ref) => (
+  <SheetPortal>
+    <SheetOverlay />
+    <SheetPrimitive.Content ref={ref} className={cn(sheetVariants({ side }), className)} {...props}>
+      <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-secondary">
+        <X className="h-4 w-4" />
+        <span className="sr-only">Fermer</span>
+      </SheetPrimitive.Close>
+      {children}
+    </SheetPrimitive.Content>
+  </SheetPortal>
+));
 SheetContent.displayName = SheetPrimitive.Content.displayName;
 
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
@@ -147,7 +75,10 @@ const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElemen
 SheetHeader.displayName = "SheetHeader";
 
 const SheetFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)} {...props} />
+  <div
+    className={cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className)}
+    {...props}
+  />
 );
 SheetFooter.displayName = "SheetFooter";
 
@@ -155,7 +86,11 @@ const SheetTitle = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Title>
 >(({ className, ...props }, ref) => (
-  <SheetPrimitive.Title ref={ref} className={cn("text-lg font-semibold text-foreground", className)} {...props} />
+  <SheetPrimitive.Title
+    ref={ref}
+    className={cn("text-lg font-semibold text-foreground", className)}
+    {...props}
+  />
 ));
 SheetTitle.displayName = SheetPrimitive.Title.displayName;
 
@@ -163,7 +98,11 @@ const SheetDescription = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof SheetPrimitive.Description>
 >(({ className, ...props }, ref) => (
-  <SheetPrimitive.Description ref={ref} className={cn("text-sm text-muted-foreground", className)} {...props} />
+  <SheetPrimitive.Description
+    ref={ref}
+    className={cn("text-sm text-muted-foreground", className)}
+    {...props}
+  />
 ));
 SheetDescription.displayName = SheetPrimitive.Description.displayName;
 
