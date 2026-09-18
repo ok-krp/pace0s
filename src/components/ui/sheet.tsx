@@ -98,7 +98,14 @@ const SheetContent = React.forwardRef<
     }
   };
 
-  const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {\n    const target = event.target as HTMLElement | null;\n    if (target?.closest("a[href]")) {\n      // Radix must not reinterpret an internal navigation click as an outside click.\n      // The default browser navigation is intentionally preserved.\n      event.stopPropagation();\n      return;\n    }
+  const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("a[href]")) {
+      // Radix must not reinterpret an internal navigation click as an outside click.
+      // The default browser navigation is intentionally preserved.
+      event.stopPropagation();
+      return;
+    }
     onClickCapture?.(event);
     if (typeof window === "undefined" || !window.location.pathname.startsWith("/ai/")) return;
     const target = event.target as HTMLElement | null;
