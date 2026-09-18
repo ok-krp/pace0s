@@ -7,7 +7,7 @@ import { useNavPrefs, type NavItemKey } from "@/hooks/use-nav-prefs";
 import { useLocalState } from "@/lib/storage";
 import { springSoft, springSnap, interactiveRing } from "@/lib/motion";
 const MotionLink = motion("a");
-const NativeNavLink = ({ to, className, children }: { to: string; className?: string; children: React.ReactNode }) => <a href={to} className={className} style={{ pointerEvents: "auto", touchAction: "manipulation" }}>{children}</a>;
+const NativeNavLink = ({ to, className, children, onClick }: { to: NavItemKey; className?: string; children: React.ReactNode; onClick?: () => void }) => <Link to={to} onClick={onClick} className={className}>{children}</Link>;
 export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof LayoutDashboard }> = { "/": { label: "Dashboard", icon: LayoutDashboard }, "/assistant": { label: "Assistant IA", icon: Sparkles }, "/development": { label: "Développement", icon: Wrench }, "/ai-activity": { label: "Actions IA", icon: History }, "/nutrition": { label: "Nutrition", icon: Apple }, "/courses": { label: "Courses", icon: ShoppingCart }, "/sport": { label: "Sport", icon: Dumbbell }, "/watch": { label: "Montre", icon: Watch }, "/sleep": { label: "Sommeil", icon: Moon }, "/routine": { label: "Routine", icon: Moon }, "/body": { label: "Poids & Corps", icon: Scale }, "/work": { label: "Travail", icon: Briefcase }, "/calendar": { label: "Calendrier", icon: Calendar }, "/recalls": { label: "Rappels conso", icon: AlertTriangle }, "/finance": { label: "Finance & Invest.", icon: Wallet }, "/profile": { label: "Profil", icon: UserIcon }, "/settings": { label: "Paramètres", icon: Settings } };
 type Group = { id: string; label: string; items: NavItemKey[] };
 const GROUPS: Group[] = [{ id: "assistant", label: "Intelligence Artificielle", items: ["/assistant", "/development", "/ai-activity"] }, { id: "nutrition", label: "Nutrition", items: ["/nutrition", "/courses"] }, { id: "activite", label: "Activité", items: ["/body", "/sport", "/watch", "/sleep", "/calendar", "/work"] }, { id: "finance", label: "Finance", items: ["/finance"] }];
@@ -39,41 +39,33 @@ export function MobileTopBar() {
             type="button"
             aria-label="Fermer le menu"
             onClick={() => setOpen(false)}
-            className="fixed inset-0 z-[110] bg-black/35 backdrop-blur-[2px] md:hidden"
+            className="fixed inset-0 z-[110] bg-black/20 md:hidden"
           />
-          <aside
-            className="fixed left-3 right-3 top-[max(0.75rem,env(safe-area-inset-top))] bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-[120] flex min-h-0 flex-col overflow-hidden rounded-[24px] border border-white/10 bg-slate-950/80 px-3 py-4 shadow-2xl backdrop-blur-2xl md:hidden"
-            style={{ pointerEvents: "auto", touchAction: "pan-y" }}
-          >
-            <div className="sticky top-0 z-10 flex-none flex items-center justify-between px-3 py-2 mb-2 bg-slate-950/75 backdrop-blur-xl rounded-2xl">
-              <a
-                href="/"
+          <aside className="fixed left-3 top-3 bottom-3 z-[120] flex w-[calc(100vw-6rem)] max-w-72 min-h-0 flex-col overflow-hidden px-3 py-5 glass-card rounded-[20px] isolate md:hidden">
+            <div className="flex-none flex items-center justify-between px-3 py-2 mb-4">
+              <Link
+                to="/"
+                search={{}}
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2"
-                style={{ pointerEvents: "auto", touchAction: "manipulation" }}
               >
                 <div className="size-8 grid place-items-center text-primary"><Sparkles className="size-4" /></div>
                 <div>
-                  <div className="font-display font-semibold text-[15px] tracking-tight text-white">Pace</div>
-                  <div className="text-[11px] text-white/65 -mt-0.5">centre de contrôle</div>
+                  <div className="font-display font-semibold text-[15px] tracking-tight">Pace</div>
+                  <div className="text-[11px] text-muted-foreground -mt-0.5">centre de contrôle</div>
                 </div>
-              </a>
-              <button type="button" onClick={() => setOpen(false)} className={`${interactiveRing} text-white/85`} aria-label="Fermer">
+              </Link>
+              <button type="button" onClick={() => setOpen(false)} className={interactiveRing} aria-label="Fermer">
                 <span className="text-lg leading-none">×</span>
               </button>
             </div>
 
-            <div
-              className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain touch-pan-y pr-1 pb-4"
-              style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-y" }}
-            >
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1">
               <GroupedNav currentPath={path} />
             </div>
 
-            <div className="flex-none pt-3">
-              <BottomNav currentPath={path} />
-              <div className="px-3 pt-3 text-[11px] text-white/50">v2 · cloud sync</div>
-            </div>
+            <BottomNav currentPath={path} />
+            <div className="flex-none px-3 pt-3 text-[11px] text-muted-foreground">v2 · cloud sync</div>
           </aside>
         </>
       ) : null}
