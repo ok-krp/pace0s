@@ -46,23 +46,29 @@ async function generateFoodVision(prompt: string, imageDataUrl: string, contentT
 }
 function storagePathForUser(userId: string, path: string) { const normalized = path.replace(/^\/+/, ""); if (!normalized || normalized.includes("..") || !normalized.startsWith(`${userId}/`)) throw new Error("Référence image invalide."); return normalized; }
 
-export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((d: { storagePath: string; goal?: string; hint?: string }) => z.object({ storagePath: z.string().min(3).max(500), goal: z.string().max(300).optional(), hint: z.string().max(300).optional() }).parse(d)).handler(async ({ data, context }) => {
+export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((d: { storagePath?: string; vision?: unknown; goal?: string; hint?: string }) => z.object({ storagePath: z.string().min(3).max(500).optional(), vision: visionSchema.optional(), goal: z.string().max(300).optional(), hint: z.string().max(300).optional() }).refine((value) => Boolean(value.storagePath || value.vision), "Analyse photo manquante.").parse(d)).handler(async ({ data, context }) => {
   const { data: consent, error: consentError } = await context.supabase.from("legal_consent").select("opts").eq("user_id", context.userId).eq("eula_version", LEGAL_VERSIONS.eula).eq("privacy_version", LEGAL_VERSIONS.privacy).maybeSingle();
   if (consentError) throw new Error(consentError.message);
   if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) return { error: "Consentement Analyse IA requis", result: null };
-  const path = storagePathForUser(context.userId, data.storagePath);
+  const path = data.storagePath ? storagePathForUser(context.userId, data.storagePath) : null;
   try {
-    const { data: file, error: downloadError } = await supabaseAdmin.storage.from(PHOTO_BUCKET).download(path);
-    if (downloadError || !file) throw new Error("Image introuvable ou inaccessible.");
-    const bytes = Buffer.from(await file.arrayBuffer());
-    if (bytes.length === 0 || bytes.length > MAX_PHOTO_BYTES) throw new Error("Image trop lourde ou vide.");
-    const contentType = file.type || "image/jpeg";
-    if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Format image non autorisé.");
-    const imageDataUrl = `data:${contentType};base64,${bytes.toString("base64")}`;
-    const prompt = [PHOTO_INSTRUCTIONS, "IMPORTANT : fais d'abord un inventaire exhaustif des composants visibles. N'en omets aucun, même si la portion est petite ou l'identification imparfaite.", "Si le plat correspond à un plat connu, donne son nom canonique clairement.", data.goal ? `Objectif : ${data.goal}.` : "", data.hint ? `Indice : ${data.hint}.` : "", "Réponds en JSON pur avec dish_name, items [{name,brand,grams,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg}], health_score, quality, confidence, confidence_note, notes."].filter(Boolean).join("\n\n");
-    const { text } = await generateFoodVision(prompt, imageDataUrl, contentType);
-    const parsed = visionSchema.safeParse(extractJson(text));
-    if (!parsed.success) return { error: "Réponse IA invalide", result: null };
+    let parsed: z.infer<typeof visionSchema>;
+    if (data.vision) {
+      parsed = visionSchema.parse(data.vision);
+    } else {
+      const { data: file, error: downloadError } = await supabaseAdmin.storage.from(PHOTO_BUCKET).download(path!);
+      if (downloadError || !file) throw new Error("Image introuvable ou inaccessible.");
+      const bytes = Buffer.from(await file.arrayBuffer());
+      if (bytes.length === 0 || bytes.length > MAX_PHOTO_BYTES) throw new Error("Image trop lourde ou vide.");
+      const contentType = file.type || "image/jpeg";
+      if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Format image non autorisé.");
+      const imageDataUrl = `data:${contentType};base64,${bytes.toString("base64")}`;
+      const prompt = [PHOTO_INSTRUCTIONS, "IMPORTANT : fais d'abord un inventaire exhaustif des composants visibles. N'en omets aucun, même si la portion est petite ou l'identification imparfaite.", "Si le plat correspond à un plat connu, donne son nom canonique clairement.", data.goal ? `Objectif : ${data.goal}.` : "", data.hint ? `Indice : ${data.hint}.` : "", "Réponds en JSON pur avec dish_name, items [{name,brand,grams,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg}], health_score, quality, confidence, confidence_note, notes."].filter(Boolean).join("\n\n");
+      const { text } = await generateFoodVision(prompt, imageDataUrl, contentType);
+      const result = visionSchema.safeParse(extractJson(text));
+      if (!result.success) return { error: "Réponse IA invalide", result: null };
+      parsed = result.data;
+    }
     if (parsed.data.items.length === 0) return { error: "Aucun aliment identifiable sur cette photo.", result: null };
 
     const dish = await findDishReference(parsed.data.dish_name);
@@ -86,7 +92,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
     const result = foodAnalysisSchema.parse({ dish_name: parsed.data.dish_name, items: completeItems, health_score: parsed.data.health_score, quality: parsed.data.quality, confidence: Math.min(parsed.data.confidence, nutrition.confidence || parsed.data.confidence), confidence_note: `${parsed.data.confidence_note} ${referenceCount}/${parsed.data.items.length} aliments calibrés par les références Pace.`.trim(), notes: `${parsed.data.notes}${referenceCount < parsed.data.items.length ? " Les aliments sans référence Pace sont conservés avec une estimation visuelle au lieu d’être supprimés." : ""}` });
     return { error: null, result };
   } catch (e) { console.error("analyzeFoodPhoto error", e); return { error: e instanceof Error ? e.message : "Erreur IA", result: null }; }
-  finally { await supabaseAdmin.storage.from(PHOTO_BUCKET).remove([path]).catch(() => undefined); }
+  finally { if (path) await supabaseAdmin.storage.from(PHOTO_BUCKET).remove([path]).catch(() => undefined); }
 });
 
 export const nutritionAdvice = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((d: { summary: string }) => z.object({ summary: z.string().min(1).max(4000) }).parse(d)).handler(async ({ data, context }) => {
