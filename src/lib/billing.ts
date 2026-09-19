@@ -1,7 +1,15 @@
+/*
+Legacy paid catalog kept here for reference during the pricing migration.
+export const PLAN_CATALOG_LEGACY = {
+  plus: { name: "Plus", monthly: 4.99, annual: 49 },
+  pro: { name: "Pro", monthly: 19.99, annual: 199 },
+  coach: { name: "Coach", monthly: 39.99, annual: 399 },
+} as const;
+*/
 export const PLAN_CATALOG = {
-  plus: { name: "Plus", monthly: 4.99, annual: 49, description: "Le quotidien complet de Pace.", features: ["Tous les modules essentiels", "Synchronisation cloud", "IA locale quand disponible", "IA Pace Cloud : 60 actions/mois", "Historique illimité", "Automatisations avancées"] },
-  pro: { name: "Pro", monthly: 19.99, annual: 199, description: "Pour un usage intensif et les analyses avancées.", features: ["Tout Plus", "IA Pace Cloud : 250 actions/mois", "Analyse nutrition avancée", "Priorité sur les nouvelles fonctions"] },
-  coach: { name: "Coach", monthly: 39.99, annual: 399, description: "Pour les usages avancés, partagés et familiaux.", features: ["Tout Pro", "IA Pace Cloud : 750 actions/mois", "Espaces et programmes partagés", "Fonctions coach / famille"] },
+  plus: { name: "Pace Essential", monthly: 9.99, annual: 99, description: "L’OS quotidien complet.", features: ["Accès complet aux 8 modules", "Synchro automatique Bluetooth & Apple Health / Google Fit", "Historique et sauvegardes illimités"] },
+  pro: { name: "Pace Pro", monthly: 19.99, annual: 199, description: "Performance & IA intégrée.", features: ["Tout le plan Essential", "Coach Pace IA en temps réel", "Corrélation croisée Sommeil × Sport × Finances", "Recommandations personnalisées automatiques"] },
+  coach: { name: "Pace Ultimate", monthly: 29.99, annual: 299, description: "Haute performance & accès anticipé.", features: ["Tout le plan Pro", "Accès prioritaire aux modèles IA de dernière génération", "Intégrations bancaires et agendas poussées", "Support prioritaire direct"] },
 } as const;
 export type PlanId = keyof typeof PLAN_CATALOG;
 export type EntitlementPlan = "trial" | PlanId | "expired";

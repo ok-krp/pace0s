@@ -14,8 +14,10 @@ export const getBillingStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((data: unknown) => deviceSchema.parse(data))
   .handler(async ({ data, context }) => {
+    /*
     const { ensureTrial } = await import("./billing.server");
     const trial = await ensureTrial(context.userId, data.deviceId, context.supabase);
+    */
     const { data: subscription } = await context.supabase
       .from("billing_subscriptions")
       .select("plan,status,current_period_end,cancel_at_period_end")
@@ -23,18 +25,18 @@ export const getBillingStatus = createServerFn({ method: "GET" })
       .maybeSingle();
 
     const paidPlan = subscription?.plan && isPaidPlan(subscription.plan as PlanId) ? (subscription.plan as PlanId) : null;
-    const trialActive = new Date(trial.trial_ends_at).getTime() > Date.now();
-    const effectivePlan = paidPlan ?? (trialActive ? "trial" : "expired");
+    const trialActive = false;
+    const effectivePlan = paidPlan ?? "expired";
 
     return {
       plan: effectivePlan,
-      status: subscription?.status ?? (trialActive ? "trialing" : "expired"),
+      status: subscription?.status ?? "expired",
       currentPeriodEnd: subscription?.current_period_end ?? null,
       cancelAtPeriodEnd: subscription?.cancel_at_period_end ?? false,
-      aiMonthlyLimit: paidPlan ? PLAN_AI_LIMITS[paidPlan] : trialActive ? PLAN_AI_LIMITS.trial : PLAN_AI_LIMITS.expired,
+      aiMonthlyLimit: paidPlan ? PLAN_AI_LIMITS[paidPlan] : PLAN_AI_LIMITS.expired,
       catalog: PLAN_CATALOG,
       stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
-      trialEndsAt: trial.trial_ends_at,
+      trialEndsAt: null,
       trialActive,
     };
   });
