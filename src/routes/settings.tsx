@@ -37,23 +37,33 @@ function setThemeColor(dark: boolean, signal = false) {
 
 function SettingsPage() {
   const [dark, setDark] = useState(false);
+  const [signal, setSignal] = useState(false);
   const push = usePush();
   const [sending, setSending] = useState(false);
   const sendTest = useServerFn(sendTestNotification);
   const handleTogglePush = async (v: boolean) => { try { if (v) await push.enable(); else await push.disable(); } catch (e) { console.error(e); toast.error((e as Error).message || "Impossible de modifier les notifications"); } };
   const handleSendTest = async () => { setSending(true); try { const res = await sendTest({ data: { title: "Test Pace", message: "Notification reçue avec succès 🎉" } }); if (res.ok) toast.success(`Notification envoyée (${res.recipients} appareil${res.recipients === 1 ? "" : "s"})`); else toast.error(`Échec : ${res.error}`); } catch (e) { toast.error((e as Error).message); } finally { setSending(false); } };
   useEffect(() => {
-    const signal = localStorage.getItem("pace.visual-theme") === "signal";
+    const activeSignal = localStorage.getItem("pace.visual-theme") === "signal";
     const stored = localStorage.getItem("pace.dark") === "1";
-    setDark(signal || stored);
-    if (signal) {
+    setSignal(activeSignal);
+    setDark(activeSignal || stored);
+    if (activeSignal) {
       document.documentElement.dataset.visualTheme = "signal";
       document.documentElement.classList.add("dark");
     } else {
       delete document.documentElement.dataset.visualTheme;
       document.documentElement.classList.toggle("dark", stored);
     }
-    setThemeColor(signal || stored, signal);
+    setThemeColor(activeSignal || stored, activeSignal);
+
+    const handleVisualThemeChange = (event: Event) => {
+      const nextSignal = (event as CustomEvent<{ signal: boolean }>).detail?.signal === true;
+      setSignal(nextSignal);
+      setDark(nextSignal || localStorage.getItem("pace.dark") === "1");
+    };
+    window.addEventListener("pace.visual-theme.change", handleVisualThemeChange);
+    return () => window.removeEventListener("pace.visual-theme.change", handleVisualThemeChange);
   }, []);
   const downloadNativeAndroidApp = () => { window.open(NATIVE_ANDROID_APK_URL, "_blank", "noopener,noreferrer"); toast.success("Téléchargement de l'application Android Pace lancé."); };
   const toggleDark = (v: boolean) => {
@@ -84,7 +94,7 @@ function SettingsPage() {
                   <Row icon={<Sparkles className="size-4" />} label="Style visuel" desc="Bascule toute l'interface vers le style Signal inspiré du dashboard sommeil">
                     <VisualThemeToggle compact={false} />
                   </Row>
-                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} disabled={localStorage.getItem("pace.visual-theme") === "signal"} /></Row>
+                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} disabled={signal} /></Row>
                   <Row icon={<Smartphone className="size-4" />} label="Application Android" desc="Télécharger la version native de PaceOS"><Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger</Button></Row>
                   <WallpaperSettings />
                 </AccordionContent>
