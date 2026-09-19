@@ -153,46 +153,100 @@
 }
 
 
-/* Signal SaaS system: deliberately sharp, dense, and operational. Scoped to the alternate theme only. */
-[data-visual-theme="signal"] *,
-[data-visual-theme="signal"] *::before,
-[data-visual-theme="signal"] *::after {
-  border-radius: 0 !important;
-}
-
+/* Signal — simple SaaS mode. Flat, neutral, readable, and intentionally non-Apple. */
 [data-visual-theme="signal"] {
-  --signal-line: oklch(0.58 0.03 155 / 0.18);
-  --signal-line-strong: oklch(0.62 0.04 155 / 0.28);
-  --signal-panel: oklch(0.125 0.017 155 / 0.96);
-  --signal-panel-raised: oklch(0.16 0.02 155 / 0.98);
-  --signal-hover: oklch(0.19 0.025 155 / 0.98);
-  --signal-green: oklch(0.78 0.18 158);
-  --signal-green-dim: oklch(0.58 0.13 158);
+  color-scheme: dark;
+  --background: oklch(0.13 0.008 250);
+  --foreground: oklch(0.94 0.008 250);
+  --surface: oklch(0.16 0.009 250);
+  --surface-elevated: oklch(0.19 0.01 250);
+  --card: oklch(0.16 0.009 250);
+  --card-foreground: oklch(0.94 0.008 250);
+  --popover: oklch(0.18 0.01 250);
+  --popover-foreground: oklch(0.94 0.008 250);
+  --primary: oklch(0.72 0.12 245);
+  --primary-foreground: oklch(0.13 0.008 250);
+  --secondary: oklch(0.20 0.01 250);
+  --secondary-foreground: oklch(0.91 0.008 250);
+  --muted: oklch(0.20 0.01 250);
+  --muted-foreground: oklch(0.66 0.01 250);
+  --accent: oklch(0.23 0.012 250);
+  --accent-foreground: oklch(0.94 0.008 250);
+  --destructive: oklch(0.65 0.18 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --success: oklch(0.72 0.12 155);
+  --warning: oklch(0.78 0.13 82);
+  --border: oklch(0.55 0.012 250 / 0.22);
+  --input: oklch(0.12 0.008 250);
+  --ring: oklch(0.72 0.12 245);
+  --chart-1: oklch(0.72 0.12 245);
+  --chart-2: oklch(0.72 0.12 155);
+  --chart-3: oklch(0.78 0.13 82);
+  --chart-4: oklch(0.65 0.18 25);
+  --chart-5: oklch(0.68 0.12 300);
+  --sidebar: oklch(0.115 0.008 250);
+  --sidebar-foreground: oklch(0.92 0.008 250);
+  --sidebar-primary: oklch(0.72 0.12 245);
+  --sidebar-primary-foreground: oklch(0.13 0.008 250);
+  --sidebar-accent: oklch(0.18 0.01 250);
+  --sidebar-accent-foreground: oklch(0.94 0.008 250);
+  --sidebar-border: oklch(0.55 0.012 250 / 0.18);
+  --sidebar-ring: oklch(0.72 0.12 245);
+  --glass-tint: 24 27 34;
+  --glass-tint-base: 0.92;
+  --glass-tint-strength: var(--glass-tint-base);
+  --glass-blur: 0px;
+  --glass-blur-thin: 0px;
+  --glass-saturate: 100%;
+  --glass-radius: 0px;
+  --glass-radius-sm: 0px;
+  --glass-edge: 0;
+  --glass-sheen: 0;
+  --glass-elev-1: 0 1px 2px oklch(0 0 0 / 0.28);
+  --glass-elev-2: 0 4px 14px -10px oklch(0 0 0 / 0.55);
+  --glass-elev-3: 0 8px 24px -16px oklch(0 0 0 / 0.65);
+  --wallpaper: linear-gradient(180deg, oklch(0.135 0.008 250) 0%, oklch(0.115 0.008 250) 100%);
 }
 
-/* Remove the decorative glass treatment and replace it with an enterprise-style surface system. */
+[data-visual-theme="signal"] body,
+[data-visual-theme="signal"] h1,
+[data-visual-theme="signal"] h2,
+[data-visual-theme="signal"] h3,
+[data-visual-theme="signal"] h4,
+[data-visual-theme="signal"] h5,
+[data-visual-theme="signal"] .font-display {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* No wallpaper, blur, glass, sheen, gradients, or decorative glow. */
+[data-visual-theme="signal"] .pace-bg,
+[data-visual-theme="signal"] .pace-bg::before {
+  background: var(--background) !important;
+}
+[data-visual-theme="signal"] .pace-bg::before { opacity: 1; }
 [data-visual-theme="signal"] .glass-card,
 [data-visual-theme="signal"] [class*="glass-card"],
 [data-visual-theme="signal"] .glass-thin,
 [data-visual-theme="signal"] .glass-icon,
 [data-visual-theme="signal"] [class*="bg-card"],
 [data-visual-theme="signal"] [class*="bg-popover"] {
-  background: var(--signal-panel) !important;
+  background: var(--card) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border: 1px solid var(--signal-line) !important;
-  box-shadow: 0 8px 28px -24px oklch(0 0 0 / 0.95) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0 !important;
+  box-shadow: var(--glass-elev-2) !important;
 }
+[data-visual-theme="signal"] .glass-card::before,
+[data-visual-theme="signal"] [class*="glass-card"]::before,
+[data-visual-theme="signal"] .glass-card::after,
+[data-visual-theme="signal"] [class*="glass-card"]::after { display: none !important; }
 
-/* Cards become flat system panels with explicit hierarchy instead of rounded containers. */
-[data-visual-theme="signal"] .glass-card:hover,
-[data-visual-theme="signal"] [class*="glass-card"]:hover {
-  border-color: var(--signal-line-strong) !important;
-  background: var(--signal-panel-raised) !important;
-  box-shadow: 0 12px 32px -26px oklch(0 0 0 / 1) !important;
-}
+/* Everything is rectangular: no pills or rounded Apple-style controls. */
+[data-visual-theme="signal"] *,
+[data-visual-theme="signal"] *::before,
+[data-visual-theme="signal"] *::after { border-radius: 0 !important; }
 
-/* SaaS controls: compact, rectangular, high information density. */
 [data-visual-theme="signal"] button,
 [data-visual-theme="signal"] [role="button"],
 [data-visual-theme="signal"] input,
@@ -200,177 +254,101 @@
 [data-visual-theme="signal"] select {
   border-radius: 0 !important;
 }
-
-[data-visual-theme="signal"] button:not([data-state="checked"]):not([data-state="on"]),
+[data-visual-theme="signal"] button,
 [data-visual-theme="signal"] [role="button"] {
-  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
-
 [data-visual-theme="signal"] button:hover,
 [data-visual-theme="signal"] [role="button"]:hover {
-  box-shadow: inset 0 0 0 1px oklch(0.78 0.18 158 / 0.14);
+  box-shadow: none !important;
+  filter: none !important;
 }
-
 [data-visual-theme="signal"] button:focus-visible,
 [data-visual-theme="signal"] [role="button"]:focus-visible,
 [data-visual-theme="signal"] input:focus-visible,
 [data-visual-theme="signal"] textarea:focus-visible,
 [data-visual-theme="signal"] select:focus-visible {
-  outline: 1px solid var(--signal-green) !important;
-  outline-offset: 0 !important;
-  box-shadow: 0 0 0 1px oklch(0.78 0.18 158 / 0.2) !important;
+  outline: 2px solid var(--ring) !important;
+  outline-offset: -1px !important;
+  box-shadow: none !important;
 }
 
-/* Inputs use hard edges and a clear field hierarchy. */
 [data-visual-theme="signal"] input,
 [data-visual-theme="signal"] textarea,
 [data-visual-theme="signal"] select {
-  background: oklch(0.105 0.014 155 / 0.96) !important;
-  border: 1px solid var(--signal-line) !important;
-  box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.35) !important;
+  background: var(--input) !important;
+  border: 1px solid var(--border) !important;
+  box-shadow: none !important;
 }
-
 [data-visual-theme="signal"] input:hover,
 [data-visual-theme="signal"] textarea:hover,
-[data-visual-theme="signal"] select:hover {
-  border-color: var(--signal-line-strong) !important;
-}
+[data-visual-theme="signal"] select:hover { border-color: oklch(0.65 0.012 250 / 0.36) !important; }
 
-[data-visual-theme="signal"] input::placeholder,
-[data-visual-theme="signal"] textarea::placeholder {
-  color: oklch(0.54 0.018 150);
-}
-
-/* Primary actions are dense and rectangular rather than pill-like. */
 [data-visual-theme="signal"] [class*="bg-primary"] {
-  border: 1px solid oklch(0.86 0.14 158 / 0.45);
-  box-shadow: 0 0 22px -16px oklch(0.78 0.18 158 / 0.9) !important;
+  border: 1px solid oklch(0.82 0.08 245 / 0.35);
+  box-shadow: none !important;
 }
+[data-visual-theme="signal"] [class*="bg-primary"]:hover { filter: brightness(1.05); }
 
-[data-visual-theme="signal"] [class*="bg-primary"]:hover {
-  filter: brightness(1.06);
-}
-
-/* Dividers and list rows carry more of the visual hierarchy than shadows. */
+[data-visual-theme="signal"] [class*="text-primary"] { text-shadow: none !important; }
 [data-visual-theme="signal"] hr,
 [data-visual-theme="signal"] [role="separator"] {
-  border-color: var(--signal-line) !important;
-  background: var(--signal-line) !important;
+  border-color: var(--border) !important;
+  background: var(--border) !important;
 }
 
-[data-visual-theme="signal"] [data-state="open"],
-[data-visual-theme="signal"] [data-state="selected"],
-[data-visual-theme="signal"] [data-state="active"] {
-  border-color: oklch(0.78 0.18 158 / 0.32) !important;
+/* Clear active state: one subtle background + one left rule. */
+[data-visual-theme="signal"] nav a {
+  border-left: 2px solid transparent;
+}
+[data-visual-theme="signal"] nav a:hover {
+  background: var(--surface-elevated);
+  border-left-color: var(--border);
+}
+[data-visual-theme="signal"] nav a[aria-current="page"],
+[data-visual-theme="signal"] nav a[data-active="true"] {
+  background: var(--surface-elevated);
+  border-left-color: var(--primary);
 }
 
-/* Remove floating/pill aesthetics from common utility classes while preserving layout. */
-[data-visual-theme="signal"] [class*="rounded-full"],
-[data-visual-theme="signal"] [class*="rounded-xl"],
-[data-visual-theme="signal"] [class*="rounded-lg"],
-[data-visual-theme="signal"] [class*="rounded-md"],
-[data-visual-theme="signal"] [class*="rounded-sm"],
-[data-visual-theme="signal"] [class*="rounded-2xl"],
-[data-visual-theme="signal"] [class*="rounded-3xl"] {
-  border-radius: 0 !important;
+[data-visual-theme="signal"] aside {
+  border-right: 1px solid var(--border) !important;
+  box-shadow: none !important;
 }
 
-/* Tables and data-dense regions read like a modern SaaS console. */
-[data-visual-theme="signal"] table {
-  border-collapse: collapse;
-}
-
+[data-visual-theme="signal"] table { border-collapse: collapse; }
 [data-visual-theme="signal"] th {
-  background: oklch(0.12 0.016 155 / 0.98);
-  color: oklch(0.68 0.02 150);
+  background: var(--surface);
+  color: var(--muted-foreground);
   font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-
 [data-visual-theme="signal"] th,
-[data-visual-theme="signal"] td {
-  border-bottom: 1px solid var(--signal-line) !important;
-}
+[data-visual-theme="signal"] td { border-bottom: 1px solid var(--border) !important; }
+[data-visual-theme="signal"] tr:hover > td { background: var(--surface-elevated); }
 
-[data-visual-theme="signal"] tr:hover > td {
-  background: oklch(0.16 0.022 155 / 0.72);
-}
-
-/* Dialogs/popovers/sheets use hard-edged console panels. */
 [data-visual-theme="signal"] [role="dialog"],
 [data-visual-theme="signal"] [data-radix-popper-content-wrapper] > *,
 [data-visual-theme="signal"] [data-side] {
   border-radius: 0 !important;
 }
-
 [data-visual-theme="signal"] [role="dialog"] {
-  border: 1px solid var(--signal-line-strong);
-  box-shadow: 0 24px 64px -34px oklch(0 0 0 / 1);
+  border: 1px solid var(--border);
+  box-shadow: var(--glass-elev-3);
 }
 
-/* Sidebar is a fixed operational rail, visually separated by one precise rule. */
-[data-visual-theme="signal"] aside {
-  border-right: 1px solid var(--signal-line-strong) !important;
-  box-shadow: 8px 0 30px -28px oklch(0 0 0 / 1) !important;
-}
-
-[data-visual-theme="signal"] nav a {
-  border-left: 2px solid transparent;
-}
-
-[data-visual-theme="signal"] nav a:hover {
-  background: oklch(0.16 0.022 155 / 0.82);
-  border-left-color: oklch(0.78 0.18 158 / 0.35);
-}
-
-[data-visual-theme="signal"] nav a[aria-current="page"],
-[data-visual-theme="signal"] nav a[data-active="true"] {
-  background: oklch(0.17 0.026 155 / 0.96);
-  border-left-color: var(--signal-green);
-}
-
-/* Keep the theme intentionally compact: less chrome, more usable information. */
-[data-visual-theme="signal"] .pace-bg {
-  background: oklch(0.075 0.014 155);
-}
-
-[data-visual-theme="signal"] .pace-bg::before {
-  background-size: 20px 20px, 20px 20px, auto, auto, auto;
-}
-
-[data-visual-theme="signal"] ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-[data-visual-theme="signal"] ::-webkit-scrollbar-track {
-  background: oklch(0.08 0.012 155);
-}
-
-[data-visual-theme="signal"] ::-webkit-scrollbar-thumb {
-  background: oklch(0.32 0.028 155);
-  border: 2px solid oklch(0.08 0.012 155);
-}
-
-[data-visual-theme="signal"] ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.45 0.05 155);
-}
-
-/* Status chips can still communicate state, but never become decorative pills. */
 [data-visual-theme="signal"] [class*="badge"],
 [data-visual-theme="signal"] [class*="Badge"] {
-  border: 1px solid var(--signal-line) !important;
-  background: oklch(0.14 0.018 155 / 0.96) !important;
-  padding-inline: 0.45rem;
+  border: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  padding-inline: 0.4rem;
   font-size: 0.68rem;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
 }
 
-/* Kill transform-based "floating card" micro-interactions in Signal. */
-[data-visual-theme="signal"] [class*="hover:-translate"],
-[data-visual-theme="signal"] [class*="hover:translate"],
-[data-visual-theme="signal"] [class*="hover:scale"] {
-  transform: none !important;
-}
+[data-visual-theme="signal"] ::-webkit-scrollbar { width: 8px; height: 8px; }
+[data-visual-theme="signal"] ::-webkit-scrollbar-track { background: var(--background); }
+[data-visual-theme="signal"] ::-webkit-scrollbar-thumb { background: oklch(0.32 0.01 250); border: 2px solid var(--background); }
+[data-visual-theme="signal"] ::-webkit-scrollbar-thumb:hover { background: oklch(0.42 0.012 250); }
