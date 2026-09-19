@@ -152,6 +152,7 @@ function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="subscription">
+          {/* Legacy subscription grid preserved in comments for visual rollback.
           <div className="glass-card rounded-3xl border border-white/20 bg-white/5 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)] p-5 sm:p-7">
             <div className="max-w-3xl">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Abonnement</div>
@@ -189,11 +190,83 @@ function SettingsPage() {
             </div>
             <p className="mt-4 text-[11px] text-muted-foreground">Prix affichés hors TVA éventuelle. Aucun plan gratuit ni essai gratuit n’est proposé.</p>
           </div>
+          */}
+
+          <section className="min-h-[calc(100vh-13rem)] bg-[#050507] text-white rounded-[28px] border border-white/10 p-4 sm:p-8 overflow-hidden">
+            <div className="mx-auto max-w-6xl">
+              <div className="flex items-center justify-between gap-4 rounded-full border border-white/10 bg-[#121215]/80 px-4 py-2.5 backdrop-blur-xl">
+                <div className="flex items-center gap-3 min-w-0">
+                  <CreditCard className="size-4 shrink-0 text-white/70" />
+                  <span className="text-sm font-medium tracking-tight truncate">PaceOS</span>
+                </div>
+                {billing?.cancelAtPeriodEnd && <span className="rounded-full border border-amber-400/20 px-3 py-1 text-[10px] uppercase tracking-wider text-amber-200/70">Annulation en fin de période</span>}
+              </div>
+
+              <div className="relative py-14 sm:py-20 text-center">
+                <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center overflow-hidden pointer-events-none">
+                  <span className="text-[clamp(5rem,18vw,13rem)] font-black tracking-[-0.08em] leading-none text-white/[0.06] select-none">PRICING</span>
+                </div>
+                <div className="relative">
+                  <div className="text-[11px] uppercase tracking-[0.3em] text-white/45">Abonnement PaceOS</div>
+                  <h2 className="mt-3 text-4xl sm:text-5xl font-display font-semibold tracking-tight text-white">Choisis ton plan PaceOS</h2>
+                  <p className="mx-auto mt-4 max-w-2xl text-sm sm:text-base leading-relaxed text-white/60">Accès payant sans essai gratuit. Les droits sont synchronisés côté serveur après confirmation Stripe.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+                {(Object.entries(PLAN_CATALOG) as Array<[PlanId, typeof PLAN_CATALOG[PlanId]]>).map(([plan, details]) => {
+                  const isPro = plan === "pro";
+                  const current = billing?.plan === plan;
+                  const disabled = !billing?.stripeConfigured || current;
+                  const price = billingInterval === "monthly" ? details.monthly.toFixed(2).replace(".", ",") : details.annual.toFixed(0);
+                  const period = billingInterval === "monthly" ? "/ mois" : "/ an";
+                  return (
+                    <section key={plan} className={`flex min-h-[390px] flex-col rounded-3xl border p-7 backdrop-blur-xl bg-white/5 border-white/10 ${isPro ? "border-white/30 bg-white/10" : ""}`}>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-[11px] uppercase tracking-[0.2em] text-white/45">{isPro ? "Pro" : plan === "plus" ? "Essential" : "Ultimate"}</div>
+                          <h3 className="mt-2 text-xl font-medium text-white">{details.name}</h3>
+                        </div>
+                        {current && <span className="rounded-full border border-white/20 px-3 py-1 text-[10px] uppercase tracking-wider text-white/70">Actuel</span>}
+                      </div>
+                      <div className="mt-8 flex items-end gap-2">
+                        <span className="text-4xl font-display font-semibold tracking-tight text-white">{price} €</span>
+                        <span className="pb-1 text-sm text-white/45">{period}</span>
+                      </div>
+                      <p className="mt-3 min-h-10 text-sm leading-relaxed text-white/55">{details.description}</p>
+                      <ul className="mt-6 flex-1 space-y-3">
+                        {details.features.map((feature) => <li key={feature} className="flex items-start gap-3 text-sm text-white/70"><Check className="mt-0.5 size-4 shrink-0 text-white" />{feature}</li>)}
+                      </ul>
+                      <Button className={`mt-7 w-full rounded-2xl border border-white/20 ${isPro ? "bg-white text-[#050507]" : "bg-white/5 text-white"}`} disabled={disabled} onClick={async () => {
+                        try {
+                          const res = await startCheckout({ data: { plan: plan as "plus" | "pro" | "coach", interval: billingInterval } });
+                          window.location.href = res.url;
+                        } catch (error) {
+                          toast.error((error as Error).message);
+                        }
+                      }}>{current ? "Plan actuel" : !billing?.stripeConfigured ? "Paiement à configurer" : "S’abonner"}</Button>
+                    </section>
+                  );
+                })}
+              </div>
+
+              <div className="mt-8 flex flex-col items-center gap-3">
+                <div className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1 backdrop-blur-xl">
+                  <button type="button" aria-pressed={billingInterval === "monthly"} onClick={() => setBillingInterval("monthly")} className={`rounded-full px-4 py-2 text-xs font-medium ${billingInterval === "monthly" ? "bg-white text-[#050507]" : "text-white/55"}`}>Mensuel</button>
+                  <button type="button" aria-pressed={billingInterval === "annual"} onClick={() => setBillingInterval("annual")} className={`rounded-full px-4 py-2 text-xs font-medium ${billingInterval === "annual" ? "bg-white text-[#050507]" : "text-white/55"}`}>Annuel</button>
+                </div>
+                <div className="text-xs text-white/45">Facturation annuelle — Essential 99 €, Pro 199 €, Ultimate 299 € / an</div>
+                <div className="text-[11px] text-white/35">Prix affichés hors TVA éventuelle. Aucun plan gratuit ni essai gratuit n’est proposé.</div>
+              </div>
+            </div>
+          </section>
         </TabsContent>
       </Tabs>
     </div>
   );
 }
+
+/* Legacy PlanCard implementation preserved for rollback/reference.
 
 function PlanCard({ plan, name, price, annual, features, highlighted = false, current = false, disabled = false, onSelect }: { plan: PlanId; name: string; price: string; annual: string; features: string[]; highlighted?: boolean; current?: boolean; disabled?: boolean; onSelect?: () => void }) {
   return <section className={`rounded-2xl border p-5 flex flex-col ${highlighted ? "border-primary/40 bg-primary/[0.04]" : "border-border/70"}`}>
@@ -204,6 +277,8 @@ function PlanCard({ plan, name, price, annual, features, highlighted = false, cu
     <Button className="mt-5 w-full rounded-xl" disabled={disabled || current} onClick={onSelect}>{current ? "Plan actuel" : disabled ? "Paiement à configurer" : "Choisir ce plan"}</Button>
   </section>;
 }
+
+*/
 
 function Row({ icon, label, desc, children }: { icon: React.ReactNode; label: string; desc: string; children: React.ReactNode }) {
   return <div className="settings-row flex items-center gap-3 px-2 py-3"><div className="size-8 shrink-0 grid place-items-center text-muted-foreground">{icon}</div><div className="flex-1 min-w-0"><div className="font-medium text-sm text-white drop-shadow-sm">{label}</div><div className="text-xs text-muted-foreground leading-relaxed">{desc}</div></div>{children}</div>;
