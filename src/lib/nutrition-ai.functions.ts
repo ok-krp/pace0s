@@ -12,7 +12,38 @@ const PHOTO_BUCKET = "nutrition-ai";
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 const visionItemSchema = z.object({ name: z.string().min(1).max(200), brand: z.string().nullable().default(null), grams: z.number().min(0).max(50000), kcal: z.number().min(0).max(20000), protein_g: z.number().min(0).max(1000), carbs_g: z.number().min(0).max(1000), fat_g: z.number().min(0).max(1000), fiber_g: z.number().min(0).max(500), sugar_g: z.number().min(0).max(500), sodium_mg: z.number().min(0).max(10000) });
 const visionSchema = z.object({ dish_name: z.string().min(1).max(300), items: z.array(visionItemSchema).max(50), health_score: z.enum(["green", "orange", "red"]), quality: z.enum(["bulking", "cutting", "balanced", "treat"]), confidence: z.number().min(0).max(1), confidence_note: z.string().default(""), notes: z.string().default("") });
-function getGeminiModel() { const key = process.env.GEMINI_API_KEY; if (!key) throw new Error("L’IA Pace n’est pas configurée sur le serveur."); return createGoogleGenerativeAI({ apiKey: key })(AI_MODEL.replace(/^google\//, "")); }
+const FALLBACK_AI_MODEL = "google/gemini-2.5-flash";
+
+function getGeminiModel(model = AI_MODEL) {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error("L’IA Pace n’est pas configurée sur le serveur.");
+  return createGoogleGenerativeAI({ apiKey: key })(model.replace(/^google\//, ""));
+}
+
+function isTransientVisionCapacityError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  const candidate = error as { status?: unknown } | null;
+  const status = typeof candidate?.status === "number" ? candidate.status : 0;
+  return status === 429 || status === 503 || /high demand|overloaded|resource.?exhausted|rate.?limit|too many requests|temporarily unavailable/i.test(message);
+}
+
+async function generateFoodVision(prompt: string, imageDataUrl: string, contentType: string) {
+  const messages = [{
+    role: "user" as const,
+    content: [
+      { type: "text" as const, text: prompt },
+      { type: "file" as const, data: imageDataUrl, mediaType: contentType },
+    ],
+  }];
+
+  try {
+    return await generateText({ maxRetries: 0, model: getGeminiModel(), messages });
+  } catch (error) {
+    if (!isTransientVisionCapacityError(error)) throw error;
+    console.warn("[nutrition-ai] Gemini primary model unavailable; trying fallback model.");
+    return await generateText({ maxRetries: 1, model: getGeminiModel(FALLBACK_AI_MODEL), messages });
+  }
+}
 function storagePathForUser(userId: string, path: string) { const normalized = path.replace(/^\/+/, ""); if (!normalized || normalized.includes("..") || !normalized.startsWith(`${userId}/`)) throw new Error("Référence image invalide."); return normalized; }
 
 export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((d: { storagePath: string; goal?: string; hint?: string }) => z.object({ storagePath: z.string().min(3).max(500), goal: z.string().max(300).optional(), hint: z.string().max(300).optional() }).parse(d)).handler(async ({ data, context }) => {
@@ -29,7 +60,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
     if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Format image non autorisé.");
     const imageDataUrl = `data:${contentType};base64,${bytes.toString("base64")}`;
     const prompt = [PHOTO_INSTRUCTIONS, "IMPORTANT : fais d'abord un inventaire exhaustif des composants visibles. N'en omets aucun, même si la portion est petite ou l'identification imparfaite.", "Si le plat correspond à un plat connu, donne son nom canonique clairement.", data.goal ? `Objectif : ${data.goal}.` : "", data.hint ? `Indice : ${data.hint}.` : "", "Réponds en JSON pur avec dish_name, items [{name,brand,grams,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg}], health_score, quality, confidence, confidence_note, notes."].filter(Boolean).join("\n\n");
-    const { text } = await generateText({ model: getGeminiModel(), messages: [{ role: "user", content: [{ type: "text", text: prompt }, { type: "file", data: imageDataUrl, mediaType: contentType }] }] });
+    const { text } = await generateFoodVision(prompt, imageDataUrl, contentType);
     const parsed = visionSchema.safeParse(extractJson(text));
     if (!parsed.success) return { error: "Réponse IA invalide", result: null };
     if (parsed.data.items.length === 0) return { error: "Aucun aliment identifiable sur cette photo.", result: null };
