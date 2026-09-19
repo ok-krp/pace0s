@@ -266,6 +266,8 @@ function SettingsPage() {
   );
 }
 
+/* Legacy PlanCard implementation preserved for rollback/reference.
+
 function PlanCard({ plan, name, price, annual, features, highlighted = false, current = false, disabled = false, onSelect }: { plan: PlanId; name: string; price: string; annual: string; features: string[]; highlighted?: boolean; current?: boolean; disabled?: boolean; onSelect?: () => void }) {
   return <section className={`rounded-2xl border p-5 flex flex-col ${highlighted ? "border-primary/40 bg-primary/[0.04]" : "border-border/70"}`}>
     <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">{name}</h3>{current ? <span className="text-[10px] uppercase tracking-wider text-primary">Actuel</span> : highlighted && <span className="text-[10px] uppercase tracking-wider text-primary">Recommandé</span>}</div>
@@ -275,6 +277,8 @@ function PlanCard({ plan, name, price, annual, features, highlighted = false, cu
     <Button className="mt-5 w-full rounded-xl" disabled={disabled || current} onClick={onSelect}>{current ? "Plan actuel" : disabled ? "Paiement à configurer" : "Choisir ce plan"}</Button>
   </section>;
 }
+
+*/
 
 function Row({ icon, label, desc, children }: { icon: React.ReactNode; label: string; desc: string; children: React.ReactNode }) {
   return <div className="settings-row flex items-center gap-3 px-2 py-3"><div className="size-8 shrink-0 grid place-items-center text-muted-foreground">{icon}</div><div className="flex-1 min-w-0"><div className="font-medium text-sm text-white drop-shadow-sm">{label}</div><div className="text-xs text-muted-foreground leading-relaxed">{desc}</div></div>{children}</div>;
