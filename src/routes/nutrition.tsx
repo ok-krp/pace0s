@@ -26,14 +26,12 @@ import { FoodAnalysisEditor } from "@/components/FoodAnalysisEditor";
 import { NutritionDailyAiChat } from "@/components/NutritionDailyAiChat";
 import { toast } from "sonner";
 import { isLegalCategoryAllowed } from "@/lib/legal";
-import { supabase } from "@/integrations/supabase/client";
 
 const searchSchema = z.object({ tab: z.enum(["nutrition", "recipes", "water"]).optional() });
 export const Route = createFileRoute("/nutrition")({ head: () => ({ meta: [{ title: "Nutrition — Pace" }, { name: "description", content: "Nutrition, recettes et hydratation." }] }), validateSearch: searchSchema, component: NutritionPage });
 type Item = NutritionItem;
 const COL_FIELD: Record<NutCol, keyof Item> = { kcal: "kcal", protein: "p", carbs: "c", fat: "f", sat_fat: "sat", sugar: "sugar", fiber: "fiber", salt: "salt", sodium: "sodium", iron: "iron", calcium: "calcium", vit_c: "vitC" };
 const MEALS = ["Petit déjeuner", "Déjeuner", "Goûter", "Dîner", "Collation"];
-const NUTRITION_PHOTO_BUCKET = "nutrition-ai";
 const MAX_NUTRITION_PHOTO_BYTES = 8 * 1024 * 1024;
 
 function NutritionPage() {
