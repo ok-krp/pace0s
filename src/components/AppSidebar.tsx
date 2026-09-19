@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/s
 import { useNavPrefs, type NavItemKey } from "@/hooks/use-nav-prefs";
 import { useLocalState } from "@/lib/storage";
 import { springSoft, interactiveRing } from "@/lib/motion";
+import { VisualThemeToggle } from "@/components/VisualThemeToggle";
 const NativeNavLink = ({ to, className, children, onClick }: { to: NavItemKey; className?: string; children: React.ReactNode; onClick?: () => void }) => <Link to={to} onClick={onClick} className={className}>{children}</Link>;
 export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof LayoutDashboard }> = { "/": { label: "Dashboard", icon: LayoutDashboard }, "/assistant": { label: "Assistant IA", icon: Sparkles }, "/development": { label: "Développement", icon: Wrench }, "/ai-activity": { label: "Actions IA", icon: History }, "/nutrition": { label: "Nutrition", icon: Apple }, "/courses": { label: "Courses", icon: ShoppingCart }, "/sport": { label: "Sport", icon: Dumbbell }, "/watch": { label: "Montre", icon: Watch }, "/sleep": { label: "Sommeil", icon: Moon }, "/routine": { label: "Routine", icon: Moon }, "/body": { label: "Poids & Corps", icon: Scale }, "/work": { label: "Travail", icon: Briefcase }, "/calendar": { label: "Calendrier", icon: Calendar }, "/recalls": { label: "Rappels conso", icon: AlertTriangle }, "/finance": { label: "Finance & Invest.", icon: Wallet }, "/profile": { label: "Profil", icon: UserIcon }, "/settings": { label: "Paramètres", icon: Settings } };
 type Group = { id: string; label: string; items: NavItemKey[] };
@@ -18,13 +19,16 @@ function BottomNav({ currentPath, onNavigate }: { currentPath: string; onNavigat
 function SidebarContent({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) {
   return <>
     <div className="flex-none flex items-center gap-2 px-3 py-2 mb-4">
-      <Link to="/" search={{}} onClick={onNavigate} className="flex items-center gap-2">
+      <Link to="/" search={{}} onClick={onNavigate} className="flex items-center gap-2 min-w-0">
         <div className="size-8 grid place-items-center text-primary"><Sparkles className="size-4" /></div>
-        <div>
+        <div className="min-w-0">
           <div className="font-display font-semibold text-[15px] tracking-tight">Pace</div>
           <div className="text-[11px] text-muted-foreground -mt-0.5">centre de contrôle</div>
         </div>
       </Link>
+      <div className="ml-auto shrink-0">
+        <VisualThemeToggle compact={false} />
+      </div>
     </div>
     <button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} className="flex-none flex items-center gap-2 px-3 py-2 mb-3 rounded-md glass-thin text-sm text-muted-foreground hover:text-foreground transition">
       <Search className="size-3.5" /><span className="flex-1 text-left">Rechercher…</span><kbd className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-mono">⌘K</kbd>
