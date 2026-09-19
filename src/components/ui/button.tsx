@@ -22,8 +22,8 @@ const buttonVariants = cva(
         secondary: "glass-thin",
         glass: "glass-thin",
         ghost:
-          "text-muted-foreground hover:text-foreground hover:bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.5))] hover:backdrop-blur-[var(--glass-blur-thin)]",
-        link: "text-primary underline-offset-4 hover:underline",
+          "text-muted-foreground hover:bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.5))] hover:backdrop-blur-[var(--glass-blur-thin)]",
+        link: "text-primary underline-offset-4",
       },
       size: {
         default: "h-9 px-4 py-2",
