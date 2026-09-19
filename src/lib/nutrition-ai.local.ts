@@ -16,7 +16,7 @@ async function getPreferredDevice(): Promise<"webgpu" | "wasm"> {
 }
 
 async function createPipeline(device: "webgpu" | "wasm") {
-  return pipeline("image-to-text", MODEL_ID, { device, dtype: "q4" }) as unknown as VisionPipeline;
+  return pipeline("image-to-text", MODEL_ID, { device, dtype: device === "webgpu" ? "q4f16" : "q8" }) as unknown as VisionPipeline;
 }
 
 async function getPipeline() {
