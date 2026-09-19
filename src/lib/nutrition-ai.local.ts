@@ -5,12 +5,31 @@ const MODEL_ID = "HuggingFaceTB/SmolVLM-500M-Instruct";
 type VisionPipeline = ((input: unknown, options?: Record<string, unknown>) => Promise<Array<{ generated_text?: string }> | { generated_text?: string }>);
 let pipelinePromise: Promise<VisionPipeline> | null = null;
 
-function getPipeline() {
+async function getPreferredDevice(): Promise<"webgpu" | "wasm"> {
+  if (typeof navigator === "undefined" || !("gpu" in navigator)) return "wasm";
+  try {
+    const adapter = await navigator.gpu.requestAdapter();
+    return adapter ? "webgpu" : "wasm";
+  } catch {
+    return "wasm";
+  }
+}
+
+async function createPipeline(device: "webgpu" | "wasm") {
+  return pipeline("image-to-text", MODEL_ID, { device, dtype: "q4" }) as unknown as VisionPipeline;
+}
+
+async function getPipeline() {
   if (!pipelinePromise) {
-    pipelinePromise = pipeline("image-to-text", MODEL_ID, {
-      device: "webgpu",
-      dtype: "q4",
-    }) as unknown as Promise<VisionPipeline>;
+    pipelinePromise = (async () => {
+      const preferred = await getPreferredDevice();
+      try {
+        return await createPipeline(preferred);
+      } catch (error) {
+        if (preferred !== "webgpu") throw error;
+        return createPipeline("wasm");
+      }
+    })();
   }
   return pipelinePromise;
 }
@@ -39,15 +58,14 @@ function buildPrompt(goal?: string, hint?: string) {
 
 export async function analyzeFoodPhotoLocally(file: File, options?: { goal?: string; hint?: string }): Promise<FoodAnalysis> {
   if (typeof window === "undefined") throw new Error("Analyse locale disponible uniquement dans le navigateur.");
-  if (!("gpu" in navigator)) throw new Error("WebGPU indisponible dans ce navigateur. Utilise un navigateur recent compatible WebGPU.");
 
   const model = await getPipeline();
   const imageUrl = URL.createObjectURL(file);
   try {
-    const output = await model(
-      imageUrl,
-      { max_new_tokens: 700, do_sample: false },
-    );
+    const output = await model(imageUrl, {
+      max_new_tokens: 700,
+      do_sample: false,
+    });
     const item = Array.isArray(output) ? output[0] : output;
     const generated = typeof item?.generated_text === "string" ? item.generated_text : "";
     if (!generated) throw new Error("Le modele local n a produit aucune analyse.");
