@@ -381,10 +381,16 @@
 
 
 /* ================================================================
+   Pace Glass — legacy implementation kept as annotation.
+   Nothing is deleted: the previous Glass implementation remains below
+   as commented source for rollback/reference.
+   ================================================================ */
+/*
+/ * ================================================================
    Pace Glass — third visual theme
    Premium dark glass / frosted surfaces. Scoped exclusively to
    data-visual-theme="glass"; default Pace and Signal remain intact.
-   ================================================================ */
+   ================================================================ * /
 [data-visual-theme="glass"] {
   color-scheme: dark;
   --background: oklch(0.095 0.018 255);
@@ -445,7 +451,7 @@
 }
 [data-visual-theme="glass"] .pace-bg::before { opacity: 1; }
 
-/* Shared existing cards become the GlassCard material. */
+/ * Shared existing cards become the GlassCard material. * /
 [data-visual-theme="glass"] .glass-card,
 [data-visual-theme="glass"] [class*="glass-card"],
 [data-visual-theme="glass"] .glass-thin,
@@ -482,7 +488,7 @@
   box-shadow: var(--glass-elev-1) !important;
 }
 
-/* Existing Button component = GlassButton system. */
+/ * Existing Button component = GlassButton system. * /
 [data-visual-theme="glass"] button,
 [data-visual-theme="glass"] [role="button"] {
   border-radius: 14px;
@@ -528,7 +534,7 @@
   box-shadow: 0 0 0 3px oklch(0.78 0.10 225 / 0.10) !important;
 }
 
-/* Desktop sidebar and mobile drawer use the same floating material. */
+/ * Desktop sidebar and mobile drawer use the same floating material. * /
 [data-visual-theme="glass"] aside,
 [data-visual-theme="glass"] header,
 [data-visual-theme="glass"] [role="dialog"][data-state="open"] {
@@ -551,7 +557,7 @@
   backdrop-filter: blur(6px) !important;
 }
 
-/* Settings intentionally suppresses glass on its own surfaces; Glass theme restores it. */
+/ * Settings intentionally suppresses glass on its own surfaces; Glass theme restores it. * /
 [data-visual-theme="glass"] .settings-panel .glass-card,
 [data-visual-theme="glass"] .settings-panel .glass-thin {
   background: oklch(1 0 0 / 0.055) !important;
@@ -567,7 +573,7 @@
 [data-visual-theme="glass"] ::-webkit-scrollbar-thumb { background: oklch(1 0 0 / 0.16); border: 2px solid transparent; background-clip: padding-box; border-radius: 999px; }
 
 
-/* Vibrant Glass refinement: Apple Vision Pro direction. Keep background color, reduce milkiness. */
+/ * Vibrant Glass refinement: Apple Vision Pro direction. Keep background color, reduce milkiness. * /
 [data-visual-theme="glass"] .glass-card,
 [data-visual-theme="glass"] [class*="glass-card"] {
   background: rgb(255 255 255 / 0.05) !important;
@@ -582,7 +588,7 @@
   backdrop-filter: blur(32px) saturate(160%) !important;
   -webkit-backdrop-filter: blur(32px) saturate(160%) !important;
 }
-/* Nested surfaces: visibly separate glass layers without turning opaque. */
+/ * Nested surfaces: visibly separate glass layers without turning opaque. * /
 [data-visual-theme="glass"] .settings-panel .glass-thin,
 [data-visual-theme="glass"] .settings-panel [data-slot="card"],
 [data-visual-theme="glass"] .settings-panel .settings-row:hover,
@@ -622,3 +628,219 @@
 }
 [data-visual-theme="glass"] .text-foreground { color: rgb(255 255 255 / 0.92) !important; }
 [data-visual-theme="glass"] .text-muted-foreground { color: rgb(255 255 255 / 0.55) !important; }
+
+*/
+
+/* ================================================================
+   Pace Glass — Spatial Design / Vision Pro
+   Active implementation. Scoped exclusively to the Glass theme.
+   ================================================================ */
+[data-visual-theme="glass"] {
+  --background: oklch(0.08 0.025 255);
+  --foreground: rgb(255 255 255 / 0.92);
+  --card: rgb(255 255 255 / 0.05);
+  --card-foreground: rgb(255 255 255 / 0.92);
+  --popover: rgb(15 20 34 / 0.72);
+  --popover-foreground: rgb(255 255 255 / 0.92);
+  --secondary: rgb(255 255 255 / 0.08);
+  --secondary-foreground: rgb(255 255 255 / 0.90);
+  --muted: rgb(255 255 255 / 0.06);
+  --muted-foreground: rgb(255 255 255 / 0.70);
+  --accent: rgb(255 255 255 / 0.10);
+  --accent-foreground: rgb(255 255 255 / 0.92);
+  --border: rgb(255 255 255 / 0.20);
+  --input: rgb(0 0 0 / 0.16);
+  --primary: oklch(0.82 0.11 220);
+  --primary-foreground: oklch(0.10 0.02 255);
+  --ring: oklch(0.82 0.11 220);
+  --glass-tint: 255 255 255;
+  --glass-tint-base: 0.05;
+  --glass-tint-strength: 0.05;
+  --glass-blur: 40px;
+  --glass-blur-thin: 24px;
+  --glass-saturate: 165%;
+  --glass-radius: 24px;
+  --glass-radius-sm: 16px;
+  --glass-edge: 0.20;
+  --glass-sheen: 0;
+  --wallpaper:
+    radial-gradient(700px 520px at 8% 8%, oklch(0.62 0.18 220 / 0.32), transparent 68%),
+    radial-gradient(760px 560px at 92% 12%, oklch(0.58 0.20 300 / 0.28), transparent 70%),
+    radial-gradient(760px 620px at 68% 88%, oklch(0.55 0.19 165 / 0.25), transparent 72%),
+    radial-gradient(560px 500px at 18% 92%, oklch(0.62 0.17 255 / 0.22), transparent 72%),
+    linear-gradient(135deg, oklch(0.075 0.028 255), oklch(0.11 0.035 275) 48%, oklch(0.075 0.028 190));
+}
+
+/* Vibrant spatial background: the color lives behind the glass. */
+[data-visual-theme="glass"] .pace-bg,
+[data-visual-theme="glass"] .pace-bg::before {
+  background: var(--wallpaper) !important;
+  background-size: cover !important;
+}
+[data-visual-theme="glass"] .pace-bg::before {
+  opacity: 1 !important;
+  filter: saturate(135%) !important;
+}
+
+/* Main GlassCard material: transparent, blurred, edge-lit. */
+[data-visual-theme="glass"] .glass-card,
+[data-visual-theme="glass"] [class*="glass-card"],
+[data-visual-theme="glass"] [data-slot="card"] {
+  position: relative;
+  background: rgb(255 255 255 / 0.05) !important;
+  border-top: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-left: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.05) !important;
+  border-right: 1px solid rgb(255 255 255 / 0.05) !important;
+  backdrop-filter: blur(24px) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(165%) !important;
+  box-shadow: 0 12px 40px 0 rgb(0 0 0 / 0.15) !important;
+  border-radius: 24px !important;
+  transition: background-color 300ms ease, border-color 300ms ease, transform 300ms ease, box-shadow 300ms ease;
+}
+
+/* Nested glass layers. */
+[data-visual-theme="glass"] .glass-thin,
+[data-visual-theme="glass"] .glass-icon {
+  background: rgb(255 255 255 / 0.10) !important;
+  border-top: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-left: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.05) !important;
+  border-right: 1px solid rgb(255 255 255 / 0.05) !important;
+  backdrop-filter: blur(32px) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(165%) !important;
+  box-shadow: 0 12px 40px 0 rgb(0 0 0 / 0.15) !important;
+}
+
+/* Spatial hover — intentionally subtle and physical. */
+[data-visual-theme="glass"] .glass-card:hover,
+[data-visual-theme="glass"] [data-slot="card"]:hover {
+  background: rgb(255 255 255 / 0.10) !important;
+  border-top-color: rgb(255 255 255 / 0.30) !important;
+  border-left-color: rgb(255 255 255 / 0.30) !important;
+  transform: scale(1.02);
+}
+
+/* GlassButton system. */
+[data-visual-theme="glass"] button,
+[data-visual-theme="glass"] [role="button"] {
+  border-radius: 16px;
+  color: rgb(255 255 255 / 0.92);
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+[data-visual-theme="glass"] button:hover:not(:disabled),
+[data-visual-theme="glass"] [role="button"]:hover:not([aria-disabled="true"]) {
+  background: rgb(255 255 255 / 0.10) !important;
+  border-color: rgb(255 255 255 / 0.30) !important;
+}
+[data-visual-theme="glass"] button.bg-primary,
+[data-visual-theme="glass"] [class*="bg-primary"] {
+  background: rgb(255 255 255 / 0.10) !important;
+  color: white !important;
+  border-top: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-left: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.05) !important;
+  border-right: 1px solid rgb(255 255 255 / 0.05) !important;
+  backdrop-filter: blur(24px) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(165%) !important;
+  box-shadow: 0 12px 40px 0 rgb(0 0 0 / 0.15) !important;
+}
+[data-visual-theme="glass"] button[data-variant="outline"],
+[data-visual-theme="glass"] button[data-variant="secondary"],
+[data-visual-theme="glass"] button.glass-thin {
+  background: rgb(255 255 255 / 0.05) !important;
+  border-top: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-left: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.05) !important;
+  border-right: 1px solid rgb(255 255 255 / 0.05) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+}
+
+/* Floating desktop sidebar. */
+[data-visual-theme="glass"] aside {
+  left: 1rem !important;
+  top: 1rem !important;
+  bottom: 1rem !important;
+  width: 18rem !important;
+  border-radius: 24px !important;
+  background: rgb(255 255 255 / 0.05) !important;
+  border-top: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-left: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.05) !important;
+  border-right: 1px solid rgb(255 255 255 / 0.05) !important;
+  backdrop-filter: blur(40px) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(165%) !important;
+  box-shadow: 0 12px 40px 0 rgb(0 0 0 / 0.15) !important;
+}
+[data-visual-theme="glass"] header {
+  background: rgb(255 255 255 / 0.05) !important;
+  border-top: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-left: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.05) !important;
+  border-right: 1px solid rgb(255 255 255 / 0.05) !important;
+  backdrop-filter: blur(40px) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(165%) !important;
+  box-shadow: 0 12px 40px 0 rgb(0 0 0 / 0.15) !important;
+}
+
+/* Navigation keeps the glass hierarchy instead of adding opaque pills. */
+[data-visual-theme="glass"] nav a {
+  color: rgb(255 255 255 / 0.70);
+}
+[data-visual-theme="glass"] nav a:hover {
+  background: rgb(255 255 255 / 0.10) !important;
+  color: white !important;
+}
+[data-visual-theme="glass"] nav a[aria-current="page"],
+[data-visual-theme="glass"] nav a[data-active="true"] {
+  background: rgb(255 255 255 / 0.10) !important;
+  color: white !important;
+  border-left-color: rgb(255 255 255 / 0.30) !important;
+}
+
+/* Typography. */
+[data-visual-theme="glass"] h1,
+[data-visual-theme="glass"] h2,
+[data-visual-theme="glass"] h3,
+[data-visual-theme="glass"] h4,
+[data-visual-theme="glass"] h5,
+[data-visual-theme="glass"] .font-display,
+[data-visual-theme="glass"] .text-foreground {
+  color: white !important;
+  font-weight: 500;
+  filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.22));
+}
+[data-visual-theme="glass"] .text-muted-foreground {
+  color: rgb(255 255 255 / 0.70) !important;
+}
+
+/* Inputs remain spatial surfaces, not opaque controls. */
+[data-visual-theme="glass"] input,
+[data-visual-theme="glass"] textarea,
+[data-visual-theme="glass"] select {
+  background: rgb(0 0 0 / 0.16) !important;
+  border-top: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-left: 1px solid rgb(255 255 255 / 0.30) !important;
+  border-bottom: 1px solid rgb(255 255 255 / 0.05) !important;
+  border-right: 1px solid rgb(255 255 255 / 0.05) !important;
+  backdrop-filter: blur(24px) !important;
+  -webkit-backdrop-filter: blur(24px) !important;
+  border-radius: 16px !important;
+}
+
+/* Keep the settings-specific existing glass suppression overridden by the
+   spatial material, without changing Pace or Signal. */
+[data-visual-theme="glass"] .settings-panel .glass-card,
+[data-visual-theme="glass"] .settings-panel .glass-thin {
+  background: rgb(255 255 255 / 0.05) !important;
+  border-top-color: rgb(255 255 255 / 0.30) !important;
+  border-left-color: rgb(255 255 255 / 0.30) !important;
+  border-bottom-color: rgb(255 255 255 / 0.05) !important;
+  border-right-color: rgb(255 255 255 / 0.05) !important;
+  backdrop-filter: blur(24px) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(165%) !important;
+  box-shadow: 0 12px 40px 0 rgb(0 0 0 / 0.15) !important;
+}
+
+/* Preserve source history: old implementation is commented above, not removed. */
