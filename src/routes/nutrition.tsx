@@ -20,6 +20,7 @@ import { RecipesView } from "@/components/RecipesView";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { fetchProductByBarcode, type OFFProduct } from "@/lib/openfoodfacts";
 import { analyzeFoodPhoto } from "@/lib/nutrition-ai.functions";
+import { analyzeFoodPhotoLocally } from "@/lib/nutrition-ai.local";
 import { sumItems, type FoodAnalysis, type FoodItem } from "@/lib/nutrition-ai.shared";
 import { FoodAnalysisEditor } from "@/components/FoodAnalysisEditor";
 import { NutritionDailyAiChat } from "@/components/NutritionDailyAiChat";
@@ -50,8 +51,21 @@ function NutritionPage() {
     if (!isLegalCategoryAllowed("ai")) { toast.error("Consentement Analyse IA requis."); return; }
     if (!file.type.startsWith("image/") || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) { toast.error("Format image non autorisé"); return; }
     if (file.size > MAX_NUTRITION_PHOTO_BYTES) { toast.error("Image trop lourde (max 8 Mo)"); return; }
-    setBusy(true); const previewUrl = URL.createObjectURL(file); let storagePath: string | null = null;
-    try { const { data: { user }, error: userError } = await supabase.auth.getUser(); if (userError || !user) throw new Error("Session utilisateur indisponible."); const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg"; storagePath = `${user.id}/${crypto.randomUUID()}.${extension}`; const { error: uploadError } = await supabase.storage.from(NUTRITION_PHOTO_BUCKET).upload(storagePath, file, { contentType: file.type, cacheControl: "3600", upsert: false }); if (uploadError) throw new Error(`Upload photo impossible : ${uploadError.message}`); const res = await analyzePhoto({ data: { storagePath } }); if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; } const r = res.result as FoodAnalysis; setPending({ kind: "photo", photo: previewUrl, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner" }); } catch (err) { toast.error(err instanceof Error ? err.message : "Erreur IA"); } finally { if (storagePath) await supabase.storage.from(NUTRITION_PHOTO_BUCKET).remove([storagePath]); setBusy(false); }
+
+    setBusy(true);
+    const previewUrl = URL.createObjectURL(file);
+    try {
+      const localResult = await analyzeFoodPhotoLocally(file);
+      const res = await analyzePhoto({ data: { vision: localResult } });
+      if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
+      const r = res.result as FoodAnalysis;
+      setPending({ kind: "photo", photo: previewUrl, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner" });
+    } catch (err) {
+      URL.revokeObjectURL(previewUrl);
+      toast.error(err instanceof Error ? err.message : "Erreur IA locale");
+    } finally {
+      setBusy(false);
+    }
   };
   const confirmAdd = () => { if (!pending) return; if (pending.kind === "barcode") { const f = pending.grams / 100; addNutritionItem({ name: `${pending.product.name}${pending.product.brand ? ` · ${pending.product.brand}` : ""} (${pending.grams}g)`, meal: pending.meal, kcal: Math.round(pending.product.kcal * f), p: +(pending.product.protein_g * f).toFixed(1), c: +(pending.product.carbs_g * f).toFixed(1), f: +(pending.product.fat_g * f).toFixed(1), fiber: +(pending.product.fiber_g * f).toFixed(1), sugar: +(pending.product.sugar_g * f).toFixed(1), sodium: +(pending.product.sodium_mg * f).toFixed(1) }); } else { const t = sumItems(pending.items); addNutritionItem({ name: `${pending.result.dish_name} (${Math.round(t.grams)}g)`, meal: pending.meal, kcal: t.kcal, p: t.protein_g, c: t.carbs_g, f: t.fat_g, fiber: t.fiber_g, sugar: t.sugar_g, sodium: t.sodium_mg }); } toast.success(`Ajouté à ${pending.meal}`); setPending(null); };
   return <div>
