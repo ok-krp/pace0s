@@ -712,14 +712,7 @@
   box-shadow: 0 12px 40px 0 rgb(0 0 0 / 0.15) !important;
 }
 
-/* Spatial hover — intentionally subtle and physical. */
-[data-visual-theme="glass"] .glass-card:hover,
-[data-visual-theme="glass"] [data-slot="card"]:hover {
-  background: rgb(255 255 255 / 0.10) !important;
-  border-top-color: rgb(255 255 255 / 0.30) !important;
-  border-left-color: rgb(255 255 255 / 0.30) !important;
-  transform: scale(1.02);
-}
+/* Legacy spatial hover implementation preserved in the earlier commented layer. */
 
 /* GlassButton system. */
 [data-visual-theme="glass"] button,
@@ -866,4 +859,30 @@
   opacity: revert-layer !important;
   transform: revert-layer !important;
   filter: revert-layer !important;
+}
+
+/* ================================================================
+   GLOBAL HOVER LOCK — no visual hover state anywhere in PaceOS.
+   Legacy hover utilities remain in source/comments for history, but
+   active styles are made inert here.
+   ================================================================ */
+[data-visual-theme] :where(*):hover {
+  background: inherit !important;
+  background-color: inherit !important;
+  color: inherit !important;
+  border-color: inherit !important;
+  opacity: inherit !important;
+  transform: none !important;
+  box-shadow: inherit !important;
+  filter: inherit !important;
+  text-shadow: inherit !important;
+}
+[data-visual-theme] :where(*):hover::before,
+[data-visual-theme] :where(*):hover::after {
+  opacity: inherit !important;
+  transform: none !important;
+  filter: inherit !important;
+}
+[data-visual-theme] :where(a,button,[role="button"],input,textarea,select):hover {
+  transition: none !important;
 }
