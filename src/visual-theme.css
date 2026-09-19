@@ -565,3 +565,60 @@
 [data-visual-theme="glass"] ::-webkit-scrollbar { width: 8px; height: 8px; }
 [data-visual-theme="glass"] ::-webkit-scrollbar-track { background: transparent; }
 [data-visual-theme="glass"] ::-webkit-scrollbar-thumb { background: oklch(1 0 0 / 0.16); border: 2px solid transparent; background-clip: padding-box; border-radius: 999px; }
+
+
+/* Vibrant Glass refinement: Apple Vision Pro direction. Keep background color, reduce milkiness. */
+[data-visual-theme="glass"] .glass-card,
+[data-visual-theme="glass"] [class*="glass-card"] {
+  background: rgb(255 255 255 / 0.05) !important;
+  border: 1px solid rgb(255 255 255 / 0.20) !important;
+  backdrop-filter: blur(48px) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(48px) saturate(165%) !important;
+  box-shadow: 0 12px 40px 0 rgb(0 0 0 / 0.15) !important;
+}
+[data-visual-theme="glass"] .glass-thin {
+  background: rgb(255 255 255 / 0.10) !important;
+  border: 1px solid rgb(255 255 255 / 0.20) !important;
+  backdrop-filter: blur(32px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(160%) !important;
+}
+/* Nested surfaces: visibly separate glass layers without turning opaque. */
+[data-visual-theme="glass"] .settings-panel .glass-thin,
+[data-visual-theme="glass"] .settings-panel [data-slot="card"],
+[data-visual-theme="glass"] .settings-panel .settings-row:hover,
+[data-visual-theme="glass"] .settings-panel [class*="bg-white"] {
+  background: rgb(255 255 255 / 0.15) !important;
+  border-color: rgb(255 255 255 / 0.30) !important;
+  backdrop-filter: blur(32px) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(165%) !important;
+}
+[data-visual-theme="glass"] .settings-panel .settings-row {
+  color: white;
+}
+[data-visual-theme="glass"] .settings-panel .settings-row > div:nth-child(2) > div:first-child,
+[data-visual-theme="glass"] .settings-panel h2,
+[data-visual-theme="glass"] .settings-panel h3,
+[data-visual-theme="glass"] .settings-panel [data-slot="accordion-trigger"] {
+  color: white !important;
+  font-weight: 500;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.16));
+}
+[data-visual-theme="glass"] aside,
+[data-visual-theme="glass"] header {
+  background: rgb(255 255 255 / 0.05) !important;
+  border: 1px solid rgb(255 255 255 / 0.20) !important;
+  backdrop-filter: blur(48px) saturate(165%) !important;
+  -webkit-backdrop-filter: blur(48px) saturate(165%) !important;
+  box-shadow: 0 12px 40px 0 rgb(0 0 0 / 0.15) !important;
+}
+[data-visual-theme="glass"] .pace-bg,
+[data-visual-theme="glass"] .pace-bg::before {
+  background: var(--wallpaper) !important;
+}
+[data-visual-theme="glass"] .pace-bg::before { filter: saturate(115%); }
+[data-visual-theme="glass"] button,
+[data-visual-theme="glass"] [role="button"] {
+  color: rgb(255 255 255 / 0.90);
+}
+[data-visual-theme="glass"] .text-foreground { color: rgb(255 255 255 / 0.92) !important; }
+[data-visual-theme="glass"] .text-muted-foreground { color: rgb(255 255 255 / 0.55) !important; }
