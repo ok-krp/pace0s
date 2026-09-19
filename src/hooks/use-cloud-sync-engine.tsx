@@ -174,12 +174,28 @@ export function useCloudSyncEngineInternal() {
       if (current && Date.parse(current.updated_at) >= Date.parse(updatedAt)) {
         applyRemoteAndRemember(key, current.value, current.updated_at, current.updated_by); markVersion(key, current.updated_at); return false;
       }
+      /*
+       * Legacy direct PATCH path intentionally disabled.
+       * It could race with the newest-wins RPC and surface Supabase 409 conflicts.
+       * The RPC is now the single mutation path for existing rows.
+       */
       if (current) {
-        const { data, error } = await supabase.from("user_state").update({ value, updated_at: updatedAt, updated_by: DEVICE_ID } as never).eq("user_id", user.id).eq("key", key).lt("updated_at", updatedAt).select("key,value,updated_at,updated_by");
-        if (error) throw error;
-        if (data?.length) return true;
+        const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
+        const result = await rpc("upsert_user_state_if_newer", {
+          p_user_id: user.id,
+          p_key: key,
+          p_value: value,
+          p_updated_at: updatedAt,
+          p_updated_by: DEVICE_ID,
+        });
+        if (result?.error) throw result.error;
+        if (result?.data === true) return true;
         current = await selectCurrent();
-        if (current) { applyRemoteAndRemember(key, current.value, current.updated_at, current.updated_by); markVersion(key, current.updated_at); return false; }
+        if (current) {
+          applyRemoteAndRemember(key, current.value, current.updated_at, current.updated_by);
+          markVersion(key, current.updated_at);
+          return false;
+        }
       }
       const { error: insertError } = await supabase.from("user_state").insert({ user_id: user.id, key, value, updated_at: updatedAt, updated_by: DEVICE_ID } as never);
       if (!insertError) return true;
