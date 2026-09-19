@@ -33,13 +33,14 @@ export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
-function setThemeColor(dark: boolean, signal = false) {
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", signal ? "#07100b" : dark ? "#1f242c" : "#f8fafc");
+function setThemeColor(dark: boolean, signal = false, glass = false) {
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", glass ? "#070b12" : signal ? "#07100b" : dark ? "#1f242c" : "#f8fafc");
 }
 
 function SettingsPage() {
   const [dark, setDark] = useState(false);
   const [signal, setSignal] = useState(false);
+  const [glass, setGlass] = useState(false);
   const push = usePush();
   const [sending, setSending] = useState(false);
   const [billing, setBilling] = useState<{ plan: EntitlementPlan; status: string; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; stripeConfigured: boolean; trialEndsAt: string; trialActive: boolean } | null>(null);
@@ -54,22 +55,27 @@ function SettingsPage() {
   useEffect(() => { let deviceId = localStorage.getItem("pace.billing.device_id"); if (!deviceId) { deviceId = crypto.randomUUID() + "-" + crypto.randomUUID(); localStorage.setItem("pace.billing.device_id", deviceId); } getBilling({ data: { deviceId } }).then(setBilling).catch((error) => console.error("billing status failed", error)).finally(() => setBillingLoading(false)); }, [getBilling]);
   useEffect(() => {
     const activeSignal = localStorage.getItem("pace.visual-theme") === "signal";
+    const activeGlass = localStorage.getItem("pace.visual-theme") === "glass";
     const stored = localStorage.getItem("pace.dark") === "1";
     setSignal(activeSignal);
-    setDark(activeSignal || stored);
-    if (activeSignal) {
-      document.documentElement.dataset.visualTheme = "signal";
+    setGlass(activeGlass);
+    setDark(activeSignal || activeGlass || stored);
+    if (activeSignal || activeGlass) {
+      document.documentElement.dataset.visualTheme = activeSignal ? "signal" : "glass";
       document.documentElement.classList.add("dark");
     } else {
       delete document.documentElement.dataset.visualTheme;
       document.documentElement.classList.toggle("dark", stored);
     }
-    setThemeColor(activeSignal || stored, activeSignal);
+    setThemeColor(activeSignal || activeGlass || stored, activeSignal, activeGlass);
 
     const handleVisualThemeChange = (event: Event) => {
-      const nextSignal = (event as CustomEvent<{ signal: boolean }>).detail?.signal === true;
+      const theme = (event as CustomEvent<{ theme?: string; signal?: boolean }>).detail?.theme;
+      const nextSignal = theme === "signal" || (!theme && (event as CustomEvent<{ signal?: boolean }>).detail?.signal === true);
+      const nextGlass = theme === "glass";
       setSignal(nextSignal);
-      setDark(nextSignal || localStorage.getItem("pace.dark") === "1");
+      setGlass(nextGlass);
+      setDark(nextSignal || nextGlass || localStorage.getItem("pace.dark") === "1");
     };
     window.addEventListener("pace.visual-theme.change", handleVisualThemeChange);
     return () => window.removeEventListener("pace.visual-theme.change", handleVisualThemeChange);
@@ -79,7 +85,7 @@ function SettingsPage() {
     setDark(v);
     document.documentElement.classList.toggle("dark", v);
     localStorage.setItem("pace.dark", v ? "1" : "0");
-    setThemeColor(v, localStorage.getItem("pace.visual-theme") === "signal");
+    setThemeColor(v, localStorage.getItem("pace.visual-theme") === "signal", localStorage.getItem("pace.visual-theme") === "glass");
   };
   const exportData = () => { const data: Record<string, unknown> = {}; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => { try { data[k] = JSON.parse(localStorage.getItem(k) ?? "null"); } catch {} }); const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `lifetracker-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); toast.success("Export téléchargé"); };
   const reset = () => { if (!confirm("Réinitialiser TOUTES vos données ?")) return; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k)); toast.success("Données effacées"); setTimeout(() => location.reload(), 600); };
@@ -100,10 +106,10 @@ function SettingsPage() {
               <AccordionItem value="appearance">
                 <AccordionTrigger>Apparence & appareil</AccordionTrigger>
                 <AccordionContent>
-                  <Row icon={<Sparkles className="size-4" />} label="Style visuel" desc="Bascule toute l'interface vers le style Signal inspiré du dashboard sommeil">
+                  <Row icon={<Sparkles className="size-4" />} label="Style visuel" desc="Cycle entre les styles Pace, Signal et Premium Glass">
                     <VisualThemeToggle compact={false} />
                   </Row>
-                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} disabled={signal} /></Row>
+                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} disabled={signal || glass} /></Row>
                   <Row icon={<Smartphone className="size-4" />} label="Application Android" desc="Télécharger la version native de PaceOS"><Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger</Button></Row>
                   <WallpaperSettings />
                 </AccordionContent>

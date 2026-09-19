@@ -378,3 +378,190 @@
   border-radius: 0 !important;
   box-shadow: none !important;
 }
+
+
+/* ================================================================
+   Pace Glass — third visual theme
+   Premium dark glass / frosted surfaces. Scoped exclusively to
+   data-visual-theme="glass"; default Pace and Signal remain intact.
+   ================================================================ */
+[data-visual-theme="glass"] {
+  color-scheme: dark;
+  --background: oklch(0.095 0.018 255);
+  --foreground: oklch(0.96 0.008 255);
+  --card: oklch(0.18 0.025 255 / 0.34);
+  --card-foreground: oklch(0.96 0.008 255);
+  --popover: oklch(0.16 0.025 255 / 0.68);
+  --popover-foreground: oklch(0.96 0.008 255);
+  --primary: oklch(0.78 0.10 225);
+  --primary-foreground: oklch(0.12 0.02 255);
+  --secondary: oklch(0.22 0.025 255 / 0.38);
+  --secondary-foreground: oklch(0.94 0.008 255);
+  --muted: oklch(0.20 0.02 255 / 0.32);
+  --muted-foreground: oklch(0.68 0.012 255);
+  --accent: oklch(0.25 0.03 255 / 0.42);
+  --accent-foreground: oklch(0.96 0.008 255);
+  --border: oklch(1 0 0 / 0.11);
+  --input: oklch(0.16 0.02 255 / 0.48);
+  --ring: oklch(0.78 0.10 225);
+  --sidebar: oklch(0.11 0.02 255 / 0.55);
+  --sidebar-foreground: oklch(0.94 0.008 255);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: oklch(1 0 0 / 0.07);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: oklch(1 0 0 / 0.10);
+  --sidebar-ring: var(--ring);
+  --glass-tint: 255 255 255;
+  --glass-tint-base: 0.055;
+  --glass-tint-strength: var(--glass-tint-base);
+  --glass-blur: 24px;
+  --glass-blur-thin: 14px;
+  --glass-saturate: 145%;
+  --glass-radius: 24px;
+  --glass-radius-sm: 16px;
+  --glass-edge: 0.12;
+  --glass-sheen: 1;
+  --glass-elev-1: 0 1px 0 oklch(1 0 0 / 0.10), 0 8px 30px -20px oklch(0 0 0 / 0.80);
+  --glass-elev-2: 0 1px 0 oklch(1 0 0 / 0.10), 0 18px 50px -28px oklch(0 0 0 / 0.88);
+  --glass-elev-3: 0 1px 0 oklch(1 0 0 / 0.13), 0 28px 70px -32px oklch(0 0 0 / 0.92);
+  --wallpaper: radial-gradient(900px 600px at 10% -5%, oklch(0.55 0.10 225 / 0.18), transparent 62%), radial-gradient(900px 700px at 95% 5%, oklch(0.48 0.08 285 / 0.14), transparent 64%), radial-gradient(800px 600px at 50% 110%, oklch(0.45 0.08 195 / 0.10), transparent 65%), linear-gradient(180deg, oklch(0.085 0.018 255), oklch(0.12 0.022 255));
+}
+
+[data-visual-theme="glass"] body,
+[data-visual-theme="glass"] h1,
+[data-visual-theme="glass"] h2,
+[data-visual-theme="glass"] h3,
+[data-visual-theme="glass"] h4,
+[data-visual-theme="glass"] h5,
+[data-visual-theme="glass"] .font-display {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+[data-visual-theme="glass"] .pace-bg,
+[data-visual-theme="glass"] .pace-bg::before {
+  background: var(--wallpaper) !important;
+  background-size: cover !important;
+}
+[data-visual-theme="glass"] .pace-bg::before { opacity: 1; }
+
+/* Shared existing cards become the GlassCard material. */
+[data-visual-theme="glass"] .glass-card,
+[data-visual-theme="glass"] [class*="glass-card"],
+[data-visual-theme="glass"] .glass-thin,
+[data-visual-theme="glass"] .glass-icon,
+[data-visual-theme="glass"] [data-slot="card"] {
+  background: oklch(1 0 0 / 0.055) !important;
+  border: 1px solid oklch(1 0 0 / 0.12) !important;
+  backdrop-filter: blur(24px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(145%) !important;
+  box-shadow: var(--glass-elev-2) !important;
+  border-radius: 24px !important;
+}
+[data-visual-theme="glass"] .glass-card::before,
+[data-visual-theme="glass"] [class*="glass-card"]::before {
+  content: "" !important;
+  display: block !important;
+  position: absolute !important;
+  inset: 0 0 auto !important;
+  height: 1px !important;
+  background: linear-gradient(90deg, transparent, oklch(1 0 0 / 0.28), transparent) !important;
+  pointer-events: none !important;
+}
+[data-visual-theme="glass"] .glass-card:hover,
+[data-visual-theme="glass"] .glass-thin:hover {
+  border-color: oklch(1 0 0 / 0.18) !important;
+  background: oklch(1 0 0 / 0.075) !important;
+}
+[data-visual-theme="glass"] .glass-thin,
+[data-visual-theme="glass"] .glass-icon {
+  background: oklch(1 0 0 / 0.045) !important;
+  backdrop-filter: blur(16px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(140%) !important;
+  border-radius: 16px !important;
+  box-shadow: var(--glass-elev-1) !important;
+}
+
+/* Existing Button component = GlassButton system. */
+[data-visual-theme="glass"] button,
+[data-visual-theme="glass"] [role="button"] {
+  border-radius: 14px;
+  transition: background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, filter 180ms ease;
+}
+[data-visual-theme="glass"] button:hover:not(:disabled),
+[data-visual-theme="glass"] [role="button"]:hover:not([aria-disabled="true"]) {
+  filter: brightness(1.08);
+}
+[data-visual-theme="glass"] button:active,
+[data-visual-theme="glass"] [role="button"]:active { transform: none !important; }
+[data-visual-theme="glass"] button.bg-primary,
+[data-visual-theme="glass"] [class*="bg-primary"] {
+  background: oklch(0.78 0.10 225 / 0.82) !important;
+  color: var(--primary-foreground) !important;
+  border: 1px solid oklch(1 0 0 / 0.20) !important;
+  backdrop-filter: blur(14px) saturate(145%) !important;
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.28), 0 10px 30px -18px oklch(0.78 0.10 225 / 0.65) !important;
+}
+[data-visual-theme="glass"] button.glass-thin,
+[data-visual-theme="glass"] button[data-variant="outline"],
+[data-visual-theme="glass"] button[data-variant="secondary"] {
+  background: oklch(1 0 0 / 0.065) !important;
+  color: var(--foreground) !important;
+  border: 1px solid oklch(1 0 0 / 0.12) !important;
+  backdrop-filter: blur(14px) saturate(140%) !important;
+  -webkit-backdrop-filter: blur(14px) saturate(140%) !important;
+  box-shadow: var(--glass-elev-1) !important;
+}
+[data-visual-theme="glass"] input,
+[data-visual-theme="glass"] textarea,
+[data-visual-theme="glass"] select {
+  background: oklch(0 0 0 / 0.16) !important;
+  border: 1px solid oklch(1 0 0 / 0.12) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  border-radius: 14px !important;
+}
+[data-visual-theme="glass"] input:focus,
+[data-visual-theme="glass"] textarea:focus,
+[data-visual-theme="glass"] select:focus {
+  border-color: oklch(0.78 0.10 225 / 0.48) !important;
+  box-shadow: 0 0 0 3px oklch(0.78 0.10 225 / 0.10) !important;
+}
+
+/* Desktop sidebar and mobile drawer use the same floating material. */
+[data-visual-theme="glass"] aside,
+[data-visual-theme="glass"] header,
+[data-visual-theme="glass"] [role="dialog"][data-state="open"] {
+  background: oklch(0.10 0.02 255 / 0.58) !important;
+  backdrop-filter: blur(28px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(150%) !important;
+  border-color: oklch(1 0 0 / 0.12) !important;
+  box-shadow: var(--glass-elev-3) !important;
+}
+[data-visual-theme="glass"] nav a:hover {
+  background: oklch(1 0 0 / 0.065) !important;
+}
+[data-visual-theme="glass"] nav a[aria-current="page"],
+[data-visual-theme="glass"] nav a[data-active="true"] {
+  background: oklch(1 0 0 / 0.10) !important;
+  border-left-color: var(--primary) !important;
+}
+[data-visual-theme="glass"] [data-radix-dialog-overlay] {
+  background: oklch(0.02 0.01 255 / 0.48) !important;
+  backdrop-filter: blur(6px) !important;
+}
+
+/* Settings intentionally suppresses glass on its own surfaces; Glass theme restores it. */
+[data-visual-theme="glass"] .settings-panel .glass-card,
+[data-visual-theme="glass"] .settings-panel .glass-thin {
+  background: oklch(1 0 0 / 0.055) !important;
+  border-color: oklch(1 0 0 / 0.12) !important;
+  backdrop-filter: blur(24px) saturate(145%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(145%) !important;
+  box-shadow: var(--glass-elev-2) !important;
+}
+
+[data-visual-theme="glass"] ::selection { background: oklch(0.78 0.10 225 / 0.28); }
+[data-visual-theme="glass"] ::-webkit-scrollbar { width: 8px; height: 8px; }
+[data-visual-theme="glass"] ::-webkit-scrollbar-track { background: transparent; }
+[data-visual-theme="glass"] ::-webkit-scrollbar-thumb { background: oklch(1 0 0 / 0.16); border: 2px solid transparent; background-clip: padding-box; border-radius: 999px; }
