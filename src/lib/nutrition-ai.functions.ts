@@ -12,7 +12,7 @@ const PHOTO_BUCKET = "nutrition-ai";
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 const visionItemSchema = z.object({ name: z.string().min(1).max(200), brand: z.string().nullable().default(null), grams: z.number().min(0).max(50000), kcal: z.number().min(0).max(20000), protein_g: z.number().min(0).max(1000), carbs_g: z.number().min(0).max(1000), fat_g: z.number().min(0).max(1000), fiber_g: z.number().min(0).max(500), sugar_g: z.number().min(0).max(500), sodium_mg: z.number().min(0).max(10000) });
 const visionSchema = z.object({ dish_name: z.string().min(1).max(300), items: z.array(visionItemSchema).max(50), health_score: z.enum(["green", "orange", "red"]), quality: z.enum(["bulking", "cutting", "balanced", "treat"]), confidence: z.number().min(0).max(1), confidence_note: z.string().default(""), notes: z.string().default("") });
-const FALLBACK_AI_MODEL = "google/gemini-2.5-flash";
+const FALLBACK_AI_MODEL = "google/gemini-3.6-flash";
 
 function getGeminiModel(model = AI_MODEL) {
   const key = process.env.GEMINI_API_KEY;
