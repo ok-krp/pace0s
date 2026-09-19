@@ -95,15 +95,19 @@ export async function createBillingCheckoutForUser(
   const priceId = process.env[`${prefix}_${data.interval === "monthly" ? "MONTHLY" : "ANNUAL"}`];
   if (!priceId) throw new Error("Ce plan n'est pas encore activé côté paiement.");
   const customerId = await ensureCustomer(userId, email, supabase);
+  /*
   const { data: trial } = await supabase.from("billing_trials").select("trial_ends_at").eq("user_id", userId).maybeSingle();
   const trialEnd = trial?.trial_ends_at ? Math.floor(new Date(trial.trial_ends_at).getTime() / 1000) : null;
+  */
   const checkoutParams: Record<string, string> = {
     mode: "subscription", customer: customerId, "line_items[0][price]": priceId, "line_items[0][quantity]": "1",
     success_url: `${appUrl()}/settings?billing=success`, cancel_url: `${appUrl()}/settings?billing=cancelled`, client_reference_id: userId,
     "subscription_data[metadata][pace_user_id]": userId, "subscription_data[metadata][pace_plan]": data.plan,
     payment_method_collection: "always",
   };
+  /* Paid-only pricing: no trial period is attached to new Stripe subscriptions.
   if (trialEnd && trialEnd > Math.floor(Date.now() / 1000) + 60) checkoutParams["subscription_data[trial_end]"] = String(trialEnd);
+  */
   const session = await stripeRequest("/checkout/sessions", checkoutParams);
   return { url: String(session.url) };
 }
