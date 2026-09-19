@@ -7,7 +7,7 @@ let pipelinePromise: Promise<VisionPipeline> | null = null;
 
 function getPipeline() {
   if (!pipelinePromise) {
-    pipelinePromise = pipeline("image-text-to-text", MODEL_ID, {
+    pipelinePromise = pipeline("image-to-text", MODEL_ID, {
       device: "webgpu",
       dtype: "q4",
     }) as unknown as Promise<VisionPipeline>;
@@ -45,8 +45,8 @@ export async function analyzeFoodPhotoLocally(file: File, options?: { goal?: str
   const imageUrl = URL.createObjectURL(file);
   try {
     const output = await model(
-      [{ role: "user", content: [{ type: "image", image: imageUrl }, { type: "text", text: buildPrompt(options?.goal, options?.hint) }] }],
-      { max_new_tokens: 700, do_sample: false, return_full_text: false },
+      imageUrl,
+      { max_new_tokens: 700, do_sample: false },
     );
     const item = Array.isArray(output) ? output[0] : output;
     const generated = typeof item?.generated_text === "string" ? item.generated_text : "";
