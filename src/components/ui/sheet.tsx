@@ -21,7 +21,10 @@ const SheetOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SheetPrimitive.Overlay
     className={cn(
+      /* Legacy overlay animation/z-index kept in history:
       "fixed inset-0 z-[120] bg-slate-950/55 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
+   */
+      "fixed inset-0 !z-[9998] bg-slate-950/60 backdrop-blur-sm data-[state=open]:opacity-100 data-[state=closed]:opacity-0 transition-opacity duration-200",
       className,
     )}
     {...props}
@@ -31,13 +34,16 @@ const SheetOverlay = React.forwardRef<
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 
 const sheetVariants = cva(
+  /* Legacy Sheet transform/animation layer kept in history:
   "fixed z-[130] gap-4 glass-card p-6 transition ease-in-out data-[state=closed]:duration-300 data-[state=open]:duration-500 data-[state=open]:animate-in data-[state=closed]:animate-out",
+  */
+  "fixed !z-[9999] gap-4 glass-card p-6 transition-transform duration-300 ease-out",
   {
     variants: {
       side: {
         top: "inset-x-0 top-0 rounded-b-[32px] rounded-t-none data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top",
         bottom: "inset-x-0 bottom-0 rounded-t-[32px] rounded-b-none data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom",
-        left: "inset-y-0 left-0 h-full w-3/4 rounded-r-[32px] rounded-l-none data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm",
+        left: "inset-y-0 left-0 h-[100dvh] w-[min(88vw,20rem)] max-w-[calc(100vw-1.5rem)] rounded-r-[32px] rounded-l-none data-[state=open]:translate-x-0 data-[state=closed]:-translate-x-full",
         right: "inset-y-0 right-0 h-full w-3/4 rounded-l-[32px] rounded-r-none data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm",
       },
     },
