@@ -101,7 +101,6 @@ function CoursesPage() {
             </div>
           ))}
         </section>
-      </section>
     </div>
   );
 }
