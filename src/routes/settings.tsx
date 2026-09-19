@@ -23,6 +23,8 @@ import { AiLocalModeSettings } from "@/components/AiLocalModeSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
 import { DailyPrioritySettings } from "@/components/DailyPrioritySettings";
 import { VisualThemeToggle } from "@/components/VisualThemeToggle";
+import { createBillingCheckout, createBillingPortal, getBillingStatus } from "@/lib/billing.functions";
+import { PLAN_CATALOG, type PlanId, type EntitlementPlan } from "@/lib/billing";
 
 const NATIVE_ANDROID_APK_URL = "https://github.com/ok-krp/pace0s/releases/download/android-application-latest/app-debug.apk";
 
@@ -40,9 +42,16 @@ function SettingsPage() {
   const [signal, setSignal] = useState(false);
   const push = usePush();
   const [sending, setSending] = useState(false);
+  const [billing, setBilling] = useState<{ plan: EntitlementPlan; status: string; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; stripeConfigured: boolean; trialEndsAt: string; trialActive: boolean } | null>(null);
+  const [billingLoading, setBillingLoading] = useState(true);
+  const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
+  const getBilling = useServerFn(getBillingStatus);
+  const startCheckout = useServerFn(createBillingCheckout);
+  const openPortal = useServerFn(createBillingPortal);
   const sendTest = useServerFn(sendTestNotification);
   const handleTogglePush = async (v: boolean) => { try { if (v) await push.enable(); else await push.disable(); } catch (e) { console.error(e); toast.error((e as Error).message || "Impossible de modifier les notifications"); } };
   const handleSendTest = async () => { setSending(true); try { const res = await sendTest({ data: { title: "Test Pace", message: "Notification reçue avec succès 🎉" } }); if (res.ok) toast.success(`Notification envoyée (${res.recipients} appareil${res.recipients === 1 ? "" : "s"})`); else toast.error(`Échec : ${res.error}`); } catch (e) { toast.error((e as Error).message); } finally { setSending(false); } };
+  useEffect(() => { let deviceId = localStorage.getItem("pace.billing.device_id"); if (!deviceId) { deviceId = crypto.randomUUID() + "-" + crypto.randomUUID(); localStorage.setItem("pace.billing.device_id", deviceId); } getBilling({ data: { deviceId } }).then(setBilling).catch((error) => console.error("billing status failed", error)).finally(() => setBillingLoading(false)); }, [getBilling]);
   useEffect(() => {
     const activeSignal = localStorage.getItem("pace.visual-theme") === "signal";
     const stored = localStorage.getItem("pace.dark") === "1";
@@ -138,16 +147,41 @@ function SettingsPage() {
 
         <TabsContent value="subscription">
           <div className="glass-card rounded-3xl p-5 sm:p-7">
-            <div className="max-w-2xl">
+            <div className="max-w-3xl">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Abonnement</div>
-              <h2 className="mt-2 text-2xl font-display font-semibold">Choisissez votre niveau Pace</h2>
-              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">L'interface est prête en onglets pour l'instant. Aucun paiement ni abonnement n'est activé dans cette version.</p>
+              <h2 className="mt-2 text-2xl font-display font-semibold">Pace, sans limites artificielles</h2>
+              <p className="mt-2 text-sm text-muted-foreground leading-relaxed">Un essai gratuit de 7 jours permet de tester Pace sans paiement. Ensuite, un abonnement est nécessaire pour continuer à utiliser les fonctionnalités cloud. Les droits sont synchronisés côté serveur après confirmation Stripe.</p>
+              <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                <span className="rounded-full border px-3 py-1">Plan actuel : <strong className="text-foreground">{billingLoading ? "…" : billing?.plan === "trial" ? "Essai gratuit" : billing?.plan === "expired" ? "Essai expiré" : PLAN_CATALOG[billing?.plan as PlanId].name}</strong></span>
+                {billing?.cancelAtPeriodEnd && <span className="rounded-full border border-amber-500/30 px-3 py-1 text-amber-600">Annulation en fin de période</span>}
+                {billing?.plan !== "trial" && billing?.plan !== "expired" && <Button variant="secondary" size="sm" className="rounded-full" onClick={async () => { try { const res = await openPortal({}); window.location.href = res.url; } catch (error) { toast.error((error as Error).message); } }}>Gérer mon abonnement</Button>}
+              </div>
             </div>
-            <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-3">
-              <PlanCard name="Free" price="0 €" features={["Modules essentiels", "IA locale WebGPU", "Synchronisation cloud"]} />
-              <PlanCard name="Pro" price="Bientôt" highlighted features={["IA cloud avancée", "Automatisations", "Planification croisée", "Historique étendu"]} />
-              <PlanCard name="Family / Coach" price="Bientôt" features={["Espaces partagés", "Membres multiples", "Programmes et listes partagés", "Fonctions équipe"]} />
+            <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/[0.04] p-4"><div className="text-sm font-medium">Essai gratuit — 7 jours</div><div className="mt-1 text-xs text-muted-foreground">Un seul essai par compte et par appareil. Aucun abonnement gratuit permanent.</div></div><div className="flex items-center gap-2 mb-4"><Button size="sm" variant={billingInterval === "monthly" ? "default" : "outline"} onClick={() => setBillingInterval("monthly")}>Mensuel</Button><Button size="sm" variant={billingInterval === "annual" ? "default" : "outline"} onClick={() => setBillingInterval("annual")}>Annuel</Button></div><div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {(Object.entries(PLAN_CATALOG) as Array<[PlanId, typeof PLAN_CATALOG[PlanId]]>).map(([plan, details]) => (
+                <PlanCard
+                  key={plan}
+                  plan={plan}
+                  name={details.name}
+                  price={billingInterval === "monthly" ? `${details.monthly.toFixed(2).replace(".", ",")} € / mois` : `${details.annual.toFixed(0)} € / an`}
+                  annual={billingInterval === "monthly" ? "Résiliable à tout moment" : "≈ 2 mois offerts"}
+                  features={[...details.features]}
+                  highlighted={plan === "pro"}
+                  current={billing?.plan === plan}
+                  disabled={!billing?.stripeConfigured}
+                  onSelect={async () => {
+                    
+                    try {
+                      const res = await startCheckout({ data: { plan: plan as "plus" | "pro" | "coach", interval: billingInterval } });
+                      window.location.href = res.url;
+                    } catch (error) {
+                      toast.error((error as Error).message);
+                    }
+                  }}
+                />
+              ))}
             </div>
+            <p className="mt-4 text-[11px] text-muted-foreground">Prix affichés à titre indicatif. La TVA applicable est calculée lors du paiement. L’annuel correspond à environ deux mois offerts.</p>
           </div>
         </TabsContent>
       </Tabs>
@@ -155,11 +189,13 @@ function SettingsPage() {
   );
 }
 
-function PlanCard({ name, price, features, highlighted = false }: { name: string; price: string; features: string[]; highlighted?: boolean }) {
-  return <section className={`rounded-2xl border p-5 ${highlighted ? "border-primary/40 bg-primary/[0.04]" : "border-border/70"}`}>
-    <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">{name}</h3>{highlighted && <span className="text-[10px] uppercase tracking-wider text-primary">Cible</span>}</div>
+function PlanCard({ plan, name, price, annual, features, highlighted = false, current = false, disabled = false, onSelect }: { plan: PlanId; name: string; price: string; annual: string; features: string[]; highlighted?: boolean; current?: boolean; disabled?: boolean; onSelect?: () => void }) {
+  return <section className={`rounded-2xl border p-5 flex flex-col ${highlighted ? "border-primary/40 bg-primary/[0.04]" : "border-border/70"}`}>
+    <div className="flex items-center justify-between gap-2"><h3 className="font-semibold">{name}</h3>{current ? <span className="text-[10px] uppercase tracking-wider text-primary">Actuel</span> : highlighted && <span className="text-[10px] uppercase tracking-wider text-primary">Recommandé</span>}</div>
     <div className="mt-3 text-2xl font-display font-bold">{price}</div>
-    <ul className="mt-4 space-y-2">{features.map((feature) => <li key={feature} className="flex items-start gap-2 text-xs text-muted-foreground"><Check className="size-3.5 mt-0.5 text-primary shrink-0" />{feature}</li>)}</ul>
+    <div className="text-xs text-muted-foreground">{annual}</div>
+    <ul className="mt-4 space-y-2 flex-1">{features.map((feature) => <li key={feature} className="flex items-start gap-2 text-xs text-muted-foreground"><Check className="size-3.5 mt-0.5 text-primary shrink-0" />{feature}</li>)}</ul>
+    <Button className="mt-5 w-full rounded-xl" disabled={disabled || current} onClick={onSelect}>{current ? "Plan actuel" : disabled ? "Paiement à configurer" : "Choisir ce plan"}</Button>
   </section>;
 }
 

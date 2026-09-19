@@ -70,6 +70,38 @@ function readDomainRecord(key: string): DomainRecord | null {
     return record?.version === 1 && typeof record.updatedAt === "string" ? record : null;
   } catch { return null; }
 }
+
+function mergeRecoveredValues(legacy: unknown, current: unknown): unknown {
+  if (current == null) return legacy;
+  if (legacy == null) return current;
+  if (Array.isArray(current) && Array.isArray(legacy)) {
+    const currentIds = new Set(current.map((item) => item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "").filter(Boolean));
+    const output = [...current];
+    for (const item of legacy) {
+      const id = item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "";
+      if (id ? !currentIds.has(id) : !output.some((existing) => serialize(existing) === serialize(item))) {
+        output.push(item);
+        if (id) currentIds.add(id);
+      }
+    }
+    return output;
+  }
+  if (typeof current === "object" && !Array.isArray(current) && typeof legacy === "object" && !Array.isArray(legacy)) {
+    const output: Record<string, unknown> = { ...(current as Record<string, unknown>) };
+    for (const [key, legacyValue] of Object.entries(legacy as Record<string, unknown>)) {
+      output[key] = key in output ? mergeRecoveredValues(legacyValue, output[key]) : legacyValue;
+    }
+    return output;
+  }
+  return current;
+}
+
+function isEmptyRecoveredValue(value: unknown): boolean {
+  if (value == null) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length === 0;
+  return false;
+}
 function serialize(value: unknown) { try { return JSON.stringify(value); } catch { return undefined; } }
 
 function unwrapNutritionValue(value: unknown) {
@@ -208,7 +240,7 @@ export function useCloudSyncEngineInternal() {
       const queued = getQueued(row.key);
       if (queued && Date.parse(queued.updatedAt) >= remoteTime) return;
       const domain = readDomainRecord(row.key);
-      if (domain && Date.parse(domain.updatedAt) >= remoteTime) return;
+      if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) return;
       applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
       markVersion(row.key, row.updated_at);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
@@ -222,17 +254,45 @@ export function useCloudSyncEngineInternal() {
         if (error || !data || cancelled) return;
         const queue = new Set(readQueue().map((item) => item.key));
         const meta = readMeta();
-        let newest = "";
+        const grouped = new Map<string, { canonical?: SyncRow; legacy?: SyncRow }>();
         for (const raw of data) {
           const row = raw as unknown as SyncRow;
           const key = row.key.startsWith("lt.") ? `${PACE_PREFIX}${row.key.slice(3)}` : row.key;
           if (!isSyncableKey(key) || queue.has(key)) continue;
-          const remoteTime = Date.parse(row.updated_at);
+          const bucket = grouped.get(key) ?? {};
+          if (row.key.startsWith("lt.")) bucket.legacy = row;
+          else bucket.canonical = row;
+          grouped.set(key, bucket);
+        }
+        let newest = "";
+        for (const [key, bucket] of grouped) {
+          const canonical = bucket.canonical;
+          const legacy = bucket.legacy;
+          const mergedValue = legacy ? mergeRecoveredValues(legacy.value, canonical?.value) : canonical?.value;
+          const sourceTime = Math.max(Date.parse(canonical?.updated_at ?? "1970-01-01T00:00:00.000Z"), Date.parse(legacy?.updated_at ?? "1970-01-01T00:00:00.000Z"));
+          if (!Number.isFinite(sourceTime)) continue;
+          const updatedAt = new Date(sourceTime).toISOString();
+          const localDomain = readDomainRecord(key);
+          const localIsEmpty = localDomain ? isEmptyRecoveredValue(localDomain.value) : true;
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
-          if (!Number.isFinite(remoteTime) || remoteTime <= localTime) continue;
-          applyRemoteAndRemember(key, row.value, row.updated_at, row.updated_by);
-          meta[key] = row.updated_at;
-          newest = newest && Date.parse(newest) > remoteTime ? newest : row.updated_at;
+          if (sourceTime <= localTime && !localIsEmpty) continue;
+          applyRemoteAndRemember(key, mergedValue, updatedAt, canonical?.updated_by ?? legacy?.updated_by);
+          meta[key] = updatedAt;
+          newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
+          if (legacy && canonical && serialize(mergedValue) !== serialize(canonical.value)) {
+            const recoveryTime = new Date().toISOString();
+            try {
+              await supabase.rpc("upsert_user_state_if_newer", {
+                p_user_id: user.id,
+                p_key: key,
+                p_value: mergedValue as never,
+                p_updated_at: recoveryTime,
+                p_updated_by: "state_recovery_v4",
+              });
+              meta[key] = recoveryTime;
+              newest = recoveryTime;
+            } catch {}
+          }
         }
         writeMeta(meta);
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);

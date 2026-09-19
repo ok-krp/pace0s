@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Dumbbell, Plus, Trash2, Play, Square, Check, Pencil, Calendar as CalIcon, History, Archive, ArchiveRestore } from "lucide-react";
 import { PageHeader, StatCard } from "@/components/Stat";
@@ -12,6 +13,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { TrendingUp } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { generateSportProgression } from "@/lib/sport-progression.functions";
 
 export const Route = createFileRoute("/sport")({
   head: () => ({ meta: [{ title: "Sport — Pace" }, { name: "description", content: "Exercices, programmes, séances : votre suivi sportif tout-en-un." }] }),
@@ -24,6 +27,7 @@ type Program = { id: string; name: string; emoji: string; days: number[]; items:
 type SessionSet = { reps: number; weight: number; done: boolean };
 type SessionExercise = { exerciseId: string; sets: SessionSet[]; note?: string };
 type WorkoutSession = { id: string; date: string; programId?: string; name: string; startedAt: number; endedAt?: number; durationMin?: number; exercises: SessionExercise[]; notes?: string };
+type ProgressionTarget = { exerciseId: string; targetSets: number; targetReps: number; targetWeight: number; strategy: string; rationale: string; basedOnSessionId: string };
 const MUSCLES = ["Pectoraux", "Dos", "Épaules", "Biceps", "Triceps", "Jambes", "Quadriceps", "Ischios", "Fessiers", "Mollets", "Abdos", "Cardio", "Autre"];
 const DAYS_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
@@ -32,65 +36,179 @@ function SportPage() {
   const [progs, setProgs] = useLocalState<Program[]>("pace.sport.programs", []);
   const [sessions, setSessions] = useLocalState<WorkoutSession[]>("pace.sport.sessions", []);
   const [active, setActive] = useLocalState<WorkoutSession | null>("pace.sport.active", null);
+  const [targets, setTargets] = useState<Record<string, ProgressionTarget>>({});
+  const [cloudHistoryReady, setCloudHistoryReady] = useState(false);
+  const [progressionLoading, setProgressionLoading] = useState(false);
+  const generateProgression = useServerFn(generateSportProgression);
   const [tab, setTab] = useState("programs");
   const [focusEx, setFocusEx] = useState<string | null>(null);
   const openOverload = useCallback((exerciseId: string) => { setFocusEx(exerciseId); setTab("overload"); }, []);
   const todayDow = new Date().getDay();
+
+  const loadCloudSportHistory = useCallback(async () => {
+    const { data: userData, error: authError } = await supabase.auth.getUser();
+    if (authError || !userData.user) return;
+    const [{ data: cloudSessions, error: sessionError }, { data: cloudTargets, error: targetError }] = await Promise.all([
+      supabase.from("sport_workout_sessions").select("id,program_id,name,workout_date,started_at,ended_at,duration_min,notes,sport_workout_exercises(id,exercise_id,position,note,sport_workout_sets(id,set_number,reps,weight,done))").eq("user_id", userData.user.id).order("workout_date", { ascending: false }).limit(200),
+      supabase.from("sport_progression_targets").select("exercise_id,target_sets,target_reps,target_weight,strategy,rationale,based_on_session_id").eq("user_id", userData.user.id),
+    ]);
+    if (!sessionError && cloudSessions) {
+      const mapped = (cloudSessions as unknown as Array<Record<string, unknown>>).map((row) => ({
+        id: String(row.id), date: String(row.workout_date), programId: row.program_id ? String(row.program_id) : undefined, name: String(row.name),
+        startedAt: Date.parse(String(row.started_at)), endedAt: row.ended_at ? Date.parse(String(row.ended_at)) : undefined,
+        durationMin: row.duration_min == null ? undefined : Number(row.duration_min), notes: row.notes ? String(row.notes) : undefined,
+        exercises: (Array.isArray(row.sport_workout_exercises) ? row.sport_workout_exercises : []).map((exercise) => {
+          const item = exercise as Record<string, unknown>;
+          return { exerciseId: String(item.exercise_id), note: item.note ? String(item.note) : undefined, sets: (Array.isArray(item.sport_workout_sets) ? item.sport_workout_sets : []).map((set) => { const s = set as Record<string, unknown>; return { setNumber: Number(s.set_number ?? 0), reps: Number(s.reps ?? 0), weight: Number(s.weight ?? 0), done: Boolean(s.done) }; }).sort((a, b) => a.setNumber - b.setNumber).map(({ reps, weight, done }) => ({ reps, weight, done })) };
+        }),
+      })).filter((session) => Number.isFinite(session.startedAt));
+      setSessions((current) => {
+        const byId = new Map<string, WorkoutSession>();
+        for (const session of current) byId.set(session.id, session);
+        for (const session of mapped) byId.set(session.id, session);
+        return [...byId.values()].sort((a, b) => b.date.localeCompare(a.date) || b.startedAt - a.startedAt);
+      });
+    }
+    if (!targetError && cloudTargets) {
+      setTargets(Object.fromEntries((cloudTargets as Array<Record<string, unknown>>).map((row) => [String(row.exercise_id), {
+        exerciseId: String(row.exercise_id), targetSets: Number(row.target_sets), targetReps: Number(row.target_reps), targetWeight: Number(row.target_weight),
+        strategy: String(row.strategy), rationale: String(row.rationale ?? ""), basedOnSessionId: String(row.based_on_session_id ?? ""),
+      }])));
+    }
+    setCloudHistoryReady(!sessionError);
+  }, [setSessions]);
+
+  useEffect(() => { void loadCloudSportHistory(); }, [loadCloudSportHistory]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const hydrateSportState = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      if (cancelled || !userData.user) return;
+      const { data, error } = await supabase
+        .from("user_state")
+        .select("key,value")
+        .eq("user_id", userData.user.id)
+        .in("key", ["pace.sport.exercises", "pace.sport.programs"]);
+      if (cancelled || error || !data) return;
+      for (const row of data as Array<{ key: string; value: unknown }>) {
+        if (row.key === "pace.sport.exercises" && Array.isArray(row.value)) {
+          setExs((current) => {
+            const byId = new Map(current.map((item) => [item.id, item]));
+            for (const item of row.value as Exercise[]) if (item?.id) byId.set(item.id, item);
+            return [...byId.values()];
+          });
+        }
+        if (row.key === "pace.sport.programs" && Array.isArray(row.value)) {
+          setProgs((current) => {
+            const byId = new Map(current.map((item) => [item.id, item]));
+            for (const item of row.value as Program[]) if (item?.id) byId.set(item.id, item);
+            return [...byId.values()];
+          });
+        }
+      }
+    };
+    void hydrateSportState();
+    return () => { cancelled = true; };
+  }, [setExs, setProgs]);
+
+  const lastPerformance = useCallback((exerciseId: string) => {
+    const previous = sessions.filter((session) => session.exercises.some((item) => item.exerciseId === exerciseId)).sort((a, b) => b.date.localeCompare(a.date))[0];
+    const exercise = previous?.exercises.find((item) => item.exerciseId === exerciseId);
+    const done = exercise?.sets.filter((set) => set.done) ?? [];
+    return done.length ? { sets: done.map((set) => ({ ...set })), sessionId: previous!.id } : null;
+  }, [sessions]);
+
+  const persistCloudSession = useCallback(async (session: WorkoutSession) => {
+    const { data: userData, error: authError } = await supabase.auth.getUser();
+    if (authError || !userData.user) throw new Error("Session Supabase expirée.");
+    const { error: sessionError } = await supabase.from("sport_workout_sessions").insert({
+      id: session.id, user_id: userData.user.id, program_id: session.programId ?? null, name: session.name, workout_date: session.date,
+      started_at: new Date(session.startedAt).toISOString(), ended_at: session.endedAt ? new Date(session.endedAt).toISOString() : null,
+      duration_min: session.durationMin ?? null, notes: session.notes ?? null, is_temporary: false,
+    });
+    if (sessionError) throw sessionError;
+    const workoutExercises = session.exercises.map((exercise, position) => ({ id: crypto.randomUUID(), session_id: session.id, exercise_id: exercise.exerciseId, position, note: exercise.note ?? null }));
+    if (workoutExercises.length) {
+      const { error: exerciseError } = await supabase.from("sport_workout_exercises").insert(workoutExercises);
+      if (exerciseError) { await supabase.rpc("sport_delete_workout", { p_id: session.id }); throw exerciseError; }
+      const sets = session.exercises.flatMap((exercise, exerciseIndex) => exercise.sets.map((set, setIndex) => ({ id: crypto.randomUUID(), workout_exercise_id: workoutExercises[exerciseIndex].id, set_number: setIndex + 1, reps: set.reps, weight: set.weight, done: set.done })));
+      if (sets.length) {
+        const { error: setError } = await supabase.from("sport_workout_sets").insert(sets);
+        if (setError) { await supabase.rpc("sport_delete_workout", { p_id: session.id }); throw setError; }
+      }
+    }
+  }, []);
   const todayPrograms = progs.filter((p) => !p.isArchived && p.days.includes(todayDow));
   const startSession = (program?: Program) => {
-    const exercises: SessionExercise[] = program ? program.items.map((it) => ({ exerciseId: it.exerciseId, sets: Array.from({ length: it.sets }, () => ({ reps: it.reps, weight: it.weight ?? 0, done: false })) })) : [];
+    const exercises: SessionExercise[] = program ? program.items.map((it) => {
+      const last = lastPerformance(it.exerciseId);
+      const source = last?.sets?.length ? last.sets : Array.from({ length: it.sets }, () => ({ reps: it.reps, weight: it.weight ?? 0, done: false }));
+      return { exerciseId: it.exerciseId, sets: source.map((set) => ({ reps: set.reps, weight: set.weight, done: false })) };
+    }) : [];
     const s: WorkoutSession = { id: crypto.randomUUID(), date: todayKey(), programId: program?.id, name: program?.name ?? "Séance libre", startedAt: Date.now(), exercises };
-    setActive(s); toast.success("Séance démarrée");
+    setActive(s); toast.success("Séance démarrée", { description: program ? "Les séries démarrent avec les performances de la dernière séance." : undefined });
   };
-  const finishSession = () => {
-    if (!active) return;
+  const finishSession = async () => {
+    if (!active || progressionLoading) return;
     const ended = Date.now();
     const final: WorkoutSession = { ...active, endedAt: ended, durationMin: Math.round((ended - active.startedAt) / 60000) };
-    setSessions((p) => [final, ...p]); setActive(null);
-    const perf = new Map<string, { weight: number; reps: number; sets: number }>();
-    final.exercises.forEach((se) => { const done = se.sets.filter((s) => s.done); if (!done.length) return; const best = done.reduce((a, b) => (b.weight > a.weight ? b : a)); perf.set(se.exerciseId, { weight: best.weight, reps: best.reps, sets: done.length }); });
-    const previousSessions = [final, ...sessions];
-    const nextTargets = new Map<string, { weight: number; reps: number; sets: number; label: string }>();
-    for (const [exerciseId, pf] of perf) {
-      const ex = exs.find((item) => item.id === exerciseId);
-      const programItem = progs.flatMap((program) => program.items).find((item) => item.exerciseId === exerciseId);
-      const baseWeight = programItem?.weight ?? ex?.defaultWeight ?? pf.weight;
-      const baseReps = programItem?.reps ?? ex?.defaultReps ?? pf.reps;
-      const baseSets = programItem?.sets ?? ex?.defaultSets ?? pf.sets;
-      const recent = previousSessions.filter((session) => session.id !== final.id && session.exercises.some((item) => item.exerciseId === exerciseId)).slice(0, 1);
-      const prior = recent[0]?.exercises.find((item) => item.exerciseId === exerciseId)?.sets.filter((set) => set.done) ?? [];
-      const latestOverTarget = pf.reps >= baseReps + 2;
-      const previousOverTarget = prior.length > 0 && prior.every((set) => set.reps >= baseReps + 2);
-      const equipment = (ex?.equipment ?? "").toLowerCase();
-      const bodyweight = /poids du corps|sans matériel|bodyweight|traction|dips/i.test(equipment);
-      const canIncreaseLoad = !bodyweight && baseWeight > 0 && latestOverTarget && previousOverTarget;
-      const increment = Math.max(1.25, Math.min(baseWeight * 0.05, baseWeight * 0.10));
-      const nextWeight = canIncreaseLoad ? Math.round((baseWeight + increment) * 2) / 2 : baseWeight;
-      const nextReps = canIncreaseLoad ? baseReps : Math.min(baseReps + 2, Math.max(baseReps, pf.reps + 1));
-      const label = `${nextWeight} kg × ${nextReps} × ${baseSets}`;
-      nextTargets.set(exerciseId, { weight: nextWeight, reps: nextReps, sets: baseSets, label });
+    setProgressionLoading(true);
+    try {
+      await persistCloudSession(final);
+    } catch (error) {
+      setProgressionLoading(false);
+      toast.error("La séance n'a pas été enregistrée dans Supabase", { description: error instanceof Error ? error.message : "Réessaie avant de quitter la séance." });
+      return;
     }
-    setExs((p) => p.map((e) => { const target = nextTargets.get(e.id); return target ? { ...e, defaultWeight: target.weight, defaultReps: target.reps, defaultSets: target.sets } : e; }));
-    setProgs((p) => p.map((prog) => ({ ...prog, items: prog.items.map((it) => { const target = nextTargets.get(it.exerciseId); return target ? { ...it, weight: target.weight, reps: target.reps, sets: target.sets } : it; }) })));
-    const preview = [...nextTargets.values()].slice(0, 4).map((target) => target.label).join(" · ");
-    toast.success(`Séance terminée — ${final.durationMin} min`, { description: preview ? `Prochaine séance : ${preview}` : "Objectifs de la prochaine séance mis à jour." });
+    setSessions((p) => [final, ...p.filter((item) => item.id !== final.id)]);
+    setActive(null);
+    const completedExerciseIds = final.exercises.filter((exercise) => exercise.sets.some((set) => set.done)).map((exercise) => exercise.exerciseId);
+    if (completedExerciseIds.length) {
+      try {
+        const result = await generateProgression({ data: { sessionId: final.id, exerciseIds: [...new Set(completedExerciseIds)] } });
+        if (result.targets?.length) setTargets((current) => ({ ...current, ...Object.fromEntries(result.targets.map((target: ProgressionTarget) => [target.exerciseId, target])) }));
+        const preview = (result.targets ?? []).slice(0, 4).map((target: ProgressionTarget) => String(target.targetSets) + " × " + String(target.targetReps) + (target.targetWeight > 0 ? " @ " + String(target.targetWeight) + " kg" : "")).join(" · ");
+        toast.success("Séance terminée — " + String(final.durationMin) + " min", { description: preview ? "Cible IA : " + preview : "Séance enregistrée et progression analysée." });
+      } catch (error) {
+        console.warn("[sport] progression IA indisponible", error);
+        toast.success("Séance terminée — " + String(final.durationMin) + " min", { description: "Séance enregistrée. L'analyse IA sera réessayée à la prochaine séance." });
+      }
+    } else {
+      toast.success("Séance terminée — " + String(final.durationMin) + " min", { description: "Séance enregistrée dans l'historique." });
+    }
+    setProgressionLoading(false);
   };
   const cancelSession = () => { if (!confirm("Abandonner la séance en cours ?")) return; setActive(null); };
   const last7 = lastNDays(7); const sessionsThisWeek = sessions.filter((s) => last7.includes(s.date)); const daysActive = new Set(sessionsThisWeek.map((s) => s.date)).size;
   return <div>
-    <PageHeader title="Sport" subtitle="Tes exercices, tes programmes, tes séances — à ton image." />
+    <PageHeader title="Sport" subtitle="Tes exercices, tes programmes, tes séances — à ton image." />{!cloudHistoryReady && <div className="text-[11px] text-amber-600 dark:text-amber-300 mb-2">Synchronisation de l’historique Sport…</div>}
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3"><StatCard label="Séances des 7 derniers jours" value={sessionsThisWeek.length} unit={sessionsThisWeek.length > 1 ? "séances" : "séance"} icon={<Dumbbell className="size-4" />} /><StatCard label="Jours actifs (sur 7)" value={`${daysActive} / 7`} icon={<CalIcon className="size-4" />} /></div>
-    {active ? <ActiveSession active={active} setActive={setActive} exs={exs} onFinish={finishSession} onCancel={cancelSession} /> : <div className="rounded-2xl glass-card p-4 sm:p-5 mb-3"><div className="flex items-center justify-between mb-3 gap-2 flex-wrap"><h2 className="font-display text-base sm:text-lg font-semibold flex items-center gap-2"><CalIcon className="size-4 text-muted-foreground" /> Aujourd'hui ({DAYS_LABELS[todayDow]})</h2><Button size="sm" variant="secondary" onClick={() => startSession()} className="rounded-lg"><Play className="size-3 mr-1" />Séance libre</Button></div>{todayPrograms.length === 0 ? <div className="text-sm text-muted-foreground">Aucun programme prévu aujourd'hui. Crée-en un dans l'onglet Programmes.</div> : <div className="grid sm:grid-cols-2 gap-2">{todayPrograms.map((p) => <div key={p.id} className="rounded-xl glass-thin p-3 flex items-center gap-3"><div className="text-2xl">{p.emoji}</div><div className="flex-1 min-w-0"><div className="font-medium truncate">{p.name}</div><div className="text-xs text-muted-foreground">{p.items.length} exercice{p.items.length === 1 ? "" : "s"}</div></div><Button size="sm" onClick={() => startSession(p)} className="rounded-lg"><Play className="size-3 mr-1" />Démarrer</Button></div>)}</div>}</div>}
-    <Tabs value={tab} onValueChange={setTab} className="w-full"><div className="overflow-x-auto -mx-1 px-1 mb-2 scrollbar-hide"><TabsList className="inline-flex w-max min-w-full"><TabsTrigger value="programs" className="text-xs sm:text-sm">Programmes</TabsTrigger><TabsTrigger value="archived" className="text-xs sm:text-sm"><Archive className="size-3 mr-1" />Archivés</TabsTrigger><TabsTrigger value="exercises" className="text-xs sm:text-sm">Exercices</TabsTrigger><TabsTrigger value="overload" className="text-xs sm:text-sm"><TrendingUp className="size-3 mr-1" />Surcharge</TabsTrigger><TabsTrigger value="history" className="text-xs sm:text-sm"><History className="size-3 mr-1" />Historique</TabsTrigger></TabsList></div><TabsContent value="programs"><ProgramsTab progs={progs} setProgs={setProgs} exs={exs} onOpenExercise={openOverload} showArchived={false} /></TabsContent><TabsContent value="archived"><ProgramsTab progs={progs} setProgs={setProgs} exs={exs} onOpenExercise={openOverload} showArchived /></TabsContent><TabsContent value="exercises"><ExercisesTab exs={exs} setExs={setExs} /></TabsContent><TabsContent value="overload"><OverloadTab exs={exs} setExs={setExs} progs={progs} setProgs={setProgs} sessions={sessions} focusExerciseId={focusEx} /></TabsContent><TabsContent value="history"><HistoryTab sessions={sessions} exs={exs} onDelete={(id) => setSessions((p) => p.filter((s) => s.id !== id))} /></TabsContent></Tabs>
+    {active ? <ActiveSession active={active} setActive={setActive} exs={exs} sessions={sessions} targets={targets} onFinish={finishSession} onCancel={cancelSession} /> : <div className="rounded-2xl glass-card p-4 sm:p-5 mb-3"><div className="flex items-center justify-between mb-3 gap-2 flex-wrap"><h2 className="font-display text-base sm:text-lg font-semibold flex items-center gap-2"><CalIcon className="size-4 text-muted-foreground" /> Aujourd'hui ({DAYS_LABELS[todayDow]})</h2><Button size="sm" variant="secondary" onClick={() => startSession()} className="rounded-lg"><Play className="size-3 mr-1" />Séance libre</Button></div>{todayPrograms.length === 0 ? <div className="text-sm text-muted-foreground">Aucun programme prévu aujourd'hui. Crée-en un dans l'onglet Programmes.</div> : <div className="grid sm:grid-cols-2 gap-2">{todayPrograms.map((p) => <div key={p.id} className="rounded-xl glass-thin p-3 flex items-center gap-3"><div className="text-2xl">{p.emoji}</div><div className="flex-1 min-w-0"><div className="font-medium truncate">{p.name}</div><div className="text-xs text-muted-foreground">{p.items.length} exercice{p.items.length === 1 ? "" : "s"}</div></div><Button size="sm" onClick={() => startSession(p)} className="rounded-lg"><Play className="size-3 mr-1" />Démarrer</Button></div>)}</div>}</div>}
+    <Tabs value={tab} onValueChange={setTab} className="w-full"><div className="overflow-x-auto -mx-1 px-1 mb-2 scrollbar-hide"><TabsList className="inline-flex w-max min-w-full"><TabsTrigger value="programs" className="text-xs sm:text-sm">Programmes</TabsTrigger><TabsTrigger value="archived" className="text-xs sm:text-sm"><Archive className="size-3 mr-1" />Archivés</TabsTrigger><TabsTrigger value="exercises" className="text-xs sm:text-sm">Exercices</TabsTrigger><TabsTrigger value="overload" className="text-xs sm:text-sm"><TrendingUp className="size-3 mr-1" />Surcharge</TabsTrigger><TabsTrigger value="history" className="text-xs sm:text-sm"><History className="size-3 mr-1" />Historique</TabsTrigger></TabsList></div><TabsContent value="programs"><ProgramsTab progs={progs} setProgs={setProgs} exs={exs} onOpenExercise={openOverload} showArchived={false} /></TabsContent><TabsContent value="archived"><ProgramsTab progs={progs} setProgs={setProgs} exs={exs} onOpenExercise={openOverload} showArchived /></TabsContent><TabsContent value="exercises"><ExercisesTab exs={exs} setExs={setExs} /></TabsContent><TabsContent value="overload"><OverloadTab exs={exs} setExs={setExs} progs={progs} setProgs={setProgs} sessions={sessions} targets={targets} focusExerciseId={focusEx} /></TabsContent><TabsContent value="history"><HistoryTab sessions={sessions} exs={exs} onDelete={async (id) => { const { data, error } = await supabase.rpc("sport_delete_workout", { p_id: id }); if (error || data !== true) { toast.error("Suppression de la séance impossible."); return; } setSessions((p) => p.filter((s) => s.id !== id)); toast.success("Séance supprimée de l’historique."); }} /></TabsContent></Tabs>
   </div>;
 }
 
-function ActiveSession({ active, setActive, exs, onFinish, onCancel }: { active: WorkoutSession; setActive: (v: WorkoutSession | null) => void; exs: Exercise[]; onFinish: () => void; onCancel: () => void }) {
+function ActiveSession({ active, setActive, exs, sessions, targets, onFinish, onCancel }: { active: WorkoutSession; setActive: (v: WorkoutSession | null) => void; exs: Exercise[]; sessions: WorkoutSession[]; targets: Record<string, ProgressionTarget>; onFinish: () => void; onCancel: () => void }) {
   const updateSet = (exIdx: number, setIdx: number, patch: Partial<SessionSet>) => setActive({ ...active, exercises: active.exercises.map((e, i) => i !== exIdx ? e : { ...e, sets: e.sets.map((s, j) => j !== setIdx ? s : { ...s, ...patch }) }) });
   const addSet = (exIdx: number) => { const last = active.exercises[exIdx].sets.slice(-1)[0]; setActive({ ...active, exercises: active.exercises.map((e, i) => i !== exIdx ? e : { ...e, sets: [...e.sets, { reps: last?.reps ?? 8, weight: last?.weight ?? 0, done: false }] }) }); };
-  const addExercise = (id: string) => setActive({ ...active, exercises: [...active.exercises, { exerciseId: id, sets: [{ reps: 8, weight: 0, done: false }] }] });
+  const addExercise = (id: string) => {
+    const previous = sessions
+      .filter((session) => session.exercises.some((exercise) => exercise.exerciseId === id))
+      .sort((a, b) => b.date.localeCompare(a.date) || b.startedAt - a.startedAt)[0];
+    const previousExercise = previous?.exercises.find((exercise) => exercise.exerciseId === id);
+    const previousSets = previousExercise?.sets.filter((set) => set.done);
+    const sourceSets = previousSets?.length ? previousSets : [{ reps: 8, weight: 0, done: false }];
+    setActive({
+      ...active,
+      exercises: [...active.exercises, {
+        exerciseId: id,
+        sets: sourceSets.map((set) => ({ reps: set.reps, weight: set.weight, done: false })),
+      }],
+    });
+  };
   const removeExercise = (idx: number) => setActive({ ...active, exercises: active.exercises.filter((_, i) => i !== idx) });
-  return <div className="rounded-2xl glass-card p-5 mb-4"><div className="flex items-center justify-between mb-3 flex-wrap gap-2"><div><div className="text-xs text-primary font-medium uppercase tracking-wider">Séance en cours</div><h2 className="font-display text-xl font-semibold">{active.name}</h2></div><div className="flex gap-2"><Button variant="ghost" size="sm" onClick={onCancel}>Annuler</Button><Button onClick={onFinish} className="rounded-xl"><Square className="size-3 mr-1" />Terminer</Button></div></div><div className="space-y-3">{active.exercises.map((e, exIdx) => { const meta = exs.find((x) => x.id === e.exerciseId); return <div key={exIdx} className="rounded-xl glass-thin p-3"><div className="flex items-center justify-between mb-2"><div className="font-medium">{meta?.name ?? "Exercice"} <span className="text-xs text-muted-foreground">{meta?.muscle}</span></div><button onClick={() => removeExercise(exIdx)} aria-label="Retirer cet exercice" className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button></div><div className="space-y-1.5">{e.sets.map((s, j) => <div key={j} className="flex items-center gap-2"><span className="text-xs text-muted-foreground w-6">{j + 1}.</span><Input type="number" value={s.weight || ""} onChange={(ev) => updateSet(exIdx, j, { weight: +ev.target.value || 0 })} placeholder="kg" className="h-8 w-20 text-sm" /><span className="text-xs text-muted-foreground">×</span><Input type="number" value={s.reps || ""} onChange={(ev) => updateSet(exIdx, j, { reps: +ev.target.value || 0 })} placeholder="reps" className="h-8 w-20 text-sm" /><button onClick={() => updateSet(exIdx, j, { done: !s.done })} className={`size-7 rounded-md grid place-items-center ${s.done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}><Check className="size-3.5" /></button></div>)}<Button variant="ghost" size="sm" onClick={() => addSet(exIdx)} className="h-7 text-xs"><Plus className="size-3 mr-1" />Série</Button></div></div>; })}<SportExercisePicker exercises={exs} onChange={addExercise} /></div></div>;
+  return <div className="rounded-2xl glass-card p-5 mb-4"><div className="flex items-center justify-between mb-3 flex-wrap gap-2"><div><div className="text-xs text-primary font-medium uppercase tracking-wider">Séance en cours</div><h2 className="font-display text-xl font-semibold">{active.name}</h2></div><div className="flex gap-2"><Button variant="ghost" size="sm" onClick={onCancel}>Annuler</Button><Button onClick={onFinish} className="rounded-xl"><Square className="size-3 mr-1" />Terminer</Button></div></div><div className="space-y-3">{active.exercises.map((e, exIdx) => { const meta = exs.find((x) => x.id === e.exerciseId); return <div key={exIdx} className="rounded-xl glass-thin p-3"><div className="flex items-center justify-between mb-2"><div className="font-medium">{meta?.name ?? "Exercice"} <span className="text-xs text-muted-foreground">{meta?.muscle}</span>{targets[e.exerciseId] && <span className="ml-2 text-[11px] text-primary">(cible : {targets[e.exerciseId].targetSets} × {targets[e.exerciseId].targetReps}{targets[e.exerciseId].targetWeight > 0 ? ` @ ${targets[e.exerciseId].targetWeight} kg` : ""})</span>}</div><button onClick={() => removeExercise(exIdx)} aria-label="Retirer cet exercice" className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button></div><div className="space-y-1.5">{e.sets.map((s, j) => <div key={j} className="flex items-center gap-2"><span className="text-xs text-muted-foreground w-6">{j + 1}.</span><Input type="number" value={s.weight || ""} onChange={(ev) => updateSet(exIdx, j, { weight: +ev.target.value || 0 })} placeholder="kg" className="h-8 w-20 text-sm" /><span className="text-xs text-muted-foreground">×</span><Input type="number" value={s.reps || ""} onChange={(ev) => updateSet(exIdx, j, { reps: +ev.target.value || 0 })} placeholder="reps" className="h-8 w-20 text-sm" /><button onClick={() => updateSet(exIdx, j, { done: !s.done })} className={`size-7 rounded-md grid place-items-center ${s.done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}><Check className="size-3.5" /></button></div>)}<Button variant="ghost" size="sm" onClick={() => addSet(exIdx)} className="h-7 text-xs"><Plus className="size-3 mr-1" />Série</Button></div></div>; })}<SportExercisePicker exercises={exs} onChange={addExercise} /></div></div>;
 }
 
 const ExercisesTab = memo(function ExercisesTab({ exs, setExs }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void }) {
@@ -128,7 +246,7 @@ function deriveSessionRows(sessions: WorkoutSession[], exerciseId: string): Over
   return rows;
 }
 
-const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, sessions, focusExerciseId }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void; progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; sessions: WorkoutSession[]; focusExerciseId?: string | null }) {
+const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, sessions, targets: aiTargets, focusExerciseId }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void; progs: Program[]; setProgs: (v: Program[] | ((p: Program[]) => Program[])) => void; sessions: WorkoutSession[]; targets: Record<string, ProgressionTarget>; focusExerciseId?: string | null }) {
   const [manualStore, setManualStore] = useLocalState<OverloadStore>("pace.sport.overload", {});
   const rowsByExercise = useMemo(() => { const map: Record<string, OverloadRow[]> = {}; exs.forEach((e) => { const sessionRows = deriveSessionRows(sessions, e.id); const manualRows = manualStore[e.id] ?? []; map[e.id] = [...sessionRows, ...manualRows].sort((a, b) => b.date.localeCompare(a.date) || (a.source === "manual" ? -1 : 1)); }); return map; }, [exs, sessions, manualStore]);
   const muscles = useMemo(() => Array.from(new Set(exs.map((e) => e.muscle))), [exs]); const [muscle, setMuscle] = useState(""); const currentMuscle = muscle || muscles[0] || ""; const muscleExs = useMemo(() => exs.filter((e) => e.muscle === currentMuscle), [exs, currentMuscle]);
@@ -141,5 +259,5 @@ const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, se
   const removeRow = (exerciseId: string, id: string) => setManualStore((p) => ({ ...p, [exerciseId]: (p[exerciseId] ?? []).filter((r) => r.id !== id) }));
   const guardSession = (row: OverloadRow) => { if (row.source === "session") { toast.info("Cette ligne vient d'une séance réelle — modifie-la dans l'onglet Historique."); return true; } return false; };
   if (!exs.length) return <div className="text-sm text-muted-foreground text-center py-8">Crée d'abord un exercice pour suivre ta surcharge progressive.</div>;
-  return <div className="space-y-4"><div><div className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider">Groupe musculaire</div><div className="flex gap-1.5 flex-wrap">{muscles.map((m) => <button key={m} onClick={() => setMuscle(m)} className={`px-3 py-1.5 rounded-lg text-xs ${currentMuscle === m ? "glass-thin text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}>{m}</button>)}</div></div>{!muscleExs.length ? <div className="text-sm text-muted-foreground text-center py-8">Aucun exercice dans ce groupe.</div> : <div className="space-y-4">{muscleExs.map((ex) => { const rows = rowsByExercise[ex.id] ?? []; const tgt = targets[ex.id]; const lastW = rows[0]?.weight ?? 0; const prevW = rows[1]?.weight ?? 0; const delta = lastW - prevW; return <div key={ex.id} id={`ov-${ex.id}`} className="rounded-2xl glass-card overflow-hidden scroll-mt-24"><div className="flex items-center justify-between gap-2 p-3 border-b border-border/50 flex-wrap"><div className="min-w-0"><div className="font-medium truncate">{ex.name}</div>{ex.equipment && <div className="text-[11px] text-muted-foreground">{ex.equipment}</div>}</div><div className="flex items-center gap-1.5 flex-wrap text-[11px]">{tgt && <span className="px-2 py-0.5 rounded-md glass-thin">Cible <b>{tgt.sets} × {tgt.reps}</b></span>}{rows.length >= 2 && <span className={`px-2 py-0.5 rounded-md ${delta > 0 ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : delta < 0 ? "bg-rose-500/15 text-rose-700 dark:text-rose-300" : "bg-muted"}`}>{delta > 0 ? "↑" : delta < 0 ? "↓" : "="} {Math.abs(delta)} kg</span>}<Button size="sm" variant="secondary" onClick={() => addRow(ex.id)} className="rounded-lg h-7 text-xs"><Plus className="size-3 mr-0.5" />Ligne manuelle</Button></div></div>{!rows.length ? <div className="text-xs text-muted-foreground text-center py-4">Aucune entrée. Termine une séance avec cet exercice, ou ajoute une ligne manuelle.</div> : <div className="overflow-x-auto"><div className="min-w-[700px]"><div className="grid grid-cols-[110px_1fr_1fr_1fr_1fr_36px] gap-px bg-border text-[11px] uppercase tracking-wider text-muted-foreground"><div className="bg-card px-2 py-1.5">Date</div><div className="bg-card px-2 py-1.5 text-center">Reps / série</div><div className="bg-card px-2 py-1.5 text-center">Kg / série</div><div className="bg-card px-2 py-1.5 text-center">Séries</div><div className="bg-card px-2 py-1.5">Note</div><div className="bg-card px-2 py-1.5" /></div>{rows.map((r) => { const locked = r.source === "session"; const repsSeries = r.repSeries?.length ? r.repSeries : [r.reps]; const weightSeries = r.weightSeries?.length ? r.weightSeries : [r.weight]; const repsText = repsSeries.join(" / "); const weightText = weightSeries.join(" / "); return <div key={r.id} className="grid grid-cols-[110px_1fr_1fr_1fr_1fr_36px] gap-px bg-border text-sm"><div className="bg-card px-1 py-1 flex items-center gap-1"><Input type="date" value={r.date} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { date: e.target.value })} className="h-8 text-xs" />{locked && <span title="Issue d'une séance réelle" className="text-[10px] text-primary shrink-0">●</span>}</div><div className="bg-card px-1 py-1"><Input value={repsText} disabled={locked} onChange={(e) => { const series = parseSeries(e.target.value); updateRow(ex.id, r.id, { repSeries: series, reps: series[0] ?? 0, sets: series.length }); }} placeholder="9 / 7 / 7" className="h-8 text-center text-xs" /></div><div className="bg-card px-1 py-1"><Input value={weightText} disabled={locked} onChange={(e) => { const series = parseSeries(e.target.value); updateRow(ex.id, r.id, { weightSeries: series, weight: series[0] ?? 0 }); }} placeholder="40 / 42 / 42" className="h-8 text-center text-xs" /></div><div className="bg-card px-1 py-1"><Input type="number" value={r.sets || ""} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { sets: +e.target.value || 0 })} className="h-8 text-center" /></div><div className="bg-card px-1 py-1"><Input value={r.note ?? ""} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { note: e.target.value })} placeholder="Ressenti…" className="h-8 text-xs" /></div><button onClick={() => locked ? guardSession(r) : removeRow(ex.id, r.id)} aria-label="Supprimer cette ligne de surcharge" className="bg-card grid place-items-center text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button></div>; })}</div></div>}</div>; })}</div>}</div>;
+  return <div className="space-y-4"><div><div className="text-xs text-muted-foreground mb-1.5 uppercase tracking-wider">Groupe musculaire</div><div className="flex gap-1.5 flex-wrap">{muscles.map((m) => <button key={m} onClick={() => setMuscle(m)} className={`px-3 py-1.5 rounded-lg text-xs ${currentMuscle === m ? "glass-thin text-foreground font-medium" : "text-muted-foreground hover:text-foreground"}`}>{m}</button>)}</div></div>{!muscleExs.length ? <div className="text-sm text-muted-foreground text-center py-8">Aucun exercice dans ce groupe.</div> : <div className="space-y-4">{muscleExs.map((ex) => { const rows = rowsByExercise[ex.id] ?? []; const tgt = targets[ex.id]; const lastW = rows[0]?.weight ?? 0; const prevW = rows[1]?.weight ?? 0; const delta = lastW - prevW; return <div key={ex.id} id={`ov-${ex.id}`} className="rounded-2xl glass-card overflow-hidden scroll-mt-24"><div className="flex items-center justify-between gap-2 p-3 border-b border-border/50 flex-wrap"><div className="min-w-0"><div className="font-medium truncate">{ex.name}</div>{ex.equipment && <div className="text-[11px] text-muted-foreground">{ex.equipment}</div>}</div><div className="flex items-center gap-1.5 flex-wrap text-[11px]">{aiTargets[ex.id] ? <span className="px-2 py-0.5 rounded-md glass-thin text-primary">(cible : <b>{aiTargets[ex.id].targetSets} × {aiTargets[ex.id].targetReps}{aiTargets[ex.id].targetWeight > 0 ? " @ " + aiTargets[ex.id].targetWeight + " kg" : ""}</b>)</span> : tgt && <span className="px-2 py-0.5 rounded-md glass-thin">Base <b>{tgt.sets} × {tgt.reps}</b></span>}{rows.length >= 2 && <span className={`px-2 py-0.5 rounded-md ${delta > 0 ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : delta < 0 ? "bg-rose-500/15 text-rose-700 dark:text-rose-300" : "bg-muted"}`}>{delta > 0 ? "↑" : delta < 0 ? "↓" : "="} {Math.abs(delta)} kg</span>}<Button size="sm" variant="secondary" onClick={() => addRow(ex.id)} className="rounded-lg h-7 text-xs"><Plus className="size-3 mr-0.5" />Ligne manuelle</Button></div></div>{!rows.length ? <div className="text-xs text-muted-foreground text-center py-4">Aucune entrée. Termine une séance avec cet exercice, ou ajoute une ligne manuelle.</div> : <div className="overflow-x-auto"><div className="min-w-[700px]"><div className="grid grid-cols-[110px_1fr_1fr_1fr_1fr_36px] gap-px bg-border text-[11px] uppercase tracking-wider text-muted-foreground"><div className="bg-card px-2 py-1.5">Date</div><div className="bg-card px-2 py-1.5 text-center">Reps / série</div><div className="bg-card px-2 py-1.5 text-center">Kg / série</div><div className="bg-card px-2 py-1.5 text-center">Séries</div><div className="bg-card px-2 py-1.5">Note</div><div className="bg-card px-2 py-1.5" /></div>{rows.map((r) => { const locked = r.source === "session"; const repsSeries = r.repSeries?.length ? r.repSeries : [r.reps]; const weightSeries = r.weightSeries?.length ? r.weightSeries : [r.weight]; const repsText = repsSeries.join(" / "); const weightText = weightSeries.join(" / "); return <div key={r.id} className="grid grid-cols-[110px_1fr_1fr_1fr_1fr_36px] gap-px bg-border text-sm"><div className="bg-card px-1 py-1 flex items-center gap-1"><Input type="date" value={r.date} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { date: e.target.value })} className="h-8 text-xs" />{locked && <span title="Issue d'une séance réelle" className="text-[10px] text-primary shrink-0">●</span>}</div><div className="bg-card px-1 py-1"><Input value={repsText} disabled={locked} onChange={(e) => { const series = parseSeries(e.target.value); updateRow(ex.id, r.id, { repSeries: series, reps: series[0] ?? 0, sets: series.length }); }} placeholder="9 / 7 / 7" className="h-8 text-center text-xs" /></div><div className="bg-card px-1 py-1"><Input value={weightText} disabled={locked} onChange={(e) => { const series = parseSeries(e.target.value); updateRow(ex.id, r.id, { weightSeries: series, weight: series[0] ?? 0 }); }} placeholder="40 / 42 / 42" className="h-8 text-center text-xs" /></div><div className="bg-card px-1 py-1"><Input type="number" value={r.sets || ""} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { sets: +e.target.value || 0 })} className="h-8 text-center" /></div><div className="bg-card px-1 py-1"><Input value={r.note ?? ""} disabled={locked} onChange={(e) => updateRow(ex.id, r.id, { note: e.target.value })} placeholder="Ressenti…" className="h-8 text-xs" /></div><button onClick={() => locked ? guardSession(r) : removeRow(ex.id, r.id)} aria-label="Supprimer cette ligne de surcharge" className="bg-card grid place-items-center text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button></div>; })}</div></div>}</div>; })}</div>}</div>;
 });
