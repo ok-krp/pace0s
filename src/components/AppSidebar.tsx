@@ -21,12 +21,12 @@ function SidebarContent({ currentPath, onNavigate }: { currentPath: string; onNa
       <Link to="/" search={{}} onClick={onNavigate} className="flex items-center gap-2 min-w-0">
         <div className="size-8 grid place-items-center text-primary"><Sparkles className="size-4" /></div>
         <div className="min-w-0">
-          <div className="font-display font-semibold text-[15px] tracking-tight">Pace</div>
-          <div className="text-[11px] text-muted-foreground -mt-0.5">centre de contrôle</div>
+          <div className="font-display font-semibold text-[15px] tracking-tight text-white drop-shadow-sm">Pace</div>
+          <div className="text-[11px] text-white/50 -mt-0.5 drop-shadow-sm">centre de contrôle</div>
         </div>
       </Link>
     </div>
-    <button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} className="flex-none flex items-center gap-2 px-3 py-2 mb-3 rounded-md glass-thin text-sm text-muted-foreground hover:text-foreground transition">
+    <button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} className="flex-none flex items-center gap-2 px-3 py-2 mb-3 rounded-md glass-thin border border-white/20 bg-white/10 backdrop-blur-2xl text-sm text-white/70 hover:text-foreground transition">
       <Search className="size-3.5" /><span className="flex-1 text-left">Rechercher…</span><kbd className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-mono">⌘K</kbd>
     </button>
     <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain"><GroupedNav currentPath={currentPath} onNavigate={onNavigate} /></div>
@@ -37,7 +37,7 @@ function SidebarContent({ currentPath, onNavigate }: { currentPath: string; onNa
 
 export function AppSidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
-  return <aside className="fixed left-3 top-3 bottom-3 z-[100] hidden md:flex w-72 min-h-0 flex-none flex-col overflow-hidden px-3 py-5 glass-card rounded-[20px] isolate">
+  return <aside className="fixed left-3 top-3 bottom-3 z-[100] hidden md:flex w-72 min-h-0 flex-none flex-col overflow-hidden px-3 py-5 glass-card rounded-3xl border border-white/20 bg-white/5 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)] isolate">
     <SidebarContent currentPath={path} />
   </aside>;
 }
@@ -47,14 +47,14 @@ export function MobileTopBar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = getNavItem(path)?.label ?? "Pace";
 
-  return <header className="md:hidden sticky top-0 z-[120] flex items-center gap-2 mx-3 mt-[max(0.5rem,env(safe-area-inset-top))] mb-1 px-3 py-2 glass-card rounded-[18px]">
+  return <header className="md:hidden sticky top-0 z-[120] flex items-center gap-2 mx-3 mt-[max(0.5rem,env(safe-area-inset-top))] mb-1 px-3 py-2 glass-card rounded-2xl border border-white/20 bg-white/5 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)]">
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <button type="button" className={`relative z-[130] size-10 ${interactiveRing}`} aria-label="Menu" aria-expanded={open}>
           <Menu className="size-5" />
         </button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-[min(88vw,20rem)] max-w-[calc(100vw-1.5rem)] min-h-0 p-3 pt-5 rounded-r-[20px] md:hidden bg-background border-r border-border shadow-2xl">
+      <SheetContent side="left" className="w-[min(88vw,20rem)] max-w-[calc(100vw-1.5rem)] min-h-0 p-3 pt-5 rounded-r-3xl md:hidden bg-white/10 border border-white/20 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)]">
         <SheetTitle className="sr-only">Menu de navigation</SheetTitle>
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           <SidebarContent currentPath={path} onNavigate={() => setOpen(false)} />
