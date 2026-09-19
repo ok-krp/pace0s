@@ -16,36 +16,48 @@ type GroceryItem = { id: string; name: string; quantity: string; category: Groce
 const CATEGORIES: GroceryCategory[] = ["Fruits & légumes", "Protéines", "Féculents", "Produits laitiers", "Épicerie", "Boissons", "Maison", "Autre"];
 const STARTER: GroceryItem[] = [];
 
+function normalizeItems(value: unknown): GroceryItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is GroceryItem =>
+    !!item &&
+    typeof item === "object" &&
+    typeof (item as GroceryItem).id === "string" &&
+    typeof (item as GroceryItem).name === "string" &&
+    typeof (item as GroceryItem).category === "string" &&
+    typeof (item as GroceryItem).checked === "boolean"
+  );
+}
+
 function CoursesPage() {
   const [items, setItems] = useDomainState<GroceryItem[]>("courses.items", STARTER);
+  const safeItems = normalizeItems(items);
   const [name, setName] = useState("");
   const [quantity, setQuantity] = useState("");
   const [category, setCategory] = useState<GroceryCategory>("Autre");
   const [filter, setFilter] = useState<"all" | "open" | "done">("all");
 
-  const visible = useMemo(() => items.filter((item) => filter === "all" || (filter === "done" ? item.checked : !item.checked)), [items, filter]);
-  const remaining = items.filter((item) => !item.checked).length;
-  const done = items.length - remaining;
+  const visible = useMemo(() => safeItems.filter((item) => filter === "all" || (filter === "done" ? item.checked : !item.checked)), [safeItems, filter]);
+  const remaining = safeItems.filter((item) => !item.checked).length;
+  const done = safeItems.length - remaining;
   const grouped = CATEGORIES.map((cat) => ({ cat, items: visible.filter((item) => item.category === cat) })).filter((group) => group.items.length);
 
   const add = () => {
     const clean = name.trim();
     if (!clean) return;
-    setItems((prev) => [{ id: crypto.randomUUID(), name: clean, quantity: quantity.trim(), category, checked: false }, ...prev]);
+    setItems((prev) => [{ id: crypto.randomUUID(), name: clean, quantity: quantity.trim(), category, checked: false }, ...normalizeItems(prev)]);
     setName("");
     setQuantity("");
   };
-  const toggle = (id: string) => setItems((prev) => prev.map((item) => item.id === id ? { ...item, checked: !item.checked } : item));
-  const remove = (id: string) => setItems((prev) => prev.filter((item) => item.id !== id));
-  const clearDone = () => setItems((prev) => prev.filter((item) => !item.checked));
-  const addCommon = (value: string, cat: GroceryCategory) => setItems((prev) => [{ id: crypto.randomUUID(), name: value, quantity: "", category: cat, checked: false }, ...prev]);
+  const toggle = (id: string) => setItems((prev) => normalizeItems(prev).map((item) => item.id === id ? { ...item, checked: !item.checked } : item));
+  const remove = (id: string) => setItems((prev) => normalizeItems(prev).filter((item) => item.id !== id));
+  const clearDone = () => setItems((prev) => normalizeItems(prev).filter((item) => !item.checked));
+  const addCommon = (value: string, cat: GroceryCategory) => setItems((prev) => [{ id: crypto.randomUUID(), name: value, quantity: "", category: cat, checked: false }, ...normalizeItems(prev)]);
 
   return (
     <div>
       <PageHeader title="Courses" subtitle="La liste de la semaine, simple à remplir et impossible à oublier." />
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4">
-        <section className="glass-card rounded-3xl p-4 md:p-6">
+      <section className="glass-card p-4 md:p-6">
           <div className="flex flex-wrap items-center gap-2 mb-4">
             <div className="flex-1 min-w-[220px] relative">
               <ShoppingCart className="size-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -60,7 +72,7 @@ function CoursesPage() {
 
           <div className="flex items-center justify-between gap-3 border-b pb-3 mb-3">
             <div className="flex gap-1.5">
-              {([['all', `Tous · ${items.length}`], ['open', `À acheter · ${remaining}`], ['done', `Faits · ${done}`]] as const).map(([key, label]) => (
+              {([['all', `Tous · ${safeItems.length}`], ['open', `À acheter · ${remaining}`], ['done', `Faits · ${done}`]] as const).map(([key, label]) => (
                 <button key={key} onClick={() => setFilter(key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${filter === key ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"}`}>{label}</button>
               ))}
             </div>
@@ -89,28 +101,7 @@ function CoursesPage() {
             </div>
           ))}
         </section>
-
-        <aside className="space-y-4">
-          <section className="glass-card rounded-3xl p-5">
-            <div className="flex items-center gap-2 mb-3"><CirclePlus className="size-4 text-primary" /><h2 className="font-semibold text-sm">Ajouts rapides</h2></div>
-            <div className="grid grid-cols-2 gap-2">
-              {[["Œufs", "Protéines"], ["Poulet", "Protéines"], ["Bananes", "Fruits & légumes"], ["Pommes", "Fruits & légumes"], ["Riz", "Féculents"], ["Lait", "Produits laitiers"], ["Eau", "Boissons"], ["Café", "Épicerie"]].map(([label, cat]) => <button key={label} onClick={() => addCommon(label, cat as GroceryCategory)} className="flex items-center gap-2 rounded-xl border px-3 py-2 text-xs hover:bg-muted text-left"><Plus className="size-3" />{label}</button>)}
-            </div>
-          </section>
-          <section className="glass-card rounded-3xl p-5">
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Cette semaine</div>
-            <div className="mt-2 text-3xl font-display font-bold">{remaining}</div>
-            <div className="text-xs text-muted-foreground">articles encore à acheter</div>
-            <div className="mt-4 h-2 rounded-full bg-muted overflow-hidden"><div className="h-full bg-primary rounded-full transition-all" style={{ width: items.length ? `${Math.round((done / items.length) * 100)}%` : "0%" }} /></div>
-            <div className="mt-2 text-xs text-muted-foreground">{done}/{items.length} cochés</div>
-          </section>
-          <section className="glass-card rounded-3xl p-5">
-            <div className="flex items-center gap-2 mb-2"><Copy className="size-4 text-primary" /><h2 className="font-semibold text-sm">Automatisation prête</h2></div>
-            <p className="text-xs text-muted-foreground leading-relaxed">La liste est maintenant stockée via le store de domaine Pace, avec identifiant de mutation et compatibilité avec la synchronisation locale/distante. La prochaine couche peut agréger repas, recettes et garde-manger sans refaire le modèle de données.</p>
-            <div className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground"><ChevronDown className="size-3" /> Préparation pour l'assistant IA</div>
-          </section>
-        </aside>
-      </div>
+      </section>
     </div>
   );
 }

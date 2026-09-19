@@ -352,3 +352,29 @@
 [data-visual-theme="signal"] ::-webkit-scrollbar-track { background: var(--background); }
 [data-visual-theme="signal"] ::-webkit-scrollbar-thumb { background: oklch(0.32 0.01 250); border: 2px solid var(--background); }
 [data-visual-theme="signal"] ::-webkit-scrollbar-thumb:hover { background: oklch(0.42 0.012 250); }
+
+/* Final Signal hard-reset: the mode owns its geometry and never inherits rounded UI tokens. */
+[data-visual-theme="signal"] {
+  --radius: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
+  --glass-radius: 0px;
+  --glass-radius-sm: 0px;
+}
+[data-visual-theme="signal"] *,
+[data-visual-theme="signal"] *::before,
+[data-visual-theme="signal"] *::after {
+  border-radius: 0 !important;
+}
+[data-visual-theme="signal"] .glass-card,
+[data-visual-theme="signal"] [class*="glass-card"],
+[data-visual-theme="signal"] .glass-thin,
+[data-visual-theme="signal"] .glass-icon,
+[data-visual-theme="signal"] [data-slot="card"] {
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
