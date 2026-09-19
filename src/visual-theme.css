@@ -151,3 +151,226 @@
 [data-visual-theme="signal"] .signal-theme-dot {
   box-shadow: 0 0 12px oklch(0.78 0.18 158 / 0.62);
 }
+
+
+/* Signal SaaS system: deliberately sharp, dense, and operational. Scoped to the alternate theme only. */
+[data-visual-theme="signal"] *,
+[data-visual-theme="signal"] *::before,
+[data-visual-theme="signal"] *::after {
+  border-radius: 0 !important;
+}
+
+[data-visual-theme="signal"] {
+  --signal-line: oklch(0.58 0.03 155 / 0.18);
+  --signal-line-strong: oklch(0.62 0.04 155 / 0.28);
+  --signal-panel: oklch(0.125 0.017 155 / 0.96);
+  --signal-panel-raised: oklch(0.16 0.02 155 / 0.98);
+  --signal-hover: oklch(0.19 0.025 155 / 0.98);
+  --signal-green: oklch(0.78 0.18 158);
+  --signal-green-dim: oklch(0.58 0.13 158);
+}
+
+/* Remove the decorative glass treatment and replace it with an enterprise-style surface system. */
+[data-visual-theme="signal"] .glass-card,
+[data-visual-theme="signal"] [class*="glass-card"],
+[data-visual-theme="signal"] .glass-thin,
+[data-visual-theme="signal"] .glass-icon,
+[data-visual-theme="signal"] [class*="bg-card"],
+[data-visual-theme="signal"] [class*="bg-popover"] {
+  background: var(--signal-panel) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border: 1px solid var(--signal-line) !important;
+  box-shadow: 0 8px 28px -24px oklch(0 0 0 / 0.95) !important;
+}
+
+/* Cards become flat system panels with explicit hierarchy instead of rounded containers. */
+[data-visual-theme="signal"] .glass-card:hover,
+[data-visual-theme="signal"] [class*="glass-card"]:hover {
+  border-color: var(--signal-line-strong) !important;
+  background: var(--signal-panel-raised) !important;
+  box-shadow: 0 12px 32px -26px oklch(0 0 0 / 1) !important;
+}
+
+/* SaaS controls: compact, rectangular, high information density. */
+[data-visual-theme="signal"] button,
+[data-visual-theme="signal"] [role="button"],
+[data-visual-theme="signal"] input,
+[data-visual-theme="signal"] textarea,
+[data-visual-theme="signal"] select {
+  border-radius: 0 !important;
+}
+
+[data-visual-theme="signal"] button:not([data-state="checked"]):not([data-state="on"]),
+[data-visual-theme="signal"] [role="button"] {
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+[data-visual-theme="signal"] button:hover,
+[data-visual-theme="signal"] [role="button"]:hover {
+  box-shadow: inset 0 0 0 1px oklch(0.78 0.18 158 / 0.14);
+}
+
+[data-visual-theme="signal"] button:focus-visible,
+[data-visual-theme="signal"] [role="button"]:focus-visible,
+[data-visual-theme="signal"] input:focus-visible,
+[data-visual-theme="signal"] textarea:focus-visible,
+[data-visual-theme="signal"] select:focus-visible {
+  outline: 1px solid var(--signal-green) !important;
+  outline-offset: 0 !important;
+  box-shadow: 0 0 0 1px oklch(0.78 0.18 158 / 0.2) !important;
+}
+
+/* Inputs use hard edges and a clear field hierarchy. */
+[data-visual-theme="signal"] input,
+[data-visual-theme="signal"] textarea,
+[data-visual-theme="signal"] select {
+  background: oklch(0.105 0.014 155 / 0.96) !important;
+  border: 1px solid var(--signal-line) !important;
+  box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.35) !important;
+}
+
+[data-visual-theme="signal"] input:hover,
+[data-visual-theme="signal"] textarea:hover,
+[data-visual-theme="signal"] select:hover {
+  border-color: var(--signal-line-strong) !important;
+}
+
+[data-visual-theme="signal"] input::placeholder,
+[data-visual-theme="signal"] textarea::placeholder {
+  color: oklch(0.54 0.018 150);
+}
+
+/* Primary actions are dense and rectangular rather than pill-like. */
+[data-visual-theme="signal"] [class*="bg-primary"] {
+  border: 1px solid oklch(0.86 0.14 158 / 0.45);
+  box-shadow: 0 0 22px -16px oklch(0.78 0.18 158 / 0.9) !important;
+}
+
+[data-visual-theme="signal"] [class*="bg-primary"]:hover {
+  filter: brightness(1.06);
+}
+
+/* Dividers and list rows carry more of the visual hierarchy than shadows. */
+[data-visual-theme="signal"] hr,
+[data-visual-theme="signal"] [role="separator"] {
+  border-color: var(--signal-line) !important;
+  background: var(--signal-line) !important;
+}
+
+[data-visual-theme="signal"] [data-state="open"],
+[data-visual-theme="signal"] [data-state="selected"],
+[data-visual-theme="signal"] [data-state="active"] {
+  border-color: oklch(0.78 0.18 158 / 0.32) !important;
+}
+
+/* Remove floating/pill aesthetics from common utility classes while preserving layout. */
+[data-visual-theme="signal"] [class*="rounded-full"],
+[data-visual-theme="signal"] [class*="rounded-xl"],
+[data-visual-theme="signal"] [class*="rounded-lg"],
+[data-visual-theme="signal"] [class*="rounded-md"],
+[data-visual-theme="signal"] [class*="rounded-sm"],
+[data-visual-theme="signal"] [class*="rounded-2xl"],
+[data-visual-theme="signal"] [class*="rounded-3xl"] {
+  border-radius: 0 !important;
+}
+
+/* Tables and data-dense regions read like a modern SaaS console. */
+[data-visual-theme="signal"] table {
+  border-collapse: collapse;
+}
+
+[data-visual-theme="signal"] th {
+  background: oklch(0.12 0.016 155 / 0.98);
+  color: oklch(0.68 0.02 150);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+[data-visual-theme="signal"] th,
+[data-visual-theme="signal"] td {
+  border-bottom: 1px solid var(--signal-line) !important;
+}
+
+[data-visual-theme="signal"] tr:hover > td {
+  background: oklch(0.16 0.022 155 / 0.72);
+}
+
+/* Dialogs/popovers/sheets use hard-edged console panels. */
+[data-visual-theme="signal"] [role="dialog"],
+[data-visual-theme="signal"] [data-radix-popper-content-wrapper] > *,
+[data-visual-theme="signal"] [data-side] {
+  border-radius: 0 !important;
+}
+
+[data-visual-theme="signal"] [role="dialog"] {
+  border: 1px solid var(--signal-line-strong);
+  box-shadow: 0 24px 64px -34px oklch(0 0 0 / 1);
+}
+
+/* Sidebar is a fixed operational rail, visually separated by one precise rule. */
+[data-visual-theme="signal"] aside {
+  border-right: 1px solid var(--signal-line-strong) !important;
+  box-shadow: 8px 0 30px -28px oklch(0 0 0 / 1) !important;
+}
+
+[data-visual-theme="signal"] nav a {
+  border-left: 2px solid transparent;
+}
+
+[data-visual-theme="signal"] nav a:hover {
+  background: oklch(0.16 0.022 155 / 0.82);
+  border-left-color: oklch(0.78 0.18 158 / 0.35);
+}
+
+[data-visual-theme="signal"] nav a[aria-current="page"],
+[data-visual-theme="signal"] nav a[data-active="true"] {
+  background: oklch(0.17 0.026 155 / 0.96);
+  border-left-color: var(--signal-green);
+}
+
+/* Keep the theme intentionally compact: less chrome, more usable information. */
+[data-visual-theme="signal"] .pace-bg {
+  background: oklch(0.075 0.014 155);
+}
+
+[data-visual-theme="signal"] .pace-bg::before {
+  background-size: 20px 20px, 20px 20px, auto, auto, auto;
+}
+
+[data-visual-theme="signal"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-visual-theme="signal"] ::-webkit-scrollbar-track {
+  background: oklch(0.08 0.012 155);
+}
+
+[data-visual-theme="signal"] ::-webkit-scrollbar-thumb {
+  background: oklch(0.32 0.028 155);
+  border: 2px solid oklch(0.08 0.012 155);
+}
+
+[data-visual-theme="signal"] ::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.45 0.05 155);
+}
+
+/* Status chips can still communicate state, but never become decorative pills. */
+[data-visual-theme="signal"] [class*="badge"],
+[data-visual-theme="signal"] [class*="Badge"] {
+  border: 1px solid var(--signal-line) !important;
+  background: oklch(0.14 0.018 155 / 0.96) !important;
+  padding-inline: 0.45rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+}
+
+/* Kill transform-based "floating card" micro-interactions in Signal. */
+[data-visual-theme="signal"] [class*="hover:-translate"],
+[data-visual-theme="signal"] [class*="hover:translate"],
+[data-visual-theme="signal"] [class*="hover:scale"] {
+  transform: none !important;
+}
