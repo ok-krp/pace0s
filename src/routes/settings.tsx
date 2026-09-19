@@ -101,7 +101,7 @@ function SettingsPage() {
         </TabsList>
 
         <TabsContent value="settings">
-          <div className="glass-card rounded-3xl p-3 sm:p-5 settings-panel">
+          <div className="glass-card rounded-3xl border border-white/20 bg-white/5 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)] p-3 sm:p-5 settings-panel">
             <Accordion type="multiple" className="settings-accordion">
               <AccordionItem value="appearance">
                 <AccordionTrigger>Apparence & appareil</AccordionTrigger>
@@ -152,10 +152,10 @@ function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="subscription">
-          <div className="glass-card rounded-3xl p-5 sm:p-7">
+          <div className="glass-card rounded-3xl border border-white/20 bg-white/5 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)] p-5 sm:p-7">
             <div className="max-w-3xl">
               <div className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Abonnement</div>
-              <h2 className="mt-2 text-2xl font-display font-semibold">Pace, sans limites artificielles</h2>
+              <h2 className="mt-2 text-2xl font-display font-semibold text-white drop-shadow-sm">Pace, sans limites artificielles</h2>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">Un essai gratuit de 7 jours permet de tester Pace sans paiement. Ensuite, un abonnement est nécessaire pour continuer à utiliser les fonctionnalités cloud. Les droits sont synchronisés côté serveur après confirmation Stripe.</p>
               <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <span className="rounded-full border px-3 py-1">Plan actuel : <strong className="text-foreground">{billingLoading ? "…" : billing?.plan === "trial" ? "Essai gratuit" : billing?.plan === "expired" ? "Essai expiré" : (() => { const plan = billing?.plan; return plan && plan !== "trial" && plan !== "expired" && plan in PLAN_CATALOG ? PLAN_CATALOG[plan as PlanId].name : plan === "trial" ? "Essai gratuit" : plan === "expired" ? "Essai expiré" : "Plan indisponible"; })()}</strong></span>
@@ -163,7 +163,7 @@ function SettingsPage() {
                 {billing?.plan !== "trial" && billing?.plan !== "expired" && <Button variant="secondary" size="sm" className="rounded-full" onClick={async () => { try { const res = await openPortal({}); window.location.href = res.url; } catch (error) { toast.error((error as Error).message); } }}>Gérer mon abonnement</Button>}
               </div>
             </div>
-            <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/[0.04] p-4"><div className="text-sm font-medium">Essai gratuit — 7 jours</div><div className="mt-1 text-xs text-muted-foreground">Un seul essai par compte et par appareil. Aucun abonnement gratuit permanent.</div></div><div className="flex items-center gap-2 mb-4"><Button size="sm" variant={billingInterval === "monthly" ? "default" : "outline"} onClick={() => setBillingInterval("monthly")}>Mensuel</Button><Button size="sm" variant={billingInterval === "annual" ? "default" : "outline"} onClick={() => setBillingInterval("annual")}>Annuel</Button></div><div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/[0.04] p-4"><div className="text-sm font-medium text-white drop-shadow-sm">Essai gratuit — 7 jours</div><div className="mt-1 text-xs text-muted-foreground">Un seul essai par compte et par appareil. Aucun abonnement gratuit permanent.</div></div><div className="flex items-center gap-2 mb-4"><Button size="sm" variant={billingInterval === "monthly" ? "default" : "outline"} onClick={() => setBillingInterval("monthly")}>Mensuel</Button><Button size="sm" variant={billingInterval === "annual" ? "default" : "outline"} onClick={() => setBillingInterval("annual")}>Annuel</Button></div><div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {(Object.entries(PLAN_CATALOG) as Array<[PlanId, typeof PLAN_CATALOG[PlanId]]>).map(([plan, details]) => (
                 <PlanCard
                   key={plan}
@@ -206,5 +206,5 @@ function PlanCard({ plan, name, price, annual, features, highlighted = false, cu
 }
 
 function Row({ icon, label, desc, children }: { icon: React.ReactNode; label: string; desc: string; children: React.ReactNode }) {
-  return <div className="settings-row flex items-center gap-3 px-2 py-3"><div className="size-8 shrink-0 grid place-items-center text-muted-foreground">{icon}</div><div className="flex-1 min-w-0"><div className="font-medium text-sm">{label}</div><div className="text-xs text-muted-foreground leading-relaxed">{desc}</div></div>{children}</div>;
+  return <div className="settings-row flex items-center gap-3 px-2 py-3"><div className="size-8 shrink-0 grid place-items-center text-muted-foreground">{icon}</div><div className="flex-1 min-w-0"><div className="font-medium text-sm text-white drop-shadow-sm">{label}</div><div className="text-xs text-muted-foreground leading-relaxed">{desc}</div></div>{children}</div>;
 }
