@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { PLAN_CATALOG, PLAN_AI_LIMITS, type PlanId, planFromPriceId } from "./billing";
 import { createHmac, timingSafeEqual, createHash } from "node:crypto";
-import type { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 const stripeBase = "https://api.stripe.com/v1";
 
@@ -64,16 +64,16 @@ function hashDeviceId(deviceId: string): string {
 }
 
 export async function ensureTrial(userId: string, deviceId: string, supabase: typeof supabaseAdmin) {
-  const { data: existing } = await supabase.from("billing_trials").select("trial_started_at,trial_ends_at,device_hash").eq("user_id", userId).maybeSingle();
+  const { data: existing } = await supabaseAdmin.from("billing_trials").select("trial_started_at,trial_ends_at,device_hash").eq("user_id", userId).maybeSingle();
   if (existing) return existing;
   const deviceHash = hashDeviceId(deviceId);
   const now = new Date();
   const ends = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const { data, error } = await supabase.from("billing_trials").insert({ user_id: userId, device_hash: deviceHash, trial_started_at: now.toISOString(), trial_ends_at: ends.toISOString() }).select("trial_started_at,trial_ends_at,device_hash").single();
+  const { data, error } = await supabaseAdmin.from("billing_trials").insert({ user_id: userId, device_hash: deviceHash, trial_started_at: now.toISOString(), trial_ends_at: ends.toISOString() }).select("trial_started_at,trial_ends_at,device_hash").single();
   if (error) {
-    const { data: byDevice } = await supabase.from("billing_trials").select("user_id,trial_started_at,trial_ends_at,device_hash").eq("device_hash", deviceHash).maybeSingle();
+    const { data: byDevice } = await supabaseAdmin.from("billing_trials").select("user_id,trial_started_at,trial_ends_at,device_hash").eq("device_hash", deviceHash).maybeSingle();
     if (byDevice && byDevice.user_id !== userId) throw new Error("Cet appareil a déjà utilisé l’essai gratuit de Pace.");
-    const { data: retry } = await supabase.from("billing_trials").select("trial_started_at,trial_ends_at,device_hash").eq("user_id", userId).maybeSingle();
+    const { data: retry } = await supabaseAdmin.from("billing_trials").select("trial_started_at,trial_ends_at,device_hash").eq("user_id", userId).maybeSingle();
     if (retry) return retry;
     throw new Error("Impossible d’activer l’essai gratuit.");
   }
