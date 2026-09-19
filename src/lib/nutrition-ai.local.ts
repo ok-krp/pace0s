@@ -65,7 +65,6 @@ export async function analyzeFoodPhotoLocally(file: File, options?: { goal?: str
     const output = await model(imageUrl, {
       max_new_tokens: 700,
       do_sample: false,
-      prompt: buildPrompt(options?.goal, options?.hint),
     });
     const item = Array.isArray(output) ? output[0] : output;
     const generated = typeof item?.generated_text === "string" ? item.generated_text : "";
