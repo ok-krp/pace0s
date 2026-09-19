@@ -54,7 +54,7 @@ export function MobileTopBar() {
           <Menu className="size-5" />
         </button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-[min(88vw,20rem)] max-w-[calc(100vw-1.5rem)] min-h-0 p-3 pt-5 rounded-r-[20px] md:hidden">
+      <SheetContent side="left" className="w-[min(88vw,20rem)] max-w-[calc(100vw-1.5rem)] min-h-0 p-3 pt-5 rounded-r-[20px] md:hidden bg-background border-r border-border shadow-2xl">
         <SheetTitle className="sr-only">Menu de navigation</SheetTitle>
         <div className="flex h-full min-h-0 flex-col overflow-hidden">
           <SidebarContent currentPath={path} onNavigate={() => setOpen(false)} />
