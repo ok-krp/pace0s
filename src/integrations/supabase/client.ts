@@ -3,9 +3,14 @@ import { createClient } from "@supabase/supabase-js";
 import type { PaceDatabase } from "./pace-database";
 
 function createSupabaseClient() {
-  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  // Browser-safe Supabase configuration: publishable keys are intended for public clients.
+  // Prefer Vite env vars when configured, with the PaceOS project values as a production-safe fallback.
+  const SUPABASE_URL =
+    import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "https://jayzswkabxfhzmftagku.supabase.co";
   const SUPABASE_PUBLISHABLE_KEY =
-    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_PUBLISHABLE_KEY;
+    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.SUPABASE_PUBLISHABLE_KEY ||
+    "sb_publishable_2C2_WSyuDwMzT8uRB2uO_A_f-J2zTfQ";
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [

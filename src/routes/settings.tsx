@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Moon, Sun, Download, Trash2, Bell, Send, Brain, Smartphone, CreditCard, Check } from "lucide-react";
+import { Moon, Sun, Download, Trash2, Bell, Send, Brain, Smartphone, CreditCard, Check, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader } from "@/components/Stat";
@@ -22,6 +22,7 @@ import { AiSettings } from "@/components/AiSettings";
 import { AiLocalModeSettings } from "@/components/AiLocalModeSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
 import { DailyPrioritySettings } from "@/components/DailyPrioritySettings";
+import { VisualThemeToggle } from "@/components/VisualThemeToggle";
 
 const NATIVE_ANDROID_APK_URL = "https://github.com/ok-krp/pace0s/releases/download/android-application-latest/app-debug.apk";
 
@@ -30,18 +31,47 @@ export const Route = createFileRoute("/settings")({
   component: SettingsPage,
 });
 
-function setThemeColor(dark: boolean) { document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#111722" : "#f8fafc"); }
+function setThemeColor(dark: boolean, signal = false) {
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", signal ? "#07100b" : dark ? "#1f242c" : "#f8fafc");
+}
 
 function SettingsPage() {
   const [dark, setDark] = useState(false);
+  const [signal, setSignal] = useState(false);
   const push = usePush();
   const [sending, setSending] = useState(false);
   const sendTest = useServerFn(sendTestNotification);
   const handleTogglePush = async (v: boolean) => { try { if (v) await push.enable(); else await push.disable(); } catch (e) { console.error(e); toast.error((e as Error).message || "Impossible de modifier les notifications"); } };
   const handleSendTest = async () => { setSending(true); try { const res = await sendTest({ data: { title: "Test Pace", message: "Notification reçue avec succès 🎉" } }); if (res.ok) toast.success(`Notification envoyée (${res.recipients} appareil${res.recipients === 1 ? "" : "s"})`); else toast.error(`Échec : ${res.error}`); } catch (e) { toast.error((e as Error).message); } finally { setSending(false); } };
-  useEffect(() => { const stored = localStorage.getItem("pace.dark") === "1"; setDark(stored); document.documentElement.classList.toggle("dark", stored); setThemeColor(stored); }, []);
+  useEffect(() => {
+    const activeSignal = localStorage.getItem("pace.visual-theme") === "signal";
+    const stored = localStorage.getItem("pace.dark") === "1";
+    setSignal(activeSignal);
+    setDark(activeSignal || stored);
+    if (activeSignal) {
+      document.documentElement.dataset.visualTheme = "signal";
+      document.documentElement.classList.add("dark");
+    } else {
+      delete document.documentElement.dataset.visualTheme;
+      document.documentElement.classList.toggle("dark", stored);
+    }
+    setThemeColor(activeSignal || stored, activeSignal);
+
+    const handleVisualThemeChange = (event: Event) => {
+      const nextSignal = (event as CustomEvent<{ signal: boolean }>).detail?.signal === true;
+      setSignal(nextSignal);
+      setDark(nextSignal || localStorage.getItem("pace.dark") === "1");
+    };
+    window.addEventListener("pace.visual-theme.change", handleVisualThemeChange);
+    return () => window.removeEventListener("pace.visual-theme.change", handleVisualThemeChange);
+  }, []);
   const downloadNativeAndroidApp = () => { window.open(NATIVE_ANDROID_APK_URL, "_blank", "noopener,noreferrer"); toast.success("Téléchargement de l'application Android Pace lancé."); };
-  const toggleDark = (v: boolean) => { setDark(v); document.documentElement.classList.toggle("dark", v); localStorage.setItem("pace.dark", v ? "1" : "0"); setThemeColor(v); };
+  const toggleDark = (v: boolean) => {
+    setDark(v);
+    document.documentElement.classList.toggle("dark", v);
+    localStorage.setItem("pace.dark", v ? "1" : "0");
+    setThemeColor(v, localStorage.getItem("pace.visual-theme") === "signal");
+  };
   const exportData = () => { const data: Record<string, unknown> = {}; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => { try { data[k] = JSON.parse(localStorage.getItem(k) ?? "null"); } catch {} }); const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `lifetracker-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); toast.success("Export téléchargé"); };
   const reset = () => { if (!confirm("Réinitialiser TOUTES vos données ?")) return; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k)); toast.success("Données effacées"); setTimeout(() => location.reload(), 600); };
 
@@ -61,7 +91,10 @@ function SettingsPage() {
               <AccordionItem value="appearance">
                 <AccordionTrigger>Apparence & appareil</AccordionTrigger>
                 <AccordionContent>
-                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} /></Row>
+                  <Row icon={<Sparkles className="size-4" />} label="Style visuel" desc="Bascule toute l'interface vers le style Signal inspiré du dashboard sommeil">
+                    <VisualThemeToggle compact={false} />
+                  </Row>
+                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} disabled={signal} /></Row>
                   <Row icon={<Smartphone className="size-4" />} label="Application Android" desc="Télécharger la version native de PaceOS"><Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger</Button></Row>
                   <WallpaperSettings />
                 </AccordionContent>
