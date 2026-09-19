@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { PLAN_CATALOG, PLAN_AI_LIMITS, type PlanId } from "./billing";
+import { PLAN_CATALOG, PLAN_AI_LIMITS, isPaidPlan, type PlanId } from "./billing";
 
 const deviceSchema = z.object({ deviceId: z.string().min(16).max(200) });
 
@@ -22,7 +22,7 @@ export const getBillingStatus = createServerFn({ method: "GET" })
       .eq("user_id", context.userId)
       .maybeSingle();
 
-    const paidPlan = (subscription?.plan as PlanId | undefined) ?? null;
+    const paidPlan = subscription?.plan && isPaidPlan(subscription.plan as PlanId) ? (subscription.plan as PlanId) : null;
     const trialActive = new Date(trial.trial_ends_at).getTime() > Date.now();
     const effectivePlan = paidPlan ?? (trialActive ? "trial" : "expired");
 
