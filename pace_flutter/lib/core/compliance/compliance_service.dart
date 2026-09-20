@@ -29,6 +29,20 @@ class PaceComplianceService {
     }
   }
 
+  Future<bool> hasConsent(String consentType) async {
+    final value = client;
+    final user = value?.auth.currentUser;
+    if (value == null || user == null) return false;
+    final rows = await value
+        .from('consent_records')
+        .select('granted')
+        .eq('user_id', user.id)
+        .eq('consent_type', consentType)
+        .order('created_at', ascending: false)
+        .limit(1);
+    return rows.isNotEmpty && rows.first['granted'] == true;
+  }
+
   Future<void> requestAccountDeletion() async {
     final value = client;
     final user = value?.auth.currentUser;
