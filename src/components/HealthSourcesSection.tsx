@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { insertHealthSamples } from "@/lib/health.functions";
 import type { NativeHealthConnect } from "@/lib/health-connect-bridge";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 type AppleHealthBridge = { _receive?: (payload: { ok?: boolean; status?: string; error?: string; samples?: Array<{ ts: string; type: string; value: number; source: string }> }) => void };
 
@@ -17,10 +18,51 @@ export function HealthSourcesSection() {
   const [healthConnectAvailable, setHealthConnectAvailable] = useState(false);
   const [healthKitBridgeAvailable, setHealthKitBridgeAvailable] = useState(false);
   const [appleSyncing, setAppleSyncing] = useState(false);
+  const [healthConsent, setHealthConsent] = useState(false);
+  const [cloudHealthConsent, setCloudHealthConsent] = useState(false);
   const platform = useMemo(() => (isAndroid() ? "android" : isIOS() ? "ios" : "web"), []);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const user = (await supabase.auth.getUser()).data.user;
+      if (!user || !active) return;
+      const { data } = await supabase
+        .from("consent_records")
+        .select("consent_type,granted,created_at")
+        .in("consent_type", ["health_data", "health_cloud_sync"])
+        .order("created_at", { ascending: false });
+      if (!active) return;
+      const latest = new Map<string, boolean>();
+      for (const row of data ?? []) {
+        if (!latest.has(row.consent_type)) latest.set(row.consent_type, row.granted);
+      }
+      setHealthConsent(latest.get("health_data") === true);
+      setCloudHealthConsent(latest.get("health_cloud_sync") === true);
+    })();
+    return () => { active = false; };
+  }, []);
   useEffect(() => { setHealthConnectAvailable(!!window.PaceHealthConnect); setHealthKitBridgeAvailable(!!window.webkit?.messageHandlers?.paceHealthKit); const previous = window.PaceAppleHealth?._receive; window.PaceAppleHealth = { _receive: async (payload) => { if (!payload?.ok) { setAppleSyncing(false); toast.error(payload?.error || "Impossible de synchroniser Apple Santé"); return; } const samples = (payload.samples ?? []).filter((sample) => Number.isFinite(sample.value) && sample.ts && sample.type && sample.source === "apple_health"); try { let inserted = 0; for (let i = 0; i < samples.length; i += 500) { const chunk = samples.slice(i, i + 500); const result = await insert({ data: { samples: chunk as never } }); inserted += result.inserted; } toast.success(`${inserted} données Apple Santé synchronisées`); } catch { toast.error("Les données Apple Santé ont été lues mais n'ont pas pu être synchronisées vers Pace."); } finally { setAppleSyncing(false); } }, }; return () => { if (previous) window.PaceAppleHealth = { _receive: previous }; else delete window.PaceAppleHealth; }; }, [insert]);
-  const connectHealthConnect = () => { if (!healthConnectAvailable) { toast.info("Health Connect nécessite l'application Android Pace. La PWA ne peut pas y accéder directement."); return; } window.PaceHealthConnect?.requestSync?.(); };
-  const connectAppleHealth = () => { if (!healthKitBridgeAvailable) { toast.info("Apple Santé nécessite la version iOS native de Pace avec HealthKit. La PWA ne peut pas y accéder directement."); return; } setAppleSyncing(true); window.webkit?.messageHandlers?.paceHealthKit?.postMessage({ action: "requestAuthorizationAndSync" }); };
+  const requireHealthConsent = () => {
+    if (!healthConsent) {
+      toast.info("Activez d’abord « Accès aux données de santé » dans Paramètres → Confidentialité.");
+      return false;
+    }
+    return true;
+  };
+  const connectHealthConnect = () => {
+    if (!requireHealthConsent()) return;
+    if (!cloudHealthConsent) {
+      toast.info("Activez aussi « Synchronisation santé cloud » pour envoyer les données vers Pace.");
+      return;
+    }
+    if (!healthConnectAvailable) { toast.info("Health Connect nécessite l'application Android Pace. La PWA ne peut pas y accéder directement."); return; } window.PaceHealthConnect?.requestSync?.(); };
+  const connectAppleHealth = () => {
+    if (!requireHealthConsent()) return;
+    if (!cloudHealthConsent) {
+      toast.info("Activez aussi « Synchronisation santé cloud » pour envoyer les données vers Pace.");
+      return;
+    }
+    if (!healthKitBridgeAvailable) { toast.info("Apple Santé nécessite la version iOS native de Pace avec HealthKit. La PWA ne peut pas y accéder directement."); return; } setAppleSyncing(true); window.webkit?.messageHandlers?.paceHealthKit?.postMessage({ action: "requestAuthorizationAndSync" }); };
 
   return (
     <details className="pt-3 border-t border-border group">

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/compliance/compliance_service.dart';
 import '../../core/platform/health_adapter.dart';
 import '../../core/platform/native_health_adapter.dart';
 import '../../core/storage/local_store.dart';
@@ -23,16 +24,32 @@ class _HealthPageState extends State<HealthPage> {
   Future<void> _checkAndRead({bool request = false}) async {
     setState(() => _busy = true);
     try {
+      final compliance = PaceComplianceService(widget.sync.client);
+      final healthConsent = await compliance.hasConsent('health_data');
+      if (!healthConsent && request) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Activez d’abord le consentement « Accès aux données de santé » dans Paramètres.')));
+          setState(() => _busy = false);
+        }
+        return;
+      }
+      if (!healthConsent) {
+        if (mounted) setState(() { _busy = false; _available = false; _samples = const []; });
+        return;
+      }
       final available = await _adapter.isAvailable();
       var permitted = available;
       if (available && request) permitted = await _adapter.requestPermissions();
       final samples = permitted ? await _adapter.readRecent() : const <PaceHealthSample>[];
-      if (permitted && samples.isNotEmpty) {
+      final cloudConsent = await compliance.hasConsent('health_cloud_sync');
+      if (permitted && samples.isNotEmpty && cloudConsent) {
         final payload = samples
             .map((sample) => {'type': sample.type, 'value': sample.value, 'timestamp': sample.timestamp.toUtc().toIso8601String(), 'unit': sample.unit, 'source': sample.source})
             .toList();
         await widget.localStore.write('pace.health.samples', payload);
         await widget.sync.syncNow();
+      } else if (permitted && samples.isNotEmpty && !cloudConsent) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Données lues localement. Activez la synchronisation santé cloud pour les envoyer à Pace.')));
       }
       if (!mounted) return;
       setState(() {

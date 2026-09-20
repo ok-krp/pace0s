@@ -1,10 +1,15 @@
 export type LegalRegion = "EU" | "CA-US" | "BR" | "UK" | "CH" | "OTHER";
 
 export type LegalConsentOptions = {
+  health_data: boolean;
+  health_cloud_sync: boolean;
+  financial_data: boolean;
+  ai_processing: boolean;
   analytics: boolean;
   notifications: boolean;
   sync_cloud: boolean;
   ai: boolean;
+  marketing: boolean;
   do_not_sell?: boolean;
 };
 
@@ -14,10 +19,15 @@ export const LEGAL_VERSIONS = {
 } as const;
 
 export const DEFAULT_LEGAL_OPTS: LegalConsentOptions = {
+  health_data: false,
+  health_cloud_sync: false,
+  financial_data: false,
+  ai_processing: false,
   analytics: false,
   notifications: false,
   sync_cloud: false,
   ai: false,
+  marketing: false,
 };
 
 const STORAGE_KEY = "pace.legal.consent";

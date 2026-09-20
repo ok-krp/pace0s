@@ -255,6 +255,36 @@ export type Database = {
         }
         Relationships: []
       }
+      audit_log: {
+        Row: {
+          action: string
+          created_at: string
+          id: number
+          ip_hash: string | null
+          metadata: Json
+          resource: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: never
+          ip_hash?: string | null
+          metadata?: Json
+          resource?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: never
+          ip_hash?: string | null
+          metadata?: Json
+          resource?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       billing_customers: {
         Row: {
           created_at: string
@@ -306,30 +336,6 @@ export type Database = {
         }
         Relationships: []
       }
-      billing_trials: {
-        Row: {
-          user_id: string
-          device_hash: string
-          trial_started_at: string
-          trial_ends_at: string
-          created_at: string
-        }
-        Insert: {
-          user_id: string
-          device_hash: string
-          trial_started_at: string
-          trial_ends_at: string
-          created_at?: string
-        }
-        Update: {
-          user_id?: string
-          device_hash?: string
-          trial_started_at?: string
-          trial_ends_at?: string
-          created_at?: string
-        }
-        Relationships: []
-      },
       billing_subscriptions: {
         Row: {
           cancel_at_period_end: boolean
@@ -361,6 +367,99 @@ export type Database = {
           status?: string
           stripe_customer_id?: string
           stripe_subscription_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      billing_trials: {
+        Row: {
+          created_at: string
+          device_hash: string
+          trial_ends_at: string
+          trial_started_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_hash: string
+          trial_ends_at: string
+          trial_started_at: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_hash?: string
+          trial_ends_at?: string
+          trial_started_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      consent_records: {
+        Row: {
+          consent_type: string
+          created_at: string
+          granted: boolean
+          id: string
+          ip_hash: string | null
+          legal_version: string
+          policy_version: string
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          consent_type: string
+          created_at?: string
+          granted: boolean
+          id?: string
+          ip_hash?: string | null
+          legal_version: string
+          policy_version: string
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          consent_type?: string
+          created_at?: string
+          granted?: boolean
+          id?: string
+          ip_hash?: string | null
+          legal_version?: string
+          policy_version?: string
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      data_deletion_requests: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_code: string | null
+          id: string
+          requested_at: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          requested_at?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          id?: string
+          requested_at?: string
+          status?: string
           updated_at?: string
           user_id?: string
         }
@@ -551,8 +650,11 @@ export type Database = {
       health_samples: {
         Row: {
           created_at: string
+          external_id: string | null
           id: string
+          metadata: Json
           source: string
+          source_id: string | null
           ts: string
           type: string
           user_id: string
@@ -560,8 +662,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          external_id?: string | null
           id?: string
+          metadata?: Json
           source?: string
+          source_id?: string | null
           ts?: string
           type: string
           user_id: string
@@ -569,8 +674,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          external_id?: string | null
           id?: string
+          metadata?: Json
           source?: string
+          source_id?: string | null
           ts?: string
           type?: string
           user_id?: string
