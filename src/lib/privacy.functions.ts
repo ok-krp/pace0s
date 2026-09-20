@@ -72,7 +72,7 @@ export const exportMyData = createServerFn({ method: "POST" })
     const tables: Record<string, unknown[]> = {};
 
     for (const table of EXPORT_TABLES) {
-      const select = EXPORT_SELECTS[table] ?? "*";
+      const select = "*";
       const { data, error } = await supabaseAdmin.from(table).select(select).eq("user_id", context.userId);
       if (error) {
         console.error("privacy export failed", { table, error: error.message });
