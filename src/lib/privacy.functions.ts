@@ -105,17 +105,16 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     }
 
     try {
-      const [{ data: programs }, { data: sessions }, { data: workoutExercises }] = await Promise.all([
+      const [{ data: programs }, { data: sessions }] = await Promise.all([
         supabaseAdmin.from("sport_programs").select("id").eq("user_id", userId),
         supabaseAdmin.from("sport_workout_sessions").select("id").eq("user_id", userId),
-        supabaseAdmin.from("sport_workout_exercises").select("id,session_id").in(
-          "session_id",
-          (await supabaseAdmin.from("sport_workout_sessions").select("id").eq("user_id", userId)).data?.map((row) => row.id) ?? [],
-        ),
       ]);
       const programIds = (programs ?? []).map((row) => row.id);
       const sessionIds = (sessions ?? []).map((row) => row.id);
-      const workoutExerciseIds = (workoutExercises ?? []).map((row) => row.id);
+      const workoutExercises = sessionIds.length
+        ? (await supabaseAdmin.from("sport_workout_exercises").select("id").in("session_id", sessionIds)).data ?? []
+        : [];
+      const workoutExerciseIds = workoutExercises.map((row) => row.id);
 
       if (workoutExerciseIds.length) {
         const { error } = await supabaseAdmin.from("sport_workout_sets").delete().in("workout_exercise_id", workoutExerciseIds);
