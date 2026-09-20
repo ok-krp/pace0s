@@ -3,7 +3,9 @@ import { memo, useState } from "react";
 import { motion } from "framer-motion";
 import { LayoutDashboard, Moon, Apple, Scale, Briefcase, Calendar, Wallet, Settings, Sparkles, User as UserIcon, Menu, Dumbbell, AlertTriangle, ChevronDown, Wrench, History, Search, Watch, ShoppingCart } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+/* Legacy Radix Sheet imports kept commented for rollback/reference:
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+*/
 import { useNavPrefs, type NavItemKey } from "@/hooks/use-nav-prefs";
 import { useLocalState } from "@/lib/storage";
 import { springSoft, interactiveRing } from "@/lib/motion";
@@ -47,24 +49,63 @@ export function MobileTopBar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const current = getNavItem(path)?.label ?? "Pace";
 
-  return <header className="md:hidden sticky top-0 z-[120] flex items-center gap-2 mx-3 mt-[max(0.5rem,env(safe-area-inset-top))] mb-1 px-3 py-2 glass-card rounded-2xl border border-white/20 bg-white/5 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)]">
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <button type="button" className={`relative z-[130] size-10 ${interactiveRing}`} aria-label="Menu" aria-expanded={open}>
-          <Menu className="size-5" />
-        </button>
-      </SheetTrigger>
-      <SheetContent side="left" className="w-[min(88vw,20rem)] max-w-[calc(100vw-1.5rem)] min-h-0 p-3 pt-5 rounded-r-3xl md:hidden bg-white/10 border border-white/20 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)]">
-        <SheetTitle className="sr-only">Menu de navigation</SheetTitle>
-        <div className="flex h-full min-h-0 flex-col overflow-hidden">
+  return <>
+    <header className="md:hidden sticky top-0 z-[120] flex items-center gap-2 mx-3 mt-[max(0.5rem,env(safe-area-inset-top))] mb-1 px-3 py-2 glass-card rounded-2xl border border-white/20 bg-white/5 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)]">
+      <button
+        type="button"
+        className={`relative z-[130] size-10 ${interactiveRing}`}
+        aria-label="Menu"
+        aria-expanded={open}
+        onClick={() => setOpen(true)}
+      >
+        <Menu className="size-5" />
+      </button>
+      <div className="flex-1 font-display font-semibold truncate">{current}</div>
+      <button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} aria-label="Rechercher" className={`size-10 ${interactiveRing}`}>
+        <Search className="size-4" />
+      </button>
+    </header>
+
+    {open && <>
+      <div
+        className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm md:hidden"
+        aria-hidden="true"
+        onClick={() => setOpen(false)}
+      />
+      <aside
+        aria-label="Navigation mobile"
+        className="fixed inset-y-0 left-0 z-[9999] w-[280px] h-full max-w-[calc(100vw-1.5rem)] transform bg-[#050507] border-r border-white/10 p-4 shadow-2xl transition-transform duration-300 ease-in-out translate-x-0 md:hidden overflow-hidden"
+      >
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="flex items-center justify-between flex-none pb-3">
+            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/45">Navigation</div>
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="size-9 grid place-items-center rounded-md text-white/65"
+              aria-label="Fermer le menu"
+            >
+              <span aria-hidden="true" className="text-xl leading-none">×</span>
+            </button>
+          </div>
           <SidebarContent currentPath={path} onNavigate={() => setOpen(false)} />
         </div>
-      </SheetContent>
-    </Sheet>
-    <div className="flex-1 font-display font-semibold truncate">{current}</div>
-    <button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} aria-label="Rechercher" className={`size-10 ${interactiveRing}`}>
-      <Search className="size-4" />
-    </button>
-  </header>;
+      </aside>
+    </>}
+
+    {/*
+      Legacy Radix Sheet implementation kept intact for rollback/reference.
+      The direct drawer above intentionally replaces the portal/overlay path:
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetTrigger asChild>...</SheetTrigger>
+        <SheetContent side="left" ...>
+          <SheetTitle className="sr-only">Menu de navigation</SheetTitle>
+          <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            <SidebarContent currentPath={path} onNavigate={() => setOpen(false)} />
+          </div>
+        </SheetContent>
+      </Sheet>
+    */}
+  </>;
 }
 export function MobileTabBar() { const path = useRouterState({ select: (s) => s.location.pathname }); const { bottom } = useNavPrefs(); if (!bottom.length) return null; return <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 pointer-events-none"><div className="glass-card pointer-events-auto mx-auto max-w-md px-2 py-1.5"><div className="flex gap-1 overflow-x-auto scrollbar-none">{bottom.map((to) => { const it = getNavItem(to); if (!it) return null; const active = path === to; const Icon = it.icon; const className = `flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-md text-[10px] shrink-0 min-w-[58px] will-change-transform ${interactiveRing} ${active ? "text-primary bg-[color-mix(in_oklab,var(--primary)_14%,transparent)]" : "text-muted-foreground"}`; return <Link key={to} to={to} className={className}><Icon className="size-5 shrink-0" /><span className="truncate max-w-full">{it.label}</span></Link>; })}</div></div></nav>; }
