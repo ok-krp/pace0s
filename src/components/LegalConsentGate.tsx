@@ -69,7 +69,7 @@ export function LegalConsentGate() {
         setOpen(status.required);
         if (status.required) {
           const geo = await loadGeo();
-          if (!cancelled) { setRegion(geo.region); setCountry(geo.country); }
+          if (!cancelled) { setRegion(geo.region as LegalRegion); setCountry(geo.country); }
         }
       } catch (e) {
         if (!cancelled) toast.error(e instanceof Error ? e.message : "Impossible de charger le consentement");
