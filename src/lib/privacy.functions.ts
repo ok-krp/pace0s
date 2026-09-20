@@ -58,10 +58,6 @@ const DELETE_TABLES = [
   "profiles",
 ] as const;
 
-const EXPORT_SELECTS: Partial<Record<(typeof EXPORT_TABLES)[number], string>> = {
-  ai_provider_secrets: "provider,key_last4,created_at,updated_at",
-};
-
 export const exportMyData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
