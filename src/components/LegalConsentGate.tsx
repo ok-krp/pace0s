@@ -61,7 +61,7 @@ export function LegalConsentGate() {
       try {
         const status = await loadStatus();
         if (cancelled) return;
-        setRegion(status.region);
+        setRegion(status.region as LegalRegion);
         setCountry(status.ipCountry);
         setOpts(status.opts);
         writeLocalLegalConsent(status.opts);
