@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../core/compliance/compliance_service.dart';
 import '../../core/notifications/notification_service.dart';
 import '../../core/storage/local_store.dart';
 import '../../core/supabase/pace_supabase.dart';
@@ -111,6 +112,12 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   late bool _aiConfirmations;
   late bool _notifications;
   late bool _memory;
+  bool _healthConsent = false;
+  bool _healthCloudConsent = false;
+  bool _financialConsent = false;
+  bool _aiConsent = false;
+  bool _marketingConsent = false;
+  bool _deleting = false;
 
   @override
   void initState() {
@@ -118,6 +125,82 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     _aiConfirmations = _ai.confirmActions;
     _notifications = widget.localStore.read('pace.settings.notifications') as bool? ?? true;
     _memory = _ai.memoryEnabled;
+    _loadConsent();
+  }
+
+  Future<void> _loadConsent() async {
+    final client = widget.auth.client;
+    final user = client?.auth.currentUser;
+    if (client == null || user == null) return;
+    try {
+      final rows = await client
+          .from('consent_records')
+          .select('consent_type,granted,created_at')
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false);
+      final latest = <String, bool>{};
+      for (final row in rows) {
+        final type = row['consent_type'] as String?;
+        if (type != null && !latest.containsKey(type)) {
+          latest[type] = row['granted'] == true;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _healthConsent = latest['health_data'] ?? false;
+        _healthCloudConsent = latest['health_cloud_sync'] ?? false;
+        _financialConsent = latest['financial_data'] ?? false;
+        _aiConsent = latest['ai_processing'] ?? false;
+        _marketingConsent = latest['marketing'] ?? false;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _setConsent(String type, bool value) async {
+    final service = PaceComplianceService(widget.auth.client);
+    try {
+      await service.recordConsent(
+        consentType: type,
+        granted: value,
+        legalVersion: '2026-09-20',
+        policyVersion: '2026-09-20',
+      );
+      if (!mounted) return;
+      setState(() {
+        if (type == 'health_data') _healthConsent = value;
+        if (type == 'health_cloud_sync') _healthCloudConsent = value;
+        if (type == 'financial_data') _financialConsent = value;
+        if (type == 'ai_processing') _aiConsent = value;
+        if (type == 'marketing') _marketingConsent = value;
+      });
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+    }
+  }
+
+  Future<void> _requestDeletion() async {
+    if (_deleting) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer le compte ?'),
+        content: const Text('La demande sera enregistrée et traitée côté serveur. Cette action concerne le compte et les données Pace associées.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Annuler')),
+          FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Demander la suppression')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    setState(() => _deleting = true);
+    try {
+      await PaceComplianceService(widget.auth.client).requestAccountDeletion();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demande de suppression enregistrée.')));
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
+    } finally {
+      if (mounted) setState(() => _deleting = false);
+    }
   }
 
   Future<void> _setNotification(bool value) async {
@@ -196,6 +279,18 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                   await _ai.setMemoryEnabled(value);
                   setState(() => _memory = value);
                 },
+              ),
+            ]),
+            _section('Données & confidentialité', [
+              SwitchListTile.adaptive(title: const Text('Accès aux données de santé'), subtitle: const Text('Autoriser Pace à lire les données Santé / Health Connect sélectionnées.'), value: _healthConsent, onChanged: (value) => _setConsent('health_data', value)),
+              SwitchListTile.adaptive(title: const Text('Synchronisation santé cloud'), subtitle: const Text('Autoriser l’envoi des données de santé vers votre compte Pace.'), value: _healthCloudConsent, onChanged: _healthConsent ? (value) => _setConsent('health_cloud_sync', value) : null),
+              SwitchListTile.adaptive(title: const Text('Données financières'), subtitle: const Text('Autoriser le traitement des données financières connectées.'), value: _financialConsent, onChanged: (value) => _setConsent('financial_data', value)),
+              SwitchListTile.adaptive(title: const Text('Traitement IA'), subtitle: const Text('Autoriser l’utilisation des données nécessaires aux fonctions IA.'), value: _aiConsent, onChanged: (value) => _setConsent('ai_processing', value)),
+              SwitchListTile.adaptive(title: const Text('Marketing'), subtitle: const Text('Autoriser les communications et mesures marketing.'), value: _marketingConsent, onChanged: (value) => _setConsent('marketing', value)),
+              ListTile(
+                title: const Text('Supprimer mon compte'),
+                subtitle: const Text('Créer une demande de suppression de toutes les données Pace associées.'),
+                trailing: FilledButton.tonal(onPressed: _deleting ? null : _requestDeletion, child: Text(_deleting ? '…' : 'Supprimer')),
               ),
             ]),
             _section('Notifications', [
