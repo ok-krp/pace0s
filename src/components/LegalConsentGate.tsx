@@ -15,16 +15,31 @@ export function openConsentSheet() {
   if (typeof window !== "undefined") window.dispatchEvent(new Event(OPEN_EVENT));
 }
 
-type Category = { key: keyof LegalConsentOptions; label: string; desc: string; group: "functional" | "analytics" | "marketing" };
+type Category = { key: keyof LegalConsentOptions; label: string; desc: string; group: "health" | "functional" | "analytics" | "marketing" };
 
 const OPTIONS: Category[] = [
-  { key: "sync_cloud",    label: "Fonctionnel — Synchronisation",  desc: "Sauvegarde chiffrée des préférences entre appareils.",     group: "functional" },
-  { key: "notifications", label: "Fonctionnel — Notifications",    desc: "Rappels hydratation, routine, sommeil.",                    group: "functional" },
-  { key: "analytics",     label: "Analytique — Mesure d'usage",    desc: "Statistiques anonymes pour améliorer Pace.",                group: "analytics" },
-  { key: "ai",            label: "Marketing — Analyse IA",         desc: "Analyse photos de repas et conseils nutrition personnalisés.", group: "marketing" },
+  { key: "health_data",       label: "Santé — Accès aux données",    desc: "Lire les données Santé / Health Connect que vous choisissez de synchroniser.", group: "health" },
+  { key: "health_cloud_sync", label: "Santé — Synchronisation cloud", desc: "Transmettre vos données de santé à votre compte Pace pour les retrouver sur vos appareils.", group: "health" },
+  { key: "financial_data",    label: "Finance — Données financières", desc: "Utiliser les données financières que vous choisissez de connecter.", group: "health" },
+  { key: "ai_processing",     label: "IA — Traitement",              desc: "Utiliser les données nécessaires aux fonctions IA que vous activez.", group: "functional" },
+  { key: "sync_cloud",        label: "Fonctionnel — Synchronisation", desc: "Sauvegarde des préférences entre appareils.", group: "functional" },
+  { key: "notifications",     label: "Fonctionnel — Notifications",   desc: "Rappels hydratation, routine et sommeil.", group: "functional" },
+  { key: "analytics",         label: "Analytique — Mesure d’usage",   desc: "Mesure d’usage pour améliorer Pace.", group: "analytics" },
+  { key: "marketing",         label: "Marketing",                    desc: "Communications et mesure marketing lorsque vous les autorisez.", group: "marketing" },
 ];
 
-const ALL_ACCEPTED: LegalConsentOptions = { analytics: true, notifications: true, sync_cloud: true, ai: true };
+const ALL_ACCEPTED: LegalConsentOptions = {
+  health_data: true,
+  health_cloud_sync: true,
+  financial_data: true,
+  ai_processing: true,
+  analytics: true,
+  notifications: true,
+  sync_cloud: true,
+  ai: true,
+  marketing: true,
+  do_not_sell: false,
+};
 
 export function LegalConsentGate() {
   const loadStatus = useServerFn(getLegalConsentStatus);
