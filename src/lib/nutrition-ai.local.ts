@@ -5,10 +5,20 @@ const MODEL_ID = "HuggingFaceTB/SmolVLM-500M-Instruct";
 type VisionPipeline = ((input: unknown, options?: Record<string, unknown>) => Promise<Array<{ generated_text?: string }> | { generated_text?: string }>);
 let pipelinePromise: Promise<VisionPipeline> | null = null;
 
+type WebGpuNavigator = Navigator & {
+  gpu?: {
+    requestAdapter: () => Promise<unknown>;
+  };
+};
+
 async function getPreferredDevice(): Promise<"webgpu" | "wasm"> {
-  if (typeof navigator === "undefined" || !("gpu" in navigator)) return "wasm";
+  if (typeof navigator === "undefined") return "wasm";
+
+  const gpu = (navigator as WebGpuNavigator).gpu;
+  if (!gpu) return "wasm";
+
   try {
-    const adapter = await navigator.gpu.requestAdapter();
+    const adapter = await gpu.requestAdapter();
     return adapter ? "webgpu" : "wasm";
   } catch {
     return "wasm";
@@ -35,7 +45,7 @@ async function getPipeline() {
 }
 
 function extractJson(text: string): unknown {
-  const cleaned = text.trim().replace(/^\`\`\`(?:json)?\s*/i, "").replace(/\`\`\`\s*$/i, "").trim();
+  const cleaned = text.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "").trim();
   try {
     return JSON.parse(cleaned);
   } catch {

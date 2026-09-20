@@ -158,13 +158,33 @@ function SettingsPage() {
               <h2 className="mt-2 text-2xl font-display font-semibold text-white drop-shadow-sm">Pace, sans limites artificielles</h2>
               <p className="mt-2 text-sm text-muted-foreground leading-relaxed">Pace fonctionne désormais sur abonnement payant. Choisis Essential, Pro ou Ultimate pour activer les fonctionnalités correspondantes. Les droits sont synchronisés côté serveur après confirmation Stripe.</p>
               <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <span className="rounded-full border px-3 py-1">Plan actuel : <strong className="text-foreground">{billingLoading ? "…" : billing?.plan === "trial" ? "Abonnement requis" : billing?.plan === "expired" ? "Abonnement requis" : (() => { const plan = billing?.plan; return plan && plan !== "trial" && plan !== "expired" && plan in PLAN_CATALOG ? PLAN_CATALOG[plan as PlanId].name : plan === "trial" ? "Essai gratuit" : plan === "expired" ? "Essai expiré" : "Plan indisponible"; })()}</strong></span>
-                {billing?.cancelAtPeriodEnd && <span className="rounded-full border border-amber-500/30 px-3 py-1 text-amber-600">Annulation en fin de période</span>}
-                {billing?.plan !== "trial" && billing?.plan !== "expired" && <Button variant="secondary" size="sm" className="rounded-full" onClick={async () => { try { const res = await openPortal({}); window.location.href = res.url; } catch (error) { toast.error((error as Error).message); } }}>Gérer mon abonnement</Button>}
+                <span className="rounded-full border px-3 py-1">
+                  Plan actuel :{" "}
+                  <strong className="text-foreground">
+                    {billingLoading ? "…" : billing?.plan && billing.plan !== "trial" && billing.plan !== "expired" && billing.plan in PLAN_CATALOG ? PLAN_CATALOG[billing.plan as PlanId].name : "Abonnement requis"}
+                  </strong>
+                </span>
+                {billing?.cancelAtPeriodEnd && (
+                  <span className="rounded-full border border-amber-500/30 px-3 py-1 text-amber-600">Annulation en fin de période</span>
+                )}
+                {billing?.plan !== "trial" && billing?.plan !== "expired" && (
+                  <Button variant="secondary" size="sm" className="rounded-full" onClick={async () => {
+                    try {
+                      const res = await openPortal({});
+                      window.location.href = res.url;
+                    } catch (error) {
+                      toast.error((error as Error).message);
+                    }
+                  }}>Gérer mon abonnement</Button>
+                )}
               </div>
             </div>
-            {/* Ancienne offre d’essai conservée en commentaire : la grille est désormais 100 % payante. */}<div className="flex items-center gap-2 mb-4"><Button size="sm" variant={billingInterval === "monthly" ? "default" : "outline"} onClick={() => setBillingInterval("monthly")}>Mensuel</Button><Button size="sm" variant={billingInterval === "annual" ? "default" : "outline"} onClick={() => setBillingInterval("annual")}>Annuel</Button></div><div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              {(Object.entries(PLAN_CATALOG) as Array<[PlanId, typeof PLAN_CATALOG[PlanId]]>).map(([plan, details]) => (
+            <div className="mt-6 flex items-center gap-2">
+              <Button size="sm" variant={billingInterval === "monthly" ? "default" : "outline"} onClick={() => setBillingInterval("monthly")}>Mensuel</Button>
+              <Button size="sm" variant={billingInterval === "annual" ? "default" : "outline"} onClick={() => setBillingInterval("annual")}>Annuel</Button>
+            </div>
+            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+              {(Object.entries(PLAN_CATALOG) as Array<[PlanId, (typeof PLAN_CATALOG)[PlanId]]>).map(([plan, details]) => (
                 <PlanCard
                   key={plan}
                   plan={plan}
@@ -176,7 +196,6 @@ function SettingsPage() {
                   current={billing?.plan === plan}
                   disabled={!billing?.stripeConfigured}
                   onSelect={async () => {
-                    
                     try {
                       const res = await startCheckout({ data: { plan: plan as "plus" | "pro" | "coach", interval: billingInterval } });
                       window.location.href = res.url;
