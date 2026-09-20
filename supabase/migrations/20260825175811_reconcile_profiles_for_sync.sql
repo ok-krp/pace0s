@@ -1,0 +1,2 @@
+-- Historical migration marker preserved for Supabase migration-history compatibility.
+-- The schema changes are represented by the current canonical migrations.

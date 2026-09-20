@@ -16,44 +16,11 @@ const LABELS: Record<string, { icon: ReactNode; title: string; desc: string; has
 
 export function RemindersSection() {
   const { rows, loading, save } = useReminders();
-
-  const handle = async (next: ReminderRow) => {
-    try { await save(next); } catch (e) { toast.error((e as Error).message); }
-  };
-
+  const handle = async (next: ReminderRow) => { try { await save(next); } catch (e) { toast.error((e as Error).message); } };
   return (
-    <div className="rounded-2xl glass-card p-4">
-      <div className="mb-3">
-        <div className="font-medium">Rappels intelligents</div>
-        <div className="text-xs text-muted-foreground">Notifications contextuelles basées sur tes données du jour</div>
-      </div>
-      {loading ? (
-        <div className="text-sm text-muted-foreground py-4">Chargement…</div>
-      ) : (
-        <div className="space-y-2">
-          {Object.entries(LABELS).map(([type, meta]) => {
-            const row = rows[type as keyof typeof rows];
-            return (
-              <div key={type} className="flex items-center gap-3 rounded-xl bg-muted/40 p-3">
-                <div className="size-9 rounded-lg bg-background grid place-items-center">{meta.icon}</div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium">{meta.title}</div>
-                  <div className="text-xs text-muted-foreground truncate">{meta.desc}</div>
-                </div>
-                {meta.hasTime && row.enabled && (
-                  <Input
-                    type="time"
-                    value={row.time_local ?? ""}
-                    onChange={(e) => handle({ ...row, time_local: e.target.value || null })}
-                    className="w-24 h-9"
-                  />
-                )}
-                <Switch checked={row.enabled} onCheckedChange={(v) => handle({ ...row, enabled: v })} />
-              </div>
-            );
-          })}
-        </div>
-      )}
+    <div className="space-y-2">
+      <div className="mb-3"><div className="font-medium">Rappels intelligents</div><div className="text-xs text-muted-foreground">Notifications contextuelles basées sur tes données du jour</div></div>
+      {loading ? <div className="text-sm text-muted-foreground py-4">Chargement…</div> : <div className="space-y-0 divide-y divide-border/60">{Object.entries(LABELS).map(([type, meta]) => { const row = rows[type as keyof typeof rows]; return <div key={type} className="flex items-center gap-3 py-3"><div className="size-9 rounded-lg bg-muted grid place-items-center">{meta.icon}</div><div className="flex-1 min-w-0"><div className="text-sm font-medium">{meta.title}</div><div className="text-xs text-muted-foreground truncate">{meta.desc}</div></div>{meta.hasTime && row.enabled && <Input type="time" value={row.time_local ?? ""} onChange={(e) => handle({ ...row, time_local: e.target.value || null })} className="w-24 h-9" />}<Switch checked={row.enabled} onCheckedChange={(v) => handle({ ...row, enabled: v })} /></div>; })}</div>}
     </div>
   );
 }

@@ -1,0 +1,38 @@
+name: Cloud Sync Audit
+
+on:
+  pull_request:
+    paths:
+      - "src/hooks/use-cloud-sync-engine.tsx"
+      - "src/hooks/use-cloud-sync.tsx"
+      - "src/lib/storage.ts"
+      - "supabase/migrations/**"
+      - "scripts/cloud-sync-contract-test.mjs"
+      - "package.json"
+      - ".github/workflows/cloud-sync-audit.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/hooks/use-cloud-sync-engine.tsx"
+      - "src/hooks/use-cloud-sync.tsx"
+      - "src/lib/storage.ts"
+      - "supabase/migrations/**"
+      - "scripts/cloud-sync-contract-test.mjs"
+      - "package.json"
+      - ".github/workflows/cloud-sync-audit.yml"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run test:sync
+      # TanStack Router generates src/routeTree.gen.ts during the Vite build.
+      # Run the build before typecheck so newly added file routes are included.
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm run lint

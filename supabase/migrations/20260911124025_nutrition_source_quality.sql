@@ -1,0 +1,5 @@
+-- Migration-history reconciliation for the Supabase Preview environment.
+-- The preview database already records version 20260911124025 as
+-- nutrition_source_quality. The actual schema change remains in
+-- 20260830194015_nutrition_source_quality.sql and is intentionally not
+-- duplicated here.

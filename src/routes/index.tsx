@@ -2,16 +2,15 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { liquidTooltipStyle, liquidDot } from "@/lib/chart-style";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Moon, Droplets, Dumbbell, Briefcase, Wallet, TrendingUp, Flame, CheckCircle2, Scale, Sparkles, Footprints, Activity } from "lucide-react";
-import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, Area, AreaChart } from "recharts";
+import { Moon, Droplets, Dumbbell, Briefcase, Wallet, Flame, CheckCircle2, Scale, Sparkles, Footprints, Activity } from "lucide-react";
+import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { PageHeader, StatCard } from "@/components/Stat";
-import { useLocalState, lastNDays, fmtDay, todayKey } from "@/lib/storage";
+import { useLocalState, lastNDays, todayKey } from "@/lib/storage";
 import { useUserGoals } from "@/hooks/use-user-goals";
 import { useHealthToday } from "@/hooks/use-health";
 import { DashboardDialogs, type DashDialog } from "@/components/DashboardDialogs";
 import { DailyRhythmRing, type RhythmMetric } from "@/components/DailyRhythmRing";
 import { DailyInsight } from "@/components/DailyInsight";
-import { WeeklyHabits } from "@/components/WeeklyHabits";
 import { SmartCard } from "@/components/SmartCard";
 import { buildIntel, statusColor, type ModuleKey } from "@/lib/insights";
 import { toast } from "sonner";
@@ -38,6 +37,8 @@ export const Route = createFileRoute("/")({
 
 type SleepEntry = { hours: number };
 type Day<T> = Record<string, T>;
+type WorkoutSessionSummary = { id: string; date: string; name: string; durationMin?: number; exercises: unknown[] };
+type WorkoutProgramSummary = { id: string; name: string; days: number[]; isArchived?: boolean; items?: unknown[] };
 
 const ICONS: Record<ModuleKey, React.ReactNode> = {
   sleep: <Moon className="size-4" />,
@@ -73,8 +74,11 @@ function Dashboard() {
   const [work] = useLocalState<Day<number>>("pace.work.minutes", {});
   const [tx] = useLocalState<Array<{ date: string; amount: number; cat: string }>>("pace.tx", []);
   const [weights] = useLocalState<Day<{ w: number }>>("pace.weight", {});
+  const [sessions] = useLocalState<WorkoutSessionSummary[]>("pace.sport.sessions", []);
+  const [programs] = useLocalState<WorkoutProgramSummary[]>("pace.sport.programs", []);
 
   const today = todayKey();
+  const todayDow = new Date().getDay();
   const days = useMemo(() => lastNDays(7), []);
 
   useEffect(() => {
@@ -112,8 +116,9 @@ function Dashboard() {
   const routineDoneCount = (routines[today] ?? []).length;
   const routineTotal = allRoutines.length || 1;
   const workMin = work[today] ?? 0;
-  const todaySpend = tx.filter((t) => t.date === today && t.amount < 0).reduce((s, t) => s + -t.amount, 0);
-  const todayIncome = tx.filter((t) => t.date === today && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const recordedWorkout = sessions.find((s) => s.date === today);
+  const scheduledWorkout = programs.find((p) => !p.isArchived && p.days.includes(todayDow));
+  const todayWorkout = recordedWorkout ?? (scheduledWorkout ? { id: scheduledWorkout.id, date: today, name: scheduledWorkout.name, exercises: scheduledWorkout.items ?? [] } : undefined);
 
   const rhythmMetrics: RhythmMetric[] = useMemo(
     () => [
@@ -124,17 +129,6 @@ function Dashboard() {
       { key: "focus", label: "Focus", value: workMin, max: 240, unit: "min", from: "oklch(0.72 0.15 20)", to: "oklch(0.52 0.2 258)" },
     ],
     [sleepH, waterMl, kcal, routineDoneCount, routineTotal, workMin, goals.waterMl, goals.kcal],
-  );
-
-  const trend = useMemo(
-    () =>
-      days.map((d) => ({
-        day: fmtDay(d).slice(0, 3),
-        sommeil: sleep[d]?.hours ?? 0,
-        eau: (water[d] ?? 0) / 1000,
-        kcal: nutrition[d]?.kcal ?? 0,
-      })),
-    [days, sleep, water, nutrition],
   );
 
   const weightSeries = useMemo(
@@ -161,6 +155,23 @@ function Dashboard() {
       }
     },
     [addWater, navigate],
+  );
+
+  const workoutCard = (
+    <motion.button type="button" onClick={() => navigate({ to: "/sport" })} whileHover={{ y: -2, scale: 1.008 }} transition={{ duration: 0.18 }} className="relative glass-card p-5 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+      <div className="flex items-start justify-between gap-2">
+        <div className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Sport du jour</div>
+        <Dumbbell className="size-5 shrink-0 text-primary" />
+      </div>
+      <div className="mt-2.5 flex items-end justify-between gap-2">
+        <div className="min-w-0">
+          <div className="font-display text-[28px] leading-none font-bold tracking-tight truncate">{todayWorkout ? todayWorkout.name : "Aucune séance"}</div>
+          <div className="mt-2 text-xs text-muted-foreground">{todayWorkout ? `${todayWorkout.exercises.length} exercices${todayWorkout.durationMin ? ` · ${todayWorkout.durationMin} min` : ""}` : "Aucune séance prévue/enregistrée aujourd'hui"}</div>
+        </div>
+      </div>
+      <div className="mt-3 h-1.5 rounded-full overflow-hidden" style={{ background: "color-mix(in oklab, var(--foreground) 8%, transparent)" }}><div className="h-full rounded-full" style={{ width: todayWorkout ? "100%" : "0%", background: "var(--primary)" }} /></div>
+      <div className="mt-2.5 text-xs font-medium text-primary">{todayWorkout ? "Séance d'aujourd'hui · Voir →" : "Ouvrir Sport →"}</div>
+    </motion.button>
   );
 
   return (
@@ -197,14 +208,29 @@ function Dashboard() {
             <ul className="w-full max-w-sm space-y-2">{intel.rhythmLines.map((l) => <li key={l.label} className="flex items-start gap-2.5"><span className="mt-1.5 size-1.5 rounded-full shrink-0" style={{ background: statusColor[l.status] }} /><div className="min-w-0"><div className="text-[13px] font-medium leading-tight">{l.label}</div><div className="text-[11px] text-muted-foreground leading-snug">{l.text}</div></div></li>)}</ul>
           </div>
         </motion.button>
-        <SmartCard metric={intel.metrics.find((m) => m.key === "kcal")!} icon={ICONS.kcal} onOpen={() => setDialog("kcal")} onQuickAdd={() => setDialog("kcal")} quickLabel="Repas" />
+        <div className="glass-card p-5 md:p-6 flex flex-col justify-between gap-5">
+          <div className="flex items-center justify-between">
+            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Flame className="size-4" /> Nutrition & hydratation</div>
+            <button type="button" onClick={() => navigate({ to: "/nutrition" })} className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition">Détails →</button>
+          </div>
+          <div className="flex flex-col gap-1">
+            <button type="button" onClick={() => setDialog("kcal")} className="flex items-center gap-3 text-left rounded-xl glass-thin px-3 py-2.5 hover:opacity-90 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+              <span className="min-w-0 flex-1 text-sm">Calories : <strong>{kcal.toLocaleString("fr-FR")}</strong> / {goals.kcal.toLocaleString("fr-FR")} kcal</span>
+              <span aria-hidden="true" className="text-lg leading-none text-muted-foreground">+</span>
+            </button>
+            <button type="button" onClick={() => setDialog("water")} className="flex items-center gap-3 text-left rounded-xl glass-thin px-3 py-2.5 hover:opacity-90 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+              <span className="min-w-0 flex-1 text-sm">Hydratation : <strong>{(waterMl / 1000).toFixed(1)} L</strong> / {(goals.waterMl / 1000).toFixed(1)} L</span>
+              <span aria-hidden="true" className="text-lg leading-none text-muted-foreground">+</span>
+            </button>
+          </div>
+        </div>
       </div>
-      <motion.div layout className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-        {intel.metrics.filter((m) => m.key !== "kcal").map((m) => {
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        {intel.metrics.filter((m) => m.key !== "kcal" && m.key !== "water").map((m) => {
           const q = quickFor(m.key);
-          return <SmartCard key={m.key} metric={m} icon={ICONS[m.key]} onOpen={q.open} onQuickAdd={q.add} quickLabel={q.label} />;
+          return <div key={m.key} className="contents"><SmartCard metric={m} icon={ICONS[m.key]} onOpen={q.open} onQuickAdd={q.add} quickLabel={q.label} />{m.key === "routine" && workoutCard}</div>;
         })}
-      </motion.div>
+      </div>
       {(health.steps > 0 || health.kcalActive > 0) && (
         <div className="grid grid-cols-3 gap-4 mb-4">
           <StatCard label="Pas" value={health.steps.toLocaleString()} icon={<Footprints className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" />
@@ -212,32 +238,9 @@ function Dashboard() {
           <StatCard label={kcal - health.kcalActive >= 0 ? "Surplus" : "Déficit"} value={Math.abs(kcal - health.kcalActive)} unit="kcal" icon={<Flame className="size-4" />} onClick={() => setDialog("kcal")} hint="Détail" />
         </div>
       )}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <div className="lg:col-span-2 rounded-2xl glass-card p-5">
-          <div className="flex items-center justify-between mb-3"><div><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Tendance 7 jours</div><div className="font-display text-lg font-semibold mt-0.5">Sommeil & hydratation</div></div></div>
-          <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={trend}>
-              <defs>
-                <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} /><stop offset="100%" stopColor="var(--primary)" stopOpacity={0} /></linearGradient>
-                <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="var(--chart-2)" stopOpacity={0.3} /><stop offset="100%" stopColor="var(--chart-2)" stopOpacity={0} /></linearGradient>
-              </defs>
-              <XAxis dataKey="day" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} /><YAxis hide /><Tooltip contentStyle={liquidTooltipStyle} />
-              <Area type="monotone" dataKey="sommeil" stroke="var(--primary)" strokeWidth={2} fill="url(#g1)" dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} connectNulls={false} />
-              <Area type="monotone" dataKey="eau" stroke="var(--chart-2)" strokeWidth={2} fill="url(#g2)" dot={liquidDot("var(--chart-2")} activeDot={{ r: 5 }} connectNulls={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-        <button type="button" onClick={() => navigate({ to: "/finance" })} className="text-left rounded-2xl glass-card p-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
-          <div className="flex items-center justify-between mb-3"><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Finances du jour</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Ouvrir →</div></div>
-          <div className="flex items-center gap-2 text-[color:var(--success)]"><TrendingUp className="size-4" /><span className="font-display text-2xl font-semibold">+{todayIncome.toFixed(0)}€</span></div>
-          <div className="flex items-center gap-2 text-destructive mt-2"><Wallet className="size-4" /><span className="font-display text-2xl font-semibold">-{todaySpend.toFixed(0)}€</span></div>
-          <div className="border-t border-border mt-4 pt-3 text-sm"><div className="flex justify-between"><span className="text-muted-foreground">Net</span><span className={`font-medium ${todayIncome - todaySpend >= 0 ? "text-[color:var(--success)]" : "text-destructive"}`}>{(todayIncome - todaySpend).toFixed(2)}€</span></div></div>
-        </button>
-      </div>
-      <WeeklyHabits routines={routines} total={allRoutines.length} />
       {weightSeries.length > 1 && (
         <button type="button" onClick={() => setDialog("weight")} className="w-full text-left rounded-2xl glass-card p-5 hover:shadow-[var(--shadow-card)] transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
-          <div className="flex items-center justify-between mb-3"><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider"><Dumbbell className="size-3 inline mr-1" /> Évolution du poids</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Peser →</div></div>
+          <div className="flex items-center justify-between mb-3"><div className="text-xs font-medium text-muted-foreground uppercase tracking-wider"><Scale className="size-3 inline mr-1" /> Évolution du poids</div><div className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Peser →</div></div>
           <ResponsiveContainer width="100%" height={140}><LineChart data={weightSeries}><XAxis dataKey="d" hide /><YAxis hide domain={["dataMin - 1", "dataMax + 1"]} /><Tooltip contentStyle={liquidTooltipStyle} /><Line type="monotone" dataKey="w" stroke="var(--primary)" strokeWidth={2.5} dot={liquidDot("var(--primary)")} activeDot={{ r: 5 }} connectNulls={false} /></LineChart></ResponsiveContainer>
         </button>
       )}

@@ -15,6 +15,7 @@ CREATE TABLE public.profiles (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id uuid NOT NULL UNIQUE,
   display_name text,
+  full_name text,
   email text,
   age int,
   sex text CHECK (sex IN ('male','female','other')),

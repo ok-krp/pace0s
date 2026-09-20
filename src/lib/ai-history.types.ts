@@ -2,7 +2,7 @@ import type { UIMessage } from "ai";
 
 export type AgentType = "coach" | "build";
 export type MemoryLevel = "none" | "limited" | "complete";
-export type AiProviderSource = "pace" | "byok";
+export type AiProviderSource = "pace" | "byok" | "local";
 export type AiProvider = "openai" | "anthropic" | "gemini" | "openrouter" | "custom";
 
 export type AiPermissions = {

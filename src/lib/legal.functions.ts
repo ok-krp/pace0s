@@ -23,7 +23,7 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
 
 export const saveLegalConsent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => consentSchema.parse(data))
+  .validator((data: unknown) => consentSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { getRequestCountry, legalRegionForCountry } = await import("./legal.server");
     const country = getRequestCountry();

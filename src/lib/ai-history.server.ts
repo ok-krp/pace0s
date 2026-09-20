@@ -5,7 +5,7 @@ import { DEFAULT_AI_PERMISSIONS, type AgentType, type AiPermissions, type AiPref
 type Client = SupabaseClient<Database>;
 
 export async function listConversationsServer(client: Client, userId: string, agentType: AgentType) {
-  const { data, error } = await client.from("ai_conversations").select("id,agent_type,title,is_starred,is_archived,is_ephemeral,updated_at").eq("user_id", userId).eq("agent_type", agentType).eq("is_ephemeral", false).order("is_starred", { ascending: false }).order("updated_at", { ascending: false });
+  const { data, error } = await client.from("ai_conversations").select("id,agent_type,title,is_starred,is_archived,is_ephemeral,updated_at").eq("user_id", userId).eq("agent_type", agentType).eq("is_ephemeral", false).order("is_starred", { ascending: false }).order("updated_at", { ascending: false }).order("id", { ascending: false });
   if (error) { console.error("AI conversation list failed", error); throw new Error("Impossible de charger les conversations IA."); }
   return data;
 }
@@ -20,7 +20,7 @@ export async function getConversationServer(client: Client, userId: string, id: 
   const { data: conversation, error } = await client.from("ai_conversations").select("id,agent_type,title,is_starred,is_archived,is_ephemeral,updated_at").eq("id", id).eq("user_id", userId).eq("agent_type", agentType).maybeSingle();
   if (error) { console.error("AI conversation read failed", error); throw new Error("Impossible de charger la conversation IA."); }
   if (!conversation) return null;
-  const { data: rows, error: messageError } = await client.from("ai_messages").select("id,role,parts").eq("conversation_id", id).eq("user_id", userId).order("created_at");
+  const { data: rows, error: messageError } = await client.from("ai_messages").select("id,role,parts,created_at").eq("conversation_id", id).eq("user_id", userId).order("created_at", { ascending: true }).order("id", { ascending: true });
   if (messageError) { console.error("AI messages read failed", messageError); throw new Error("Impossible de charger les messages IA."); }
   const messages = rows.map((row) => ({ id: row.id, role: row.role, parts: row.parts }));
   return { conversation, messages };

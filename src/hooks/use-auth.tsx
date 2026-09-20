@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { switchLocalAccountScope } from "@/lib/account-scope";
 
 type AuthCtx = {
   user: User | null;
@@ -14,19 +15,31 @@ const Ctx = createContext<AuthCtx>({ user: null, session: null, loading: true, s
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [scopeReady, setScopeReady] = useState(false);
 
   useEffect(() => {
-    // Listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
+    let disposed = false;
+
+    const applySession = (nextSession: Session | null) => {
+      if (disposed) return;
+      switchLocalAccountScope(nextSession?.user.id ?? null);
+      setSession(nextSession);
+      setScopeReady(true);
       setLoading(false);
+    };
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      applySession(nextSession);
     });
-    // Then existing session
+
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
+      applySession(data.session);
     });
-    return () => subscription.unsubscribe();
+
+    return () => {
+      disposed = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
@@ -34,11 +47,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user: session?.user ?? null,
         session,
-        loading,
+        loading: loading || !scopeReady,
         signOut: async () => { await supabase.auth.signOut(); },
       }}
     >
-      {children}
+      {scopeReady ? children : null}
     </Ctx.Provider>
   );
 }

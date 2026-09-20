@@ -114,10 +114,13 @@ class _PhotoPickerButtonState extends State<PhotoPickerButton> {
   Widget build(BuildContext context) {
     final selected = _value;
     if (selected == null) {
-      return OutlinedButton.icon(
-        onPressed: _loading ? null : _choose,
-        icon: _loading ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.add_a_photo_outlined),
-        label: const Text('Ajouter une photo'),
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: IconButton.filledTonal(
+          tooltip: 'Ajouter une photo',
+          onPressed: _loading ? null : _choose,
+          icon: _loading ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.add),
+        ),
       );
     }
 

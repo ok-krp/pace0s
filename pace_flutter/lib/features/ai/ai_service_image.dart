@@ -7,10 +7,12 @@ extension PaceAiImageSupport on PaceAiService {
     required XFile image,
   }) async {
     final clean = text.trim();
-    if (clean.isEmpty) return '';
+    final prompt = clean.isEmpty
+        ? 'Analyse cette photo de repas, estime les aliments et leurs macros (kcal, protéines, glucides, lipides, fibres, sucres, sodium), puis ajoute automatiquement le repas estimé dans ma Nutrition.'
+        : clean;
 
     final now = DateTime.now();
-    final userMessage = AiMessage(id: _uuid(), role: 'user', text: clean, createdAt: now);
+    final userMessage = AiMessage(id: _uuid(), role: 'user', text: prompt, createdAt: now);
     final previous = await loadMessages(conversation.id);
     final next = [...previous, userMessage];
     if (!conversation.ephemeral) await _replaceMessages(conversation.id, next);
@@ -22,7 +24,7 @@ extension PaceAiImageSupport on PaceAiService {
       await _replaceMessages(conversation.id, [...next, assistant]);
       await _insertCloudMessage(conversation, assistant);
       if (conversation.title == 'Nouvelle conversation') {
-        await renameConversation(conversation.id, clean.length > 52 ? '${clean.substring(0, 52).trim()}…' : clean);
+        await renameConversation(conversation.id, prompt.length > 52 ? '${prompt.substring(0, 52).trim()}…' : prompt);
       }
     }
     return responseText;

@@ -26,6 +26,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as InvestmentsRouteImport } from './routes/investments'
 import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as DevelopmentRouteImport } from './routes/development'
+import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as CalendarRouteImport } from './routes/calendar'
 import { Route as BodyRouteImport } from './routes/body'
 import { Route as AssistantRouteImport } from './routes/assistant'
@@ -121,6 +122,11 @@ const DevelopmentRoute = DevelopmentRouteImport.update({
   path: '/development',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CoursesRoute = CoursesRouteImport.update({
+  id: '/courses',
+  path: '/courses',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CalendarRoute = CalendarRouteImport.update({
   id: '/calendar',
   path: '/calendar',
@@ -174,6 +180,7 @@ export interface FileRoutesByFullPath {
   '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
+  '/courses': typeof CoursesRoute
   '/development': typeof DevelopmentRoute
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
@@ -202,6 +209,7 @@ export interface FileRoutesByTo {
   '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
+  '/courses': typeof CoursesRoute
   '/development': typeof DevelopmentRoute
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
@@ -231,6 +239,7 @@ export interface FileRoutesById {
   '/assistant': typeof AssistantRoute
   '/body': typeof BodyRoute
   '/calendar': typeof CalendarRoute
+  '/courses': typeof CoursesRoute
   '/development': typeof DevelopmentRoute
   '/finance': typeof FinanceRoute
   '/investments': typeof InvestmentsRoute
@@ -261,6 +270,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/body'
     | '/calendar'
+    | '/courses'
     | '/development'
     | '/finance'
     | '/investments'
@@ -289,6 +299,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/body'
     | '/calendar'
+    | '/courses'
     | '/development'
     | '/finance'
     | '/investments'
@@ -317,6 +328,7 @@ export interface FileRouteTypes {
     | '/assistant'
     | '/body'
     | '/calendar'
+    | '/courses'
     | '/development'
     | '/finance'
     | '/investments'
@@ -346,6 +358,7 @@ export interface RootRouteChildren {
   AssistantRoute: typeof AssistantRoute
   BodyRoute: typeof BodyRoute
   CalendarRoute: typeof CalendarRoute
+  CoursesRoute: typeof CoursesRoute
   DevelopmentRoute: typeof DevelopmentRoute
   FinanceRoute: typeof FinanceRoute
   InvestmentsRoute: typeof InvestmentsRoute
@@ -490,6 +503,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DevelopmentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/courses': {
+      id: '/courses'
+      path: '/courses'
+      fullPath: '/courses'
+      preLoaderRoute: typeof CoursesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/calendar': {
       id: '/calendar'
       path: '/calendar'
@@ -562,6 +582,7 @@ const rootRouteChildren: RootRouteChildren = {
   AssistantRoute: AssistantRoute,
   BodyRoute: BodyRoute,
   CalendarRoute: CalendarRoute,
+  CoursesRoute: CoursesRoute,
   DevelopmentRoute: DevelopmentRoute,
   FinanceRoute: FinanceRoute,
   InvestmentsRoute: InvestmentsRoute,

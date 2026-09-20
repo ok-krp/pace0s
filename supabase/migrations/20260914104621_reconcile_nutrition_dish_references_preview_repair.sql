@@ -1,0 +1,5 @@
+-- Historical compatibility migration for Supabase Preview.
+-- This version already exists in the Preview migration history. Keep the
+-- migration file in version control so CI can reconcile local and remote
+-- migration histories. The actual schema repair is safely reasserted by
+-- 20260914110000_reassert_nutrition_dish_references_preview_baseline.sql.

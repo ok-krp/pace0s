@@ -56,7 +56,6 @@ export async function fetchProductByBarcode(barcode: string): Promise<OFFProduct
   };
 }
 
-
 export function computeHealthScore(p: OFFProduct): { score: "green" | "orange" | "red"; warnings: string[] } {
   const warnings: string[] = [];
   let s = 0;

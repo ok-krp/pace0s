@@ -1,0 +1,90 @@
+/* PaceOS visual system: one neutral canvas + one accent + semantic feedback. */
+:root {
+  --background: oklch(0.985 0.004 250);
+  --foreground: oklch(0.19 0.02 255);
+  --surface: oklch(1 0 0 / 0.48);
+  --surface-elevated: oklch(1 0 0 / 0.62);
+  --card: oklch(1 0 0 / 0.5);
+  --card-foreground: oklch(0.19 0.02 255);
+  --popover: oklch(0.985 0.006 250 / 0.94);
+  --popover-foreground: oklch(0.19 0.02 255);
+  --primary: oklch(0.58 0.19 258);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.95 0.006 250 / 0.62);
+  --secondary-foreground: oklch(0.23 0.02 255);
+  --muted: oklch(0.95 0.006 250 / 0.5);
+  --muted-foreground: oklch(0.46 0.018 255);
+  --accent: oklch(0.93 0.025 258 / 0.72);
+  --accent-foreground: oklch(0.24 0.035 258);
+  --border: oklch(0.22 0.02 255 / 0.10);
+  --input: oklch(1 0 0 / 0.46);
+  --ring: oklch(0.58 0.19 258);
+  --sidebar: oklch(0.985 0.004 250 / 0.72);
+  --sidebar-foreground: oklch(0.24 0.02 255);
+  --sidebar-primary: oklch(0.58 0.19 258);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.93 0.025 258 / 0.66);
+  --sidebar-accent-foreground: oklch(0.24 0.035 258);
+  --sidebar-border: oklch(0.22 0.02 255 / 0.09);
+  --sidebar-ring: oklch(0.58 0.19 258);
+  --chart-1: oklch(0.58 0.19 258);
+  --chart-2: oklch(0.58 0.19 258);
+  --chart-3: oklch(0.58 0.19 258);
+  --chart-4: oklch(0.58 0.19 258);
+  --chart-5: oklch(0.58 0.19 258);
+  --destructive: oklch(0.61 0.20 27);
+  --destructive-foreground: oklch(0.99 0 0);
+  --success: oklch(0.60 0.17 155);
+  --warning: oklch(0.67 0.15 80);
+}
+
+.dark {
+  --background: oklch(0.17 0.012 255);
+  --foreground: oklch(0.97 0.004 250);
+  --surface: oklch(1 0 0 / 0.10);
+  --surface-elevated: oklch(1 0 0 / 0.14);
+  --card: oklch(1 0 0 / 0.11);
+  --card-foreground: oklch(0.97 0.004 250);
+  --popover: oklch(0.20 0.014 255 / 0.95);
+  --popover-foreground: oklch(0.97 0.004 250);
+  --primary: oklch(0.72 0.17 258);
+  --primary-foreground: oklch(0.16 0.012 255);
+  --secondary: oklch(1 0 0 / 0.12);
+  --secondary-foreground: oklch(0.97 0.004 250);
+  --muted: oklch(1 0 0 / 0.10);
+  --muted-foreground: oklch(0.80 0.01 250);
+  --accent: oklch(0.30 0.035 258 / 0.72);
+  --accent-foreground: oklch(0.98 0.004 250);
+  --border: oklch(1 0 0 / 0.11);
+  --input: oklch(1 0 0 / 0.12);
+  --ring: oklch(0.72 0.17 258);
+  --sidebar: oklch(0.18 0.012 255 / 0.78);
+  --sidebar-foreground: oklch(0.95 0.004 250);
+  --sidebar-primary: oklch(0.72 0.17 258);
+  --sidebar-primary-foreground: oklch(0.16 0.012 255);
+  --sidebar-accent: oklch(0.30 0.035 258 / 0.66);
+  --sidebar-accent-foreground: oklch(0.98 0.004 250);
+  --sidebar-border: oklch(1 0 0 / 0.10);
+  --sidebar-ring: oklch(0.72 0.17 258);
+  --chart-1: oklch(0.72 0.17 258);
+  --chart-2: oklch(0.72 0.17 258);
+  --chart-3: oklch(0.72 0.17 258);
+  --chart-4: oklch(0.72 0.17 258);
+  --chart-5: oklch(0.72 0.17 258);
+  --destructive: oklch(0.70 0.18 27);
+  --destructive-foreground: oklch(0.16 0.012 255);
+  --success: oklch(0.72 0.15 155);
+  --warning: oklch(0.78 0.14 80);
+}
+
+/* Keep semantic feedback available without turning the product into a rainbow. */
+.text-emerald-500,.text-emerald-600,.text-green-500,.text-green-600 { color: var(--success) !important; }
+.text-amber-500,.text-amber-600,.text-yellow-500,.text-yellow-600 { color: var(--warning) !important; }
+.text-red-500,.text-red-600,.text-rose-500,.text-rose-600 { color: var(--destructive) !important; }
+.bg-emerald-500,.bg-emerald-600,.bg-green-500,.bg-green-600 { background-color: var(--success) !important; }
+.bg-amber-500,.bg-amber-600,.bg-yellow-500,.bg-yellow-600 { background-color: var(--warning) !important; }
+.bg-red-500,.bg-red-600,.bg-rose-500,.bg-rose-600 { background-color: var(--destructive) !important; }
+
+/* Neutralize common decorative rainbow utilities in favour of the single accent. */
+[class*="from-red-"],[class*="from-orange-"],[class*="from-yellow-"],[class*="from-green-"],[class*="from-emerald-"],[class*="from-cyan-"],[class*="from-sky-"],[class*="from-blue-"],[class*="from-indigo-"],[class*="from-violet-"],[class*="from-purple-"],[class*="from-pink-"] { --tw-gradient-from: var(--primary) !important; }
+[class*="to-red-"],[class*="to-orange-"],[class*="to-yellow-"],[class*="to-green-"],[class*="to-emerald-"],[class*="to-cyan-"],[class*="to-sky-"],[class*="to-blue-"],[class*="to-indigo-"],[class*="to-violet-"],[class*="to-purple-"],[class*="to-pink-"] { --tw-gradient-to: var(--primary) !important; }

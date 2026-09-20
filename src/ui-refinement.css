@@ -1,0 +1,206 @@
+/* PaceOS UI refinement: Inter + flatter glass/icon treatment. */
+:root {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --radius: 0.75rem;
+  --glass-radius: 16px;
+  --glass-radius-sm: 12px;
+}
+
+.dark {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+.glass-icon {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-radius: 0 !important;
+}
+
+.glass-card,
+.glass-thin,
+[data-slot="card"],
+.card {
+  border-radius: 16px !important;
+}
+
+/* A card is the surface. Any card-like descendant must not create another surface.
+   Its border is intentionally preserved as the only secondary visual treatment. */
+.glass-card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"]),
+[data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"]),
+.card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"]) {
+  background: transparent !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent) !important;
+  border-radius: 0 !important;
+  isolation: auto !important;
+}
+
+/* Rectangular thin-glass controls inside a surface are controls, not another panel.
+   Keep true pill controls (.rounded-full) visually intact. */
+.glass-card .glass-thin:not(.rounded-full),
+[data-slot="card"] .glass-thin:not(.rounded-full),
+.card .glass-thin:not(.rounded-full),
+:is([class*="bg-card"], [class*="bg-surface"], [class*="bg-secondary"], [class*="bg-muted"], [class*="bg-accent"], [class*="bg-input"], [class*="bg-popover"]) .glass-thin:not(.rounded-full) {
+  background: transparent !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: none !important;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent) !important;
+}
+
+/* Remove dark utility backgrounds from nested surfaces across the entire app.
+   Only descendants of an existing card/glass surface are affected; standalone
+   controls and page-level backgrounds keep their intended styling. */
+.glass-card :is([class*="bg-black"], [class*="bg-zinc-9"], [class*="bg-neutral-9"], [class*="bg-gray-9"], [class*="bg-slate-9"], [class*="bg-stone-9"]),
+[data-slot="card"] :is([class*="bg-black"], [class*="bg-zinc-9"], [class*="bg-neutral-9"], [class*="bg-gray-9"], [class*="bg-slate-9"], [class*="bg-stone-9"]),
+.card :is([class*="bg-black"], [class*="bg-zinc-9"], [class*="bg-neutral-9"], [class*="bg-gray-9"], [class*="bg-slate-9"], [class*="bg-stone-9"]) {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-color: color-mix(in srgb, currentColor 14%, transparent) !important;
+}
+
+/* Card components use semantic Tailwind surfaces (bg-card/bg-secondary/etc.)
+   without a shared .card class. Flatten only when one surface is nested inside
+   another surface, which is the pattern producing the black-on-black rectangles
+   in Settings and other dense pages. */
+:is([class*="bg-card"], [class*="bg-surface"], [class*="bg-secondary"], [class*="bg-muted"], [class*="bg-accent"], [class*="bg-input"], [class*="bg-popover"]) :is([class*="bg-card"], [class*="bg-surface"], [class*="bg-secondary"], [class*="bg-muted"], [class*="bg-accent"], [class*="bg-input"], [class*="bg-popover"], [class*="bg-black"], [class*="bg-zinc-9"], [class*="bg-neutral-9"], [class*="bg-gray-9"], [class*="bg-slate-9"], [class*="bg-stone-9"]) {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border-color: color-mix(in srgb, currentColor 14%, transparent) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Remove all nested decorative rims/sheen as well. */
+.glass-card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::before,
+.glass-card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::after,
+[data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"])::before,
+[data-slot="card"] :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"])::after,
+.card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::before,
+.card :is(.glass-card, .glass-thin, .card, .liquid-glass, [class~="liquid-glass"], [data-slot="card"], [class*="bg-card"])::after {
+  display: none !important;
+}
+
+/* The work timer uses the outer glass card as its only visual surface. */
+.work-flat-surface {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Numeric KPI values remain visually dominant. */
+.tabular-nums,
+[data-kpi-value="true"] {
+  font-weight: 700;
+}
+
+/* The dashboard's compact action controls remain rectangular rather than pill-shaped. */
+.glass-thin.rounded-full {
+  border-radius: 10px !important;
+}
+
+/* Reference layout: Notes occupy the large left column; Focus sits above Routine. */
+@media (min-width: 1024px) {
+  .work-page > .grid {
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr) !important;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .work-page > .grid > section:nth-child(1) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .work-page > .grid > section:nth-child(2) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .work-page > .grid > section:nth-child(3) {
+    grid-column: 1;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* Dashboard nutrition/hydration card: taller, clearer rows and explicit quick-add affordances. */
+@media (min-width: 1024px) {
+  body .grid.grid-cols-1.lg\:grid-cols-3.gap-4.mb-4 > .glass-card:nth-child(2) {
+    min-height: 100%;
+    padding: 1.5rem !important;
+    gap: 1rem;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-3.gap-4.mb-4 > .glass-card:nth-child(2) > div:nth-child(2) {
+    gap: 0.75rem;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-3.gap-4.mb-4 > .glass-card:nth-child(2) > div:nth-child(2) > button {
+    min-height: 72px;
+    padding: 0.85rem 1rem !important;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-3.gap-4.mb-4 > .glass-card:nth-child(2) > div:nth-child(2) > button > span[aria-hidden="true"] {
+    font-size: 0 !important;
+    min-width: 88px;
+    min-height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--primary) 16%, transparent);
+    color: var(--primary);
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-3.gap-4.mb-4 > .glass-card:nth-child(2) > div:nth-child(2) > button > span[aria-hidden="true"]::after {
+    content: "Ajout rapide";
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+}
+
+/* Nutrition page: give the meals the dominant workspace and compress hydration. */
+@media (min-width: 1024px) {
+  body .grid.grid-cols-1.lg\:grid-cols-2.gap-4.items-stretch {
+    grid-template-columns: minmax(0, 5fr) minmax(210px, 2fr) !important;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-2.gap-4.items-stretch > section:nth-child(2) .glass-card {
+    padding: 0.9rem !important;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-2.gap-4.items-stretch > section:nth-child(2) .glass-card > :first-child {
+    transform: scale(0.84);
+    transform-origin: top center;
+    margin-bottom: -1.1rem;
+  }
+
+  body .grid.grid-cols-1.lg\:grid-cols-2.gap-4.items-stretch > section:nth-child(2) .glass-card > :nth-child(2) {
+    margin-top: 0.25rem;
+  }
+}
+
+/* The nutrition assistant launcher is an icon, not another card/square. */
+button[aria-label="Décrire ce que j’ai mangé aujourd’hui"] {
+  background: transparent !important;
+  background-image: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-radius: 0 !important;
+}

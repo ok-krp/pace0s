@@ -1,101 +1,63 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { liquidTooltipStyle } from "@/lib/chart-style";
-import { useEffect, useRef, useState } from "react";
-import { Play, Pause, RotateCcw, Briefcase, Trash2 } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
-import { PageHeader, StatCard } from "@/components/Stat";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Play, Pause, RotateCcw, Briefcase, Plus, Check, StickyNote, Trash2, Search, Bold, Italic, Underline, Strikethrough, List, ListOrdered, ListTodo, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Pin, PinOff, Palette, Undo2, Redo2 } from "lucide-react";
+import { PageHeader } from "@/components/Stat";
 import { useLocalState, lastNDays, fmtDay, todayKey } from "@/lib/storage";
+import { useDomainState } from "@/lib/domain-store";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
-export const Route = createFileRoute("/work")({
-  head: () => ({ meta: [{ title: "Travail — Pace" }, { name: "description", content: "Timer, sessions, productivité." }] }),
-  component: WorkPage,
-});
-
+export const Route = createFileRoute("/work")({ head: () => ({ meta: [{ title: "Travail, routine & notes — Pace" }, { name: "description", content: "Travail, routine et notes réunis dans un seul espace quotidien." }] }), component: WorkPage });
+type Habit = { id: string; name: string; emoji: string };
+type Note = { id: string; title: string; html: string; pinned: boolean; color: string; createdAt: number; updatedAt: number };
 const CATS = ["École", "Business", "Sport", "Projets"];
+const COLORS = [{ key: "default", cls: "bg-card" }, { key: "amber", cls: "bg-amber-500/10" }, { key: "rose", cls: "bg-rose-500/10" }, { key: "emerald", cls: "bg-emerald-500/10" }, { key: "sky", cls: "bg-sky-500/10" }, { key: "violet", cls: "bg-violet-500/10" }];
+const FONTS = [{ label: "Par défaut", value: "" }, { label: "Serif", value: "Georgia, serif" }, { label: "Manuscrite", value: "'Brush Script MT', cursive" }, { label: "Monospace", value: "'Courier New', monospace" }, { label: "Arial", value: "Arial, sans-serif" }];
+const SIZES = [{ label: "Petit", value: "2" }, { label: "Normal", value: "3" }, { label: "Grand", value: "5" }, { label: "Très grand", value: "7" }];
+const textPreview = (html: string) => { if (typeof document === "undefined") return ""; const div = document.createElement("div"); div.innerHTML = html; return (div.textContent || "").trim().slice(0, 120); };
 
 function WorkPage() {
+  const navigate = useNavigate();
   const [data, setData] = useLocalState<Record<string, number>>("pace.work.minutes", {});
   const [sessions, setSessions] = useLocalState<Array<{ id: string; date: string; cat: string; minutes: number }>>("pace.work.sessions", []);
-  const [cat, setCat] = useState("Business");
-  const [running, setRunning] = useState(false);
-  const [seconds, setSeconds] = useState(0);
-  const ref = useRef<number | null>(null);
+  const [cat, setCat] = useState("Business"); const [running, setRunning] = useState(false); const [seconds, setSeconds] = useState(0); const ref = useRef<number | null>(null);
+  const [legacyHabits] = useLocalState<Habit[]>("pace.routine.list", [{ id: "h1", name: "Sport", emoji: "🏋️" }, { id: "h2", name: "Lecture", emoji: "📖" }, { id: "h3", name: "Méditation", emoji: "🧘" }, { id: "h4", name: "Douche froide", emoji: "❄️" }]);
+  const [legacyDone] = useLocalState<Record<string, string[]>>("pace.routine.done", {}); const [habits, setHabits] = useDomainState<Habit[]>("routine.list", legacyHabits); const [done, setDone] = useDomainState<Record<string, string[]>>("routine.done", legacyDone);
+  const [habitName, setHabitName] = useState(""); const [habitEmoji, setHabitEmoji] = useState("✨");
+  const [notes, setNotes] = useLocalState<Note[]>("pace.notes.list", []); const [selectedNoteId, setSelectedNoteId] = useState<string | null>(null); const [query, setQuery] = useState("");
+  const safeData = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const safeSessions = Array.isArray(sessions) ? sessions : [];
+  const safeHabits = Array.isArray(habits) ? habits : [];
+  const safeDone = done && typeof done === "object" && !Array.isArray(done) ? done : {};
+  const safeNotes = Array.isArray(notes) ? notes : [];
+  const today = todayKey();
+  useEffect(() => { if (running) ref.current = window.setInterval(() => setSeconds((s) => s + 1), 1000); return () => { if (ref.current) clearInterval(ref.current); }; }, [running]);
+  const stop = () => { setRunning(false); const completedMinutes = Math.floor(seconds / 60); if (completedMinutes > 0) { setData((p) => ({ ...(p && typeof p === "object" && !Array.isArray(p) ? p : {}), [today]: ((p && typeof p === "object" && !Array.isArray(p) ? p[today] : 0) ?? 0) + completedMinutes })); setSessions((p) => [{ id: crypto.randomUUID(), date: today, cat, minutes: completedMinutes }, ...(Array.isArray(p) ? p : [])].slice(0, 100)); } setSeconds(0); };
+  const days = lastNDays(14); const series = days.map((d) => ({ d: fmtDay(d).slice(0, 3), min: typeof safeData[d] === "number" ? safeData[d] : 0 })); const totalMin = series.reduce((s, x) => s + x.min, 0); const avg = totalMin / 14; const todayMin = typeof safeData[today] === "number" ? safeData[today] : 0; const fmt = (s: number) => `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+  const todayDone = Array.isArray(safeDone[today]) ? safeDone[today] : []; const toggleHabit = (id: string) => setDone((p) => { const base = p && typeof p === "object" && !Array.isArray(p) ? p : {}; const current = Array.isArray(base[today]) ? base[today] : []; return { ...base, [today]: current.includes(id) ? current.filter((x) => x !== id) : [...current, id] }; });
+  const addHabit = () => { if (!habitName.trim()) return; setHabits((p) => [...(Array.isArray(p) ? p : []), { id: crypto.randomUUID(), name: habitName.trim(), emoji: habitEmoji }]); setHabitName(""); setHabitEmoji("✨"); };
+  const filteredNotes = useMemo(() => { const q = query.trim().toLowerCase(); const list = q ? safeNotes.filter((n) => typeof n?.title === "string" && (n.title.toLowerCase().includes(q) || textPreview(typeof n.html === "string" ? n.html : "").toLowerCase().includes(q))) : safeNotes; return [...list].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || b.updatedAt - a.updatedAt); }, [safeNotes, query]);
+  const selectedNote = safeNotes.find((n) => n.id === selectedNoteId) ?? null;
+  const createNote = () => { const n: Note = { id: crypto.randomUUID(), title: "", html: "", pinned: false, color: "default", createdAt: Date.now(), updatedAt: Date.now() }; setNotes((p) => [n, ...(Array.isArray(p) ? p : [])]); setSelectedNoteId(n.id); };
+  const updateNote = (id: string, patch: Partial<Note>) => setNotes((p) => (Array.isArray(p) ? p : []).map((n) => n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n));
+  const removeNote = (id: string) => { setNotes((p) => (Array.isArray(p) ? p : []).filter((n) => n.id !== id)); if (selectedNoteId === id) setSelectedNoteId(null); };
 
-  useEffect(() => {
-    if (running) ref.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
-    return () => { if (ref.current) clearInterval(ref.current); };
-  }, [running]);
-
-  const stop = () => {
-    setRunning(false);
-    if (seconds > 0) {
-      const m = Math.round(seconds / 60);
-      const today = todayKey();
-      // L'arrêt déclenche l'enregistrement automatiquement : il n'y a plus de bouton "Enregistrer" séparé.
-      setData((p) => ({ ...p, [today]: (p[today] ?? 0) + m }));
-      setSessions((p) => [{ id: crypto.randomUUID(), date: today, cat, minutes: m }, ...p].slice(0, 100));
-    }
-    setSeconds(0);
-  };
-
-  const days = lastNDays(14);
-  const series = days.map((d) => ({ d: fmtDay(d).slice(0, 3), min: data[d] ?? 0 }));
-  const totalMin = series.reduce((s, x) => s + x.min, 0);
-  const avg = totalMin / 14;
-  const today = data[todayKey()] ?? 0;
-  const fmt = (s: number) => `${String(Math.floor(s / 3600)).padStart(2, "0")}:${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-
-  return (
-    <div>
-      <PageHeader title="Travail & Productivité" subtitle="Concentration et progression." />
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <StatCard label="Aujourd'hui" value={`${Math.floor(today / 60)}h${today % 60}`} icon={<Briefcase className="size-4" />} />
-        <StatCard label="Moyenne 14j" value={`${Math.floor(avg / 60)}h${Math.round(avg % 60)}`} />
-        <StatCard label="Total 14j" value={`${Math.floor(totalMin / 60)}h`} />
-      </div>
-      <div className="rounded-2xl glass-card p-6 mb-4 flex flex-col items-center gap-4">
-        <div className="font-display text-6xl font-semibold tabular-nums tracking-tight">{fmt(seconds)}</div>
-        <Select value={cat} onValueChange={setCat}>
-          <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-          <SelectContent>{CATS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-        </Select>
-        <div className="flex gap-2">
-          <Button onClick={() => setRunning(!running)} className="rounded-xl px-6">
-            {running ? <><Pause className="size-4 mr-1" />Pause</> : <><Play className="size-4 mr-1" />Démarrer</>}
-          </Button>
-          <Button onClick={stop} variant="secondary" className="rounded-xl"><RotateCcw className="size-4 mr-1" />Arrêter</Button>
-        </div>
-        <span className="text-xs text-muted-foreground" aria-live="polite">Les sessions sont enregistrées automatiquement à l'arrêt.</span>
-      </div>
-      <div className="rounded-2xl glass-card p-5 mb-4">
-        <h2 className="font-display text-lg font-semibold mb-3">Heures travaillées 14j</h2>
-        <ResponsiveContainer width="100%" height={200}>
-          <BarChart data={series}>
-            <XAxis dataKey="d" fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
-            <YAxis fontSize={11} stroke="var(--muted-foreground)" tickLine={false} axisLine={false} />
-            <Tooltip contentStyle={liquidTooltipStyle} />
-            <Bar dataKey="min" fill="var(--primary)" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-      {sessions.length > 0 && (
-        <div className="rounded-2xl glass-card overflow-hidden">
-          <div className="px-5 py-3 border-b border-border bg-muted/30 font-display text-sm font-semibold">Sessions récentes</div>
-          <ul className="divide-y divide-border max-h-72 overflow-y-auto">
-            {sessions.map((s) => (
-              <li key={s.id} className="px-5 py-3 flex justify-between items-center text-sm group gap-3">
-                <span className="truncate"><span className="font-medium">{s.cat}</span> · {s.date}</span>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-muted-foreground">{Math.floor(s.minutes / 60)}h {s.minutes % 60}m</span>
-                  <button onClick={() => { if (!confirm("Supprimer cette session ?")) return; setSessions((p) => p.filter((x) => x.id !== s.id)); setData((p) => { const cur = p[s.date] ?? 0; return { ...p, [s.date]: Math.max(0, cur - s.minutes) }; }); }} className="text-muted-foreground hover:text-destructive opacity-60 group-hover:opacity-100 transition" aria-label="Supprimer"><Trash2 className="size-4" /></button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
+  return <div className="work-page"><PageHeader title="Travail · Routine · Notes" subtitle="Un seul espace pour piloter ton quotidien." /><div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.72fr)_minmax(360px,0.92fr)] gap-5 items-stretch">
+    <section className="glass-card p-5 lg:row-span-2 min-h-[560px]"><div className="flex items-center justify-between mb-4"><div><div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Travail</div><div className="font-display text-lg font-semibold mt-1">Concentration</div></div><Briefcase className="size-5 text-primary" /></div><div className="grid grid-cols-3 gap-2 mb-4"><div className="work-flat-surface rounded-xl p-3"><div className="text-[10px] text-muted-foreground">Aujourd'hui</div><div className="font-semibold mt-1">{Math.floor(todayMin / 60)}h{todayMin % 60}</div></div><div className="work-flat-surface rounded-xl p-3"><div className="text-[10px] text-muted-foreground">Moy. 14j</div><div className="font-semibold mt-1">{Math.floor(avg / 60)}h{Math.round(avg % 60)}</div></div><div className="work-flat-surface rounded-xl p-3"><div className="text-[10px] text-muted-foreground">Total</div><div className="font-semibold mt-1">{Math.floor(totalMin / 60)}h</div></div></div><div className="rounded-2xl work-flat-surface p-5 flex flex-col items-center gap-4"><div className="font-display text-5xl font-semibold tabular-nums tracking-tight">{fmt(seconds)}</div><Select value={cat} onValueChange={setCat}><SelectTrigger className="w-full work-flat-surface"><SelectValue /></SelectTrigger><SelectContent>{CATS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select><div className="flex gap-2 w-full"><Button onClick={() => setRunning(!running)} className="rounded-xl flex-1">{running ? <><Pause className="size-4 mr-1" />Pause</> : <><Play className="size-4 mr-1" />Démarrer</>}</Button><Button onClick={stop} variant="ghost" className="rounded-xl px-3"><RotateCcw className="size-4" /></Button></div><span className="text-[11px] text-muted-foreground">1 minute enregistrée par tranche complète de 60 secondes.</span></div>{safeSessions.length > 0 && <div className="mt-4 space-y-1.5">{safeSessions.slice(0, 4).map((s) => <div key={s.id} className="flex justify-between text-xs px-1"><span>{s.cat} · {s.date}</span><span className="text-muted-foreground">{s.minutes} min</span></div>)}</div>}</section>
+    <section className="glass-card p-5"><div className="flex items-center justify-between mb-4"><div><div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Routine</div><div className="font-display text-lg font-semibold mt-1">Aujourd'hui · {todayDone.length}/{safeHabits.length}</div></div><div className="text-sm font-semibold text-primary">{safeHabits.length ? Math.round(todayDone.length / safeHabits.length * 100) : 0}%</div></div><div className="flex gap-2 mb-3"><Input value={habitEmoji} onChange={(e) => setHabitEmoji(e.target.value)} className="w-14 text-center" /><Input value={habitName} onChange={(e) => setHabitName(e.target.value)} placeholder="Nouvelle habitude" /><Button onClick={addHabit} size="icon" className="rounded-xl shrink-0"><Plus className="size-4" /></Button></div><div className="space-y-2">{safeHabits.slice(0, 8).map((h) => { const checked = todayDone.includes(h.id); return <button key={h.id} type="button" onClick={() => toggleHabit(h.id)} className={`w-full flex items-center gap-3 rounded-xl p-3 text-left transition ${checked ? "bg-primary/8" : "glass-thin"}`}><span className="text-lg">{h.emoji}</span><span className={`flex-1 text-sm ${checked ? "line-through opacity-60" : "font-medium"}`}>{h.name}</span><span className={`size-6 rounded-full border grid place-items-center ${checked ? "bg-primary border-primary text-primary-foreground" : "border-border"}`}>{checked && <Check className="size-3.5" />}</span></button>; })}</div><button onClick={() => navigate({ to: "/routine" })} className="mt-4 text-xs text-muted-foreground hover:text-foreground transition">Gérer toutes les habitudes →</button></section>
+    <section className="glass-card p-5 min-h-[520px]"><div className="flex items-center justify-between mb-3"><div><div className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Notes</div><div className="font-display text-lg font-semibold mt-1">Espace notes</div></div><StickyNote className="size-5 text-primary" /></div><div className="grid grid-cols-[180px_minmax(0,1fr)] lg:grid-cols-[155px_minmax(0,1fr)] gap-3 h-[430px]"><div className="min-h-0 flex flex-col"><div className="flex gap-1.5 mb-2"><div className="relative flex-1"><Search className="size-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Rechercher…" value={query} onChange={(e) => setQuery(e.target.value)} className="pl-7 h-8 text-xs" /></div><Button size="icon" onClick={createNote} className="size-8 rounded-lg shrink-0"><Plus className="size-3.5" /></Button></div><div className="space-y-1.5 overflow-y-auto pr-1">{filteredNotes.length === 0 ? <div className="text-[11px] text-muted-foreground italic px-2 py-5 text-center">Aucune note.</div> : filteredNotes.map((n) => { const colorCls = COLORS.find((c) => c.key === n.color)?.cls ?? "bg-card"; return <button key={n.id} onClick={() => setSelectedNoteId(n.id)} className={`w-full text-left rounded-lg glass-thin ${colorCls} p-2.5 transition ${selectedNoteId === n.id ? "ring-2 ring-primary" : "hover:opacity-90"}`}><div className="flex items-center gap-1">{n.pinned && <Pin className="size-2.5 text-primary shrink-0" />}<div className="font-medium text-xs truncate">{n.title || "Sans titre"}</div></div><div className="text-[10px] text-muted-foreground truncate mt-0.5">{textPreview(typeof n.html === "string" ? n.html : "") || "Note vide"}</div></button>; })}</div></div><div className="min-w-0 min-h-0">{selectedNote ? <NoteEditor key={selectedNote.id} note={selectedNote} onChange={(patch) => updateNote(selectedNote.id, patch)} onDelete={() => removeNote(selectedNote.id)} /> : <div className="h-full rounded-xl glass-thin flex items-center justify-center text-xs text-muted-foreground text-center p-5">Sélectionne une note ou crée-en une nouvelle.<br />Les notes restent ici, directement dans Travail.</div>}</div></div></section>
+  </div></div>;
 }
+
+function NoteEditor({ note, onChange, onDelete }: { note: Note; onChange: (patch: Partial<Note>) => void; onDelete: () => void }) {
+  const editorRef = useRef<HTMLDivElement>(null); const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { if (editorRef.current && editorRef.current.innerHTML !== note.html) editorRef.current.innerHTML = note.html; }, [note.id]);
+  const scheduleSave = () => { if (saveTimer.current) clearTimeout(saveTimer.current); saveTimer.current = setTimeout(() => { if (editorRef.current) onChange({ html: editorRef.current.innerHTML }); }, 400); };
+  const exec = (command: string, value?: string) => { editorRef.current?.focus(); document.execCommand(command, false, value); scheduleSave(); };
+  const insertChecklist = () => { editorRef.current?.focus(); document.execCommand("insertHTML", false, `<div class="pace-check" style="display:flex;align-items:center;gap:6px;margin:2px 0"><input type="checkbox" /><span contenteditable="true">Élément</span></div><br/>`); scheduleSave(); };
+  const insertLink = () => { const url = window.prompt("Lien (https://…)"); if (url) exec("createLink", url); };
+  const colorCls = COLORS.find((c) => c.key === note.color)?.cls ?? "bg-card";
+  return <div className={`rounded-xl glass-card ${colorCls} p-3 flex flex-col h-full`}><div className="flex items-center gap-1.5 mb-2"><Input value={note.title} onChange={(e) => onChange({ title: e.target.value })} placeholder="Titre de la note" className="border-0 shadow-none bg-transparent text-sm font-display font-semibold px-1 focus-visible:ring-0 h-8" /><button onClick={() => onChange({ pinned: !note.pinned })} aria-label={note.pinned ? "Désépingler" : "Épingler"} className="p-1.5 rounded-lg hover:bg-muted shrink-0">{note.pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}</button><button onClick={onDelete} aria-label="Supprimer la note" className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-destructive shrink-0"><Trash2 className="size-3.5" /></button></div><div className="flex flex-wrap items-center gap-0.5 mb-2 pb-2 border-b border-border/50"><ToolbarBtn onClick={() => exec("undo")} label="Annuler (Ctrl+Z)"><Undo2 className="size-3" /></ToolbarBtn><ToolbarBtn onClick={() => exec("redo")} label="Rétablir (Ctrl+Y / Ctrl+Shift+Z)"><Redo2 className="size-3" /></ToolbarBtn><div className="w-px h-4 bg-border mx-0.5" /><ToolbarBtn onClick={() => exec("bold")} label="Gras"><Bold className="size-3" /></ToolbarBtn><ToolbarBtn onClick={() => exec("italic")} label="Italique"><Italic className="size-3" /></ToolbarBtn><ToolbarBtn onClick={() => exec("underline")} label="Souligné"><Underline className="size-3" /></ToolbarBtn><ToolbarBtn onClick={() => exec("strikeThrough")} label="Barré"><Strikethrough className="size-3" /></ToolbarBtn><ToolbarBtn onClick={() => exec("insertUnorderedList")} label="Liste à puces"><List className="size-3" /></ToolbarBtn><ToolbarBtn onClick={() => exec("insertOrderedList")} label="Liste numérotée"><ListOrdered className="size-3" /></ToolbarBtn><ToolbarBtn onClick={insertChecklist} label="Liste de tâches"><ListTodo className="size-3" /></ToolbarBtn><ToolbarBtn onClick={() => exec("justifyLeft")} label="Gauche"><AlignLeft className="size-3" /></ToolbarBtn><ToolbarBtn onClick={() => exec("justifyCenter")} label="Centrer"><AlignCenter className="size-3" /></ToolbarBtn><ToolbarBtn onClick={() => exec("justifyRight")} label="Droite"><AlignRight className="size-3" /></ToolbarBtn><ToolbarBtn onClick={insertLink} label="Lien"><LinkIcon className="size-3" /></ToolbarBtn><label className="relative inline-flex items-center justify-center size-7 rounded-lg hover:bg-muted cursor-pointer" title="Couleur du texte"><Palette className="size-3" /><input type="color" onChange={(e) => exec("foreColor", e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" /></label><Select onValueChange={(v) => exec("fontName", v)}><SelectTrigger className="h-7 w-[90px] text-[10px]"><SelectValue placeholder="Police" /></SelectTrigger><SelectContent>{FONTS.map((f) => <SelectItem key={f.label} value={f.value || "default"}>{f.label}</SelectItem>)}</SelectContent></Select><Select onValueChange={(v) => exec("fontSize", v)}><SelectTrigger className="h-7 w-[82px] text-[10px]"><SelectValue placeholder="Taille" /></SelectTrigger><SelectContent>{SIZES.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent></Select><div className="flex items-center gap-0.5 ml-auto">{COLORS.map((c) => <button key={c.key} onClick={() => onChange({ color: c.key })} aria-label={`Couleur ${c.key}`} className={`size-4 rounded-full border ${note.color === c.key ? "border-primary border-2" : "border-border"}`} style={c.key === "default" ? { backgroundColor: "var(--muted)" } : undefined} />)}</div></div><div ref={editorRef} contentEditable suppressContentEditableWarning onInput={scheduleSave} onKeyDown={(e) => { if (!(e.ctrlKey || e.metaKey)) return; if (e.key.toLowerCase() === "z") { e.preventDefault(); exec(e.shiftKey ? "redo" : "undo"); } else if (e.key.toLowerCase() === "y") { e.preventDefault(); exec("redo"); } }} className="flex-1 overflow-y-auto outline-none text-xs leading-relaxed px-1 py-1" /></div>;
+}
+function ToolbarBtn({ onClick, label, children }: { onClick: () => void; label: string; children: React.ReactNode }) { return <button onClick={onClick} aria-label={label} title={label} className="size-7 rounded-lg hover:bg-muted grid place-items-center text-foreground">{children}</button>; }

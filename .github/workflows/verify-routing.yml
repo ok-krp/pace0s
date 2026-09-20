@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build-and-verify-routing:
@@ -31,18 +31,21 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      # TanStack Router generates src/routeTree.gen.ts during the Vite build.
+      # Run the build before typecheck so newly-added file routes are part of
+      # FileRoutesByPath when TypeScript validates createFileRoute(...).
+      - name: Generate route tree and build production bundle
+        run: npm run build
+
       - name: TypeScript typecheck
         run: npm run typecheck
-
-      - name: Build production bundle
-        run: npm run build
 
       - name: Verify generated TanStack route tree
         shell: bash
         run: |
           test -f src/routeTree.gen.ts
           grep -Fq "IndexRouteImport" src/routeTree.gen.ts || { echo "Missing index route in route tree"; exit 1; }
-          for route in "/assistant" "/development" "/ai-activity" "/nutrition" "/sport" "/watch" "/sleep" "/routine" "/body" "/work" "/calendar" "/notes" "/recalls" "/finance" "/profile" "/settings" "/scan" "/recipes" "/investments" "/water" "/login"; do
+          for route in "/assistant" "/development" "/ai-activity" "/nutrition" "/courses" "/sport" "/watch" "/sleep" "/routine" "/body" "/work" "/calendar" "/notes" "/recalls" "/finance" "/profile" "/settings" "/scan" "/recipes" "/investments" "/water" "/login"; do
             grep -Fq "'$route'" src/routeTree.gen.ts || grep -Fq "\"$route\"" src/routeTree.gen.ts || {
               echo "Missing route in generated tree: $route"
               exit 1
@@ -50,16 +53,8 @@ jobs:
           done
           echo "All expected application routes are present."
 
-      - name: Commit regenerated route tree when changed
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Verify route tree is generated
         shell: bash
         run: |
-          if git diff --quiet -- src/routeTree.gen.ts; then
-            echo "routeTree.gen.ts is already current"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/routeTree.gen.ts
-          git commit -m "chore(routing): regenerate TanStack route tree"
-          git push
+          test -s src/routeTree.gen.ts
+          echo "TanStack route tree generated successfully."

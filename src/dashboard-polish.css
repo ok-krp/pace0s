@@ -1,0 +1,42 @@
+.glass-icon {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Center every Radix dialog against the viewport, including the command palette. */
+[data-radix-dialog-content] {
+  inset: 0 !important;
+  margin: auto !important;
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  transform: none !important;
+}
+
+/* Daily Rhythm: compact textual breakdown instead of dot markers. */
+button[aria-label="Voir le détail du Daily Rhythm"] ul li {
+  gap: 0.45rem;
+}
+button[aria-label="Voir le détail du Daily Rhythm"] ul li > span {
+  display: none;
+}
+button[aria-label="Voir le détail du Daily Rhythm"] ul li::before {
+  content: "-";
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
+button[aria-label="Voir le détail du Daily Rhythm"] ul li > div > div:first-child {
+  display: inline;
+  font-weight: 600;
+}
+button[aria-label="Voir le détail du Daily Rhythm"] ul li > div > div:first-child::after {
+  content: ":";
+}
+button[aria-label="Voir le détail du Daily Rhythm"] ul li > div > div:nth-child(2) {
+  display: inline;
+  margin-left: 0.25rem;
+}
