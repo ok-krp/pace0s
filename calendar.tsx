@@ -9,6 +9,13 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
+/*
+ * The calendar intentionally mirrors persisted values into local editor drafts.
+ * Keep these synchronous draft resets; the current React Hooks lint rule flags this
+ * established form as set-state-in-effect even though it is deliberate here.
+ */
+/* eslint-disable react-hooks/set-state-in-effect */
+
 const searchSchema = z.object({ d: z.string().optional() });
 export const Route = createFileRoute("/calendar")({
   validateSearch: searchSchema,
