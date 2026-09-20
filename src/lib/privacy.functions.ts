@@ -38,11 +38,8 @@ const DELETE_TABLES = [
   "ai_preferences",
   "ai_provider_secrets",
   "ai_tool_idempotency",
-  "sport_workout_sets",
-  "sport_workout_exercises",
   "sport_progression_targets",
   "sport_workout_sessions",
-  "sport_program_items",
   "sport_programs",
   "sport_exercises",
   "food_log",
@@ -108,6 +105,31 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     }
 
     try {
+      const [{ data: programs }, { data: sessions }, { data: workoutExercises }] = await Promise.all([
+        supabaseAdmin.from("sport_programs").select("id").eq("user_id", userId),
+        supabaseAdmin.from("sport_workout_sessions").select("id").eq("user_id", userId),
+        supabaseAdmin.from("sport_workout_exercises").select("id,session_id").in(
+          "session_id",
+          (await supabaseAdmin.from("sport_workout_sessions").select("id").eq("user_id", userId)).data?.map((row) => row.id) ?? [],
+        ),
+      ]);
+      const programIds = (programs ?? []).map((row) => row.id);
+      const sessionIds = (sessions ?? []).map((row) => row.id);
+      const workoutExerciseIds = (workoutExercises ?? []).map((row) => row.id);
+
+      if (workoutExerciseIds.length) {
+        const { error } = await supabaseAdmin.from("sport_workout_sets").delete().in("workout_exercise_id", workoutExerciseIds);
+        if (error) throw new Error("cleanup:sport_workout_sets");
+      }
+      if (sessionIds.length) {
+        const { error } = await supabaseAdmin.from("sport_workout_exercises").delete().in("session_id", sessionIds);
+        if (error) throw new Error("cleanup:sport_workout_exercises");
+      }
+      if (programIds.length) {
+        const { error } = await supabaseAdmin.from("sport_program_items").delete().in("program_id", programIds);
+        if (error) throw new Error("cleanup:sport_program_items");
+      }
+
       for (const table of DELETE_TABLES) {
         const { error } = await supabaseAdmin.from(table).delete().eq("user_id", userId);
         if (error) throw new Error(`cleanup:${table}`);
