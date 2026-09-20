@@ -99,7 +99,7 @@ export const listHealthToday = createServerFn({ method: "GET" })
     }
 
     const range = localDayRange(data.timeZone);
-    const healthTable = context.supabase.from("health_samples") as any;
+    const healthTable = context.supabase.from("health_samples");
     const result = await healthTable.select("type, value, ts, source").gte("ts", range.start.toISOString()).lt("ts", range.end.toISOString()).order("ts", { ascending: false }).limit(10000);
     if (result.error) {
       console.error("health sample read failed", result.error);
