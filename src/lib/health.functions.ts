@@ -14,6 +14,24 @@ export const insertHealthSamples = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => insertSchema.parse(d))
   .handler(async ({ data, context }) => {
+    const { data: healthConsent } = await context.supabase
+      .from("consent_records")
+      .select("granted")
+      .eq("consent_type", "health_data")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const { data: cloudConsent } = await context.supabase
+      .from("consent_records")
+      .select("granted")
+      .eq("consent_type", "health_cloud_sync")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (healthConsent?.granted !== true || cloudConsent?.granted !== true) {
+      throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
+    }
+
     const healthTable = context.supabase.from("health_samples");
     const rows: TablesInsert<"health_samples">[] = data.samples.map((s) => ({ ...s, user_id: context.userId, metadata: s.metadata ?? {} }));
     const externalIds = rows.map((r) => r.external_id).filter((v): v is string => !!v);
@@ -65,6 +83,21 @@ export const listHealthToday = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => z.object({ timeZone: z.string().optional() }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
+    const { data: healthConsent } = await context.supabase
+      .from("consent_records")
+      .select("granted")
+      .eq("consent_type", "health_data")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (healthConsent?.granted !== true) {
+      return {
+        steps: 0, kcalActive: 0, kcalTotal: 0, distanceM: 0, sleepMin: 0, exerciseMin: 0,
+        heartRate: null, restingHeartRate: null, weightKg: null, oxygenSaturation: null,
+        temperatureC: null, cadenceRpm: null, powerW: null, sources: {}, lastSource: null, lastTs: null, count: 0,
+      };
+    }
+
     const range = localDayRange(data.timeZone);
     const healthTable = context.supabase.from("health_samples") as any;
     const result = await healthTable.select("type, value, ts, source").gte("ts", range.start.toISOString()).lt("ts", range.end.toISOString()).order("ts", { ascending: false }).limit(10000);
