@@ -69,27 +69,27 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
       if (!result.success) return { error: "Réponse IA invalide", result: null };
       parsed = result.data;
     }
-    if (parsed.data.items.length === 0) return { error: "Aucun aliment identifiable sur cette photo.", result: null };
+    if (parsed.items.length === 0) return { error: "Aucun aliment identifiable sur cette photo.", result: null };
 
-    const dish = await findDishReference(parsed.data.dish_name);
-    if (dish && parsed.data.confidence >= 0.65) {
-      const grams = parsed.data.items.reduce((sum, item) => sum + item.grams, 0) || Number(dish.portion_g);
+    const dish = await findDishReference(parsed.dish_name);
+    if (dish && parsed.confidence >= 0.65) {
+      const grams = parsed.items.reduce((sum, item) => sum + item.grams, 0) || Number(dish.portion_g);
       const values = scaleDishReference(dish, grams);
       const macroKcal = 4 * values.protein_g + 4 * values.carbs_g + 9 * values.fat_g;
-      const result = foodAnalysisSchema.parse({ dish_name: dish.canonical_name, items: [{ name: dish.canonical_name, brand: null, grams, ...values }], health_score: parsed.data.health_score, quality: parsed.data.quality, confidence: Math.min(parsed.data.confidence, Number(dish.confidence)), confidence_note: `${parsed.data.confidence_note} Référence calibrée Pace : ${Math.round(Number(dish.confidence) * 100)} %.`, notes: `${parsed.data.notes} Valeurs issues d'une référence de plat calibrée, redimensionnée à la portion estimée.` });
+      const result = foodAnalysisSchema.parse({ dish_name: dish.canonical_name, items: [{ name: dish.canonical_name, brand: null, grams, ...values }], health_score: parsed.health_score, quality: parsed.quality, confidence: Math.min(parsed.confidence, Number(dish.confidence)), confidence_note: `${parsed.confidence_note} Référence calibrée Pace : ${Math.round(Number(dish.confidence) * 100)} %.`, notes: `${parsed.notes} Valeurs issues d'une référence de plat calibrée, redimensionnée à la portion estimée.` });
       if (Math.abs(macroKcal - values.kcal) / Math.max(values.kcal, 1) > 0.1) return { error: "Référence nutritionnelle incohérente", result: null };
       return { error: null, result };
     }
 
-    const nutrition = await calculateReferenceBasedNutrition(parsed.data.items.map(x => ({ name: x.name, grams: x.grams })));
+    const nutrition = await calculateReferenceBasedNutrition(parsed.items.map(x => ({ name: x.name, grams: x.grams })));
     const referenceByName = new Map(nutrition.items.map((item) => [item.name.trim().toLocaleLowerCase("fr-FR"), item]));
-    const completeItems = parsed.data.items.map((visionItem) => {
+    const completeItems = parsed.items.map((visionItem) => {
       const reference = referenceByName.get(visionItem.name.trim().toLocaleLowerCase("fr-FR"));
       if (reference) return { name: reference.name, brand: visionItem.brand, grams: reference.grams, kcal: reference.kcal, protein_g: reference.protein_g, carbs_g: reference.carbs_g, fat_g: reference.fat_g, fiber_g: reference.fiber_g, sugar_g: reference.sugar_g, sodium_mg: reference.sodium_mg };
       return { name: visionItem.name, brand: visionItem.brand, grams: visionItem.grams, kcal: Math.round(visionItem.kcal), protein_g: Math.round(visionItem.protein_g * 10) / 10, carbs_g: Math.round(visionItem.carbs_g * 10) / 10, fat_g: Math.round(visionItem.fat_g * 10) / 10, fiber_g: Math.round(visionItem.fiber_g * 10) / 10, sugar_g: Math.round(visionItem.sugar_g * 10) / 10, sodium_mg: Math.round(visionItem.sodium_mg * 10) / 10 };
     });
-    const referenceCount = parsed.data.items.filter((item) => referenceByName.has(item.name.trim().toLocaleLowerCase("fr-FR"))).length;
-    const result = foodAnalysisSchema.parse({ dish_name: parsed.data.dish_name, items: completeItems, health_score: parsed.data.health_score, quality: parsed.data.quality, confidence: Math.min(parsed.data.confidence, nutrition.confidence || parsed.data.confidence), confidence_note: `${parsed.data.confidence_note} ${referenceCount}/${parsed.data.items.length} aliments calibrés par les références Pace.`.trim(), notes: `${parsed.data.notes}${referenceCount < parsed.data.items.length ? " Les aliments sans référence Pace sont conservés avec une estimation visuelle au lieu d’être supprimés." : ""}` });
+    const referenceCount = parsed.items.filter((item) => referenceByName.has(item.name.trim().toLocaleLowerCase("fr-FR"))).length;
+    const result = foodAnalysisSchema.parse({ dish_name: parsed.dish_name, items: completeItems, health_score: parsed.health_score, quality: parsed.quality, confidence: Math.min(parsed.confidence, nutrition.confidence || parsed.confidence), confidence_note: `${parsed.confidence_note} ${referenceCount}/${parsed.items.length} aliments calibrés par les références Pace.`.trim(), notes: `${parsed.notes}${referenceCount < parsed.items.length ? " Les aliments sans référence Pace sont conservés avec une estimation visuelle au lieu d’être supprimés." : ""}` });
     return { error: null, result };
   } catch (e) { console.error("analyzeFoodPhoto error", e); return { error: e instanceof Error ? e.message : "Erreur IA", result: null }; }
   finally { if (path) await supabaseAdmin.storage.from(PHOTO_BUCKET).remove([path]).catch(() => undefined); }

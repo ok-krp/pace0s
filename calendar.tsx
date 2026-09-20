@@ -9,6 +9,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
+
 const searchSchema = z.object({ d: z.string().optional() });
 export const Route = createFileRoute("/calendar")({
   validateSearch: searchSchema,
