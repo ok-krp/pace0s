@@ -45,7 +45,7 @@ async function getPipeline() {
 }
 
 function extractJson(text: string): unknown {
-  const cleaned = text.trim().replace(/^\`\`\`(?:json)?\s*/i, "").replace(/\`\`\`\s*$/i, "").trim();
+  const cleaned = text.trim().replace(/^```(?:json)?\\s*/i, "").replace(/```\\s*$/i, "").trim();
   try {
     return JSON.parse(cleaned);
   } catch {
