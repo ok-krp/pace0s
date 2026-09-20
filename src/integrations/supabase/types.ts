@@ -650,8 +650,11 @@ export type Database = {
       health_samples: {
         Row: {
           created_at: string
+          external_id: string | null
           id: string
+          metadata: Json
           source: string
+          source_id: string | null
           ts: string
           type: string
           user_id: string
@@ -659,8 +662,11 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          external_id?: string | null
           id?: string
+          metadata?: Json
           source?: string
+          source_id?: string | null
           ts?: string
           type: string
           user_id: string
@@ -668,8 +674,11 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          external_id?: string | null
           id?: string
+          metadata?: Json
           source?: string
+          source_id?: string | null
           ts?: string
           type?: string
           user_id?: string
