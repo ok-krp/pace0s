@@ -164,7 +164,7 @@ function SettingsPage() {
                 {billing?.plan !== "trial" && billing?.plan !== "expired" && <Button variant="secondary" size="sm" className="rounded-full" onClick={async () => { try { const res = await openPortal({}); window.location.href = res.url; } catch (error) { toast.error((error as Error).message); } }}>Gérer mon abonnement</Button>}
               </div>
             </div>
-            {/* Ancienne offre d’essai conservée en commentaire : la grille est désormais 100 % payante. */}<div className="flex items-center gap-2 mb-4"><Button size="sm" variant={billingInterval === "monthly" ? "default" : "outline"} onClick={() => setBillingInterval("monthly")}>Mensuel</Button><Button size="sm" variant={billingInterval === "annual" ? "default" : "outline"} onClick={() => setBillingInterval("annual")}>Annuel</Button></div><div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            Ancienne offre d’essai conservée en commentaire : la grille est désormais 100 % payante.<div className="flex items-center gap-2 mb-4"><Button size="sm" variant={billingInterval === "monthly" ? "default" : "outline"} onClick={() => setBillingInterval("monthly")}>Mensuel</Button><Button size="sm" variant={billingInterval === "annual" ? "default" : "outline"} onClick={() => setBillingInterval("annual")}>Annuel</Button></div><div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {(Object.entries(PLAN_CATALOG) as Array<[PlanId, typeof PLAN_CATALOG[PlanId]]>).map(([plan, details]) => (
                 <PlanCard
                   key={plan}
