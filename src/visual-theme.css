@@ -1,211 +1,70 @@
-/* Pace Signal visual theme — a complete alternate skin, not a replacement of the default glass UI. */
+/* Pace Signal — Executive SaaS visual system.
+   Scoped exclusively to data-visual-theme="signal".
+   The default Pace theme and Glass theme are intentionally untouched. */
 [data-visual-theme="signal"] {
   color-scheme: dark;
 
-  --background: oklch(0.105 0.018 155);
-  --foreground: oklch(0.95 0.012 150);
-  --surface: oklch(0.15 0.018 155 / 0.92);
-  --surface-elevated: oklch(0.18 0.022 155 / 0.96);
-  --card: oklch(0.135 0.018 155 / 0.94);
-  --card-foreground: oklch(0.95 0.012 150);
-  --popover: oklch(0.14 0.02 155 / 0.98);
-  --popover-foreground: oklch(0.95 0.012 150);
+  --background: #030303;
+  --foreground: oklch(0.96 0 0);
+  --surface: oklch(0.07 0 0);
+  --surface-elevated: oklch(0.09 0 0);
+  --card: rgb(255 255 255 / 0.02);
+  --card-foreground: oklch(0.96 0 0);
+  --popover: #080808;
+  --popover-foreground: oklch(0.96 0 0);
 
-  --primary: oklch(0.78 0.18 158);
-  --primary-foreground: oklch(0.11 0.02 155);
-  --secondary: oklch(0.19 0.02 155);
-  --secondary-foreground: oklch(0.9 0.012 150);
-  --muted: oklch(0.18 0.018 155);
-  --muted-foreground: oklch(0.62 0.018 150);
-  --accent: oklch(0.22 0.028 155);
-  --accent-foreground: oklch(0.95 0.012 150);
-  --destructive: oklch(0.63 0.18 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --success: oklch(0.78 0.18 158);
+  --primary: oklch(0.82 0.14 195);
+  --primary-foreground: #030303;
+  --secondary: oklch(0.12 0 0);
+  --secondary-foreground: oklch(0.92 0 0);
+  --muted: oklch(0.11 0 0);
+  --muted-foreground: oklch(0.56 0 0);
+  --accent: oklch(0.14 0 0);
+  --accent-foreground: oklch(0.96 0 0);
+  --destructive: oklch(0.68 0.18 25);
+  --destructive-foreground: #fff;
+  --success: oklch(0.78 0.16 155);
   --warning: oklch(0.78 0.15 82);
 
-  --border: oklch(0.5 0.025 155 / 0.22);
-  --input: oklch(0.5 0.025 155 / 0.28);
-  --ring: oklch(0.78 0.18 158);
-  --chart-1: oklch(0.78 0.18 158);
-  --chart-2: oklch(0.67 0.15 158);
-  --chart-3: oklch(0.55 0.12 158);
-  --chart-4: oklch(0.68 0.16 82);
-  --chart-5: oklch(0.62 0.17 25);
+  --border: rgb(255 255 255 / 0.05);
+  --input: rgb(255 255 255 / 0.04);
+  --ring: oklch(0.82 0.14 195);
+  --chart-1: oklch(0.82 0.14 195);
+  --chart-2: oklch(0.78 0.16 155);
+  --chart-3: oklch(0.78 0.15 82);
+  --chart-4: oklch(0.68 0.18 25);
+  --chart-5: oklch(0.70 0.13 285);
 
-  --sidebar: oklch(0.09 0.016 155);
-  --sidebar-foreground: oklch(0.92 0.012 150);
-  --sidebar-primary: oklch(0.78 0.18 158);
-  --sidebar-primary-foreground: oklch(0.11 0.02 155);
-  --sidebar-accent: oklch(0.17 0.022 155);
-  --sidebar-accent-foreground: oklch(0.95 0.012 150);
-  --sidebar-border: oklch(0.5 0.025 155 / 0.2);
-  --sidebar-ring: oklch(0.78 0.18 158);
+  --sidebar: #030303;
+  --sidebar-foreground: oklch(0.92 0 0);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: rgb(255 255 255 / 0.04);
+  --sidebar-accent-foreground: oklch(0.96 0 0);
+  --sidebar-border: rgb(255 255 255 / 0.05);
+  --sidebar-ring: var(--ring);
 
-  --glass-tint: 7 12 9;
-  --glass-tint-base: 0.78;
-  --glass-tint-strength: var(--glass-tint-base);
-  --glass-blur: 0px;
-  --glass-blur-thin: 0px;
-  --glass-saturate: 100%;
-  --glass-radius: 10px;
-  --glass-radius-sm: 8px;
-  --glass-edge: 0.22;
-  --glass-sheen: 0;
-  --glass-elev-1: 0 1px 0 oklch(0 0 0 / 0.38);
-  --glass-elev-2: 0 8px 24px -18px oklch(0 0 0 / 0.75);
-  --glass-elev-3: 0 14px 36px -22px oklch(0 0 0 / 0.85);
-
-  --wallpaper:
-    linear-gradient(oklch(0.13 0.02 155 / 0.5) 1px, transparent 1px),
-    linear-gradient(90deg, oklch(0.13 0.02 155 / 0.5) 1px, transparent 1px),
-    radial-gradient(900px 500px at 15% 0%, oklch(0.2 0.07 158 / 0.16), transparent 62%),
-    radial-gradient(900px 650px at 85% 100%, oklch(0.17 0.05 158 / 0.1), transparent 64%),
-    linear-gradient(180deg, oklch(0.075 0.014 155) 0%, oklch(0.11 0.018 155) 100%);
-}
-
-[data-visual-theme="signal"] body {
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  letter-spacing: 0.002em;
-}
-
-[data-visual-theme="signal"] h1,
-[data-visual-theme="signal"] h2,
-[data-visual-theme="signal"] h3,
-[data-visual-theme="signal"] h4,
-[data-visual-theme="signal"] h5,
-[data-visual-theme="signal"] .font-display {
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  letter-spacing: -0.028em;
-}
-
-[data-visual-theme="signal"] .pace-bg::before {
-  opacity: 1;
-  background: var(--wallpaper);
-  background-size: 24px 24px, 24px 24px, auto, auto, auto;
-}
-
-[data-visual-theme="signal"] .glass-card,
-[data-visual-theme="signal"] [class*="glass-card"],
-[data-visual-theme="signal"] .glass-thin,
-[data-visual-theme="signal"] .glass-icon {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  border-radius: 10px;
-  box-shadow: inset 0 1px 0 0 oklch(1 0 0 / 0.025), 0 8px 24px -18px oklch(0 0 0 / 0.72);
-}
-
-[data-visual-theme="signal"] .glass-card::before,
-[data-visual-theme="signal"] [class*="glass-card"]::before,
-[data-visual-theme="signal"] .glass-card::after,
-[data-visual-theme="signal"] [class*="glass-card"]::after {
-  display: none;
-}
-
-[data-visual-theme="signal"] .glass-thin {
-  background: oklch(0.16 0.018 155 / 0.88);
-  box-shadow: inset 0 0 0 1px oklch(0.7 0.03 155 / 0.12);
-}
-
-[data-visual-theme="signal"] .glass-thin:hover {
-  background: oklch(0.19 0.022 155 / 0.96);
-  box-shadow: inset 0 0 0 1px oklch(0.78 0.04 155 / 0.2);
-}
-
-[data-visual-theme="signal"] .rounded-2xl,
-[data-visual-theme="signal"] .rounded-xl,
-[data-visual-theme="signal"] .rounded-lg,
-[data-visual-theme="signal"] .rounded-md {
-  border-radius: 8px;
-}
-
-[data-visual-theme="signal"] .rounded-3xl {
-  border-radius: 10px;
-}
-
-[data-visual-theme="signal"] [class*="text-primary"] {
-  text-shadow: 0 0 18px oklch(0.78 0.18 158 / 0.14);
-}
-
-[data-visual-theme="signal"] [class*="bg-primary"] {
-  box-shadow: 0 0 20px -12px oklch(0.78 0.18 158 / 0.7);
-}
-
-[data-visual-theme="signal"] ::selection {
-  background: oklch(0.78 0.18 158 / 0.28);
-  color: var(--foreground);
-}
-
-[data-visual-theme="signal"] .signal-theme-control {
-  background: oklch(0.14 0.018 155 / 0.92);
-  border: 1px solid oklch(0.62 0.04 155 / 0.18);
-  color: var(--muted-foreground);
-}
-
-[data-visual-theme="signal"] .signal-theme-control:hover {
-  color: var(--foreground);
-  border-color: oklch(0.78 0.18 158 / 0.38);
-  background: oklch(0.17 0.024 155 / 0.98);
-}
-
-[data-visual-theme="signal"] .signal-theme-dot {
-  box-shadow: 0 0 12px oklch(0.78 0.18 158 / 0.62);
-}
-
-
-/* Signal — simple SaaS mode. Flat, neutral, readable, and intentionally non-Apple. */
-[data-visual-theme="signal"] {
-  color-scheme: dark;
-  --background: oklch(0.13 0.008 250);
-  --foreground: oklch(0.94 0.008 250);
-  --surface: oklch(0.16 0.009 250);
-  --surface-elevated: oklch(0.19 0.01 250);
-  --card: oklch(0.16 0.009 250);
-  --card-foreground: oklch(0.94 0.008 250);
-  --popover: oklch(0.18 0.01 250);
-  --popover-foreground: oklch(0.94 0.008 250);
-  --primary: oklch(0.72 0.12 245);
-  --primary-foreground: oklch(0.13 0.008 250);
-  --secondary: oklch(0.20 0.01 250);
-  --secondary-foreground: oklch(0.91 0.008 250);
-  --muted: oklch(0.20 0.01 250);
-  --muted-foreground: oklch(0.66 0.01 250);
-  --accent: oklch(0.23 0.012 250);
-  --accent-foreground: oklch(0.94 0.008 250);
-  --destructive: oklch(0.65 0.18 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --success: oklch(0.72 0.12 155);
-  --warning: oklch(0.78 0.13 82);
-  --border: oklch(0.55 0.012 250 / 0.22);
-  --input: oklch(0.12 0.008 250);
-  --ring: oklch(0.72 0.12 245);
-  --chart-1: oklch(0.72 0.12 245);
-  --chart-2: oklch(0.72 0.12 155);
-  --chart-3: oklch(0.78 0.13 82);
-  --chart-4: oklch(0.65 0.18 25);
-  --chart-5: oklch(0.68 0.12 300);
-  --sidebar: oklch(0.115 0.008 250);
-  --sidebar-foreground: oklch(0.92 0.008 250);
-  --sidebar-primary: oklch(0.72 0.12 245);
-  --sidebar-primary-foreground: oklch(0.13 0.008 250);
-  --sidebar-accent: oklch(0.18 0.01 250);
-  --sidebar-accent-foreground: oklch(0.94 0.008 250);
-  --sidebar-border: oklch(0.55 0.012 250 / 0.18);
-  --sidebar-ring: oklch(0.72 0.12 245);
-  --glass-tint: 24 27 34;
-  --glass-tint-base: 0.92;
-  --glass-tint-strength: var(--glass-tint-base);
+  --glass-tint: 255 255 255;
+  --glass-tint-base: 0.02;
+  --glass-tint-strength: 0.02;
   --glass-blur: 0px;
   --glass-blur-thin: 0px;
   --glass-saturate: 100%;
   --glass-radius: 0px;
   --glass-radius-sm: 0px;
-  --glass-edge: 0;
+  --glass-edge: 0.05;
   --glass-sheen: 0;
-  --glass-elev-1: 0 1px 2px oklch(0 0 0 / 0.28);
-  --glass-elev-2: 0 4px 14px -10px oklch(0 0 0 / 0.55);
-  --glass-elev-3: 0 8px 24px -16px oklch(0 0 0 / 0.65);
-  --wallpaper: linear-gradient(180deg, oklch(0.135 0.008 250) 0%, oklch(0.115 0.008 250) 100%);
+  --glass-elev-1: none;
+  --glass-elev-2: none;
+  --glass-elev-3: none;
+  --wallpaper: #030303;
+  --radius: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  --radius-2xl: 0px;
+  --radius-3xl: 0px;
 }
 
 [data-visual-theme="signal"] body,
@@ -218,167 +77,211 @@
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
-/* No wallpaper, blur, glass, sheen, gradients, or decorative glow. */
+[data-visual-theme="signal"] body {
+  letter-spacing: 0.002em;
+}
+
+[data-visual-theme="signal"] h1,
+[data-visual-theme="signal"] h2,
+[data-visual-theme="signal"] h3,
+[data-visual-theme="signal"] h4,
+[data-visual-theme="signal"] h5,
+[data-visual-theme="signal"] .font-display {
+  letter-spacing: -0.028em;
+}
+
+/* Abyssal canvas: no grid, radial glow, wallpaper, or decorative texture. */
 [data-visual-theme="signal"] .pace-bg,
 [data-visual-theme="signal"] .pace-bg::before {
-  background: var(--background) !important;
+  background: #030303 !important;
+  background-image: none !important;
+  background-size: auto !important;
+  filter: none !important;
 }
-[data-visual-theme="signal"] .pace-bg::before { opacity: 1; }
+[data-visual-theme="signal"] .pace-bg::before { opacity: 1 !important; }
+
+/* Executive cards: 2% white surface + 5% white micro-border, no glass effects. */
 [data-visual-theme="signal"] .glass-card,
 [data-visual-theme="signal"] [class*="glass-card"],
 [data-visual-theme="signal"] .glass-thin,
 [data-visual-theme="signal"] .glass-icon,
+[data-visual-theme="signal"] [data-slot="card"],
 [data-visual-theme="signal"] [class*="bg-card"],
 [data-visual-theme="signal"] [class*="bg-popover"] {
-  background: var(--card) !important;
+  background: rgb(255 255 255 / 0.02) !important;
+  border: 1px solid rgb(255 255 255 / 0.05) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
-  border: 1px solid var(--border) !important;
   border-radius: 0 !important;
-  box-shadow: var(--glass-elev-2) !important;
+  box-shadow: none !important;
 }
-[data-visual-theme="signal"] .glass-card::before,
-[data-visual-theme="signal"] [class*="glass-card"]::before,
-[data-visual-theme="signal"] .glass-card::after,
-[data-visual-theme="signal"] [class*="glass-card"]::after { display: none !important; }
 
-/* Everything is rectangular: no pills or rounded Apple-style controls. */
+/* Tailwind white utility surfaces become the same restrained executive material. */
+[data-visual-theme="signal"] [class*="bg-white"] {
+  background-color: rgb(255 255 255 / 0.02) !important;
+}
+
+/* Geometry is deliberately sharp in Signal. */
 [data-visual-theme="signal"] *,
 [data-visual-theme="signal"] *::before,
-[data-visual-theme="signal"] *::after { border-radius: 0 !important; }
+[data-visual-theme="signal"] *::after {
+  border-radius: 0 !important;
+}
 
-[data-visual-theme="signal"] button,
-[data-visual-theme="signal"] [role="button"],
+/* Sidebar: one precise divider, no floating shell. */
+[data-visual-theme="signal"] aside {
+  background: #030303 !important;
+  border-right: 1px solid rgb(255 255 255 / 0.05) !important;
+  box-shadow: none !important;
+}
+
+[data-visual-theme="signal"] nav a {
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: oklch(0.55 0 0);
+  transition: color 120ms ease, background-color 120ms ease, border-color 120ms ease;
+}
+
+[data-visual-theme="signal"] nav a:hover {
+  background: rgb(255 255 255 / 0.02) !important;
+  color: oklch(0.82 0 0) !important;
+  border-left-color: rgb(255 255 255 / 0.10);
+}
+
+[data-visual-theme="signal"] nav a[aria-current="page"],
+[data-visual-theme="signal"] nav a[data-active="true"] {
+  background: rgb(255 255 255 / 0.04) !important;
+  color: #fff !important;
+  border-left-color: oklch(0.82 0.14 195) !important;
+}
+
+/* Executive typography: large, light data; quiet labels. */
+[data-visual-theme="signal"] .text-7xl,
+[data-visual-theme="signal"] .text-6xl,
+[data-visual-theme="signal"] .text-5xl,
+[data-visual-theme="signal"] .text-4xl,
+[data-visual-theme="signal"] .text-3xl {
+  font-weight: 300 !important;
+  letter-spacing: -0.055em;
+}
+
+[data-visual-theme="signal"] .text-xs {
+  letter-spacing: 0.01em;
+}
+
+/* Ultra-fine progress rails. Any 4px Tailwind rail is kept intentionally minimal. */
+[data-visual-theme="signal"] [class*="h-1"] {
+  border-radius: 0 !important;
+}
+
+/* Color communicates status/progression only; remove decorative glow from colored data. */
+[data-visual-theme="signal"] [class*="text-primary"],
+[data-visual-theme="signal"] [class*="text-cyan"],
+[data-visual-theme="signal"] [class*="text-emerald"],
+[data-visual-theme="signal"] [class*="text-indigo"] {
+  text-shadow: none !important;
+}
+
+[data-visual-theme="signal"] [class*="bg-primary"],
+[data-visual-theme="signal"] [class*="bg-cyan"],
+[data-visual-theme="signal"] [class*="bg-emerald"],
+[data-visual-theme="signal"] [class*="bg-indigo"] {
+  box-shadow: none !important;
+}
+
+/* Inputs and controls remain rectangular and quiet. */
 [data-visual-theme="signal"] input,
 [data-visual-theme="signal"] textarea,
 [data-visual-theme="signal"] select {
-  border-radius: 0 !important;
+  background: rgb(255 255 255 / 0.02) !important;
+  border: 1px solid rgb(255 255 255 / 0.05) !important;
+  box-shadow: none !important;
 }
+
+[data-visual-theme="signal"] input::placeholder,
+[data-visual-theme="signal"] textarea::placeholder {
+  color: oklch(0.45 0 0);
+}
+
 [data-visual-theme="signal"] button,
 [data-visual-theme="signal"] [role="button"] {
+  border-radius: 0 !important;
+  box-shadow: none !important;
   transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
 }
+
 [data-visual-theme="signal"] button:hover,
 [data-visual-theme="signal"] [role="button"]:hover {
   box-shadow: none !important;
-  filter: none !important;
 }
+
+/* Focus remains visible without introducing a decorative glow. */
 [data-visual-theme="signal"] button:focus-visible,
 [data-visual-theme="signal"] [role="button"]:focus-visible,
 [data-visual-theme="signal"] input:focus-visible,
 [data-visual-theme="signal"] textarea:focus-visible,
 [data-visual-theme="signal"] select:focus-visible {
-  outline: 2px solid var(--ring) !important;
+  outline: 1px solid var(--ring) !important;
   outline-offset: -1px !important;
   box-shadow: none !important;
 }
 
-[data-visual-theme="signal"] input,
-[data-visual-theme="signal"] textarea,
-[data-visual-theme="signal"] select {
-  background: var(--input) !important;
-  border: 1px solid var(--border) !important;
-  box-shadow: none !important;
+/* Data tables and list separators use lines instead of containers. */
+[data-visual-theme="signal"] table {
+  border-collapse: collapse;
 }
-[data-visual-theme="signal"] input:hover,
-[data-visual-theme="signal"] textarea:hover,
-[data-visual-theme="signal"] select:hover { border-color: oklch(0.65 0.012 250 / 0.36) !important; }
-
-[data-visual-theme="signal"] [class*="bg-primary"] {
-  border: 1px solid oklch(0.82 0.08 245 / 0.35);
-  box-shadow: none !important;
-}
-[data-visual-theme="signal"] [class*="bg-primary"]:hover { filter: brightness(1.05); }
-
-[data-visual-theme="signal"] [class*="text-primary"] { text-shadow: none !important; }
-[data-visual-theme="signal"] hr,
-[data-visual-theme="signal"] [role="separator"] {
-  border-color: var(--border) !important;
-  background: var(--border) !important;
-}
-
-/* Clear active state: one subtle background + one left rule. */
-[data-visual-theme="signal"] nav a {
-  border-left: 2px solid transparent;
-}
-[data-visual-theme="signal"] nav a:hover {
-  background: var(--surface-elevated);
-  border-left-color: var(--border);
-}
-[data-visual-theme="signal"] nav a[aria-current="page"],
-[data-visual-theme="signal"] nav a[data-active="true"] {
-  background: var(--surface-elevated);
-  border-left-color: var(--primary);
-}
-
-[data-visual-theme="signal"] aside {
-  border-right: 1px solid var(--border) !important;
-  box-shadow: none !important;
-}
-
-[data-visual-theme="signal"] table { border-collapse: collapse; }
 [data-visual-theme="signal"] th {
-  background: var(--surface);
-  color: var(--muted-foreground);
+  background: rgb(255 255 255 / 0.02);
+  color: oklch(0.55 0 0);
   font-size: 0.68rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 [data-visual-theme="signal"] th,
-[data-visual-theme="signal"] td { border-bottom: 1px solid var(--border) !important; }
-[data-visual-theme="signal"] tr:hover > td { background: var(--surface-elevated); }
+[data-visual-theme="signal"] td {
+  border-bottom: 1px solid rgb(255 255 255 / 0.05) !important;
+}
+[data-visual-theme="signal"] tr:hover > td {
+  background: rgb(255 255 255 / 0.02) !important;
+}
 
+/* Dialogs, sheets and popovers inherit the same hard-edged panel language. */
 [data-visual-theme="signal"] [role="dialog"],
 [data-visual-theme="signal"] [data-radix-popper-content-wrapper] > *,
 [data-visual-theme="signal"] [data-side] {
   border-radius: 0 !important;
 }
 [data-visual-theme="signal"] [role="dialog"] {
-  border: 1px solid var(--border);
-  box-shadow: var(--glass-elev-3);
-}
-
-[data-visual-theme="signal"] [class*="badge"],
-[data-visual-theme="signal"] [class*="Badge"] {
-  border: 1px solid var(--border) !important;
-  background: var(--surface) !important;
-  padding-inline: 0.4rem;
-  font-size: 0.68rem;
-  letter-spacing: 0.02em;
-}
-
-[data-visual-theme="signal"] ::-webkit-scrollbar { width: 8px; height: 8px; }
-[data-visual-theme="signal"] ::-webkit-scrollbar-track { background: var(--background); }
-[data-visual-theme="signal"] ::-webkit-scrollbar-thumb { background: oklch(0.32 0.01 250); border: 2px solid var(--background); }
-[data-visual-theme="signal"] ::-webkit-scrollbar-thumb:hover { background: oklch(0.42 0.012 250); }
-
-/* Final Signal hard-reset: the mode owns its geometry and never inherits rounded UI tokens. */
-[data-visual-theme="signal"] {
-  --radius: 0px;
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
-  --radius-2xl: 0px;
-  --radius-3xl: 0px;
-  --glass-radius: 0px;
-  --glass-radius-sm: 0px;
-}
-[data-visual-theme="signal"] *,
-[data-visual-theme="signal"] *::before,
-[data-visual-theme="signal"] *::after {
-  border-radius: 0 !important;
-}
-[data-visual-theme="signal"] .glass-card,
-[data-visual-theme="signal"] [class*="glass-card"],
-[data-visual-theme="signal"] .glass-thin,
-[data-visual-theme="signal"] .glass-icon,
-[data-visual-theme="signal"] [data-slot="card"] {
-  border-radius: 0 !important;
+  background: #080808 !important;
+  border: 1px solid rgb(255 255 255 / 0.05) !important;
   box-shadow: none !important;
 }
 
+/* Status chips remain informational, never decorative. */
+[data-visual-theme="signal"] [class*="badge"],
+[data-visual-theme="signal"] [class*="Badge"] {
+  border: 1px solid rgb(255 255 255 / 0.05) !important;
+  background: rgb(255 255 255 / 0.02) !important;
+  font-size: 0.68rem;
+  letter-spacing: 0.03em;
+}
+
+/* Scrollbars are quiet and nearly invisible. */
+[data-visual-theme="signal"] ::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+[data-visual-theme="signal"] ::-webkit-scrollbar-track {
+  background: #030303;
+}
+[data-visual-theme="signal"] ::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.10);
+  border: 2px solid #030303;
+}
+[data-visual-theme="signal"] ::-webkit-scrollbar-thumb:hover {
+  background: rgb(255 255 255 / 0.14);
+}
 
 /* ================================================================
    Pace Glass — legacy implementation kept as annotation.
