@@ -16,14 +16,15 @@ class PaceComplianceService {
     if (value == null || user == null) {
       throw StateError('Un compte connecté est requis.');
     }
-    final response = await value.from('consent_records').insert({
-      'user_id': user.id,
-      'consent_type': consentType,
-      'granted': granted,
-      'legal_version': legalVersion,
-      'policy_version': policyVersion,
-    });
-    if (response.error != null) {
+    try {
+      await value.from('consent_records').insert({
+        'user_id': user.id,
+        'consent_type': consentType,
+        'granted': granted,
+        'legal_version': legalVersion,
+        'policy_version': policyVersion,
+      });
+    } on PostgrestException {
       throw StateError('Impossible d’enregistrer le consentement.');
     }
   }
