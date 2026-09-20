@@ -4,11 +4,7 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { TablesInsert } from "@/integrations/supabase/types";
 
 const SampleType = z.enum(["steps", "kcal_active", "kcal_total", "heart_rate", "resting_heart_rate", "distance_m", "sleep_min", "exercise_duration_min", "weight_kg", "oxygen_saturation", "temperature_c", "cadence_rpm", "power_w"]);
-const insertSchema = z.object({ samples: z.array(z.object({ ts: z.string(), type: SampleType, value: z.number().finite(), source: z.string().max(128).default("manual"), source_id: z.string().max(128).optional(), external_id: z.string().max(256).optional(), metadata: z.record(z.unknown()).optional() })).min(1).max(5000) });
-
-function isMissingProvenanceColumn(error: { message?: string } | null | undefined) {
-  return /column .*?(source_id|external_id|metadata).* does not exist/i.test(error?.message ?? "");
-}
+const insertSchema = z.object({ samples: z.array(z.object({ ts: z.string(), type: SampleType, value: z.number().finite(), source: z.string().max(128).default("manual"), source_id: z.string().max(128).optional(), external_id: z.string().max(256).optional(), metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional() })).min(1).max(5000) });
 
 export const insertHealthSamples = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -35,28 +31,22 @@ export const insertHealthSamples = createServerFn({ method: "POST" })
     const healthTable = context.supabase.from("health_samples");
     const rows: TablesInsert<"health_samples">[] = data.samples.map((s) => ({ ...s, user_id: context.userId, metadata: s.metadata ?? {} }));
     const externalIds = rows.map((r) => r.external_id).filter((v): v is string => !!v);
-    let provenanceSupported = true;
     let known = new Set<string>();
-
     if (externalIds.length) {
-      const existing = await healthTable.select("external_id").eq("user_id", context.userId).in("external_id", externalIds);
+      const existing = await healthTable
+        .select("external_id")
+        .eq("user_id", context.userId)
+        .in("external_id", externalIds);
       if (existing.error) {
-        if (!isMissingProvenanceColumn(existing.error)) {
-          console.error("health provenance lookup failed", existing.error);
-          throw new Error("Impossible de vérifier les données de santé existantes.");
-        }
-        provenanceSupported = false;
-      } else known = new Set((existing.data ?? []).map((r: { external_id: string }) => r.external_id));
+        console.error("health provenance lookup failed", existing.error);
+        throw new Error("Impossible de vérifier les données de santé existantes.");
+      }
+      known = new Set((existing.data ?? []).flatMap((row) => row.external_id ? [row.external_id] : []));
     }
-
-    const fresh = provenanceSupported ? rows.filter((r) => !r.external_id || !known.has(r.external_id)) : rows;
+    const fresh = rows.filter((row) => !row.external_id || !known.has(row.external_id));
     if (!fresh.length) return { inserted: 0, deduped: rows.length };
 
-    let result = await healthTable.insert(fresh, { count: "exact" });
-    if (result.error && isMissingProvenanceColumn(result.error)) {
-      const legacyRows = fresh.map(({ source_id: _sourceId, external_id: _externalId, metadata: _metadata, ...row }) => row);
-      result = await healthTable.insert(legacyRows, { count: "exact" });
-    }
+    const result = await healthTable.insert(fresh, { count: "exact" });
     if (result.error) {
       console.error("health sample insert failed", result.error);
       throw new Error("Impossible d'enregistrer les données de santé.");
