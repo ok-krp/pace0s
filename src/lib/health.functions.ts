@@ -5,10 +5,18 @@ import type { TablesInsert } from "@/integrations/supabase/types";
 
 const SampleType = z.enum(["steps", "kcal_active", "kcal_total", "heart_rate", "resting_heart_rate", "distance_m", "sleep_min", "exercise_duration_min", "weight_kg", "oxygen_saturation", "temperature_c", "cadence_rpm", "power_w"]);
 const insertSchema = z.object({ samples: z.array(z.object({ ts: z.string(), type: SampleType, value: z.number().finite(), source: z.string().max(128).default("manual"), source_id: z.string().max(128).optional(), external_id: z.string().max(256).optional(), metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional() })).min(1).max(5000) });
+const encryptedInsertSchema = z.object({
+  records: z.array(z.object({
+    ciphertext: z.string().min(1).max(2_000_000),
+    nonce: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/).min(16).max(64),
+    algorithm: z.literal("AES-256-GCM"),
+    key_version: z.number().int().positive().max(100),
+  })).min(1).max(5000),
+});
 
-export const insertHealthSamples = createServerFn({ method: "POST" })
+export const insertEncryptedHealthSamples = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((d: unknown) => insertSchema.parse(d))
+  .validator((d: unknown) => encryptedInsertSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: healthConsent } = await context.supabase
       .from("consent_records")
@@ -28,82 +36,38 @@ export const insertHealthSamples = createServerFn({ method: "POST" })
       throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
     }
 
-    const healthTable = context.supabase.from("health_samples");
-    const rows: TablesInsert<"health_samples">[] = data.samples.map((s) => ({ ...s, user_id: context.userId, metadata: s.metadata ?? {} }));
-    const externalIds = rows.map((r) => r.external_id).filter((v): v is string => !!v);
-    let known = new Set<string>();
-    if (externalIds.length) {
-      const existing = await healthTable
-        .select("external_id")
-        .eq("user_id", context.userId)
-        .in("external_id", externalIds);
-      if (existing.error) {
-        console.error("health provenance lookup failed", existing.error);
-        throw new Error("Impossible de vérifier les données de santé existantes.");
-      }
-      known = new Set((existing.data ?? []).flatMap((row) => row.external_id ? [row.external_id] : []));
-    }
-    const fresh = rows.filter((row) => !row.external_id || !known.has(row.external_id));
-    if (!fresh.length) return { inserted: 0, deduped: rows.length };
-
-    const result = await healthTable.insert(fresh, { count: "exact" });
+    const rows: TablesInsert<"health_samples_e2ee">[] = data.records.map((record) => ({
+      ...record,
+      user_id: context.userId,
+    }));
+    const result = await context.supabase.from("health_samples_e2ee").insert(rows);
     if (result.error) {
-      console.error("health sample insert failed", result.error);
-      throw new Error("Impossible d'enregistrer les données de santé.");
+      console.error("encrypted health insert failed", result.error);
+      throw new Error("Impossible d'enregistrer les données de santé chiffrées.");
     }
-    return { inserted: result.count ?? fresh.length, deduped: rows.length - fresh.length };
+    return { inserted: rows.length };
   });
 
-function localDayRange(timeZone: string | undefined) {
-  const zone = timeZone || "UTC";
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()).filter((p) => p.type !== "literal").map((p) => [p.type, p.value]));
-  const localMidnight = `${parts.year}-${parts.month}-${parts.day}T00:00:00`;
-  const guess = new Date(`${localMidnight}Z`);
-  const offset = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" }).formatToParts(guess).find((p) => p.type === "timeZoneName")?.value?.replace("GMT", "") || "+00:00";
-  const start = new Date(`${localMidnight}${offset}`);
-  const nextLocal = new Date(start.getTime() + 36 * 60 * 60 * 1000);
-  const nextParts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(nextLocal).filter((p) => p.type !== "literal").map((p) => [p.type, p.value]));
-  const nextMidnight = `${nextParts.year}-${nextParts.month}-${nextParts.day}T00:00:00`;
-  const nextGuess = new Date(`${nextMidnight}Z`);
-  const nextOffset = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" }).formatToParts(nextGuess).find((p) => p.type === "timeZoneName")?.value?.replace("GMT", "") || "+00:00";
-  return { start, end: new Date(`${nextMidnight}${nextOffset}`) };
-}
-
-export const listHealthToday = createServerFn({ method: "GET" })
+export const listEncryptedHealthSamples = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .validator((d: unknown) => z.object({ timeZone: z.string().optional() }).parse(d ?? {}))
+  .validator((d: unknown) => z.object({ limit: z.number().int().min(1).max(10000).default(10000) }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
-    const { data: healthConsent } = await context.supabase
-      .from("consent_records")
-      .select("granted")
-      .eq("consent_type", "health_data")
+    const result = await context.supabase
+      .from("health_samples_e2ee")
+      .select("id,ciphertext,nonce,algorithm,key_version,created_at")
+      .eq("user_id", context.userId)
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (healthConsent?.granted !== true) {
-      return {
-        steps: 0, kcalActive: 0, kcalTotal: 0, distanceM: 0, sleepMin: 0, exerciseMin: 0,
-        heartRate: null, restingHeartRate: null, weightKg: null, oxygenSaturation: null,
-        temperatureC: null, cadenceRpm: null, powerW: null, sources: {}, lastSource: null, lastTs: null, count: 0,
-      };
-    }
-
-    const range = localDayRange(data.timeZone);
-    const healthTable = context.supabase.from("health_samples");
-    const result = await healthTable.select("type, value, ts, source").gte("ts", range.start.toISOString()).lt("ts", range.end.toISOString()).order("ts", { ascending: false }).limit(10000);
+      .limit(data.limit);
     if (result.error) {
-      console.error("health sample read failed", result.error);
-      throw new Error("Impossible de charger les données de santé.");
+      console.error("encrypted health read failed", result.error);
+      throw new Error("Impossible de charger les données de santé chiffrées.");
     }
-    const values = result.data ?? [];
-    const sum = (type: string) => values.filter((row) => row.type === type).reduce((total, row) => total + Number(row.value), 0);
-    const latest = (type: string) => values.find((row) => row.type === type)?.value ?? null;
-    const latestSource = (type: string) => values.find((row) => row.type === type)?.source ?? null;
-    return {
-      steps: Math.round(sum("steps")), kcalActive: Math.round(sum("kcal_active")), kcalTotal: Math.round(sum("kcal_total")), distanceM: Math.round(sum("distance_m")),
-      sleepMin: Math.round(sum("sleep_min")), exerciseMin: Math.round(sum("exercise_duration_min")), heartRate: latest("heart_rate"), restingHeartRate: latest("resting_heart_rate"),
-      weightKg: latest("weight_kg"), oxygenSaturation: latest("oxygen_saturation"), temperatureC: latest("temperature_c"), cadenceRpm: latest("cadence_rpm"), powerW: latest("power_w"),
-      sources: Object.fromEntries(["steps", "kcal_active", "kcal_total", "distance_m", "sleep_min", "exercise_duration_min", "heart_rate", "resting_heart_rate", "weight_kg"].map((t) => [t, latestSource(t)])),
-      lastSource: values[0]?.source ?? null, lastTs: values[0]?.ts ?? null, count: values.length,
-    };
+    return { records: result.data ?? [] };
+  });
+
+export const insertHealthSamples = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => insertSchema.parse(d))
+  .handler(async () => {
+    throw new Error("Plaintext health ingestion is disabled. Use client-side E2EE.");
   });
