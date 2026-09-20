@@ -125,8 +125,9 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
         if (error) throw new Error("cleanup:sport_program_items");
       }
 
+      const adminDb = supabaseAdmin as any;
       for (const table of DELETE_TABLES) {
-        const { error } = await supabaseAdmin.from(table).delete().eq("user_id", userId);
+        const { error } = await adminDb.from(table).delete().eq("user_id", userId);
         if (error) throw new Error(`cleanup:${table}`);
       }
 
