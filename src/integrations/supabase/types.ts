@@ -686,6 +686,36 @@ export type Database = {
         }
         Relationships: []
       }
+      health_samples_e2ee: {
+        Row: {
+          algorithm: string
+          ciphertext: string
+          created_at: string
+          id: string
+          key_version: number
+          nonce: string
+          user_id: string
+        }
+        Insert: {
+          algorithm?: string
+          ciphertext: string
+          created_at?: string
+          id?: string
+          key_version?: number
+          nonce: string
+          user_id: string
+        }
+        Update: {
+          algorithm?: string
+          ciphertext?: string
+          created_at?: string
+          id?: string
+          key_version?: number
+          nonce?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       legal_consent: {
         Row: {
           consented_at: string
