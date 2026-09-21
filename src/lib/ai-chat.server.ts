@@ -123,7 +123,34 @@ export async function handleAiChat(request: Request) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    if (aiConsent?.granted !== true) fail(403, "ai_consent_required", "Activez le consentement « Traitement IA » dans Paramètres → Confidentialité.");
+
+    // Backward compatibility: users who accepted AI before granular consent_records
+    // existed only have the decision in legal_consent. Do not lock them out of Coach/Nutrition.
+    if (aiConsent?.granted !== true) {
+      const { data: legacyConsent, error: legacyConsentError } = await client
+        .from("legal_consent")
+        .select("opts")
+        .eq("user_id", userId)
+        .order("consented_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (legacyConsentError) fail(503, "consent_lookup_failed", "Impossible de vérifier le consentement IA.");
+
+      const legacyOpts = legacyConsent?.opts as { ai_processing?: unknown; ai?: unknown } | null;
+      const legacyGranted = legacyOpts?.ai_processing === true || legacyOpts?.ai === true;
+      if (legacyGranted) {
+        const { error: backfillError } = await client.from("consent_records").insert({
+          user_id: userId,
+          consent_type: "ai_processing",
+          granted: true,
+          legal_version: "2026-07-10",
+          policy_version: "2026-07-10",
+        });
+        if (backfillError) console.warn("[ai-chat] legacy AI consent backfill skipped", backfillError.message);
+      } else {
+        fail(403, "ai_consent_required", "Activez le consentement « Traitement IA » dans Paramètres → Confidentialité.");
+      }
+    }
     if (agentType === "build") { const { data: authUser } = await client.auth.getUser(); if (authUser.user?.email?.toLowerCase() !== "mathieu.lequint@gmail.com") fail(403, "build_forbidden", "Build IA est réservé au compte administrateur autorisé."); }
     if (!ephemeral) { const { data, error } = await client.from("ai_conversations").select("id").eq("id", conversationId).eq("user_id", userId).eq("agent_type", agentType).maybeSingle(); if (error) fail(503, "db_error", "Erreur base de données."); if (!data) fail(404, "conversation_not_found", "Cette conversation n’existe plus. Créez-en une nouvelle."); }
     const runtime = await getAiRuntimeConfig(client, userId, agentType); const preferences = await getPreferencesServer(client, userId);
@@ -146,3 +173,4 @@ export async function handleAiChat(request: Request) {
     return result.toUIMessageStreamResponse({ headers: { "X-Pace-AI-Model": runtime.model, "X-Pace-AI-Provider": PROVIDER_LABELS[runtime.provider] ?? runtime.provider }, onFinish: async ({ responseMessage, isAborted }) => { if (ephemeral) return; if (!responseMessage?.id || responseMessage.parts.length === 0) return; try { await persistAssistantMessage(client, userId, conversationId, responseMessage); if (isAborted) console.warn("[ai-chat] réponse assistant persistée après déconnexion client"); } catch (error) { console.error("[ai-chat] persistance assistant impossible", error instanceof Error ? error.message : "unknown"); } }, consumeSseStream: consumeStream, onError: describeProviderStreamError });
   } catch (error) { return errorResponse(error, startedAt); }
 }
+
