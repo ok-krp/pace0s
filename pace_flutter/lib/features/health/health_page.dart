@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/compliance/compliance_service.dart';
 import '../../core/platform/health_adapter.dart';
 import '../../core/platform/native_health_adapter.dart';
+import '../../core/security/health_e2ee_service.dart';
 import '../../core/storage/local_store.dart';
 import '../../core/sync/sync_service.dart';
 
@@ -43,11 +44,8 @@ class _HealthPageState extends State<HealthPage> {
       final samples = permitted ? await _adapter.readRecent() : const <PaceHealthSample>[];
       final cloudConsent = await compliance.hasConsent('health_cloud_sync');
       if (permitted && samples.isNotEmpty && cloudConsent) {
-        final payload = samples
-            .map((sample) => {'type': sample.type, 'value': sample.value, 'timestamp': sample.timestamp.toUtc().toIso8601String(), 'unit': sample.unit, 'source': sample.source})
-            .toList();
-        await widget.localStore.write('pace.health.samples', payload);
-        await widget.sync.syncNow();
+        final e2ee = HealthE2eeService(client: widget.sync.client!);
+        await e2ee.uploadSamples(samples);
       } else if (permitted && samples.isNotEmpty && !cloudConsent) {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Données lues localement. Activez la synchronisation santé cloud pour les envoyer à Pace.')));
       }
