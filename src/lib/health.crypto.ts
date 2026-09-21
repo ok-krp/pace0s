@@ -1,6 +1,8 @@
 const DB_NAME = "pace-health-e2ee";
 const STORE_NAME = "keys";
 const KEY_ID = "health-v1";
+const DEVICE_PRIVATE_ID = "device-private-v1";
+const DEVICE_PUBLIC_ID = "device-public-v1";
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -63,5 +65,50 @@ export async function clearHealthEncryptionKey(): Promise<void> {
     tx.objectStore(STORE_NAME).delete(KEY_ID);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error ?? new Error("Unable to remove health encryption key"));
+  });
+}
+
+
+export async function getHealthDeviceKeyPair(): Promise<CryptoKeyPair> {
+  const db = await openDb();
+  const existing = await new Promise<{ privateKey?: CryptoKey; publicKey?: CryptoKey }>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const privateRequest = tx.objectStore(STORE_NAME).get(DEVICE_PRIVATE_ID);
+    const publicRequest = tx.objectStore(STORE_NAME).get(DEVICE_PUBLIC_ID);
+    tx.oncomplete = () => resolve({ privateKey: privateRequest.result, publicKey: publicRequest.result });
+    tx.onerror = () => reject(tx.error ?? new Error("Unable to read health device key pair"));
+  });
+  if (existing.privateKey && existing.publicKey) {
+    return { privateKey: existing.privateKey, publicKey: existing.publicKey };
+  }
+
+  const pair = await crypto.subtle.generateKey(
+    { name: "ECDH", namedCurve: "P-256" },
+    false,
+    ["deriveKey"],
+  );
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put(pair.privateKey, DEVICE_PRIVATE_ID);
+    tx.objectStore(STORE_NAME).put(pair.publicKey, DEVICE_PUBLIC_ID);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error("Unable to store health device key pair"));
+  });
+  return pair;
+}
+
+export async function getHealthDevicePublicKey(): Promise<JsonWebKey> {
+  const pair = await getHealthDeviceKeyPair();
+  return crypto.subtle.exportKey("jwk", pair.publicKey);
+}
+
+export async function clearHealthDeviceKeyPair(): Promise<void> {
+  const db = await openDb();
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).delete(DEVICE_PRIVATE_ID);
+    tx.objectStore(STORE_NAME).delete(DEVICE_PUBLIC_ID);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error("Unable to remove health device key pair"));
   });
 }
