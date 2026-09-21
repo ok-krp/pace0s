@@ -84,17 +84,25 @@ export async function getHealthDeviceKeyPair(): Promise<CryptoKeyPair> {
 
   const pair = await crypto.subtle.generateKey(
     { name: "ECDH", namedCurve: "P-256" },
+    true,
+    ["deriveKey"],
+  );
+  const privateJwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
+  const privateKey = await crypto.subtle.importKey(
+    "jwk",
+    privateJwk,
+    { name: "ECDH", namedCurve: "P-256" },
     false,
     ["deriveKey"],
   );
   await new Promise<void>((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(pair.privateKey, DEVICE_PRIVATE_ID);
+    tx.objectStore(STORE_NAME).put(privateKey, DEVICE_PRIVATE_ID);
     tx.objectStore(STORE_NAME).put(pair.publicKey, DEVICE_PUBLIC_ID);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error ?? new Error("Unable to store health device key pair"));
   });
-  return pair;
+  return { privateKey, publicKey: pair.publicKey };
 }
 
 export async function getHealthDevicePublicKey(): Promise<JsonWebKey> {
