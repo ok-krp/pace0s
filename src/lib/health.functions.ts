@@ -32,10 +32,21 @@ export const listHealthToday = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => z.object({ timeZone: z.string().optional() }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
-    const { data: healthConsent } = await context.supabase.from("consent_records").select("granted").eq("consent_type", "health_data").order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const { data: healthConsent } = await context.supabase
+      .from("consent_records")
+      .select("granted")
+      .eq("consent_type", "health_data")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (healthConsent?.granted !== true) {
-      return { steps: 0, kcalActive: 0, kcalTotal: 0, distanceM: 0, sleepMin: 0, exerciseMin: 0, heartRate: null, restingHeartRate: null, weightKg: null, oxygenSaturation: null, temperatureC: null, cadenceRpm: null, powerW: null, sources: {}, lastSource: null, lastTs: null, count: 0 };
+      return {
+        steps: 0, kcalActive: 0, kcalTotal: 0, distanceM: 0, sleepMin: 0, exerciseMin: 0,
+        heartRate: null, restingHeartRate: null, weightKg: null, oxygenSaturation: null,
+        temperatureC: null, cadenceRpm: null, powerW: null, sources: {}, lastSource: null, lastTs: null, count: 0,
+      };
     }
+
     const range = localDayRange(data.timeZone);
     const healthTable = context.supabase.from("health_samples");
     const result = await healthTable.select("type, value, ts, source").gte("ts", range.start.toISOString()).lt("ts", range.end.toISOString()).order("ts", { ascending: false }).limit(10000);
@@ -56,6 +67,7 @@ export const listHealthToday = createServerFn({ method: "GET" })
     };
   });
 
+
 const encryptedInsertSchema = z.object({
   records: z.array(z.object({
     ciphertext: z.string().min(1).max(2_000_000),
@@ -67,7 +79,8 @@ const encryptedInsertSchema = z.object({
 const devicePublicKeySchema = z.object({ kty: z.literal("EC"), crv: z.literal("P-256"), x: z.string().min(1), y: z.string().min(1) });
 const registerDeviceSchema = z.object({ device_name: z.string().trim().min(1).max(128), public_key: devicePublicKeySchema });
 const envelopeSchema = z.object({
-  device_id: z.string().uuid(), sender_device_id: z.string().uuid(),
+  device_id: z.string().uuid(),
+  sender_device_id: z.string().uuid(),
   envelope: z.string().min(1).max(2_000_000),
   nonce: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/).min(16).max(64),
   algorithm: z.literal("ECDH-P256/AES-256-GCM"),
@@ -78,9 +91,15 @@ export const insertEncryptedHealthSamples = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => encryptedInsertSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const { data: healthConsent } = await context.supabase.from("consent_records").select("granted").eq("consent_type", "health_data").order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const { data: cloudConsent } = await context.supabase.from("consent_records").select("granted").eq("consent_type", "health_cloud_sync").order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (healthConsent?.granted !== true || cloudConsent?.granted !== true) throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
+    const { data: healthConsent } = await context.supabase
+      .from("consent_records").select("granted").eq("consent_type", "health_data")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const { data: cloudConsent } = await context.supabase
+      .from("consent_records").select("granted").eq("consent_type", "health_cloud_sync")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (healthConsent?.granted !== true || cloudConsent?.granted !== true) {
+      throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
+    }
     const rows = data.records.map((record) => ({ ...record, user_id: context.userId }));
     const result = await (context.supabase as any).from("health_samples_e2ee").insert(rows);
     if (result.error) throw new Error("Impossible d'enregistrer les données de santé chiffrées.");
@@ -91,7 +110,9 @@ export const listEncryptedHealthSamples = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => z.object({ limit: z.number().int().min(1).max(10000).default(10000) }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
-    const result = await (context.supabase as any).from("health_samples_e2ee").select("id,ciphertext,nonce,algorithm,key_version,created_at").eq("user_id", context.userId).order("created_at", { ascending: false }).limit(data.limit);
+    const result = await (context.supabase as any).from("health_samples_e2ee")
+      .select("id,ciphertext,nonce,algorithm,key_version,created_at")
+      .eq("user_id", context.userId).order("created_at", { ascending: false }).limit(data.limit);
     if (result.error) throw new Error("Impossible de charger les données de santé chiffrées.");
     return { records: result.data ?? [] };
   });
@@ -100,7 +121,9 @@ export const registerHealthE2eeDevice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => registerDeviceSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const result = await (context.supabase as any).from("health_e2ee_devices").insert({ user_id: context.userId, device_name: data.device_name, public_key: data.public_key, algorithm: "ECDH-P256" }).select("id,user_id,device_name,public_key,algorithm,created_at,revoked_at").single();
+    const result = await (context.supabase as any).from("health_e2ee_devices").insert({
+      user_id: context.userId, device_name: data.device_name, public_key: data.public_key, algorithm: "ECDH-P256",
+    }).select("id,user_id,device_name,public_key,algorithm,created_at,revoked_at").single();
     if (result.error) throw new Error("Impossible d'enregistrer l'appareil E2EE.");
     return result.data;
   });
@@ -108,7 +131,9 @@ export const registerHealthE2eeDevice = createServerFn({ method: "POST" })
 export const listHealthE2eeDevices = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const result = await (context.supabase as any).from("health_e2ee_devices").select("id,user_id,device_name,public_key,algorithm,created_at,revoked_at").eq("user_id", context.userId).is("revoked_at", null).order("created_at", { ascending: false });
+    const result = await (context.supabase as any).from("health_e2ee_devices")
+      .select("id,user_id,device_name,public_key,algorithm,created_at,revoked_at")
+      .eq("user_id", context.userId).is("revoked_at", null).order("created_at", { ascending: false });
     if (result.error) throw new Error("Impossible de charger les appareils E2EE.");
     return { devices: result.data ?? [] };
   });
@@ -118,9 +143,16 @@ export const createHealthE2eeEnvelope = createServerFn({ method: "POST" })
   .validator((d: unknown) => envelopeSchema.parse(d))
   .handler(async ({ data, context }) => {
     const db = context.supabase as any;
-    const { data: devices, error: devicesError } = await db.from("health_e2ee_devices").select("id").eq("user_id", context.userId).in("id", [data.device_id, data.sender_device_id]).is("revoked_at", null);
-    if (devicesError || devices?.length !== 2) throw new Error("Les deux appareils E2EE doivent appartenir au même compte et être actifs.");
-    const result = await db.from("health_e2ee_key_envelopes").insert({ user_id: context.userId, device_id: data.device_id, sender_device_id: data.sender_device_id, envelope: data.envelope, nonce: data.nonce, algorithm: data.algorithm, key_version: data.key_version }).select("id,user_id,device_id,sender_device_id,envelope,nonce,algorithm,key_version,created_at").single();
+    const { data: devices, error: devicesError } = await db.from("health_e2ee_devices")
+      .select("id").eq("user_id", context.userId)
+      .in("id", [data.device_id, data.sender_device_id]).is("revoked_at", null);
+    if (devicesError || devices?.length !== 2) {
+      throw new Error("Les deux appareils E2EE doivent appartenir au même compte et être actifs.");
+    }
+    const result = await db.from("health_e2ee_key_envelopes").insert({
+      user_id: context.userId, device_id: data.device_id, sender_device_id: data.sender_device_id,
+      envelope: data.envelope, nonce: data.nonce, algorithm: data.algorithm, key_version: data.key_version,
+    }).select("id,user_id,device_id,sender_device_id,envelope,nonce,algorithm,key_version,created_at").single();
     if (result.error) throw new Error("Impossible d'enregistrer l'enveloppe E2EE.");
     return result.data;
   });
@@ -129,7 +161,10 @@ export const listHealthE2eeEnvelopes = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => z.object({ device_id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
-    const result = await (context.supabase as any).from("health_e2ee_key_envelopes").select("id,user_id,device_id,sender_device_id,envelope,nonce,algorithm,key_version,created_at").eq("user_id", context.userId).eq("device_id", data.device_id).order("created_at", { ascending: false });
+    const result = await (context.supabase as any).from("health_e2ee_key_envelopes")
+      .select("id,user_id,device_id,sender_device_id,envelope,nonce,algorithm,key_version,created_at")
+      .eq("user_id", context.userId).eq("device_id", data.device_id)
+      .order("created_at", { ascending: false });
     if (result.error) throw new Error("Impossible de charger les enveloppes E2EE.");
     return { envelopes: result.data ?? [] };
   });
