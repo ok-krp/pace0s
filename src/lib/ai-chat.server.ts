@@ -116,13 +116,15 @@ export async function handleAiChat(request: Request) {
     if (!Array.isArray(body.messages) || body.messages.length === 0) fail(400, "no_messages", "Aucun message à envoyer."); if (typeof body.conversationId !== "string") fail(400, "no_conversation", "Conversation introuvable : ouvrez ou créez une conversation."); if (body.agentType !== "coach" && body.agentType !== "build") fail(400, "bad_agent", "Assistant inconnu.");
     const messages = body.messages as UIMessage[]; const agentType = body.agentType; const ephemeral = body.ephemeral === true; const conversationId = body.conversationId; const newest = messages[messages.length - 1]; if (newest && textOf(newest).length > MAX_TEXT_CHARS) fail(413, "message_too_long", `Message trop long : réduisez-le sous ${Math.round(MAX_TEXT_CHARS / 1000)} 000 caractères.`);
     const { client, userId } = await authenticatedClient(request);
-    const { data: aiConsent } = await client
+    const { data: aiConsent, error: aiConsentError } = await client
       .from("consent_records")
       .select("granted")
+      .eq("user_id", userId)
       .eq("consent_type", "ai_processing")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (aiConsentError) console.warn("[ai-chat] granular AI consent lookup failed", aiConsentError.message);
 
     // Backward compatibility: users who accepted AI before granular consent_records
     // existed only have the decision in legal_consent. Do not lock them out of Coach/Nutrition.
