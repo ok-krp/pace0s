@@ -9,7 +9,7 @@ import {
 
 const masterKey = await crypto.subtle.generateKey(
   { name: "AES-GCM", length: 256 },
-  false,
+  true,
   ["encrypt", "decrypt"],
 );
 
