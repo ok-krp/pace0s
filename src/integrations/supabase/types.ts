@@ -686,6 +686,72 @@ export type Database = {
         }
         Relationships: []
       }
+      health_e2ee_devices: {
+        Row: {
+          algorithm: string
+          created_at: string
+          device_name: string
+          id: string
+          public_key: Json
+          revoked_at: string | null
+          user_id: string
+        }
+        Insert: {
+          algorithm?: string
+          created_at?: string
+          device_name?: string
+          id?: string
+          public_key: Json
+          revoked_at?: string | null
+          user_id: string
+        }
+        Update: {
+          algorithm?: string
+          created_at?: string
+          device_name?: string
+          id?: string
+          public_key?: Json
+          revoked_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      health_e2ee_key_envelopes: {
+        Row: {
+          algorithm: string
+          created_at: string
+          device_id: string
+          envelope: string
+          id: string
+          key_version: number
+          nonce: string
+          sender_device_id: string | null
+          user_id: string
+        }
+        Insert: {
+          algorithm?: string
+          created_at?: string
+          device_id: string
+          envelope: string
+          id?: string
+          key_version?: number
+          nonce: string
+          sender_device_id?: string | null
+          user_id: string
+        }
+        Update: {
+          algorithm?: string
+          created_at?: string
+          device_id?: string
+          envelope?: string
+          id?: string
+          key_version?: number
+          nonce?: string
+          sender_device_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       health_samples_e2ee: {
         Row: {
           algorithm: string
