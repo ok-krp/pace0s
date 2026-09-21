@@ -13,6 +13,24 @@ const encryptedInsertSchema = z.object({
     key_version: z.number().int().positive().max(100),
   })).min(1).max(5000),
 });
+const devicePublicKeySchema = z.object({
+  kty: z.literal("EC"),
+  crv: z.literal("P-256"),
+  x: z.string().min(1),
+  y: z.string().min(1),
+});
+const registerDeviceSchema = z.object({
+  device_name: z.string().trim().min(1).max(128),
+  public_key: devicePublicKeySchema,
+});
+const envelopeSchema = z.object({
+  device_id: z.string().uuid(),
+  sender_device_id: z.string().uuid(),
+  envelope: z.string().min(1).max(2_000_000),
+  nonce: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/).min(16).max(64),
+  algorithm: z.literal("ECDH-P256/AES-256-GCM"),
+  key_version: z.number().int().positive().max(100),
+});
 
 export const insertEncryptedHealthSamples = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -63,6 +81,95 @@ export const listEncryptedHealthSamples = createServerFn({ method: "GET" })
       throw new Error("Impossible de charger les données de santé chiffrées.");
     }
     return { records: result.data ?? [] };
+  });
+
+export const registerHealthE2eeDevice = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => registerDeviceSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const result = await context.supabase
+      .from("health_e2ee_devices")
+      .insert({
+        user_id: context.userId,
+        device_name: data.device_name,
+        public_key: data.public_key,
+        algorithm: "ECDH-P256",
+      })
+      .select("id,user_id,device_name,public_key,algorithm,created_at,revoked_at")
+      .single();
+    if (result.error) {
+      console.error("health E2EE device registration failed", result.error);
+      throw new Error("Impossible d'enregistrer l'appareil E2EE.");
+    }
+    return result.data;
+  });
+
+export const listHealthE2eeDevices = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const result = await context.supabase
+      .from("health_e2ee_devices")
+      .select("id,user_id,device_name,public_key,algorithm,created_at,revoked_at")
+      .eq("user_id", context.userId)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false });
+    if (result.error) {
+      console.error("health E2EE device listing failed", result.error);
+      throw new Error("Impossible de charger les appareils E2EE.");
+    }
+    return { devices: result.data ?? [] };
+  });
+
+export const createHealthE2eeEnvelope = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => envelopeSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: devices, error: devicesError } = await context.supabase
+      .from("health_e2ee_devices")
+      .select("id")
+      .eq("user_id", context.userId)
+      .in("id", [data.device_id, data.sender_device_id])
+      .is("revoked_at", null);
+
+    if (devicesError || devices?.length !== 2) {
+      throw new Error("Les deux appareils E2EE doivent appartenir au même compte et être actifs.");
+    }
+
+    const result = await context.supabase
+      .from("health_e2ee_key_envelopes")
+      .insert({
+        user_id: context.userId,
+        device_id: data.device_id,
+        sender_device_id: data.sender_device_id,
+        envelope: data.envelope,
+        nonce: data.nonce,
+        algorithm: data.algorithm,
+        key_version: data.key_version,
+      })
+      .select("id,user_id,device_id,sender_device_id,envelope,nonce,algorithm,key_version,created_at")
+      .single();
+    if (result.error) {
+      console.error("health E2EE envelope creation failed", result.error);
+      throw new Error("Impossible d'enregistrer l'enveloppe E2EE.");
+    }
+    return result.data;
+  });
+
+export const listHealthE2eeEnvelopes = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => z.object({ device_id: z.string().uuid() }).parse(d))
+  .handler(async ({ data, context }) => {
+    const result = await context.supabase
+      .from("health_e2ee_key_envelopes")
+      .select("id,user_id,device_id,sender_device_id,envelope,nonce,algorithm,key_version,created_at")
+      .eq("user_id", context.userId)
+      .eq("device_id", data.device_id)
+      .order("created_at", { ascending: false });
+    if (result.error) {
+      console.error("health E2EE envelope listing failed", result.error);
+      throw new Error("Impossible de charger les enveloppes E2EE.");
+    }
+    return { envelopes: result.data ?? [] };
   });
 
 export const insertHealthSamples = createServerFn({ method: "POST" })
