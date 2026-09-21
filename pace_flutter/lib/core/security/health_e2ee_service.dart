@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -25,13 +24,14 @@ class HealthE2eeService {
   Future<SecretKey> _getOrCreateKey() async {
     final encoded = await _secureStorage.read(key: _keyName);
     if (encoded != null && encoded.isNotEmpty) {
-      return SecretKey(base64Url.decode(encoded));
+      return SecretKey(base64Decode(encoded));
     }
+
     final key = await _aes.newSecretKey();
     final bytes = await key.extractBytes();
     await _secureStorage.write(
       key: _keyName,
-      value: base64UrlEncode(bytes),
+      value: base64Encode(bytes),
       aOptions: const AndroidOptions(encryptedSharedPreferences: true),
     );
     return key;
@@ -58,8 +58,8 @@ class HealthE2eeService {
         nonce: nonce,
       );
       records.add({
-        'ciphertext': base64UrlEncode(box.cipherText),
-        'nonce': base64UrlEncode(box.nonce),
+        'ciphertext': base64Encode(box.cipherText),
+        'nonce': base64Encode(box.nonce),
         'algorithm': _algorithm,
         'key_version': '1',
       });
@@ -80,10 +80,10 @@ class HealthE2eeService {
               'key_version': int.parse(record['key_version']!),
             })
         .toList();
-    final result = await client.from('health_samples_e2ee').insert(rows);
-    if (result.error != null) {
-      throw StateError('Impossible de synchroniser les données de santé chiffrées.');
-    }
+
+    // Supabase Dart throws PostgrestException on a failed insert, so there is
+    // no nullable response error to inspect here.
+    await client.from('health_samples_e2ee').insert(rows);
     return rows.length;
   }
 
