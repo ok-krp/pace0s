@@ -31,7 +31,7 @@ async function storeKey(key: CryptoKey): Promise<void> {
 export async function getHealthEncryptionKey(): Promise<CryptoKey> {
   const existing = await getStoredKey();
   if (existing) return existing;
-  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  // The health master key must be locally exportable so it can be wrapped for a paired device. It is never sent to the server in plaintext; only ciphertext/envelopes leave the device.\n  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
   await storeKey(key);
   return key;
 }
