@@ -190,7 +190,7 @@ export const rotateHealthE2eeKey = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.rpc("rotate_health_e2ee_key", {
       p_new_key_version: data.new_key_version,
-      p_revoked_device_id: data.revoked_device_id ?? null,
+      p_revoked_device_id: data.revoked_device_id ?? undefined,
     });
     if (error) throw new Error("La rotation E2EE atomique a échoué.");
     return { rotated_to: data.new_key_version };
