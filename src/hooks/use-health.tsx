@@ -27,6 +27,8 @@ type HealthSample = {
 type EncryptedHealthRecord = {
   ciphertext: string;
   nonce: string;
+  algorithm: string;
+  key_version: number;
 };
 
 const SAMPLE_TYPES = new Set([
@@ -109,7 +111,7 @@ export function useHealthToday() {
 
       for (const record of records) {
         try {
-          const payload = await decryptHealthPayload(record.ciphertext, record.nonce);
+          const payload = await decryptHealthPayload(record.ciphertext, record.nonce, record.key_version);
           if (
             payload &&
             typeof payload === "object" &&
