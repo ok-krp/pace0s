@@ -1,4 +1,8 @@
-import { encryptHealthPayload, getHealthEncryptionKey } from "@/lib/health.crypto";
+import {
+  encryptHealthPayload,
+  getCurrentHealthKeyVersion,
+  getHealthEncryptionKey,
+} from "@/lib/health.crypto";
 
 const HEALTH_DEDUPE_HKDF_SALT = new TextEncoder().encode(
   "paceos-health-e2ee-dedupe-v1",
@@ -108,9 +112,7 @@ export async function encryptHealthSampleForUpload(
     throw new Error("Health sample value must be finite.");
   }
 
-  const keyVersion = await import("@/lib/health.crypto").then((module) =>
-    module.getCurrentHealthKeyVersion(),
-  );
+  const keyVersion = await getCurrentHealthKeyVersion();
   const healthMasterKey = await getHealthEncryptionKey(keyVersion);
 
   const dedupeHash = await generateHealthDedupeHash(
