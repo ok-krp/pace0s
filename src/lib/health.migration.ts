@@ -1,8 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
-import {
-  encryptHealthPayload,
-  HEALTH_E2EE_CURRENT_KEY_VERSION,
-} from "@/lib/health.crypto";
+import { encryptHealthPayload, getCurrentHealthKeyVersion } from "@/lib/health.crypto";
 
 type LegacyHealthSample = {
   id: string;
@@ -34,24 +31,33 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{
   if (readError) throw new Error("Unable to read legacy health data");
 
   const legacyRows = (rows ?? []) as LegacyHealthSample[];
-  const keyVersion = await getCurrentHealthKeyVersion();\n  let migrated = 0;
+  const keyVersion = await getCurrentHealthKeyVersion();
+  let migrated = 0;
 
   for (let offset = 0; offset < legacyRows.length; offset += CHUNK_SIZE) {
     const chunk = legacyRows.slice(offset, offset + CHUNK_SIZE);
-    const records = [];
+    const records: Array<{
+      legacy_id: string;
+      ciphertext: string;
+      nonce: string;
+      key_version: number;
+    }> = [];
 
     for (const row of chunk) {
-      const encrypted = await encryptHealthPayload({
-        id: row.id,
-        ts: row.ts,
-        type: row.type,
-        value: row.value,
-        source: row.source,
-        source_id: row.source_id,
-        external_id: row.external_id,
-        metadata: row.metadata,
-        created_at: row.created_at,
-      }, keyVersion);
+      const encrypted = await encryptHealthPayload(
+        {
+          id: row.id,
+          ts: row.ts,
+          type: row.type,
+          value: row.value,
+          source: row.source,
+          source_id: row.source_id,
+          external_id: row.external_id,
+          metadata: row.metadata,
+          created_at: row.created_at,
+        },
+        keyVersion,
+      );
 
       records.push({
         legacy_id: row.id,
@@ -92,4 +98,17 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{
   }
 
   return { migrated, deleted: legacyRows.length };
+}
+
+declare global {
+  interface Window {
+    __paceMigrateHealthE2ee?: () => Promise<{
+      migrated: number;
+      deleted: number;
+    }>;
+  }
+}
+
+if (typeof window !== "undefined") {
+  window.__paceMigrateHealthE2ee = migrateLegacyHealthSamplesToE2ee;
 }
