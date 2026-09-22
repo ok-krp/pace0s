@@ -15,49 +15,21 @@ SET search_path = public
 AS $$
 DECLARE
   server_now timestamptz := clock_timestamp();
-  current_row public.user_state%ROWTYPE;
-  accepted boolean := false;
   committed_at timestamptz;
 BEGIN
-  IF auth.uid() IS NULL OR auth.uid() <> p_user_id THEN
-    RAISE EXCEPTION 'not authorized';
-  END IF;
-  IF p_key IS NULL OR p_key = '' THEN
-    RAISE EXCEPTION 'key is required';
-  END IF;
-  IF p_updated_by IS NULL OR length(trim(p_updated_by)) = 0 THEN
-    RAISE EXCEPTION 'updated_by is required';
-  END IF;
+  IF auth.uid() IS NULL OR auth.uid() <> p_user_id THEN RAISE EXCEPTION 'not authorized'; END IF;
+  IF p_key IS NULL OR p_key = '' THEN RAISE EXCEPTION 'key is required'; END IF;
+  IF p_updated_by IS NULL OR length(trim(p_updated_by)) = 0 THEN RAISE EXCEPTION 'updated_by is required'; END IF;
 
-  SELECT *
-    INTO current_row
-    FROM public.user_state
-   WHERE user_id = p_user_id
-     AND key = p_key
-   FOR UPDATE;
+  INSERT INTO public.user_state (user_id, key, value, updated_at, updated_by)
+  VALUES (p_user_id, p_key, p_value, server_now, p_updated_by)
+  ON CONFLICT (user_id, key) DO UPDATE
+    SET value = EXCLUDED.value,
+        updated_at = EXCLUDED.updated_at,
+        updated_by = EXCLUDED.updated_by
+  RETURNING updated_at INTO committed_at;
 
-  IF current_row IS NULL THEN
-    INSERT INTO public.user_state (user_id, key, value, updated_at, updated_by)
-    VALUES (p_user_id, p_key, p_value, server_now, p_updated_by)
-    RETURNING updated_at INTO committed_at;
-    accepted := true;
-  ELSIF server_now > COALESCE(current_row.updated_at, to_timestamp(0)) THEN
-    UPDATE public.user_state
-       SET value = p_value,
-           updated_at = server_now,
-           updated_by = p_updated_by
-     WHERE user_id = p_user_id
-       AND key = p_key
-    RETURNING updated_at INTO committed_at;
-    accepted := true;
-  ELSE
-    committed_at := current_row.updated_at;
-  END IF;
-
-  RETURN jsonb_build_object(
-    'accepted', accepted,
-    'updated_at', committed_at
-  );
+  RETURN jsonb_build_object('accepted', true, 'updated_at', committed_at);
 END;
 $$;
 
