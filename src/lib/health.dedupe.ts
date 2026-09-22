@@ -33,9 +33,14 @@ export type HealthSampleForE2ee = {
 function canonicalizeHealthDedupeIdentity(
   identity: HealthDedupeIdentity,
 ): string {
+  const canonicalDate = new Date(identity.date);
+  if (Number.isNaN(canonicalDate.getTime())) {
+    throw new Error("Invalid health sample date.");
+  }
+
   return JSON.stringify([
     identity.type.normalize("NFC"),
-    identity.date,
+    canonicalDate.toISOString(),
     identity.source.normalize("NFC"),
     identity.external_id.normalize("NFC"),
   ]);
