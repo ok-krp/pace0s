@@ -7,6 +7,9 @@ const CURRENT_VERSION_ID = "health-current-version";
 const DEVICE_PRIVATE_ID = "device-private-v1";
 const DEVICE_PUBLIC_ID = "device-public-v1";
 const DEVICE_ID_ID = "device-id-v1";
+const DEDUPE_ROOT_KEY_ID = "health-dedupe-root-v1";
+const HEALTH_DEDUPE_HKDF_SALT = new TextEncoder().encode("paceos-health-e2ee-dedupe-v1");
+const HEALTH_DEDUPE_HKDF_INFO = new TextEncoder().encode("paceos/health/dedupe-hmac-sha256/v1");
 
 export const HEALTH_E2EE_ALGORITHM = "AES-256-GCM" as const;
 export const HEALTH_E2EE_KEY_WRAP_ALGORITHM = "ECDH-P256/AES-256-KW" as const;
@@ -87,6 +90,44 @@ export async function createHealthMasterKey(version: number): Promise<CryptoKey>
 export async function getHealthEncryptionKey(version?: number): Promise<CryptoKey> {
   const resolvedVersion = version ?? await getCurrentHealthKeyVersion();
   return createHealthMasterKey(resolvedVersion);
+}
+
+export async function getHealthDedupeRootKey(): Promise<CryptoKey> {
+  const existing = await readStore<CryptoKey>(DEDUPE_ROOT_KEY_ID);
+  if (existing) return existing;
+
+  // The v1 dedupe root is derived once from the v1 Health Master Key and then
+  // persisted independently so future master-key rotations do not change
+  // existing blind indexes.
+  const masterKey = await getHealthEncryptionKey(1);
+  const rawMasterKey = await crypto.subtle.exportKey("raw", masterKey);
+  const hkdfKey = await crypto.subtle.importKey("raw", rawMasterKey, "HKDF", false, ["deriveKey"]);
+  const rootKey = await crypto.subtle.deriveKey(
+    {
+      name: "HKDF",
+      hash: "SHA-256",
+      salt: HEALTH_DEDUPE_HKDF_SALT,
+      info: HEALTH_DEDUPE_HKDF_INFO,
+    },
+    hkdfKey,
+    { name: "HMAC", hash: "SHA-256", length: 256 },
+    true,
+    ["sign"],
+  );
+  await writeStore(DEDUPE_ROOT_KEY_ID, rootKey);
+  return rootKey;
+}
+
+export async function importHealthDedupeRootKey(rawKey: ArrayBuffer): Promise<CryptoKey> {
+  const key = await crypto.subtle.importKey(
+    "raw", rawKey, { name: "HMAC", hash: "SHA-256" }, true, ["sign"],
+  );
+  await writeStore(DEDUPE_ROOT_KEY_ID, key);
+  return key;
+}
+
+export async function exportHealthDedupeRootKey(): Promise<ArrayBuffer> {
+  return crypto.subtle.exportKey("raw", await getHealthDedupeRootKey());
 }
 
 function toBase64(bytes: Uint8Array): string {
