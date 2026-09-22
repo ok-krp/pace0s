@@ -677,6 +677,73 @@ export type Database = {
         }
         Relationships: []
       }
+
+      health_e2ee_pairing_sessions: {
+        Row: {
+          attempt_count: number
+          challenge: string
+          completed_at: string | null
+          confirmed_at: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          initiator_device_id: string
+          initiator_ephemeral_public_key: Json
+          locked_until: string | null
+          max_attempts: number
+          protocol_version: string
+          recipient_device_id: string | null
+          recipient_ephemeral_public_key: Json | null
+          rejected_at: string | null
+          secret_hash: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          attempt_count?: number
+          challenge: string
+          completed_at?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          initiator_device_id: string
+          initiator_ephemeral_public_key: Json
+          locked_until?: string | null
+          max_attempts?: number
+          protocol_version?: string
+          recipient_device_id?: string | null
+          recipient_ephemeral_public_key?: Json | null
+          rejected_at?: string | null
+          secret_hash: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          attempt_count?: number
+          challenge?: string
+          completed_at?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          initiator_device_id?: string
+          initiator_ephemeral_public_key?: Json
+          locked_until?: string | null
+          max_attempts?: number
+          protocol_version?: string
+          recipient_device_id?: string | null
+          recipient_ephemeral_public_key?: Json | null
+          rejected_at?: string | null
+          secret_hash?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       health_e2ee_key_envelopes: {
         Row: {
           algorithm: string
@@ -687,6 +754,7 @@ export type Database = {
           key_version: number
           nonce: string | null
           sender_device_id: string | null
+          pairing_session_id: string | null
           user_id: string
         }
         Insert: {
@@ -698,6 +766,7 @@ export type Database = {
           key_version?: number
           nonce?: string | null
           sender_device_id?: string | null
+          pairing_session_id?: string | null
           user_id: string
         }
         Update: {
@@ -709,6 +778,7 @@ export type Database = {
           key_version?: number
           nonce?: string | null
           sender_device_id?: string | null
+          pairing_session_id?: string | null
           user_id?: string
         }
         Relationships: [
@@ -1894,6 +1964,64 @@ export type Database = {
       backfill_health_e2ee_dedupe_hashes: {
         Args: { p_updates: Json }
         Returns: number
+      }
+      create_pairing_session: {
+        Args: {
+          p_challenge: string
+          p_ephemeral_pub: Json
+          p_expires_in_seconds?: number
+          p_initiator_device_id: string
+          p_secret_hash: string
+        }
+        Returns: string
+      }
+      join_pairing_session: {
+        Args: {
+          p_ephemeral_pub: Json
+          p_recipient_device_id: string
+          p_secret_plaintext: string
+          p_session_id: string
+        }
+        Returns: undefined
+      }
+      confirm_pairing_session: {
+        Args: {
+          p_initiator_device_id: string
+          p_session_id: string
+        }
+        Returns: undefined
+      }
+      complete_pairing_session: {
+        Args: {
+          p_recipient_device_id: string
+          p_session_id: string
+        }
+        Returns: undefined
+      }
+      create_pairing_envelope: {
+        Args: {
+          p_algorithm: string
+          p_envelope: string
+          p_key_version: number
+          p_recipient_device_id: string
+          p_sender_device_id: string
+          p_session_id: string
+        }
+        Returns: string
+      }
+      get_pairing_session: {
+        Args: { p_session_id: string }
+        Returns: {
+          challenge: string
+          expires_at: string
+          id: string
+          initiator_device_id: string
+          initiator_ephemeral_public_key: Json
+          protocol_version: string
+          recipient_device_id: string | null
+          recipient_ephemeral_public_key: Json | null
+          status: string
+        }[]
       }
       sport_delete_exercise: { Args: { p_id: string }; Returns: boolean }
       sport_delete_program: { Args: { p_id: string }; Returns: boolean }
