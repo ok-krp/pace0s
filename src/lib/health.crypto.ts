@@ -7,6 +7,7 @@ const CURRENT_VERSION_ID = "health-current-version";
 const DEVICE_PRIVATE_ID = "device-private-v1";
 const DEVICE_PUBLIC_ID = "device-public-v1";
 const DEVICE_ID_ID = "device-id-v1";
+const DEDUPE_ROOT_KEY_ID = "health-dedupe-root-v1";
 
 export const HEALTH_E2EE_ALGORITHM = "AES-256-GCM" as const;
 export const HEALTH_E2EE_KEY_WRAP_ALGORITHM = "ECDH-P256/AES-256-KW" as const;
@@ -87,6 +88,35 @@ export async function createHealthMasterKey(version: number): Promise<CryptoKey>
 export async function getHealthEncryptionKey(version?: number): Promise<CryptoKey> {
   const resolvedVersion = version ?? await getCurrentHealthKeyVersion();
   return createHealthMasterKey(resolvedVersion);
+}
+
+export async function getHealthDedupeRootKey(): Promise<CryptoKey> {
+  const existing = await readStore<CryptoKey>(DEDUPE_ROOT_KEY_ID);
+  if (existing) return existing;
+
+  const key = await crypto.subtle.generateKey(
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"],
+  );
+  await writeStore(DEDUPE_ROOT_KEY_ID, key);
+  return key;
+}
+
+export async function importHealthDedupeRootKey(rawKey: ArrayBuffer): Promise<CryptoKey> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    rawKey,
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"],
+  );
+  await writeStore(DEDUPE_ROOT_KEY_ID, key);
+  return key;
+}
+
+export async function exportHealthDedupeRootKey(): Promise<ArrayBuffer> {
+  return crypto.subtle.exportKey("raw", await getHealthDedupeRootKey());
 }
 
 function toBase64(bytes: Uint8Array): string {
@@ -254,6 +284,10 @@ export async function unwrapHealthMasterKeyFromRecovery(
 
 export async function clearHealthEncryptionKey(version = 1): Promise<void> {
   await deleteStore(keyId(version));
+}
+
+export async function clearHealthDedupeRootKey(): Promise<void> {
+  await deleteStore(DEDUPE_ROOT_KEY_ID);
 }
 
 export async function clearHealthDeviceKeyPair(): Promise<void> {
