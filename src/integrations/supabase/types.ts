@@ -2009,6 +2009,20 @@ export type Database = {
         }
         Returns: string
       }
+      get_pairing_session: {
+        Args: { p_session_id: string }
+        Returns: {
+          challenge: string
+          expires_at: string
+          id: string
+          initiator_device_id: string
+          initiator_ephemeral_public_key: Json
+          protocol_version: string
+          recipient_device_id: string | null
+          recipient_ephemeral_public_key: Json | null
+          status: string
+        }[]
+      }
       sport_delete_exercise: { Args: { p_id: string }; Returns: boolean }
       sport_delete_program: { Args: { p_id: string }; Returns: boolean }
       sport_delete_workout: { Args: { p_id: string }; Returns: boolean }
