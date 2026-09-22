@@ -12,7 +12,7 @@ export const HEALTH_PAIRING_PROTOCOL_VERSION = "pace-health-pairing-v1";
 export const HEALTH_PAIRING_ALGORITHM =
   "ECDH-P256/HKDF-SHA256/AES-256-KW" as const;
 
-type PairingContext = {
+export type PairingContext = {
   sessionId: string;
   challenge: string;
   senderDeviceId: string;
@@ -98,6 +98,23 @@ async function derivePairingBits(
     ikm,
     256,
   );
+}
+
+export async function createPairingSessionMaterial(): Promise<{
+  secret: string;
+  secretHash: string;
+  challenge: string;
+}> {
+  const secretBytes = crypto.getRandomValues(new Uint8Array(32));
+  const challengeBytes = crypto.getRandomValues(new Uint8Array(32));
+  const secret = toBase64Url(secretBytes);
+  const challenge = toBase64Url(challengeBytes);
+  const digest = await crypto.subtle.digest("SHA-256", encoder.encode(secret));
+  return {
+    secret,
+    secretHash: toHex(new Uint8Array(digest)),
+    challenge,
+  };
 }
 
 export async function generatePairingEphemeralKeyPair(): Promise<CryptoKeyPair> {
@@ -256,6 +273,10 @@ function toBase64Url(bytes: Uint8Array): string {
     .replace(/\\+/g, "-")
     .replace(/\\//g, "_")
     .replace(/=+$/g, "");
+}
+
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function fromBase64Url(value: string): Uint8Array<ArrayBuffer> {
