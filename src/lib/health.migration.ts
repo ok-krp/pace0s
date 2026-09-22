@@ -73,12 +73,12 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{
     migrated += Number(inserted ?? 0);
   }
 
-  const { count: remaining, error: verifyError } = await supabase
-    .from("health_samples")
+  const { count: encryptedCount, error: verifyError } = await supabase
+    .from("health_samples_e2ee")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userResult.user.id);
 
-  if (verifyError || remaining !== 0) {
+  if (verifyError || (encryptedCount ?? 0) < legacyRows.length) {
     throw new Error("Encrypted migration is incomplete; plaintext was not deleted");
   }
 
