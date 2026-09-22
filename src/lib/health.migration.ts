@@ -34,7 +34,7 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{
   if (readError) throw new Error("Unable to read legacy health data");
 
   const legacyRows = (rows ?? []) as LegacyHealthSample[];
-  let migrated = 0;
+  const keyVersion = await getCurrentHealthKeyVersion();\n  let migrated = 0;
 
   for (let offset = 0; offset < legacyRows.length; offset += CHUNK_SIZE) {
     const chunk = legacyRows.slice(offset, offset + CHUNK_SIZE);
@@ -51,7 +51,7 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{
         external_id: row.external_id,
         metadata: row.metadata,
         created_at: row.created_at,
-      }, HEALTH_E2EE_CURRENT_KEY_VERSION);
+      }, keyVersion);
 
       records.push({
         legacy_id: row.id,
