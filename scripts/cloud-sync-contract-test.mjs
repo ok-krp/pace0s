@@ -30,7 +30,8 @@ assert.match(engine, /readQueue\(\)\.filter\(\(queued\) => queued\.key !== item\
 // Client timestamps are retained only for local queue identity; server time orders cloud writes.
 assert.match(engine, /p_updated_at: item\.updatedAt/);
 assert.match(engine, /server-authoritative/);
-assert.match(engine, /const updatedAt = new Date\(\)\.toISOString\(\);/);\nassert.match(engine, /resolveConflict/);
+assert.match(engine, /const updatedAt = new Date\(\)\.toISOString\(\);/);
+assert.match(engine, /resolveConflict/);
 assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 
 // Deterministic newest-wins model for two devices and duplicate realtime events.
