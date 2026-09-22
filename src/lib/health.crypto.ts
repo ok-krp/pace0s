@@ -6,6 +6,7 @@ const KEY_PREFIX = "health-v";
 const CURRENT_VERSION_ID = "health-current-version";
 const DEVICE_PRIVATE_ID = "device-private-v1";
 const DEVICE_PUBLIC_ID = "device-public-v1";
+const DEVICE_ID_ID = "device-id-v1";
 
 export const HEALTH_E2EE_ALGORITHM = "AES-256-GCM" as const;
 export const HEALTH_E2EE_KEY_WRAP_ALGORITHM = "ECDH-P256/AES-256-KW" as const;
@@ -21,7 +22,9 @@ function keyId(version: number): string {
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => request.result.createObjectStore(STORE_NAME);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME);
+    };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error ?? new Error("IndexedDB unavailable"));
   });
@@ -77,11 +80,7 @@ async function storeKey(version: number, key: CryptoKey): Promise<void> {
 export async function createHealthMasterKey(version: number): Promise<CryptoKey> {
   const existing = await getStoredKey(version);
   if (existing) return existing;
-  const key = await crypto.subtle.generateKey(
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"],
-  );
+  const key = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
   await storeKey(version, key);
   return key;
 }
@@ -101,15 +100,7 @@ function fromBase64(value: string): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(raw, (char) => char.charCodeAt(0));
 }
 
-export async function encryptHealthPayload(
-  payload: unknown,
-  keyVersion = await getCurrentHealthKeyVersion(),
-): Promise<{
-  ciphertext: string;
-  nonce: string;
-  algorithm: typeof HEALTH_E2EE_ALGORITHM;
-  key_version: number;
-}> {
+export async function encryptHealthPayload(payload: unknown, keyVersion = await getCurrentHealthKeyVersion()) {
   const key = await getHealthEncryptionKey(keyVersion);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = new TextEncoder().encode(JSON.stringify(payload));
@@ -128,11 +119,7 @@ export async function decryptHealthPayload(
   keyVersion = await getCurrentHealthKeyVersion(),
 ): Promise<unknown> {
   const key = await getHealthEncryptionKey(keyVersion);
-  const plaintext = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: fromBase64(nonce) },
-    key,
-    fromBase64(ciphertext),
-  );
+  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64(nonce) }, key, fromBase64(ciphertext));
   return JSON.parse(new TextDecoder().decode(plaintext));
 }
 
@@ -140,13 +127,7 @@ async function importDevicePublicKey(publicKey: JsonWebKey): Promise<CryptoKey> 
   if (publicKey.kty !== "EC" || publicKey.crv !== "P-256" || !publicKey.x || !publicKey.y) {
     throw new Error("Invalid ECDH-P256 public key");
   }
-  return crypto.subtle.importKey(
-    "jwk",
-    publicKey,
-    { name: "ECDH", namedCurve: "P-256" },
-    false,
-    [],
-  );
+  return crypto.subtle.importKey("jwk", publicKey, { name: "ECDH", namedCurve: "P-256" }, false, []);
 }
 
 async function deriveDeviceWrappingKey(peerPublicKey: JsonWebKey): Promise<CryptoKey> {
@@ -164,15 +145,11 @@ async function deriveDeviceWrappingKey(peerPublicKey: JsonWebKey): Promise<Crypt
 export async function wrapHealthMasterKeyForDevice(
   peerPublicKey: JsonWebKey,
   keyVersion = await getCurrentHealthKeyVersion(),
-): Promise<{ envelope: string; key_version: number; algorithm: typeof HEALTH_E2EE_KEY_WRAP_ALGORITHM }> {
+) {
   const masterKey = await getHealthEncryptionKey(keyVersion);
   const wrappingKey = await deriveDeviceWrappingKey(peerPublicKey);
   const wrapped = await crypto.subtle.wrapKey("raw", masterKey, wrappingKey, "AES-KW");
-  return {
-    envelope: toBase64(new Uint8Array(wrapped)),
-    key_version: keyVersion,
-    algorithm: HEALTH_E2EE_KEY_WRAP_ALGORITHM,
-  };
+  return { envelope: toBase64(new Uint8Array(wrapped)), key_version: keyVersion, algorithm: HEALTH_E2EE_KEY_WRAP_ALGORITHM };
 }
 
 export async function unwrapHealthMasterKeyFromDevice(
@@ -182,13 +159,8 @@ export async function unwrapHealthMasterKeyFromDevice(
 ): Promise<CryptoKey> {
   const wrappingKey = await deriveDeviceWrappingKey(senderPublicKey);
   const masterKey = await crypto.subtle.unwrapKey(
-    "raw",
-    fromBase64(envelope),
-    wrappingKey,
-    "AES-KW",
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"],
+    "raw", fromBase64(envelope), wrappingKey, "AES-KW",
+    { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"],
   );
   await storeKey(keyVersion, masterKey);
   await setCurrentHealthKeyVersion(Math.max(await getCurrentHealthKeyVersion(), keyVersion));
@@ -202,18 +174,10 @@ export async function getHealthDeviceKeyPair(): Promise<CryptoKeyPair> {
   ]);
   if (privateKey && publicKey) return { privateKey, publicKey };
 
-  const pair = await crypto.subtle.generateKey(
-    { name: "ECDH", namedCurve: "P-256" },
-    true,
-    ["deriveKey"],
-  );
+  const pair = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveKey"]);
   const privateJwk = await crypto.subtle.exportKey("jwk", pair.privateKey);
   const persistedPrivateKey = await crypto.subtle.importKey(
-    "jwk",
-    privateJwk,
-    { name: "ECDH", namedCurve: "P-256" },
-    false,
-    ["deriveKey"],
+    "jwk", privateJwk, { name: "ECDH", namedCurve: "P-256" }, false, ["deriveKey"],
   );
   await writeStore(DEVICE_PRIVATE_ID, persistedPrivateKey);
   await writeStore(DEVICE_PUBLIC_ID, pair.publicKey);
@@ -224,35 +188,24 @@ export async function getHealthDevicePublicKey(): Promise<JsonWebKey> {
   return crypto.subtle.exportKey("jwk", (await getHealthDeviceKeyPair()).publicKey);
 }
 
+export async function getRegisteredHealthDeviceId(): Promise<string | null> {
+  return readStore<string>(DEVICE_ID_ID);
+}
+
+export async function setRegisteredHealthDeviceId(deviceId: string): Promise<void> {
+  if (!/^[0-9a-f-]{36}$/i.test(deviceId)) throw new Error("Invalid device id");
+  await writeStore(DEVICE_ID_ID, deviceId);
+}
+
 async function deriveRecoveryKey(mnemonic: string, salt: Uint8Array): Promise<CryptoKey> {
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(mnemonic.normalize("NFKD")),
-    "PBKDF2",
-    false,
-    ["deriveKey"],
-  );
+  const baseKey = await crypto.subtle.importKey("raw", new TextEncoder().encode(mnemonic.normalize("NFKD")), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: HEALTH_E2EE_RECOVERY_PBKDF2_ITERATIONS,
-      hash: "SHA-256",
-    },
-    baseKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"],
+    { name: "PBKDF2", salt, iterations: HEALTH_E2EE_RECOVERY_PBKDF2_ITERATIONS, hash: "SHA-256" },
+    baseKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"],
   );
 }
 
-export async function createHealthRecoveryEnvelope(keyVersion = await getCurrentHealthKeyVersion()): Promise<{
-  mnemonic: string;
-  envelope: string;
-  nonce: string;
-  algorithm: typeof HEALTH_E2EE_RECOVERY_ALGORITHM;
-  key_version: number;
-}> {
+export async function createHealthRecoveryEnvelope(keyVersion = await getCurrentHealthKeyVersion()) {
   const mnemonic = generateMnemonic(128);
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const recoveryKey = await deriveRecoveryKey(mnemonic, salt);
@@ -262,8 +215,7 @@ export async function createHealthRecoveryEnvelope(keyVersion = await getCurrent
   const aad = new TextEncoder().encode(`pace-health-recovery-v1:${keyVersion}`);
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: nonce, additionalData: new Uint8Array([...salt, ...aad]) },
-    recoveryKey,
-    rawMasterKey,
+    recoveryKey, rawMasterKey,
   );
   return {
     mnemonic,
@@ -275,10 +227,7 @@ export async function createHealthRecoveryEnvelope(keyVersion = await getCurrent
 }
 
 export async function unwrapHealthMasterKeyFromRecovery(
-  mnemonic: string,
-  envelope: string,
-  nonce: string,
-  keyVersion: number,
+  mnemonic: string, envelope: string, nonce: string, keyVersion: number,
 ): Promise<CryptoKey> {
   const [saltB64, ciphertextB64] = envelope.split(".");
   if (!saltB64 || !ciphertextB64) throw new Error("Invalid recovery envelope");
@@ -287,26 +236,17 @@ export async function unwrapHealthMasterKeyFromRecovery(
   const aad = new TextEncoder().encode(`pace-health-recovery-v1:${keyVersion}`);
   const rawMasterKey = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: fromBase64(nonce), additionalData: new Uint8Array([...salt, ...aad]) },
-    recoveryKey,
-    fromBase64(ciphertextB64),
+    recoveryKey, fromBase64(ciphertextB64),
   );
-  const masterKey = await crypto.subtle.importKey(
-    "raw",
-    rawMasterKey,
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"],
-  );
+  const masterKey = await crypto.subtle.importKey("raw", rawMasterKey, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
   await storeKey(keyVersion, masterKey);
   await setCurrentHealthKeyVersion(keyVersion);
   return masterKey;
 }
 
-export async function clearHealthEncryptionKey(version = 1): Promise<void> {
-  await deleteStore(keyId(version));
-}
-
+export async function clearHealthEncryptionKey(version = 1): Promise<void> { await deleteStore(keyId(version)); }
 export async function clearHealthDeviceKeyPair(): Promise<void> {
   await deleteStore(DEVICE_PRIVATE_ID);
   await deleteStore(DEVICE_PUBLIC_ID);
+  await deleteStore(DEVICE_ID_ID);
 }
