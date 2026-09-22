@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listEncryptedHealthSamples } from "@/lib/health.functions";
 import { decryptHealthPayload } from "@/lib/health.crypto";
 import { migrateLegacyHealthSamplesToE2ee } from "@/lib/health.migration";
+import { backfillHealthE2eeDedupeHashes } from "@/lib/health.dedupe.backfill";
 import { useAuth } from "@/hooks/use-auth";
 
 export type HealthToday = {
@@ -107,10 +108,42 @@ export function useHealthToday() {
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const migrationKey = `pace-health-e2ee-migrated:${user.id}`;
+      const migrationAttemptsKey = `pace-health-e2ee-migration-attempts:${user.id}`;
       if (localStorage.getItem(migrationKey) !== "1") {
-        const migration = await migrateLegacyHealthSamplesToE2ee();
-        localStorage.setItem(migrationKey, "1");
-        if (migration.deleted > 0) window.dispatchEvent(new Event("pace.health.changed"));
+        let migrationAttempts = 0;
+        try {
+          migrationAttempts = Number(sessionStorage.getItem(migrationAttemptsKey) ?? "0");
+        } catch {
+          migrationAttempts = 0;
+        }
+
+        if (migrationAttempts < 2) {
+          try {
+            try {
+              sessionStorage.setItem(migrationAttemptsKey, String(migrationAttempts + 1));
+            } catch {
+              // Session storage is best-effort; migration failure must never block E2EE reads.
+            }
+
+            const migration = await migrateLegacyHealthSamplesToE2ee();
+            localStorage.setItem(migrationKey, "1");
+            if (migration.deleted > 0) {
+              window.dispatchEvent(new Event("pace.health.changed"));
+            }
+          } catch {
+            // Legacy migration is best-effort. Continue loading already-encrypted health data.
+          }
+        }
+      }
+
+      const dedupeBackfillKey = `pace-health-e2ee-dedupe-backfilled:${user.id}`;
+      if (localStorage.getItem(dedupeBackfillKey) !== "1") {
+        try {
+          const backfill = await backfillHealthE2eeDedupeHashes();
+          if (backfill.skipped === 0) localStorage.setItem(dedupeBackfillKey, "1");
+        } catch (error) {
+          console.warn("health E2EE dedupe backfill deferred", error);
+        }
       }
 
       const response = await fetchEncrypted({ data: { limit: 10000 } });

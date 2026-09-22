@@ -1,8 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
-import {
-  encryptHealthPayload,
-  HEALTH_E2EE_CURRENT_KEY_VERSION,
-} from "@/lib/health.crypto";
+import { encryptHealthPayload, HEALTH_E2EE_CURRENT_KEY_VERSION } from "@/lib/health.crypto";
+import { generateHealthDedupeHash } from "@/lib/health.dedupe";
 
 type LegacyHealthSample = {
   id: string;
@@ -18,10 +16,7 @@ type LegacyHealthSample = {
 
 const CHUNK_SIZE = 100;
 
-export async function migrateLegacyHealthSamplesToE2ee(): Promise<{
-  migrated: number;
-  deleted: number;
-}> {
+export async function migrateLegacyHealthSamplesToE2ee(): Promise<{ migrated: number; deleted: number }> {
   const { data: userResult, error: userError } = await supabase.auth.getUser();
   if (userError || !userResult.user) throw new Error("Authenticated user required");
 
@@ -30,7 +25,6 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{
     .select("id,ts,type,value,source,source_id,external_id,metadata,created_at")
     .eq("user_id", userResult.user.id)
     .order("created_at", { ascending: true });
-
   if (readError) throw new Error("Unable to read legacy health data");
 
   const legacyRows = (rows ?? []) as LegacyHealthSample[];
@@ -41,7 +35,7 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{
     const records = [];
 
     for (const row of chunk) {
-      const encrypted = await encryptHealthPayload({
+      const payload = {
         id: row.id,
         ts: row.ts,
         type: row.type,
@@ -51,25 +45,26 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{
         external_id: row.external_id,
         metadata: row.metadata,
         created_at: row.created_at,
-      }, HEALTH_E2EE_CURRENT_KEY_VERSION);
-
+      };
+      const encrypted = await encryptHealthPayload(payload, HEALTH_E2EE_CURRENT_KEY_VERSION);
+      const stableExternalId = row.external_id || row.source_id || row.id;
+      const dedupeHash = await generateHealthDedupeHash({
+        type: row.type,
+        date: row.ts,
+        source: row.source,
+        external_id: stableExternalId,
+      });
       records.push({
         legacy_id: row.id,
         ciphertext: encrypted.ciphertext,
         nonce: encrypted.nonce,
         key_version: encrypted.key_version,
+        dedupe_hash: dedupeHash,
       });
     }
 
-    const { data: inserted, error: migrationError } = await supabase.rpc(
-      "migrate_health_legacy_chunk",
-      { p_records: records },
-    );
-
-    if (migrationError) {
-      throw new Error("Legacy health migration aborted before plaintext deletion");
-    }
-
+    const { data: inserted, error: migrationError } = await supabase.rpc("migrate_health_legacy_chunk", { p_records: records });
+    if (migrationError) throw new Error("Legacy health migration aborted before plaintext deletion");
     migrated += Number(inserted ?? 0);
   }
 
@@ -77,19 +72,12 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{
     .from("health_samples_e2ee")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userResult.user.id);
-
   if (verifyError || (encryptedCount ?? 0) < legacyRows.length) {
     throw new Error("Encrypted migration is incomplete; plaintext was not deleted");
   }
 
-  const { error: deleteError } = await supabase
-    .from("health_samples")
-    .delete()
-    .eq("user_id", userResult.user.id);
-
-  if (deleteError) {
-    throw new Error("Encrypted copy exists, but legacy plaintext deletion failed");
-  }
+  const { error: deleteError } = await supabase.from("health_samples").delete().eq("user_id", userResult.user.id);
+  if (deleteError) throw new Error("Encrypted copy exists, but legacy plaintext deletion failed");
 
   return { migrated, deleted: legacyRows.length };
 }
