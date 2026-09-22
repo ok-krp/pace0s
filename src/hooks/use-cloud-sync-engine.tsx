@@ -18,6 +18,7 @@ const DEVICE_ID = getDeviceId();
 type SyncMeta = Record<string, string>;
 export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
 type SyncRow = { key: string; value: unknown; updated_at: string; updated_by: string | null };
+type ServerWriteResult = { accepted: boolean; updated_at: string | null };
 type QueueItem = { key: string; value: unknown; updatedAt: string; mutationId?: string };
 type LegacyQueue = string[] | QueueItem[];
 type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
@@ -163,47 +164,33 @@ export function useCloudSyncEngineInternal() {
     let cancelled = false;
     const allowed = () => { try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; } };
 
-    const fallbackWrite = async (item: QueueItem): Promise<boolean> => {
-      const { key, value, updatedAt } = item;
-      const selectCurrent = async () => {
-        const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", key).limit(1);
+    const writeItem = async (item: QueueItem): Promise<boolean> => {
+      const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
+      const result = await rpc("upsert_user_state_if_newer", {
+        p_user_id: user.id,
+        p_key: item.key,
+        p_value: item.value,
+        // Kept for RPC compatibility. Ordering is server-authoritative.
+        p_updated_at: item.updatedAt,
+        p_updated_by: DEVICE_ID,
+      });
+      if (result?.error) throw result.error;
+      const payload = result?.data as ServerWriteResult | null;
+      if (!payload || typeof payload.accepted !== "boolean" || typeof payload.updated_at !== "string") {
+        throw new Error("invalid cloud sync write response");
+      }
+      if (!payload.accepted) {
+        const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", item.key).limit(1);
         if (error) throw error;
-        return (data?.[0] as SyncRow | undefined) ?? null;
-      };
-      let current = await selectCurrent();
-      if (current && Date.parse(current.updated_at) >= Date.parse(updatedAt)) {
-        applyRemoteAndRemember(key, current.value, current.updated_at, current.updated_by); markVersion(key, current.updated_at); return false;
+        const row = data?.[0] as SyncRow | undefined;
+        if (!row) throw new Error("cloud sync row disappeared");
+        applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
+        markVersion(row.key, row.updated_at);
+        return false;
       }
-      /*
-       * Legacy direct PATCH path intentionally disabled.
-       * It could race with the newest-wins RPC and surface Supabase 409 conflicts.
-       * The RPC is now the single mutation path for existing rows.
-       */
-      if (current) {
-        const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
-        const result = await rpc("upsert_user_state_if_newer", {
-          p_user_id: user.id,
-          p_key: key,
-          p_value: value,
-          p_updated_at: updatedAt,
-          p_updated_by: DEVICE_ID,
-        });
-        if (result?.error) throw result.error;
-        if (result?.data === true) return true;
-        current = await selectCurrent();
-        if (current) {
-          applyRemoteAndRemember(key, current.value, current.updated_at, current.updated_by);
-          markVersion(key, current.updated_at);
-          return false;
-        }
-      }
-      const { error: insertError } = await supabase.from("user_state").insert({ user_id: user.id, key, value, updated_at: updatedAt, updated_by: DEVICE_ID } as never);
-      if (!insertError) return true;
-      if (!/duplicate|unique/i.test(insertError.message ?? "")) throw insertError;
-      current = await selectCurrent();
-      if (!current) throw insertError;
-      if (Date.parse(current.updated_at) >= Date.parse(updatedAt)) { applyRemoteAndRemember(key, current.value, current.updated_at, current.updated_by); markVersion(key, current.updated_at); return false; }
-      throw insertError;
+      markVersion(item.key, payload.updated_at);
+      localStorage.setItem("pace.__last_sync_at", payload.updated_at);
+      return true;
     };
 
     const pushItem = async (item: QueueItem) => {
@@ -213,23 +200,15 @@ export function useCloudSyncEngineInternal() {
         if (cancelled || !allowed() || !navigator.onLine) return;
         const latest = getQueued(item.key);
         if (!latest || latest.updatedAt !== item.updatedAt) return;
-        let accepted: boolean | null = null;
+        let accepted = false;
         try {
-          const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
-          const result = await rpc("upsert_user_state_if_newer", { p_user_id: user.id, p_key: latest.key, p_value: latest.value, p_updated_at: latest.updatedAt, p_updated_by: DEVICE_ID });
-          if (result?.error) throw result.error;
-          accepted = result?.data === true ? true : result?.data === false ? false : null;
+          accepted = await writeItem(latest);
         } catch {
-          try { accepted = await fallbackWrite(latest); } catch { throw new Error("cloud write failed"); }
+          throw new Error("cloud write failed");
         }
         if (cancelled) return;
-        if (accepted === false) {
-          const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", latest.key).limit(1);
-          if (error) throw error;
-          const row = data?.[0] as SyncRow | undefined;
-          if (row) { applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by); markVersion(row.key, row.updated_at); }
-        } else {
-          markVersion(latest.key, latest.updatedAt); localStorage.setItem("pace.__last_sync_at", latest.updatedAt);
+        if (accepted) {
+          localStorage.setItem("pace.__last_sync_at", readMeta()[latest.key] ?? latest.updatedAt);
         }
         unqueueIfMutation(latest.key, latest.updatedAt);
         setStatus("ok");
