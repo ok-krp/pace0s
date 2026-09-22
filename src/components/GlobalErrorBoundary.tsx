@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, RefreshCcw, Home } from "lucide-react";
 import { getSafeClientErrorMessage } from "@/lib/client-error";
+import { ErrorReportButton } from "@/components/ErrorReportButton";
 
 type Props = { children: ReactNode };
 type State = { error: Error | null };
