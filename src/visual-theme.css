@@ -13,7 +13,7 @@
   --popover: #080808;
   --popover-foreground: oklch(0.96 0 0);
 
-  --primary: oklch(0.82 0.14 195);
+  --primary: oklch(0.82 0 0);
   --primary-foreground: #030303;
   --secondary: oklch(0.12 0 0);
   --secondary-foreground: oklch(0.92 0 0);
@@ -28,12 +28,12 @@
 
   --border: rgb(255 255 255 / 0.05);
   --input: rgb(255 255 255 / 0.04);
-  --ring: oklch(0.82 0.14 195);
-  --chart-1: oklch(0.82 0.14 195);
-  --chart-2: oklch(0.78 0.16 155);
-  --chart-3: oklch(0.78 0.15 82);
-  --chart-4: oklch(0.68 0.18 25);
-  --chart-5: oklch(0.70 0.13 285);
+  --ring: oklch(0.82 0 0);
+  --chart-1: oklch(0.82 0 0);
+  --chart-2: oklch(0.68 0 0);
+  --chart-3: oklch(0.58 0 0);
+  --chart-4: oklch(0.48 0 0);
+  --chart-5: oklch(0.38 0 0);
 
   --sidebar: #030303;
   --sidebar-foreground: oklch(0.92 0 0);
@@ -50,21 +50,21 @@
   --glass-blur: 0px;
   --glass-blur-thin: 0px;
   --glass-saturate: 100%;
-  --glass-radius: 0px;
-  --glass-radius-sm: 0px;
+  --glass-radius: 12px;
+  --glass-radius-sm: 8px;
   --glass-edge: 0.05;
   --glass-sheen: 0;
   --glass-elev-1: none;
   --glass-elev-2: none;
   --glass-elev-3: none;
   --wallpaper: #030303;
-  --radius: 0px;
-  --radius-sm: 0px;
-  --radius-md: 0px;
-  --radius-lg: 0px;
-  --radius-xl: 0px;
-  --radius-2xl: 0px;
-  --radius-3xl: 0px;
+  --radius: 12px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 14px;
+  --radius-3xl: 16px;
 }
 
 [data-visual-theme="signal"] body,
@@ -121,7 +121,7 @@
   background-color: rgb(255 255 255 / 0.02) !important;
 }
 
-/* Geometry is deliberately sharp in Signal. */
+/* Signal keeps subtle rounding: structured SaaS geometry without pill-shaped surfaces. */
 [data-visual-theme="signal"] *,
 [data-visual-theme="signal"] *::before,
 [data-visual-theme="signal"] *::after {
@@ -152,7 +152,7 @@
 [data-visual-theme="signal"] nav a[data-active="true"] {
   background: rgb(255 255 255 / 0.04) !important;
   color: #fff !important;
-  border-left-color: oklch(0.82 0.14 195) !important;
+  border-left-color: rgb(255 255 255 / 0.28) !important;
 }
 
 /* Executive typography: large, light data; quiet labels. */
@@ -221,7 +221,7 @@
 [data-visual-theme="signal"] input:focus-visible,
 [data-visual-theme="signal"] textarea:focus-visible,
 [data-visual-theme="signal"] select:focus-visible {
-  outline: 1px solid var(--ring) !important;
+  outline: 1px solid rgb(255 255 255 / 0.28) !important;
   outline-offset: -1px !important;
   box-shadow: none !important;
 }
