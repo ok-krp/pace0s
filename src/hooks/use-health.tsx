@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { listEncryptedHealthSamples } from "@/lib/health.functions";
 import { decryptHealthPayload } from "@/lib/health.crypto";
 import { migrateLegacyHealthSamplesToE2ee } from "@/lib/health.migration";
+import { backfillHealthE2eeDedupeHashes } from "@/lib/health.dedupe.backfill";
 import { useAuth } from "@/hooks/use-auth";
 
 export type HealthToday = {
@@ -132,6 +133,16 @@ export function useHealthToday() {
           } catch {
             // Legacy migration is best-effort. Continue loading already-encrypted health data.
           }
+        }
+      }
+
+      const dedupeBackfillKey = `pace-health-e2ee-dedupe-backfilled:${user.id}`;
+      if (localStorage.getItem(dedupeBackfillKey) !== "1") {
+        try {
+          const backfill = await backfillHealthE2eeDedupeHashes();
+          if (backfill.skipped === 0) localStorage.setItem(dedupeBackfillKey, "1");
+        } catch (error) {
+          console.warn("health E2EE dedupe backfill deferred", error);
         }
       }
 
