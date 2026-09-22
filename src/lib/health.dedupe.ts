@@ -1,17 +1,8 @@
 import {
   encryptHealthPayload,
   getCurrentHealthKeyVersion,
-  getHealthEncryptionKey,
   getHealthDedupeRootKey,
 } from "@/lib/health.crypto";
-
-const HEALTH_DEDUPE_HKDF_SALT = new TextEncoder().encode(
-  "paceos-health-e2ee-dedupe-v1",
-);
-
-const HEALTH_DEDUPE_HKDF_INFO = new TextEncoder().encode(
-  "paceos/health/dedupe-hmac-sha256/v1",
-);
 
 export type HealthDedupeIdentity = {
   type: string;
@@ -68,7 +59,6 @@ export async function generateHealthDedupeHash(
     );
   }
 
-  const dedupeKey = dedupeRootKey;
   const canonicalIdentity = canonicalizeHealthDedupeIdentity(identity);
   const mac = await crypto.subtle.sign(
     "HMAC",
@@ -93,7 +83,6 @@ export async function encryptHealthSampleForUpload(
   }
 
   const keyVersion = await getCurrentHealthKeyVersion();
-  const healthMasterKey = await getHealthEncryptionKey(keyVersion);
   const dedupeRootKey = await getHealthDedupeRootKey();
 
   const dedupeHash = await generateHealthDedupeHash(
