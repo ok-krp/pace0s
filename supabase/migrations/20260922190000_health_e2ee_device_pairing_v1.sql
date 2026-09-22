@@ -393,3 +393,46 @@ $$;
 
 revoke all on function public.create_pairing_envelope(uuid,uuid,uuid,text,integer,text) from public;
 grant execute on function public.create_pairing_envelope(uuid,uuid,uuid,text,integer,text) to authenticated;
+
+create or replace function public.get_pairing_session(
+  p_session_id uuid
+) returns table (
+  id uuid,
+  initiator_device_id uuid,
+  recipient_device_id uuid,
+  protocol_version text,
+  status text,
+  challenge text,
+  initiator_ephemeral_public_key jsonb,
+  recipient_ephemeral_public_key jsonb,
+  expires_at timestamptz
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  return query
+  select
+    s.id,
+    s.initiator_device_id,
+    s.recipient_device_id,
+    s.protocol_version,
+    s.status,
+    s.challenge,
+    s.initiator_ephemeral_public_key,
+    s.recipient_ephemeral_public_key,
+    s.expires_at
+  from public.health_e2ee_pairing_sessions s
+  where s.id = p_session_id
+    and s.user_id = auth.uid()
+    and s.status in ('pending','joined','confirmed');
+end;
+$$;
+
+revoke all on function public.get_pairing_session(uuid) from public;
+grant execute on function public.get_pairing_session(uuid) to authenticated;
