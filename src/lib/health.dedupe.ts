@@ -47,32 +47,6 @@ function canonicalizeHealthDedupeIdentity(
   ]);
 }
 
-async function deriveHealthDedupeKey(
-  dedupeRootKey: CryptoKey,
-): Promise<CryptoKey> {
-  const rawDedupeRootKey = await crypto.subtle.exportKey("raw", dedupeRootKey);
-  const hkdfKey = await crypto.subtle.importKey(
-    "raw",
-    rawDedupeRootKey,
-    "HKDF",
-    false,
-    ["deriveKey"],
-  );
-
-  return crypto.subtle.deriveKey(
-    {
-      name: "HKDF",
-      hash: "SHA-256",
-      salt: HEALTH_DEDUPE_HKDF_SALT,
-      info: HEALTH_DEDUPE_HKDF_INFO,
-    },
-    hkdfKey,
-    { name: "HMAC", hash: "SHA-256", length: 256 },
-    false,
-    ["sign"],
-  );
-}
-
 function toHex(value: ArrayBuffer): string {
   return Array.from(new Uint8Array(value), (byte) =>
     byte.toString(16).padStart(2, "0"),
@@ -94,7 +68,7 @@ export async function generateHealthDedupeHash(
     );
   }
 
-  const dedupeKey = await deriveHealthDedupeKey(dedupeRootKey);
+  const dedupeKey = dedupeRootKey;
   const canonicalIdentity = canonicalizeHealthDedupeIdentity(identity);
   const mac = await crypto.subtle.sign(
     "HMAC",
