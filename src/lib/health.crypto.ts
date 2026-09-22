@@ -42,7 +42,7 @@ function toBase64(bytes: Uint8Array): string {
   for (const byte of bytes) value += String.fromCharCode(byte);
   return btoa(value);
 }
-function fromBase64(value: string): Uint8Array {
+function fromBase64(value: string): Uint8Array<ArrayBuffer> {
   const raw = atob(value);
   return Uint8Array.from(raw, (char) => char.charCodeAt(0));
 }
