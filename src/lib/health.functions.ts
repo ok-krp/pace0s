@@ -54,6 +54,13 @@ const envelopeSchema = z.discriminatedUnion("algorithm", [
     algorithm: z.literal("ECDH-P256/AES-256-KW"),
     key_version: z.number().int().positive().max(100),
   }),
+  z.object({
+    device_id: z.string().uuid(), sender_device_id: z.string().uuid(),
+    envelope: z.string().min(1).max(2_000_000),
+    nonce: z.null().default(null),
+    algorithm: z.literal("ECDH-P256/AES-256-KW/KEY-BUNDLE-V1"),
+    key_version: z.number().int().positive().max(100),
+  }),
 ]);
 
 export const insertEncryptedHealthSamples = createServerFn({ method: "POST" })
