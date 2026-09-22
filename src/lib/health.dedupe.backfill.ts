@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import {
   decryptHealthPayload,
-  getHealthEncryptionKey,
+  getHealthDedupeRootKey,
 } from "@/lib/health.crypto";
 import { generateHealthDedupeHash } from "@/lib/health.dedupe";
 
@@ -94,7 +94,7 @@ export async function backfillHealthE2eeDedupeHashes(): Promise<{
           source,
           external_id: stableExternalId,
         },
-        await getHealthEncryptionKey(record.key_version),
+        await getHealthDedupeRootKey(),
       );
 
       updates.push({ id: record.id, dedupe_hash: dedupeHash });
