@@ -31,6 +31,16 @@ type ProgressionTarget = { exerciseId: string; targetSets: number; targetReps: n
 const MUSCLES = ["Pectoraux", "Dos", "Épaules", "Biceps", "Triceps", "Jambes", "Quadriceps", "Ischios", "Fessiers", "Mollets", "Abdos", "Cardio", "Autre"];
 const DAYS_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
+function getWorkingSets(sets: SessionSet[]) {
+  const done = sets.filter((set) => set.done);
+  if (done.length < 3) return done;
+  const maxWeight = Math.max(...done.map((set) => set.weight));
+  if (maxWeight <= 0) return done;
+  const last = done[done.length - 1];
+  const isDropSet = last.weight > 0 && last.weight <= maxWeight * 0.85 && done.length >= 4;
+  return isDropSet ? done.slice(0, -1) : done;
+}
+
 function SportPage() {
   const [exs, setExs] = useLocalState<Exercise[]>("pace.sport.exercises", []);
   const [progs, setProgs] = useLocalState<Program[]>("pace.sport.programs", []);
