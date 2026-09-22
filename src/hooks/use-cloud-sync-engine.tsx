@@ -360,9 +360,20 @@ export function useCloudSyncEngineInternal() {
   return { status, queuedCount: readQueue().length, conflicts, resolveConflict };
 }
 
-const SyncStatusContext = createContext<SyncStatus>("idle");
+type SyncContextValue = {
+  status: SyncStatus;
+  queuedCount: number;
+  conflicts: SyncConflict[];
+  resolveConflict: (conflictId: string, choice: "local" | "remote" | "merge") => Promise<void>;
+};
+const SyncStatusContext = createContext<SyncContextValue>({
+  status: "idle",
+  queuedCount: 0,
+  conflicts: [],
+  resolveConflict: async () => {},
+});
 export function CloudSyncProvider({ children }: { children: ReactNode }) {
-  const { status } = useCloudSyncEngineInternal();
-  return <SyncStatusContext.Provider value={status}>{children}</SyncStatusContext.Provider>;
+  const value = useCloudSyncEngineInternal();
+  return <SyncStatusContext.Provider value={value}>{children}</SyncStatusContext.Provider>;
 }
-export function useCloudSyncStatus(): SyncStatus { return useContext(SyncStatusContext); }
+export function useCloudSyncStatus(): SyncContextValue { return useContext(SyncStatusContext); }
