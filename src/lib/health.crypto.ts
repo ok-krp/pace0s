@@ -109,7 +109,7 @@ export async function encryptHealthPayload(payload: unknown, keyVersion = await 
     ciphertext: toBase64(new Uint8Array(ciphertext)),
     nonce: toBase64(nonce),
     algorithm: HEALTH_E2EE_ALGORITHM,
-    key_version: keyVersion,
+    key_version: resolvedVersion,
   };
 }
 
@@ -149,7 +149,7 @@ export async function wrapHealthMasterKeyForDevice(
   const masterKey = await getHealthEncryptionKey(keyVersion);
   const wrappingKey = await deriveDeviceWrappingKey(peerPublicKey);
   const wrapped = await crypto.subtle.wrapKey("raw", masterKey, wrappingKey, "AES-KW");
-  return { envelope: toBase64(new Uint8Array(wrapped)), key_version: keyVersion, algorithm: HEALTH_E2EE_KEY_WRAP_ALGORITHM };
+  return { envelope: toBase64(new Uint8Array(wrapped)), key_version: resolvedVersion, algorithm: HEALTH_E2EE_KEY_WRAP_ALGORITHM };
 }
 
 export async function unwrapHealthMasterKeyFromDevice(
@@ -212,7 +212,7 @@ export async function createHealthRecoveryEnvelope(keyVersion = await getCurrent
   const masterKey = await getHealthEncryptionKey(keyVersion);
   const rawMasterKey = await crypto.subtle.exportKey("raw", masterKey);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const aad = new TextEncoder().encode(`pace-health-recovery-v1:${keyVersion}`);
+  const aad = new TextEncoder().encode(`pace-health-recovery-v1:${resolvedVersion}`);
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: nonce, additionalData: new Uint8Array([...salt, ...aad]) },
     recoveryKey, rawMasterKey,
@@ -222,7 +222,7 @@ export async function createHealthRecoveryEnvelope(keyVersion = await getCurrent
     envelope: `${toBase64(salt)}.${toBase64(new Uint8Array(encrypted))}`,
     nonce: toBase64(nonce),
     algorithm: HEALTH_E2EE_RECOVERY_ALGORITHM,
-    key_version: keyVersion,
+    key_version: resolvedVersion,
   };
 }
 
