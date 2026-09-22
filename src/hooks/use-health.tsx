@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listEncryptedHealthSamples } from "@/lib/health.functions";
 import { decryptHealthPayload } from "@/lib/health.crypto";
+import { migrateLegacyHealthSamplesToE2ee } from "@/lib/health.migration";
 import { useAuth } from "@/hooks/use-auth";
 
 export type HealthToday = {
@@ -27,6 +28,8 @@ type HealthSample = {
 type EncryptedHealthRecord = {
   ciphertext: string;
   nonce: string;
+  algorithm: "AES-256-GCM";
+  key_version: number;
 };
 
 const SAMPLE_TYPES = new Set([
@@ -103,13 +106,21 @@ export function useHealthToday() {
     setLoading(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      const migrationKey = `pace-health-e2ee-migrated:${user.id}`;
+      if (localStorage.getItem(migrationKey) !== "1") {
+        const migration = await migrateLegacyHealthSamplesToE2ee();
+        localStorage.setItem(migrationKey, "1");
+        if (migration.deleted > 0) window.dispatchEvent(new Event("pace.health.changed"));
+      }
+
       const response = await fetchEncrypted({ data: { limit: 10000 } });
       const records = response.records as EncryptedHealthRecord[];
       const samples: HealthSample[] = [];
 
       for (const record of records) {
         try {
-          const payload = await decryptHealthPayload(record.ciphertext, record.nonce);
+          if (record.algorithm !== "AES-256-GCM" || !Number.isInteger(record.key_version) || record.key_version < 1) continue;
+          const payload = await decryptHealthPayload(record.ciphertext, record.nonce, record.key_version);
           if (
             payload &&
             typeof payload === "object" &&
