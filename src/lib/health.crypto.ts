@@ -19,7 +19,7 @@ export const HEALTH_E2EE_RECOVERY_PBKDF2_ITERATIONS = 600_000;
 
 function keyId(version: number): string {
   if (!Number.isInteger(version) || version < 1) throw new Error("Invalid health key version");
-  return `\${KEY_PREFIX}\${version}`;
+  return `${KEY_PREFIX}${version}`;
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -95,9 +95,26 @@ export async function getHealthEncryptionKey(version?: number): Promise<CryptoKe
 async function requireHealthEncryptionKey(version?: number): Promise<CryptoKey> {
   const resolvedVersion = version ?? await getCurrentHealthKeyVersion();
   const key = await getStoredKey(resolvedVersion);
-  if (!key) {
-    throw new Error(`Health encryption key v\${resolvedVersion} is unavailable on this device`);
+  if (!key) throw new Error(`Health encryption key v${resolvedVersion} is unavailable on this device`);
+  return key;
+}
+
+export async function importHealthMasterKey(
+  version: number,
+  rawKey: ArrayBuffer,
+): Promise<CryptoKey> {
+  if (!Number.isInteger(version) || version < 1) {
+    throw new Error("Invalid health key version");
   }
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    rawKey,
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"],
+  );
+  await storeKey(version, key);
   return key;
 }
 
@@ -105,9 +122,19 @@ export async function getHealthDedupeRootKey(): Promise<CryptoKey> {
   const existing = await readStore<CryptoKey>(DEDUPE_ROOT_KEY_ID);
   if (existing) return existing;
 
+  // Backward-compatible initialization: the first Dedupe Root Key is exactly
+  // the v1 HKDF output that generated the existing blind indexes. This makes
+  // the root stable across future Health Master Key rotations without
+  // invalidating the already-populated dedupe_hash values.
   const masterKey = await requireHealthEncryptionKey(1);
   const rawMasterKey = await crypto.subtle.exportKey("raw", masterKey);
-  const hkdfKey = await crypto.subtle.importKey("raw", rawMasterKey, "HKDF", false, ["deriveKey"]);
+  const hkdfKey = await crypto.subtle.importKey(
+    "raw",
+    rawMasterKey,
+    "HKDF",
+    false,
+    ["deriveKey"],
+  );
   const rootKey = await crypto.subtle.deriveKey(
     {
       name: "HKDF",
@@ -126,7 +153,11 @@ export async function getHealthDedupeRootKey(): Promise<CryptoKey> {
 
 export async function importHealthDedupeRootKey(rawKey: ArrayBuffer): Promise<CryptoKey> {
   const key = await crypto.subtle.importKey(
-    "raw", rawKey, { name: "HMAC", hash: "SHA-256" }, true, ["sign"],
+    "raw",
+    rawKey,
+    { name: "HMAC", hash: "SHA-256" },
+    true,
+    ["sign"],
   );
   await writeStore(DEDUPE_ROOT_KEY_ID, key);
   return key;
@@ -162,7 +193,8 @@ export async function encryptHealthPayload(payload: unknown, keyVersion?: number
 }
 
 export async function decryptHealthPayload(ciphertext: string, nonce: string, keyVersion?: number): Promise<unknown> {
-  const key = await requireHealthEncryptionKey(keyVersion);
+  const resolvedVersion = keyVersion ?? await getCurrentHealthKeyVersion();
+  const key = await requireHealthEncryptionKey(resolvedVersion);
   const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64(nonce) }, key, fromBase64(ciphertext));
   return JSON.parse(new TextDecoder().decode(plaintext));
 }
@@ -184,6 +216,92 @@ async function deriveDeviceWrappingKey(peerPublicKey: JsonWebKey): Promise<Crypt
     false,
     ["wrapKey", "unwrapKey"],
   );
+}
+
+export type HealthKeyBundleEnvelope = {
+  version: 1;
+  health_master_key: {
+    wrapped_key: string;
+    key_version: number;
+  };
+  dedupe_root_key: {
+    wrapped_key: string;
+  };
+};
+
+export async function wrapHealthKeyBundleForDevice(
+  peerPublicKey: JsonWebKey,
+  keyVersion?: number,
+): Promise<HealthKeyBundleEnvelope> {
+  const resolvedVersion = keyVersion ?? await getCurrentHealthKeyVersion();
+  const masterKey = await getHealthEncryptionKey(resolvedVersion);
+  const dedupeRootKey = await getHealthDedupeRootKey();
+  const wrappingKey = await deriveDeviceWrappingKey(peerPublicKey);
+
+  const [wrappedMaster, wrappedDedupe] = await Promise.all([
+    crypto.subtle.wrapKey("raw", masterKey, wrappingKey, "AES-KW"),
+    crypto.subtle.wrapKey("raw", dedupeRootKey, wrappingKey, "AES-KW"),
+  ]);
+
+  return {
+    version: 1,
+    health_master_key: {
+      wrapped_key: toBase64(new Uint8Array(wrappedMaster)),
+      key_version: resolvedVersion,
+    },
+    dedupe_root_key: {
+      wrapped_key: toBase64(new Uint8Array(wrappedDedupe)),
+    },
+  };
+}
+
+export async function unwrapHealthKeyBundleFromDevice(
+  envelope: HealthKeyBundleEnvelope,
+  senderPublicKey: JsonWebKey,
+): Promise<CryptoKey> {
+  if (
+    envelope.version !== 1 ||
+    envelope.health_master_key.key_version < 1 ||
+    !envelope.health_master_key.wrapped_key ||
+    !envelope.dedupe_root_key.wrapped_key
+  ) {
+    throw new Error("Invalid health key bundle envelope");
+  }
+
+  const wrappingKey = await deriveDeviceWrappingKey(senderPublicKey);
+  const [masterKey, dedupeRootKey] = await Promise.all([
+    crypto.subtle.unwrapKey(
+      "raw",
+      fromBase64(envelope.health_master_key.wrapped_key),
+      wrappingKey,
+      "AES-KW",
+      { name: "AES-GCM", length: 256 },
+      true,
+      ["encrypt", "decrypt"],
+    ),
+    crypto.subtle.unwrapKey(
+      "raw",
+      fromBase64(envelope.dedupe_root_key.wrapped_key),
+      wrappingKey,
+      "AES-KW",
+      { name: "HMAC", hash: "SHA-256" },
+      true,
+      ["sign"],
+    ),
+  ]);
+
+  await importHealthMasterKey(
+    envelope.health_master_key.key_version,
+    await crypto.subtle.exportKey("raw", masterKey),
+  );
+  await importHealthDedupeRootKey(
+    await crypto.subtle.exportKey("raw", dedupeRootKey),
+  );
+  await setCurrentHealthKeyVersion(
+    Math.max(await getCurrentHealthKeyVersion(), envelope.health_master_key.key_version),
+  );
+
+  return masterKey;
 }
 
 export async function wrapHealthMasterKeyForDevice(peerPublicKey: JsonWebKey, keyVersion?: number) {
@@ -258,10 +376,10 @@ export async function createHealthRecoveryEnvelope(keyVersion?: number) {
   const mnemonic = generateMnemonic(128);
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const recoveryKey = await deriveRecoveryKey(mnemonic, salt as Uint8Array<ArrayBuffer>);
-  const masterKey = await requireHealthEncryptionKey(resolvedVersion);
+  const masterKey = await getHealthEncryptionKey(resolvedVersion);
   const rawMasterKey = await crypto.subtle.exportKey("raw", masterKey);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
-  const aad = new TextEncoder().encode(`pace-health-recovery-v1:\${resolvedVersion}`);
+  const aad = new TextEncoder().encode(`pace-health-recovery-v1:${resolvedVersion}`);
   const encrypted = await crypto.subtle.encrypt(
     { name: "AES-GCM", iv: nonce, additionalData: new Uint8Array([...salt, ...aad]) },
     recoveryKey, rawMasterKey,
@@ -285,7 +403,7 @@ export async function unwrapHealthMasterKeyFromRecovery(
   if (!saltB64 || !ciphertextB64) throw new Error("Invalid recovery envelope");
   const salt = fromBase64(saltB64);
   const recoveryKey = await deriveRecoveryKey(mnemonic.trim(), salt as Uint8Array<ArrayBuffer>);
-  const aad = new TextEncoder().encode(`pace-health-recovery-v1:\${keyVersion}`);
+  const aad = new TextEncoder().encode(`pace-health-recovery-v1:${keyVersion}`);
   const rawMasterKey = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: fromBase64(nonce), additionalData: new Uint8Array([...salt, ...aad]) },
     recoveryKey, fromBase64(ciphertextB64),
