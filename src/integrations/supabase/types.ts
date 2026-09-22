@@ -841,6 +841,7 @@ export type Database = {
           id: string
           key_version: number
           nonce: string
+          dedupe_hash: string | null
           user_id: string
         }
         Insert: {
@@ -850,6 +851,7 @@ export type Database = {
           id?: string
           key_version?: number
           nonce: string
+          dedupe_hash?: string | null
           user_id: string
         }
         Update: {
@@ -859,6 +861,7 @@ export type Database = {
           id?: string
           key_version?: number
           nonce?: string
+          dedupe_hash?: string | null
           user_id?: string
         }
         Relationships: []
@@ -1887,6 +1890,10 @@ export type Database = {
       rotate_health_e2ee_key: {
         Args: { p_new_key_version: number; p_revoked_device_id?: string }
         Returns: undefined
+      }
+      backfill_health_e2ee_dedupe_hashes: {
+        Args: { p_updates: Json }
+        Returns: number
       }
       sport_delete_exercise: { Args: { p_id: string }; Returns: boolean }
       sport_delete_program: { Args: { p_id: string }; Returns: boolean }
