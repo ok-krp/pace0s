@@ -1,4 +1,5 @@
-import { insertHealthSamples } from "@/lib/health.functions";
+import { insertEncryptedHealthSamples } from "@/lib/health.functions";
+import { encryptHealthSampleForUpload } from "@/lib/health.dedupe";
 
 export type HealthConnectPayload = {
   source: string;
@@ -60,7 +61,11 @@ export function initHealthConnectBridge(onSync?: (result: { inserted: number; so
       for (let i = 0; i < samples.length; i += 500) {
         const chunk = samples.slice(i, i + 500);
         if (!chunk.length) continue;
-        const result = await insertHealthSamples({ data: { samples: chunk } });
+        const encrypted = [];
+        for (const sample of chunk) {
+          encrypted.push(await encryptHealthSampleForUpload(sample));
+        }
+        const result = await insertEncryptedHealthSamples({ data: { records: encrypted } });
         inserted += result.inserted;
       }
 
