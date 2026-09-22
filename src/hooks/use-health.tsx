@@ -107,10 +107,32 @@ export function useHealthToday() {
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const migrationKey = `pace-health-e2ee-migrated:${user.id}`;
+      const migrationAttemptsKey = `pace-health-e2ee-migration-attempts:${user.id}`;
       if (localStorage.getItem(migrationKey) !== "1") {
-        const migration = await migrateLegacyHealthSamplesToE2ee();
-        localStorage.setItem(migrationKey, "1");
-        if (migration.deleted > 0) window.dispatchEvent(new Event("pace.health.changed"));
+        let migrationAttempts = 0;
+        try {
+          migrationAttempts = Number(sessionStorage.getItem(migrationAttemptsKey) ?? "0");
+        } catch {
+          migrationAttempts = 0;
+        }
+
+        if (migrationAttempts < 2) {
+          try {
+            try {
+              sessionStorage.setItem(migrationAttemptsKey, String(migrationAttempts + 1));
+            } catch {
+              // Session storage is best-effort; migration failure must never block E2EE reads.
+            }
+
+            const migration = await migrateLegacyHealthSamplesToE2ee();
+            localStorage.setItem(migrationKey, "1");
+            if (migration.deleted > 0) {
+              window.dispatchEvent(new Event("pace.health.changed"));
+            }
+          } catch {
+            // Legacy migration is best-effort. Continue loading already-encrypted health data.
+          }
+        }
       }
 
       const response = await fetchEncrypted({ data: { limit: 10000 } });
