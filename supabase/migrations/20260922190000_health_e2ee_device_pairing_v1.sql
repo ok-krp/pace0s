@@ -46,11 +46,6 @@ create unique index if not exists health_e2ee_envelopes_pairing_version_uidx
   on public.health_e2ee_key_envelopes(pairing_session_id, device_id, key_version)
   where pairing_session_id is not null;
 
-revoke all on function public.create_pairing_session(uuid,text,text,jsonb,integer) from public;
-revoke all on function public.join_pairing_session(uuid,text,uuid,jsonb) from public;
-revoke all on function public.confirm_pairing_session(uuid,uuid) from public;
-revoke all on function public.complete_pairing_session(uuid,uuid) from public;
-
 create or replace function public.create_pairing_session(
   p_initiator_device_id uuid,
   p_secret_hash text,
@@ -118,6 +113,7 @@ begin
 end;
 $$;
 
+revoke all on function public.create_pairing_session(uuid,text,text,jsonb,integer) from public;
 grant execute on function public.create_pairing_session(uuid,text,text,jsonb,integer) to authenticated;
 
 create or replace function public.join_pairing_session(
@@ -213,6 +209,7 @@ begin
 end;
 $$;
 
+revoke all on function public.join_pairing_session(uuid,text,uuid,jsonb) from public;
 grant execute on function public.join_pairing_session(uuid,text,uuid,jsonb) to authenticated;
 
 create or replace function public.confirm_pairing_session(
@@ -257,6 +254,7 @@ begin
 end;
 $$;
 
+revoke all on function public.confirm_pairing_session(uuid,uuid) from public;
 grant execute on function public.confirm_pairing_session(uuid,uuid) to authenticated;
 
 create or replace function public.complete_pairing_session(
@@ -302,6 +300,7 @@ begin
 end;
 $$;
 
+revoke all on function public.complete_pairing_session(uuid,uuid) from public;
 grant execute on function public.complete_pairing_session(uuid,uuid) to authenticated;
 
 create or replace function public.create_pairing_envelope(
