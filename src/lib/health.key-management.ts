@@ -56,7 +56,8 @@ export async function acceptHealthDevicePairing(deviceId: string): Promise<numbe
   const { envelopes } = await listHealthE2eeEnvelopes({ data: { device_id: deviceId } });
   if (envelopes.length === 0) throw new Error("No E2EE pairing envelope available for this device.");
 
-  const { devices: rawDevices } = await listHealthE2eeDevices();\n  const devices = rawDevices as Array<{ id: string; public_key: JsonWebKey; revoked_at: string | null }>;
+  const { devices: rawDevices } = await listHealthE2eeDevices();
+  const devices = rawDevices as Array<{ id: string; public_key: JsonWebKey; revoked_at: string | null }>;
   const byId = new Map(devices.map((device) => [device.id, device]));
   let highestVersion = await getCurrentHealthKeyVersion();
 
