@@ -50,6 +50,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
               <Home className="size-4" /> Retour à l'accueil
             </button>
           </div>
+          <ErrorReportButton error={this.state.error} context="global-error-boundary" />
         </div>
       </div>
     );
