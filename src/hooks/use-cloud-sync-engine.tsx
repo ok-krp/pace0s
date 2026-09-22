@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
@@ -268,7 +268,7 @@ export function useCloudSyncEngineInternal() {
         for (const raw of data) {
           const row = raw as unknown as SyncRow;
           const key = row.key.startsWith("lt.") ? `${PACE_PREFIX}${row.key.slice(3)}` : row.key;
-          if (!isSyncableKey(key) || queue.has(key)) continue;
+          if (!isSyncableKey(key)) continue;
           const bucket = grouped.get(key) ?? {};
           if (row.key.startsWith("lt.")) bucket.legacy = row;
           else bucket.canonical = row;
