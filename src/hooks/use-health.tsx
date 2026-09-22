@@ -111,6 +111,10 @@ export function useHealthToday() {
 
       for (const record of records) {
         try {
+          if (record.algorithm !== "AES-256-GCM" || !Number.isInteger(record.key_version) || record.key_version < 1) {
+            console.warn("Skipping health record with unsupported encryption metadata");
+            continue;
+          }
           const payload = await decryptHealthPayload(record.ciphertext, record.nonce, record.key_version);
           if (
             payload &&
