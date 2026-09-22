@@ -97,7 +97,7 @@ export async function generateHealthDedupeHash(
   const canonicalIdentity = canonicalizeHealthDedupeIdentity(identity);
   const mac = await crypto.subtle.sign(
     "HMAC",
-    dedupeKey,
+    dedupeRootKey,
     new TextEncoder().encode(canonicalIdentity),
   );
 
