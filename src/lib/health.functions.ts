@@ -34,6 +34,7 @@ const encryptedInsertSchema = z.object({
     nonce: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/).min(16).max(64),
     algorithm: z.literal("AES-256-GCM"),
     key_version: z.number().int().positive().max(100),
+    dedupe_hash: z.string().regex(/^[0-9a-f]{64}$/),
   })).min(1).max(5000),
 });
 const devicePublicKeySchema = z.object({ kty: z.literal("EC"), crv: z.literal("P-256"), x: z.string().min(1), y: z.string().min(1) });
@@ -68,9 +69,16 @@ export const insertEncryptedHealthSamples = createServerFn({ method: "POST" })
     if (healthConsent?.granted !== true || cloudConsent?.granted !== true) {
       throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
     }
-    const rows = data.records.map((record) => ({ ...record, user_id: context.userId }));
-    const result = await (context.supabase as any).from("health_samples_e2ee").insert(rows);
-    if (result.error) throw new Error("Impossible d'enregistrer les données de santé chiffrées.");
+    const rows = data.records.map((record) => ({
+      ...record,
+      user_id: context.userId,
+    }));
+    const { error } = await context.supabase
+      .from("health_samples_e2ee")
+      .upsert(rows, { onConflict: "user_id,dedupe_hash" });
+    if (error) {
+      throw new Error("Impossible d'enregistrer les données de santé chiffrées.");
+    }
     return { inserted: rows.length };
   });
 
