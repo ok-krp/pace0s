@@ -92,6 +92,13 @@ export async function getHealthEncryptionKey(version?: number): Promise<CryptoKe
   return createHealthMasterKey(resolvedVersion);
 }
 
+async function requireHealthEncryptionKey(version?: number): Promise<CryptoKey> {
+  const resolvedVersion = version ?? await getCurrentHealthKeyVersion();
+  const key = await getStoredKey(resolvedVersion);
+  if (!key) throw new Error(`Health encryption key v${resolvedVersion} is unavailable on this device`);
+  return key;
+}
+
 export async function importHealthMasterKey(
   version: number,
   rawKey: ArrayBuffer,
@@ -119,7 +126,7 @@ export async function getHealthDedupeRootKey(): Promise<CryptoKey> {
   // the v1 HKDF output that generated the existing blind indexes. This makes
   // the root stable across future Health Master Key rotations without
   // invalidating the already-populated dedupe_hash values.
-  const masterKey = await getHealthEncryptionKey(1);
+  const masterKey = await requireHealthEncryptionKey(1);
   const rawMasterKey = await crypto.subtle.exportKey("raw", masterKey);
   const hkdfKey = await crypto.subtle.importKey(
     "raw",
@@ -187,7 +194,7 @@ export async function encryptHealthPayload(payload: unknown, keyVersion?: number
 
 export async function decryptHealthPayload(ciphertext: string, nonce: string, keyVersion?: number): Promise<unknown> {
   const resolvedVersion = keyVersion ?? await getCurrentHealthKeyVersion();
-  const key = await getHealthEncryptionKey(resolvedVersion);
+  const key = await requireHealthEncryptionKey(resolvedVersion);
   const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64(nonce) }, key, fromBase64(ciphertext));
   return JSON.parse(new TextDecoder().decode(plaintext));
 }
@@ -299,7 +306,7 @@ export async function unwrapHealthKeyBundleFromDevice(
 
 export async function wrapHealthMasterKeyForDevice(peerPublicKey: JsonWebKey, keyVersion?: number) {
   const resolvedVersion = keyVersion ?? await getCurrentHealthKeyVersion();
-  const masterKey = await getHealthEncryptionKey(resolvedVersion);
+  const masterKey = await requireHealthEncryptionKey(resolvedVersion);
   const wrappingKey = await deriveDeviceWrappingKey(peerPublicKey);
   const wrapped = await crypto.subtle.wrapKey("raw", masterKey, wrappingKey, "AES-KW");
   return {
