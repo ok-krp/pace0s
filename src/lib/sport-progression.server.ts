@@ -19,6 +19,16 @@ type ProgressionTarget = {
 };
 
 type WorkoutSet = { reps: number; weight: number; done: boolean };
+
+function getWorkingSets(sets: WorkoutSet[]) {
+  const done = sets.filter((set) => set.done);
+  if (done.length < 3) return done;
+  const maxWeight = Math.max(...done.map((set) => set.weight));
+  if (maxWeight <= 0) return done;
+  const last = done[done.length - 1];
+  const isDropSet = last.weight > 0 && last.weight <= maxWeight * 0.85 && done.length >= 4;
+  return isDropSet ? done.slice(0, -1) : done;
+}
 type WorkoutExercise = { exercise_id: string; session_id: string; position: number; sets: WorkoutSet[] };
 type WorkoutSession = { id: string; workout_date: string; name: string; duration_min: number | null; workout_exercises: WorkoutExercise[] };
 type ExerciseRow = { id: string; name: string; muscle: string; equipment: string | null; default_sets: number | null; default_reps: number | null; default_weight: number | null };
@@ -37,7 +47,7 @@ function fallbackTarget(
     .filter((item): item is { session: WorkoutSession; exercise: WorkoutExercise } => Boolean(item.exercise))
     .map(({ session, exercise: workoutExercise }) => ({
       session,
-      done: workoutExercise.sets.filter((set) => set.done),
+      done: getWorkingSets(workoutExercise.sets),
     }))
     .filter((item) => item.done.length > 0)
     .slice(0, 4);
@@ -165,7 +175,7 @@ export async function generateSportProgressionServer(context: { supabase: any; u
               date: session.workout_date,
               name: session.name,
               durationMin: session.duration_min,
-              sets: item.sets.map((set) => ({ reps: set.reps, weight: Number(set.weight), done: set.done })),
+              sets: getWorkingSets(item.sets).map((set) => ({ reps: set.reps, weight: Number(set.weight), done: set.done })),
             };
           }),
       }));
@@ -180,6 +190,7 @@ export async function generateSportProgressionServer(context: { supabase: any; u
         "Si la charge est stable mais que les reps montent, augmente les reps de 1 à 2 avant la charge.",
         "Si la récupération semble insuffisante d'après les performances et le volume, conserve ou réduis légèrement le volume plutôt que de forcer.",
         "Les valeurs doivent être des entiers pour séries/reps et un poids arrondi au 0.5 kg.",
+        "Une série finale nettement plus légère (drop set/finisher) sert à terminer l'effort mais ne compte pas comme série de travail pour targetSets, targetWeight ou targetReps. Elle reste néanmoins conservée dans l'historique brut.",
         "Chaque objet doit contenir: exerciseId, targetSets, targetReps, targetWeight, strategy, rationale, basedOnSessionId.",
         "strategy doit être l'une de: load_increase, rep_progression, set_progression, deload, repeat_and_consolidate.",
         JSON.stringify(exercisePayload),
