@@ -335,9 +335,11 @@ export function useCloudSyncEngineInternal() {
     const onOnline = () => { void syncNow(); };
     const onOffline = () => setStatus("offline");
     const onLegalChanged = () => { if (allowed()) void syncNow(); else setStatus("idle"); };
+    const onConflictResolved = () => { void syncNow(); };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     window.addEventListener("pace.legal.changed", onLegalChanged);
+    window.addEventListener("pace.sync.conflict.resolved", onConflictResolved);
     setConflicts(readConflicts());
     void syncNow();
     return () => {
@@ -345,6 +347,7 @@ export function useCloudSyncEngineInternal() {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("pace.legal.changed", onLegalChanged);
+      window.removeEventListener("pace.sync.conflict.resolved", onConflictResolved);
       void supabase.removeChannel(realtimeChannel);
     };
   }, [user]);
@@ -354,7 +357,7 @@ export function useCloudSyncEngineInternal() {
     const merged = choice === "merge" ? mergeRecoveredValues(conflict.remoteValue, conflict.localValue) : choice === "local" ? conflict.localValue : conflict.remoteValue;
     if (choice === "remote") { applyRemoteWrite(conflict.key, conflict.remoteValue, conflict.remoteUpdatedAt); unqueueIfMutation(conflict.key, getQueued(conflict.key)?.updatedAt ?? ""); markVersion(conflict.key, conflict.remoteUpdatedAt); }
     else { const updatedAt = new Date().toISOString(); applyRemoteWrite(conflict.key, merged, updatedAt); queueItem({ key: conflict.key, value: merged, updatedAt, mutationId: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : updatedAt }); }
-    const remaining = readConflicts().filter((item) => item.id !== conflictId); writeConflicts(remaining); setConflicts(remaining);
+    const remaining = readConflicts().filter((item) => item.id !== conflictId); writeConflicts(remaining); setConflicts(remaining); window.dispatchEvent(new Event("pace.sync.conflict.resolved"));
   }, []);
 
   return { status, queuedCount: readQueue().length, conflicts, resolveConflict };
