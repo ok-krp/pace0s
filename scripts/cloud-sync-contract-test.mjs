@@ -27,8 +27,9 @@ assert.match(engine, /lastRemoteValues/);
 assert.match(engine, /type QueueItem = \{ key: string; value: unknown; updatedAt: string/);
 assert.match(engine, /readQueue\(\)\.filter\(\(queued\) => queued\.key !== item\.key\)/);
 
-// Cloud writes use the mutation timestamp captured by the local-write event.
-assert.match(engine, /p_updated_at: latest\.updatedAt/);
+// Client timestamps are retained only for local queue identity; server time orders cloud writes.
+assert.match(engine, /p_updated_at: item\.updatedAt/);
+assert.match(engine, /server-authoritative/);
 assert.doesNotMatch(engine, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 
