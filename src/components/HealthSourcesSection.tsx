@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Activity, Apple, CheckCircle2, ExternalLink, HeartPulse, Smartphone } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
-import { insertHealthSamples } from "@/lib/health.functions";
+import { insertEncryptedHealthSamples } from "@/lib/health.functions";
+import { encryptHealthPayload } from "@/lib/health.crypto";
 import type { NativeHealthConnect } from "@/lib/health-connect-bridge";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,7 +15,7 @@ function isAndroid() { return /Android/i.test(navigator.userAgent); }
 function isIOS() { return /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1); }
 
 export function HealthSourcesSection() {
-  const insert = useServerFn(insertHealthSamples);
+  const insert = useServerFn(insertEncryptedHealthSamples);
   const [healthConnectAvailable, setHealthConnectAvailable] = useState(false);
   const [healthKitBridgeAvailable, setHealthKitBridgeAvailable] = useState(false);
   const [appleSyncing, setAppleSyncing] = useState(false);
@@ -41,7 +42,7 @@ export function HealthSourcesSection() {
     })();
     return () => { active = false; };
   }, []);
-  useEffect(() => { setHealthConnectAvailable(!!window.PaceHealthConnect); setHealthKitBridgeAvailable(!!window.webkit?.messageHandlers?.paceHealthKit); const previous = window.PaceAppleHealth?._receive; window.PaceAppleHealth = { _receive: async (payload) => { if (!payload?.ok) { setAppleSyncing(false); toast.error(payload?.error || "Impossible de synchroniser Apple Santé"); return; } const samples = (payload.samples ?? []).filter((sample) => Number.isFinite(sample.value) && sample.ts && sample.type && sample.source === "apple_health"); try { let inserted = 0; for (let i = 0; i < samples.length; i += 500) { const chunk = samples.slice(i, i + 500); const result = await insert({ data: { samples: chunk as never } }); inserted += result.inserted; } toast.success(`${inserted} données Apple Santé synchronisées`); } catch { toast.error("Les données Apple Santé ont été lues mais n'ont pas pu être synchronisées vers Pace."); } finally { setAppleSyncing(false); } }, }; return () => { if (previous) window.PaceAppleHealth = { _receive: previous }; else delete window.PaceAppleHealth; }; }, [insert]);
+  useEffect(() => { setHealthConnectAvailable(!!window.PaceHealthConnect); setHealthKitBridgeAvailable(!!window.webkit?.messageHandlers?.paceHealthKit); const previous = window.PaceAppleHealth?._receive; window.PaceAppleHealth = { _receive: async (payload) => { if (!payload?.ok) { setAppleSyncing(false); toast.error(payload?.error || "Impossible de synchroniser Apple Santé"); return; } const samples = (payload.samples ?? []).filter((sample) => Number.isFinite(sample.value) && sample.ts && sample.type && sample.source === "apple_health"); try { let inserted = 0; for (let i = 0; i < samples.length; i += 500) { const chunk = samples.slice(i, i + 500); const encrypted = await Promise.all(chunk.map(async (sample) => { const encrypted = await encryptHealthPayload(sample); return { ...encrypted, algorithm: "AES-256-GCM" as const, key_version: 1 }; })); const result = await insert({ data: { records: encrypted } }); inserted += result.inserted; } toast.success(`${inserted} données Apple Santé synchronisées`); } catch { toast.error("Les données Apple Santé ont été lues mais n'ont pas pu être synchronisées vers Pace."); } finally { setAppleSyncing(false); } }, }; return () => { if (previous) window.PaceAppleHealth = { _receive: previous }; else delete window.PaceAppleHealth; }; }, [insert]);
   const requireHealthConsent = () => {
     if (!healthConsent) {
       toast.info("Activez d’abord « Accès aux données de santé » dans Paramètres → Confidentialité.");
