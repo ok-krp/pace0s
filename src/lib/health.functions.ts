@@ -175,6 +175,6 @@ export const listHealthE2eeEnvelopes = createServerFn({ method: "GET" })
 export const insertHealthSamples = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => insertSchema.parse(d))
-  .handler(async () => {
+  .handler(async (): Promise<{ inserted: number }> => {
     throw new Error("Plaintext health ingestion is disabled. Use client-side E2EE.");
   });
