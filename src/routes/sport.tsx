@@ -119,27 +119,130 @@ function SportPage() {
     return done.length ? { sets: done.map((set) => ({ ...set })), sessionId: previous!.id } : null;
   }, [sessions]);
 
-  const persistCloudSession = useCallback(async (session: WorkoutSession) => {
+  const persistCloudSession = useCallback(async (session: WorkoutSession, availableExercises: Exercise[]) => {
     const { data: userData, error: authError } = await supabase.auth.getUser();
     if (authError || !userData.user) throw new Error("Session Supabase expirée.");
-    const { error: sessionError } = await supabase.from("sport_workout_sessions").insert({
-      id: session.id, user_id: userData.user.id, program_id: session.programId ?? null, name: session.name, workout_date: session.date,
-      started_at: new Date(session.startedAt).toISOString(), ended_at: session.endedAt ? new Date(session.endedAt).toISOString() : null,
-      duration_min: session.durationMin ?? null, notes: session.notes ?? null, is_temporary: false,
-    });
-    if (sessionError) throw sessionError;
-    const workoutExercises = session.exercises.map((exercise, position) => ({ id: crypto.randomUUID(), session_id: session.id, exercise_id: exercise.exerciseId, position, note: exercise.note ?? null }));
-    if (workoutExercises.length) {
-      const { error: exerciseError } = await supabase.from("sport_workout_exercises").insert(workoutExercises);
-      if (exerciseError) { await supabase.rpc("sport_delete_workout", { p_id: session.id }); throw exerciseError; }
-      const sets = session.exercises.flatMap((exercise, exerciseIndex) => exercise.sets.map((set, setIndex) => ({ id: crypto.randomUUID(), workout_exercise_id: workoutExercises[exerciseIndex].id, set_number: setIndex + 1, reps: set.reps, weight: set.weight, done: set.done })));
-      if (sets.length) {
-        const { error: setError } = await supabase.from("sport_workout_sets").insert(sets);
-        if (setError) { await supabase.rpc("sport_delete_workout", { p_id: session.id }); throw setError; }
+
+    const userId = userData.user.id;
+    const normalizedExercises = session.exercises.map((exercise) => ({
+      ...exercise,
+      sets: exercise.sets.map((set) => ({
+        ...set,
+        // The database enforces reps > 0. Empty numeric inputs must never
+        // turn into an invalid 0-rep set at finish time.
+        reps: Math.max(1, Math.trunc(Number(set.reps) || 1)),
+        weight: Math.max(0, Number(set.weight) || 0),
+      })),
+    }));
+
+    const normalizedSession: WorkoutSession = {
+      ...session,
+      exercises: normalizedExercises,
+    };
+
+    // Local Sport state is synced asynchronously. Make the finish action
+    // resilient when an exercise/program was created moments earlier and is
+    // not in Supabase yet.
+    const exerciseIds = [...new Set(normalizedExercises.map((exercise) => exercise.exerciseId))];
+    if (exerciseIds.length) {
+      const { data: existingExercises, error: existingExercisesError } = await supabase
+        .from("sport_exercises")
+        .select("id")
+        .eq("user_id", userId)
+        .in("id", exerciseIds);
+      if (existingExercisesError) throw existingExercisesError;
+
+      const existingIds = new Set((existingExercises ?? []).map((row) => String(row.id)));
+      const missingExercises = availableExercises
+        .filter((exercise) => exerciseIds.includes(exercise.id) && !existingIds.has(exercise.id))
+        .map((exercise) => ({
+          id: exercise.id,
+          user_id: userId,
+          name: exercise.name,
+          muscle: exercise.muscle,
+          equipment: exercise.equipment ?? null,
+          notes: exercise.notes ?? null,
+          default_sets: exercise.defaultSets ?? null,
+          default_reps: exercise.defaultReps ?? null,
+          default_weight: exercise.defaultWeight ?? null,
+          rest_sec: exercise.restSec ?? null,
+        }));
+
+      if (missingExercises.length) {
+        const { error: exerciseSyncError } = await supabase.from("sport_exercises").insert(missingExercises);
+        if (exerciseSyncError) throw exerciseSyncError;
+      }
+
+      if (existingIds.size + missingExercises.length < exerciseIds.length) {
+        throw new Error("Un ou plusieurs exercices de la séance ne sont plus disponibles dans Supabase.");
       }
     }
-  }, []);
-  const todayPrograms = progs.filter((p) => !p.isArchived && p.days.includes(todayDow));
+
+    let programId = normalizedSession.programId ?? null;
+    if (programId) {
+      const { data: program, error: programError } = await supabase
+        .from("sport_programs")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("id", programId)
+        .maybeSingle();
+      if (programError) throw programError;
+      // A stale local program must not prevent the workout itself from being saved.
+      if (!program) programId = null;
+    }
+
+    // Make retries idempotent: if a previous attempt partially inserted the
+    // session before failing on a child row, remove that partial tree first.
+    await supabase.rpc("sport_delete_workout", { p_id: normalizedSession.id });
+
+    const { error: sessionError } = await supabase.from("sport_workout_sessions").insert({
+      id: normalizedSession.id,
+      user_id: userId,
+      program_id: programId,
+      name: normalizedSession.name,
+      workout_date: normalizedSession.date,
+      started_at: new Date(normalizedSession.startedAt).toISOString(),
+      ended_at: normalizedSession.endedAt ? new Date(normalizedSession.endedAt).toISOString() : null,
+      duration_min: normalizedSession.durationMin ?? null,
+      notes: normalizedSession.notes ?? null,
+      is_temporary: false,
+    });
+    if (sessionError) throw sessionError;
+
+    try {
+      const workoutExercises = normalizedExercises.map((exercise, position) => ({
+        id: crypto.randomUUID(),
+        session_id: normalizedSession.id,
+        exercise_id: exercise.exerciseId,
+        position,
+        note: exercise.note ?? null,
+      }));
+
+      if (workoutExercises.length) {
+        const { error: exerciseError } = await supabase.from("sport_workout_exercises").insert(workoutExercises);
+        if (exerciseError) throw exerciseError;
+
+        const sets = normalizedExercises.flatMap((exercise, exerciseIndex) =>
+          exercise.sets.map((set, setIndex) => ({
+            id: crypto.randomUUID(),
+            workout_exercise_id: workoutExercises[exerciseIndex].id,
+            set_number: setIndex + 1,
+            reps: set.reps,
+            weight: set.weight,
+            done: set.done,
+          })),
+        );
+
+        if (sets.length) {
+          const { error: setError } = await supabase.from("sport_workout_sets").insert(sets);
+          if (setError) throw setError;
+        }
+      }
+    } catch (error) {
+      await supabase.rpc("sport_delete_workout", { p_id: normalizedSession.id });
+      throw error;
+    }
+  }, []);  const todayPrograms = progs.filter((p) => !p.isArchived && p.days.includes(todayDow));
   const startSession = (program?: Program) => {
     const exercises: SessionExercise[] = program ? program.items.map((it) => {
       const last = lastPerformance(it.exerciseId);
@@ -155,7 +258,7 @@ function SportPage() {
     const final: WorkoutSession = { ...active, endedAt: ended, durationMin: Math.round((ended - active.startedAt) / 60000) };
     setProgressionLoading(true);
     try {
-      await persistCloudSession(final);
+      await persistCloudSession(final, exs);
     } catch (error) {
       setProgressionLoading(false);
       toast.error("La séance n'a pas été enregistrée dans Supabase", { description: error instanceof Error ? error.message : "Réessaie avant de quitter la séance." });
@@ -208,7 +311,7 @@ function ActiveSession({ active, setActive, exs, sessions, targets, onFinish, on
     });
   };
   const removeExercise = (idx: number) => setActive({ ...active, exercises: active.exercises.filter((_, i) => i !== idx) });
-  return <div className="rounded-2xl glass-card p-5 mb-4"><div className="flex items-center justify-between mb-3 flex-wrap gap-2"><div><div className="text-xs text-primary font-medium uppercase tracking-wider">Séance en cours</div><h2 className="font-display text-xl font-semibold">{active.name}</h2></div><div className="flex gap-2"><Button variant="ghost" size="sm" onClick={onCancel}>Annuler</Button><Button onClick={onFinish} className="rounded-xl"><Square className="size-3 mr-1" />Terminer</Button></div></div><div className="space-y-3">{active.exercises.map((e, exIdx) => { const meta = exs.find((x) => x.id === e.exerciseId); return <div key={exIdx} className="rounded-xl glass-thin p-3"><div className="flex items-center justify-between mb-2"><div className="font-medium">{meta?.name ?? "Exercice"} <span className="text-xs text-muted-foreground">{meta?.muscle}</span>{targets[e.exerciseId] && <span className="ml-2 text-[11px] text-primary">(cible : {targets[e.exerciseId].targetSets} × {targets[e.exerciseId].targetReps}{targets[e.exerciseId].targetWeight > 0 ? ` @ ${targets[e.exerciseId].targetWeight} kg` : ""})</span>}</div><button onClick={() => removeExercise(exIdx)} aria-label="Retirer cet exercice" className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button></div><div className="space-y-1.5">{e.sets.map((s, j) => <div key={j} className="flex items-center gap-2"><span className="text-xs text-muted-foreground w-6">{j + 1}.</span><Input type="number" value={s.weight || ""} onChange={(ev) => updateSet(exIdx, j, { weight: +ev.target.value || 0 })} placeholder="kg" className="h-8 w-20 text-sm" /><span className="text-xs text-muted-foreground">×</span><Input type="number" value={s.reps || ""} onChange={(ev) => updateSet(exIdx, j, { reps: +ev.target.value || 0 })} placeholder="reps" className="h-8 w-20 text-sm" /><button onClick={() => updateSet(exIdx, j, { done: !s.done })} className={`size-7 rounded-md grid place-items-center ${s.done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}><Check className="size-3.5" /></button></div>)}<Button variant="ghost" size="sm" onClick={() => addSet(exIdx)} className="h-7 text-xs"><Plus className="size-3 mr-1" />Série</Button></div></div>; })}<SportExercisePicker exercises={exs} onChange={addExercise} /></div></div>;
+  return <div className="rounded-2xl glass-card p-5 mb-4"><div className="flex items-center justify-between mb-3 flex-wrap gap-2"><div><div className="text-xs text-primary font-medium uppercase tracking-wider">Séance en cours</div><h2 className="font-display text-xl font-semibold">{active.name}</h2></div><div className="flex gap-2"><Button variant="ghost" size="sm" onClick={onCancel}>Annuler</Button><Button onClick={onFinish} className="rounded-xl"><Square className="size-3 mr-1" />Terminer</Button></div></div><div className="space-y-3">{active.exercises.map((e, exIdx) => { const meta = exs.find((x) => x.id === e.exerciseId); return <div key={exIdx} className="rounded-xl glass-thin p-3"><div className="flex items-center justify-between mb-2"><div className="font-medium">{meta?.name ?? "Exercice"} <span className="text-xs text-muted-foreground">{meta?.muscle}</span>{targets[e.exerciseId] && <span className="ml-2 text-[11px] text-primary">(cible : {targets[e.exerciseId].targetSets} × {targets[e.exerciseId].targetReps}{targets[e.exerciseId].targetWeight > 0 ? ` @ ${targets[e.exerciseId].targetWeight} kg` : ""})</span>}</div><button onClick={() => removeExercise(exIdx)} aria-label="Retirer cet exercice" className="text-muted-foreground hover:text-destructive"><Trash2 className="size-3.5" /></button></div><div className="space-y-1.5">{e.sets.map((s, j) => <div key={j} className="flex items-center gap-2"><span className="text-xs text-muted-foreground w-6">{j + 1}.</span><Input type="number" value={s.weight || ""} onChange={(ev) => updateSet(exIdx, j, { weight: +ev.target.value || 0 })} placeholder="kg" className="h-8 w-20 text-sm" /><span className="text-xs text-muted-foreground">×</span><Input type="number" value={s.reps || ""} onChange={(ev) => updateSet(exIdx, j, { reps: Math.max(1, +ev.target.value || 1) })} placeholder="reps" className="h-8 w-20 text-sm" /><button onClick={() => updateSet(exIdx, j, { done: !s.done })} className={`size-7 rounded-md grid place-items-center ${s.done ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}><Check className="size-3.5" /></button></div>)}<Button variant="ghost" size="sm" onClick={() => addSet(exIdx)} className="h-7 text-xs"><Plus className="size-3 mr-1" />Série</Button></div></div>; })}<SportExercisePicker exercises={exs} onChange={addExercise} /></div></div>;
 }
 
 const ExercisesTab = memo(function ExercisesTab({ exs, setExs }: { exs: Exercise[]; setExs: (v: Exercise[] | ((p: Exercise[]) => Exercise[])) => void }) {
