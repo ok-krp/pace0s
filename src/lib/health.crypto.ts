@@ -160,10 +160,6 @@ export async function exportHealthDedupeRootKey(): Promise<ArrayBuffer> {
   return crypto.subtle.exportKey("raw", await getHealthDedupeRootKey());
 }
 
-export async function exportHealthDedupeRootKey(): Promise<ArrayBuffer> {
-  return crypto.subtle.exportKey("raw", await getHealthDedupeRootKey());
-}
-
 function toBase64(bytes: Uint8Array): string {
   let value = "";
   for (const byte of bytes) value += String.fromCharCode(byte);
