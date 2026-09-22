@@ -121,7 +121,7 @@
   background-color: rgb(255 255 255 / 0.02) !important;
 }
 
-/* Geometry is deliberately sharp in Signal. */
+/* Signal keeps subtle rounding: structured SaaS geometry without pill-shaped surfaces. */
 [data-visual-theme="signal"] *,
 [data-visual-theme="signal"] *::before,
 [data-visual-theme="signal"] *::after {
