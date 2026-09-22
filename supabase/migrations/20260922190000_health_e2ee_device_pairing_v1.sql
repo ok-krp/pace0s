@@ -303,3 +303,93 @@ end;
 $$;
 
 grant execute on function public.complete_pairing_session(uuid,uuid) to authenticated;
+
+create or replace function public.create_pairing_envelope(
+  p_session_id uuid,
+  p_sender_device_id uuid,
+  p_recipient_device_id uuid,
+  p_envelope text,
+  p_key_version integer,
+  p_algorithm text
+) returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_session public.health_e2ee_pairing_sessions%rowtype;
+  v_envelope_id uuid;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  select *
+  into v_session
+  from public.health_e2ee_pairing_sessions
+  where id = p_session_id
+    and user_id = auth.uid()
+  for update;
+
+  if not found or v_session.status <> 'confirmed' then
+    raise exception 'Pairing session is not confirmed';
+  end if;
+
+  if v_session.expires_at <= now() then
+    update public.health_e2ee_pairing_sessions
+    set status = 'expired', updated_at = now()
+    where id = p_session_id;
+    raise exception 'Session expired';
+  end if;
+
+  if v_session.initiator_device_id <> p_sender_device_id
+     or v_session.recipient_device_id <> p_recipient_device_id then
+    raise exception 'Pairing device mismatch';
+  end if;
+
+  if p_key_version < 1 then
+    raise exception 'Invalid key version';
+  end if;
+
+  if p_algorithm <> 'ECDH-P256/HKDF-SHA256/AES-256-KW' then
+    raise exception 'Invalid pairing algorithm';
+  end if;
+
+  if not exists (
+    select 1
+    from public.health_e2ee_devices d
+    where d.id in (p_sender_device_id, p_recipient_device_id)
+      and d.user_id = auth.uid()
+      and d.revoked_at is null
+  ) then
+    raise exception 'Pairing devices must be active';
+  end if;
+
+  insert into public.health_e2ee_key_envelopes (
+    user_id,
+    device_id,
+    sender_device_id,
+    envelope,
+    nonce,
+    algorithm,
+    key_version,
+    pairing_session_id
+  )
+  values (
+    auth.uid(),
+    p_recipient_device_id,
+    p_sender_device_id,
+    p_envelope,
+    null,
+    p_algorithm,
+    p_key_version,
+    p_session_id
+  )
+  returning id into v_envelope_id;
+
+  return v_envelope_id;
+end;
+$$;
+
+revoke all on function public.create_pairing_envelope(uuid,uuid,uuid,text,integer,text) from public;
+grant execute on function public.create_pairing_envelope(uuid,uuid,uuid,text,integer,text) to authenticated;
