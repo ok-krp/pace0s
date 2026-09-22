@@ -647,6 +647,153 @@ export type Database = {
         }
         Relationships: []
       }
+      health_e2ee_devices: {
+        Row: {
+          algorithm: string
+          created_at: string
+          device_name: string
+          id: string
+          public_key: Json
+          revoked_at: string | null
+          user_id: string
+        }
+        Insert: {
+          algorithm?: string
+          created_at?: string
+          device_name?: string
+          id?: string
+          public_key: Json
+          revoked_at?: string | null
+          user_id: string
+        }
+        Update: {
+          algorithm?: string
+          created_at?: string
+          device_name?: string
+          id?: string
+          public_key?: Json
+          revoked_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      health_e2ee_key_envelopes: {
+        Row: {
+          algorithm: string
+          created_at: string
+          device_id: string
+          envelope: string
+          id: string
+          key_version: number
+          nonce: string | null
+          sender_device_id: string | null
+          user_id: string
+        }
+        Insert: {
+          algorithm?: string
+          created_at?: string
+          device_id: string
+          envelope: string
+          id?: string
+          key_version?: number
+          nonce?: string | null
+          sender_device_id?: string | null
+          user_id: string
+        }
+        Update: {
+          algorithm?: string
+          created_at?: string
+          device_id?: string
+          envelope?: string
+          id?: string
+          key_version?: number
+          nonce?: string | null
+          sender_device_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "health_e2ee_key_envelopes_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "health_e2ee_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "health_e2ee_key_envelopes_sender_device_id_fkey"
+            columns: ["sender_device_id"]
+            isOneToOne: false
+            referencedRelation: "health_e2ee_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      health_e2ee_key_versions: {
+        Row: {
+          current_key_version: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          current_key_version?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          current_key_version?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      health_e2ee_recovery_envelopes: {
+        Row: {
+          algorithm: string
+          created_at: string
+          envelope: string
+          key_version: number
+          nonce: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          algorithm?: string
+          created_at?: string
+          envelope: string
+          key_version: number
+          nonce: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          algorithm?: string
+          created_at?: string
+          envelope?: string
+          key_version?: number
+          nonce?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      health_legacy_migration_map: {
+        Row: {
+          legacy_sample_id: string
+          migrated_at: string
+          user_id: string
+        }
+        Insert: {
+          legacy_sample_id: string
+          migrated_at?: string
+          user_id: string
+        }
+        Update: {
+          legacy_sample_id?: string
+          migrated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       health_samples: {
         Row: {
           created_at: string
@@ -683,6 +830,36 @@ export type Database = {
           type?: string
           user_id?: string
           value?: number
+        }
+        Relationships: []
+      }
+      health_samples_e2ee: {
+        Row: {
+          algorithm: string
+          ciphertext: string
+          created_at: string
+          id: string
+          key_version: number
+          nonce: string
+          user_id: string
+        }
+        Insert: {
+          algorithm?: string
+          ciphertext: string
+          created_at?: string
+          id?: string
+          key_version?: number
+          nonce: string
+          user_id: string
+        }
+        Update: {
+          algorithm?: string
+          ciphertext?: string
+          created_at?: string
+          id?: string
+          key_version?: number
+          nonce?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -1579,6 +1756,39 @@ export type Database = {
           },
         ]
       }
+      user_biometrics_e2ee: {
+        Row: {
+          algorithm: string
+          ciphertext: string
+          created_at: string
+          id: string
+          key_version: number
+          nonce: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          algorithm?: string
+          ciphertext: string
+          created_at?: string
+          id?: string
+          key_version?: number
+          nonce: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          algorithm?: string
+          ciphertext?: string
+          created_at?: string
+          id?: string
+          key_version?: number
+          nonce?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_state: {
         Row: {
           created_at: string
@@ -1615,6 +1825,7 @@ export type Database = {
     }
     Functions: {
       canonicalize_nutrition_meal: { Args: { p_meal: string }; Returns: string }
+      has_current_health_e2ee_consent: { Args: never; Returns: boolean }
       insert_coach_ai_food_idempotent: {
         Args: {
           p_carbs_g: number
@@ -1660,6 +1871,10 @@ export type Database = {
           log_date: string
         }[]
       }
+      migrate_health_legacy_chunk: {
+        Args: { p_records: Json }
+        Returns: number
+      }
       nutrition_macro_kcal_consistent: {
         Args: {
           p_carbs: number
@@ -1668,6 +1883,10 @@ export type Database = {
           p_protein: number
         }
         Returns: boolean
+      }
+      rotate_health_e2ee_key: {
+        Args: { p_new_key_version: number; p_revoked_device_id?: string }
+        Returns: undefined
       }
       sport_delete_exercise: { Args: { p_id: string }; Returns: boolean }
       sport_delete_program: { Args: { p_id: string }; Returns: boolean }
