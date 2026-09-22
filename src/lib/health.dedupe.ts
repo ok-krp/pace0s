@@ -2,6 +2,7 @@ import {
   encryptHealthPayload,
   getCurrentHealthKeyVersion,
   getHealthEncryptionKey,
+  getHealthDedupeRootKey,
 } from "@/lib/health.crypto";
 
 const HEALTH_DEDUPE_HKDF_SALT = new TextEncoder().encode(
@@ -47,12 +48,12 @@ function canonicalizeHealthDedupeIdentity(
 }
 
 async function deriveHealthDedupeKey(
-  healthMasterKey: CryptoKey,
+  dedupeRootKey: CryptoKey,
 ): Promise<CryptoKey> {
-  const rawMasterKey = await crypto.subtle.exportKey("raw", healthMasterKey);
+  const rawDedupeRootKey = await crypto.subtle.exportKey("raw", dedupeRootKey);
   const hkdfKey = await crypto.subtle.importKey(
     "raw",
-    rawMasterKey,
+    rawDedupeRootKey,
     "HKDF",
     false,
     ["deriveKey"],
@@ -80,7 +81,7 @@ function toHex(value: ArrayBuffer): string {
 
 export async function generateHealthDedupeHash(
   identity: HealthDedupeIdentity,
-  healthMasterKey: CryptoKey,
+  dedupeRootKey: CryptoKey,
 ): Promise<string> {
   if (
     !identity.type ||
@@ -93,7 +94,7 @@ export async function generateHealthDedupeHash(
     );
   }
 
-  const dedupeKey = await deriveHealthDedupeKey(healthMasterKey);
+  const dedupeKey = await deriveHealthDedupeKey(dedupeRootKey);
   const canonicalIdentity = canonicalizeHealthDedupeIdentity(identity);
   const mac = await crypto.subtle.sign(
     "HMAC",
@@ -119,6 +120,7 @@ export async function encryptHealthSampleForUpload(
 
   const keyVersion = await getCurrentHealthKeyVersion();
   const healthMasterKey = await getHealthEncryptionKey(keyVersion);
+  const dedupeRootKey = await getHealthDedupeRootKey();
 
   const dedupeHash = await generateHealthDedupeHash(
     {
@@ -127,7 +129,7 @@ export async function encryptHealthSampleForUpload(
       source: sample.source,
       external_id: sample.external_id ?? "",
     },
-    healthMasterKey,
+    dedupeRootKey,
   );
 
   const encrypted = await encryptHealthPayload(sample, keyVersion);
