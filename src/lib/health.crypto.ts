@@ -90,6 +90,25 @@ export async function getHealthEncryptionKey(version?: number): Promise<CryptoKe
   return createHealthMasterKey(resolvedVersion);
 }
 
+export async function importHealthMasterKey(
+  version: number,
+  rawKey: ArrayBuffer,
+): Promise<CryptoKey> {
+  if (!Number.isInteger(version) || version < 1) {
+    throw new Error("Invalid health key version");
+  }
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    rawKey,
+    { name: "AES-GCM", length: 256 },
+    true,
+    ["encrypt", "decrypt"],
+  );
+  await storeKey(version, key);
+  return key;
+}
+
 export async function getHealthDedupeRootKey(): Promise<CryptoKey> {
   const existing = await readStore<CryptoKey>(DEDUPE_ROOT_KEY_ID);
   if (existing) return existing;
