@@ -14,9 +14,11 @@ const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
 const DEVICE_ID = getDeviceId();
+const CONFLICTS_KEY = "pace.__sync_conflicts";
 
 type SyncMeta = Record<string, string>;
 export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
+export type SyncConflict = { id: string; key: string; localValue: unknown; remoteValue: unknown; remoteUpdatedAt: string; detectedAt: string; };
 type SyncRow = { key: string; value: unknown; updated_at: string; updated_by: string | null };
 type ServerWriteResult = { accepted: boolean; updated_at: string | null };
 type QueueItem = { key: string; value: unknown; updatedAt: string; mutationId?: string };
@@ -104,6 +106,9 @@ function isEmptyRecoveredValue(value: unknown): boolean {
   return false;
 }
 function serialize(value: unknown) { try { return JSON.stringify(value); } catch { return undefined; } }
+function readConflicts(): SyncConflict[] { try { const raw = JSON.parse(localStorage.getItem(CONFLICTS_KEY) ?? "[]") as SyncConflict[]; return Array.isArray(raw) ? raw.filter((item) => item?.id && item?.key) : []; } catch { return []; } }
+function writeConflicts(items: SyncConflict[]) { try { localStorage.setItem(CONFLICTS_KEY, JSON.stringify(items.slice(-20))); } catch {} }
+function conflictForKey(key: string): SyncConflict | undefined { return readConflicts().find((item) => item.key === key); }
 
 function unwrapNutritionValue(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
@@ -145,6 +150,7 @@ function isAuthoritativeNutritionWriter(updatedBy: string | null | undefined) {
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
+  const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
   const running = useRef(false);
   const keyWrites = useRef<Record<string, Promise<void>>>({});
   const lastRemoteValues = useRef<Record<string, string>>({});
@@ -164,7 +170,16 @@ export function useCloudSyncEngineInternal() {
     let cancelled = false;
     const allowed = () => { try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; } };
 
+    const recordConflict = (key: string, localValue: unknown, remoteValue: unknown, remoteUpdatedAt: string) => {
+      if (serialize(localValue) === serialize(remoteValue)) return;
+      const existing = conflictForKey(key);
+      if (existing && serialize(existing.remoteValue) === serialize(remoteValue)) return;
+      const next: SyncConflict = { id: `${key}:${Date.now()}`, key, localValue, remoteValue, remoteUpdatedAt, detectedAt: new Date().toISOString() };
+      const all = [...readConflicts().filter((item) => item.key !== key), next]; writeConflicts(all); setConflicts(all);
+    };
+
     const writeItem = async (item: QueueItem): Promise<boolean> => {
+      if (conflictForKey(item.key)) return false;
       const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
       const result = await rpc("upsert_user_state_if_newer", {
         p_user_id: user.id,
@@ -233,7 +248,7 @@ export function useCloudSyncEngineInternal() {
       const knownTime = Date.parse(meta[row.key] ?? "1970-01-01T00:00:00.000Z");
       if (remoteTime <= knownTime) return;
       const queued = getQueued(row.key);
-      if (queued && Date.parse(queued.updatedAt) >= remoteTime) return;
+      if (queued) { recordConflict(row.key, queued.value, row.value, row.updated_at); return; }
       const domain = readDomainRecord(row.key);
       if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) return;
       applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
@@ -270,6 +285,8 @@ export function useCloudSyncEngineInternal() {
           const localDomain = readDomainRecord(key);
           const localIsEmpty = localDomain ? isEmptyRecoveredValue(localDomain.value) : true;
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
+          const queued = getQueued(key);
+          if (queued) { recordConflict(key, queued.value, mergedValue, updatedAt); continue; }
           if (sourceTime <= localTime && !localIsEmpty) continue;
           applyRemoteAndRemember(key, mergedValue, updatedAt, canonical?.updated_by ?? legacy?.updated_by);
           meta[key] = updatedAt;
@@ -321,6 +338,7 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     window.addEventListener("pace.legal.changed", onLegalChanged);
+    setConflicts(readConflicts());
     void syncNow();
     return () => {
       cancelled = true; offLocal();
@@ -331,7 +349,15 @@ export function useCloudSyncEngineInternal() {
     };
   }, [user]);
 
-  return { status, queuedCount: readQueue().length };
+  const resolveConflict = useCallback(async (conflictId: string, choice: "local" | "remote" | "merge") => {
+    const conflict = readConflicts().find((item) => item.id === conflictId); if (!conflict) return;
+    const merged = choice === "merge" ? mergeRecoveredValues(conflict.remoteValue, conflict.localValue) : choice === "local" ? conflict.localValue : conflict.remoteValue;
+    if (choice === "remote") { applyRemoteWrite(conflict.key, conflict.remoteValue, conflict.remoteUpdatedAt); unqueueIfMutation(conflict.key, getQueued(conflict.key)?.updatedAt ?? ""); markVersion(conflict.key, conflict.remoteUpdatedAt); }
+    else { const updatedAt = new Date().toISOString(); applyRemoteWrite(conflict.key, merged, updatedAt); queueItem({ key: conflict.key, value: merged, updatedAt, mutationId: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : updatedAt }); }
+    const remaining = readConflicts().filter((item) => item.id !== conflictId); writeConflicts(remaining); setConflicts(remaining);
+  }, []);
+
+  return { status, queuedCount: readQueue().length, conflicts, resolveConflict };
 }
 
 const SyncStatusContext = createContext<SyncStatus>("idle");
