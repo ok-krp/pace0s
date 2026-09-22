@@ -121,13 +121,6 @@
   background-color: rgb(255 255 255 / 0.02) !important;
 }
 
-/* Signal keeps subtle rounding: structured SaaS geometry without pill-shaped surfaces. */
-[data-visual-theme="signal"] *,
-[data-visual-theme="signal"] *::before,
-[data-visual-theme="signal"] *::after {
-  border-radius: 0 !important;
-}
-
 /* Sidebar: one precise divider, no floating shell. */
 [data-visual-theme="signal"] aside {
   background: #030303 !important;
@@ -742,50 +735,40 @@
 /* Preserve source history: old implementation is commented above, not removed. */
 
 /* ================================================================
-   Global interaction policy: hover is visually inert.
-   Legacy hover rules remain in source for rollback/reference, but
-   pointer hover cannot change visual properties in the active UI.
+   Interaction policy — hover is non-destructive.
+   Keep component-authored surfaces intact; remove only decorative lift,
+   glow and scale. This prevents global hover rules from breaking controls.
    ================================================================ */
-[data-visual-theme] :where(*):hover {
-  background: revert-layer !important;
-  background-color: revert-layer !important;
-  color: revert-layer !important;
-  border-color: revert-layer !important;
-  opacity: revert-layer !important;
-  transform: revert-layer !important;
-  box-shadow: revert-layer !important;
-  filter: revert-layer !important;
-  text-shadow: revert-layer !important;
-}
-[data-visual-theme] :where(*):hover::before,
-[data-visual-theme] :where(*):hover::after {
-  opacity: revert-layer !important;
-  transform: revert-layer !important;
-  filter: revert-layer !important;
+[data-visual-theme="signal"] button,
+[data-visual-theme="signal"] a,
+[data-visual-theme="signal"] [role="button"] {
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* ================================================================
-   GLOBAL HOVER LOCK — no visual hover state anywhere in PaceOS.
-   Legacy hover utilities remain in source/comments for history, but
-   active styles are made inert here.
-   ================================================================ */
-[data-visual-theme] :where(*):hover {
-  background: inherit !important;
-  background-color: inherit !important;
-  color: inherit !important;
-  border-color: inherit !important;
-  opacity: inherit !important;
+[data-visual-theme="signal"] button:active:not(:disabled),
+[data-visual-theme="signal"] a:active,
+[data-visual-theme="signal"] [role="button"]:active:not([aria-disabled="true"]) {
   transform: none !important;
-  box-shadow: inherit !important;
-  filter: inherit !important;
-  text-shadow: inherit !important;
+  opacity: 0.82 !important;
 }
-[data-visual-theme] :where(*):hover::before,
-[data-visual-theme] :where(*):hover::after {
-  opacity: inherit !important;
-  transform: none !important;
-  filter: inherit !important;
+
+[data-visual-theme="signal"] button:disabled,
+[data-visual-theme="signal"] [role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
 }
-[data-visual-theme] :where(a,button,[role="button"],input,textarea,select):hover {
-  transition: none !important;
+
+@media (hover: hover) and (pointer: fine) {
+  [data-visual-theme="signal"] button:hover:not(:disabled),
+  [data-visual-theme="signal"] [role="button"]:hover:not([aria-disabled="true"]) {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Preserve Signal's intended subtle geometry rather than globally forcing
+   every descendant to a zero-radius rectangle. */
+[data-visual-theme="signal"] .glass-card,
+[data-visual-theme="signal"] [class*="glass-card"],
+[data-visual-theme="signal"] [data-slot="card"] {
+  border-radius: var(--radius) !important;
 }
