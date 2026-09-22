@@ -38,14 +38,24 @@ const encryptedInsertSchema = z.object({
 });
 const devicePublicKeySchema = z.object({ kty: z.literal("EC"), crv: z.literal("P-256"), x: z.string().min(1), y: z.string().min(1) });
 const registerDeviceSchema = z.object({ device_name: z.string().trim().min(1).max(128), public_key: devicePublicKeySchema });
-const envelopeSchema = z.object({
-  device_id: z.string().uuid(),
-  sender_device_id: z.string().uuid(),
-  envelope: z.string().min(1).max(2_000_000),
-  nonce: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/).min(16).max(64),
-  algorithm: z.literal("ECDH-P256/AES-256-GCM"),
-  key_version: z.number().int().positive().max(100),
-});
+const envelopeSchema = z.discriminatedUnion("algorithm", [
+  z.object({
+    device_id: z.string().uuid(),
+    sender_device_id: z.string().uuid(),
+    envelope: z.string().min(1).max(2_000_000),
+    nonce: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/).min(16).max(64),
+    algorithm: z.literal("ECDH-P256/AES-256-GCM"),
+    key_version: z.number().int().positive().max(100),
+  }),
+  z.object({
+    device_id: z.string().uuid(),
+    sender_device_id: z.string().uuid(),
+    envelope: z.string().min(1).max(2_000_000),
+    nonce: z.null().default(null),
+    algorithm: z.literal("ECDH-P256/AES-256-KW"),
+    key_version: z.number().int().positive().max(100),
+  }),
+]);
 
 export const insertEncryptedHealthSamples = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -70,6 +80,16 @@ export const listEncryptedHealthSamples = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => z.object({ limit: z.number().int().min(1).max(10000).default(10000) }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
+    const { data: healthConsent } = await context.supabase
+      .from("consent_records").select("granted").eq("consent_type", "health_data")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    const { data: cloudConsent } = await context.supabase
+      .from("consent_records").select("granted").eq("consent_type", "health_cloud_sync")
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (healthConsent?.granted !== true || cloudConsent?.granted !== true) {
+      throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
+    }
+
     const result = await (context.supabase as any).from("health_samples_e2ee")
       .select("id,ciphertext,nonce,algorithm,key_version,created_at")
       .eq("user_id", context.userId).order("created_at", { ascending: false }).limit(data.limit);
@@ -111,7 +131,7 @@ export const createHealthE2eeEnvelope = createServerFn({ method: "POST" })
     }
     const result = await db.from("health_e2ee_key_envelopes").insert({
       user_id: context.userId, device_id: data.device_id, sender_device_id: data.sender_device_id,
-      envelope: data.envelope, nonce: data.nonce, algorithm: data.algorithm, key_version: data.key_version,
+      envelope: data.envelope, nonce: data.nonce ?? null, algorithm: data.algorithm, key_version: data.key_version,
     }).select("id,user_id,device_id,sender_device_id,envelope,nonce,algorithm,key_version,created_at").single();
     if (result.error) throw new Error("Impossible d'enregistrer l'enveloppe E2EE.");
     return result.data;
