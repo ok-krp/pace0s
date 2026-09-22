@@ -317,6 +317,7 @@ set search_path = ''
 as $$
 declare
   v_session public.health_e2ee_pairing_sessions%rowtype;
+  v_current_version integer;
   v_envelope_id uuid;
 begin
   if auth.uid() is null then
@@ -346,8 +347,13 @@ begin
     raise exception 'Pairing device mismatch';
   end if;
 
-  if p_key_version < 1 then
-    raise exception 'Invalid key version';
+  select current_key_version
+  into v_current_version
+  from public.health_e2ee_key_versions
+  where user_id = auth.uid();
+
+  if coalesce(v_current_version, 1) <> p_key_version then
+    raise exception 'Pairing key version is not current';
   end if;
 
   if p_algorithm <> 'ECDH-P256/HKDF-SHA256/AES-256-KW' then
