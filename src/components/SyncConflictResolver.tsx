@@ -1,9 +1,11 @@
 import { useCloudSyncStatus, type SyncConflict } from "@/hooks/use-cloud-sync-engine";
 
+const MAX_SUMMARY_LENGTH = 180;
+
 function summarize(value: unknown): string {
   try {
     const text = JSON.stringify(value);
-    return text.length > 180 ? text.slice(0, 177) + "..." : text;
+    return text.length > MAX_SUMMARY_LENGTH ? text.slice(0, MAX_SUMMARY_LENGTH - 3) + "..." : text;
   } catch {
     return String(value);
   }
