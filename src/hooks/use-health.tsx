@@ -117,7 +117,8 @@ export function useHealthToday() {
 
       for (const record of records) {
         try {
-          if (record.algorithm !== "AES-256-GCM" || !Number.isInteger(record.key_version) || record.key_version < 1) continue;\n          const payload = await decryptHealthPayload(record.ciphertext, record.nonce, record.key_version);
+          if (record.algorithm !== "AES-256-GCM" || !Number.isInteger(record.key_version) || record.key_version < 1) continue;
+          const payload = await decryptHealthPayload(record.ciphertext, record.nonce, record.key_version);
           if (
             payload &&
             typeof payload === "object" &&
