@@ -1,8 +1,9 @@
 import {
-  exportHealthDedupeRootKey,
   getHealthDedupeRootKey,
   getHealthEncryptionKey,
   importHealthDedupeRootKey,
+  importHealthMasterKey,
+  setCurrentHealthKeyVersion,
 } from "@/lib/health.crypto";
 
 const encoder = new TextEncoder();
@@ -236,21 +237,14 @@ export async function unwrapHealthKeyBundle(
     ["encrypt", "decrypt"],
   );
 
-  await importHealthDedupeRootKey(await crypto.subtle.exportKey("raw", dedupeRaw));
-
-  const current = await import("@/lib/health.crypto").then((module) =>
-    module.setCurrentHealthKeyVersion(
-      Math.max(
-        envelope.health_master_key.key_version,
-        1,
-      ),
-    ),
+  await importHealthMasterKey(
+    envelope.health_master_key.key_version,
+    await crypto.subtle.exportKey("raw", healthMasterKey),
   );
-
-  await current;
-
-  void healthMasterKey;
-  void exportHealthDedupeRootKey;
+  await importHealthDedupeRootKey(await crypto.subtle.exportKey("raw", dedupeRaw));
+  await setCurrentHealthKeyVersion(
+    Math.max(envelope.health_master_key.key_version, 1),
+  );
 
   return { keyVersion: envelope.health_master_key.key_version };
 }
