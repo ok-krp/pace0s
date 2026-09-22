@@ -135,14 +135,20 @@ export async function exportHealthDedupeRootKey(): Promise<ArrayBuffer> {
   return crypto.subtle.exportKey("raw", await getHealthDedupeRootKey());
 }
 
+async function requireHealthEncryptionKey(version?: number): Promise<CryptoKey> {
+  const resolvedVersion = version ?? await getCurrentHealthKeyVersion();
+  const key = await getStoredKey(resolvedVersion);
+  if (!key) {
+    throw new Error(`Health encryption key v\${resolvedVersion} is unavailable on this device`);
+  }
+  return key;
+}
+
 export async function getHealthDedupeRootKey(): Promise<CryptoKey> {
   const existing = await readStore<CryptoKey>(DEDUPE_ROOT_KEY_ID);
   if (existing) return existing;
 
-  // The v1 dedupe root is derived once from the v1 Health Master Key and then
-  // persisted independently so future master-key rotations do not change
-  // existing blind indexes.
-  const masterKey = await getHealthEncryptionKey(1);
+  const masterKey = await requireHealthEncryptionKey(1);
   const rawMasterKey = await crypto.subtle.exportKey("raw", masterKey);
   const hkdfKey = await crypto.subtle.importKey("raw", rawMasterKey, "HKDF", false, ["deriveKey"]);
   const rootKey = await crypto.subtle.deriveKey(
