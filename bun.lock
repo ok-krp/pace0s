@@ -5,7 +5,11 @@
     "": {
       "name": "pace",
       "dependencies": {
-        "@ai-sdk/anthropic": "^4.0.10",
+        "bip39": ["bip39@3.1.0", "", { "dependencies": { "@noble/hashes": "^1.2.0" } }, "sha512-c9kiwdk45Do5GL0vJMe7tS95VjCii65mYAH7DfWl3uW8AVzXKQVUm64i3hzVybBDMp9r7j9iNxR85+ul8MdN/A=="],
+
+    "@noble/hashes": ["@noble/hashes@1.8.0", "", { "engines": { "node": "^14.21.3 || >=16" } }, "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="],
+
+    "@ai-sdk/anthropic": "^4.0.10",
         "@ai-sdk/google": "^4.0.49",
         "@ai-sdk/openai": "^4.0.27",
         "@ai-sdk/openai-compatible": "^3.0.6",
@@ -69,6 +73,7 @@
         "vaul": "^1.1.2",
         "vite-tsconfig-paths": "^6.0.2",
         "zod": "^3.24.2",
+        "bip39": "^3.1.0",
       },
       "devDependencies": {
         "@eslint/js": "^9.32.0",
