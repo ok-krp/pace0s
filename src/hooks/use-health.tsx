@@ -28,6 +28,8 @@ type HealthSample = {
 type EncryptedHealthRecord = {
   ciphertext: string;
   nonce: string;
+  algorithm: "AES-256-GCM";
+  key_version: number;
 };
 
 const SAMPLE_TYPES = new Set([
