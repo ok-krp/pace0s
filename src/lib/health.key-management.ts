@@ -81,7 +81,8 @@ export async function rotateHealthKeyAndRevokeDevice(revokedDeviceId: string | n
   const nextVersion = currentVersion + 1;
   await createHealthMasterKey(nextVersion);
 
-  const { devices } = await listHealthE2eeDevices();
+  const { devices: rawDevices } = await listHealthE2eeDevices();
+  const devices = rawDevices as Array<{ id: string; public_key: JsonWebKey; revoked_at: string | null }>;
   const activeDevices = devices.filter((device) => device.id !== revokedDeviceId && device.revoked_at === null);
   if (activeDevices.length === 0) throw new Error("Au moins un appareil actif est requis pour conserver la clé E2EE.");
 
