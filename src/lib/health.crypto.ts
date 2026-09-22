@@ -215,6 +215,92 @@ async function deriveDeviceWrappingKey(peerPublicKey: JsonWebKey): Promise<Crypt
   );
 }
 
+export type HealthKeyBundleEnvelope = {
+  version: 1;
+  health_master_key: {
+    wrapped_key: string;
+    key_version: number;
+  };
+  dedupe_root_key: {
+    wrapped_key: string;
+  };
+};
+
+export async function wrapHealthKeyBundleForDevice(
+  peerPublicKey: JsonWebKey,
+  keyVersion?: number,
+): Promise<HealthKeyBundleEnvelope> {
+  const resolvedVersion = keyVersion ?? await getCurrentHealthKeyVersion();
+  const masterKey = await getHealthEncryptionKey(resolvedVersion);
+  const dedupeRootKey = await getHealthDedupeRootKey();
+  const wrappingKey = await deriveDeviceWrappingKey(peerPublicKey);
+
+  const [wrappedMaster, wrappedDedupe] = await Promise.all([
+    crypto.subtle.wrapKey("raw", masterKey, wrappingKey, "AES-KW"),
+    crypto.subtle.wrapKey("raw", dedupeRootKey, wrappingKey, "AES-KW"),
+  ]);
+
+  return {
+    version: 1,
+    health_master_key: {
+      wrapped_key: toBase64(new Uint8Array(wrappedMaster)),
+      key_version: resolvedVersion,
+    },
+    dedupe_root_key: {
+      wrapped_key: toBase64(new Uint8Array(wrappedDedupe)),
+    },
+  };
+}
+
+export async function unwrapHealthKeyBundleFromDevice(
+  envelope: HealthKeyBundleEnvelope,
+  senderPublicKey: JsonWebKey,
+): Promise<CryptoKey> {
+  if (
+    envelope.version !== 1 ||
+    envelope.health_master_key.key_version < 1 ||
+    !envelope.health_master_key.wrapped_key ||
+    !envelope.dedupe_root_key.wrapped_key
+  ) {
+    throw new Error("Invalid health key bundle envelope");
+  }
+
+  const wrappingKey = await deriveDeviceWrappingKey(senderPublicKey);
+  const [masterKey, dedupeRootKey] = await Promise.all([
+    crypto.subtle.unwrapKey(
+      "raw",
+      fromBase64(envelope.health_master_key.wrapped_key),
+      wrappingKey,
+      "AES-KW",
+      { name: "AES-GCM", length: 256 },
+      true,
+      ["encrypt", "decrypt"],
+    ),
+    crypto.subtle.unwrapKey(
+      "raw",
+      fromBase64(envelope.dedupe_root_key.wrapped_key),
+      wrappingKey,
+      "AES-KW",
+      { name: "HMAC", hash: "SHA-256" },
+      true,
+      ["sign"],
+    ),
+  ]);
+
+  await importHealthMasterKey(
+    envelope.health_master_key.key_version,
+    await crypto.subtle.exportKey("raw", masterKey),
+  );
+  await importHealthDedupeRootKey(
+    await crypto.subtle.exportKey("raw", dedupeRootKey),
+  );
+  await setCurrentHealthKeyVersion(
+    Math.max(await getCurrentHealthKeyVersion(), envelope.health_master_key.key_version),
+  );
+
+  return masterKey;
+}
+
 export async function wrapHealthMasterKeyForDevice(peerPublicKey: JsonWebKey, keyVersion?: number) {
   const resolvedVersion = keyVersion ?? await getCurrentHealthKeyVersion();
   const masterKey = await getHealthEncryptionKey(resolvedVersion);
