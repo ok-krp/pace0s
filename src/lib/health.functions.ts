@@ -203,3 +203,128 @@ export const rotateHealthE2eeKey = createServerFn({ method: "POST" })
     if (error) throw new Error("La rotation E2EE atomique a échoué.");
     return { rotated_to: data.new_key_version };
   });
+
+const pairingSessionSchema = z.object({
+  initiator_device_id: z.string().uuid(),
+  secret_hash: z.string().regex(/^[0-9a-f]{64}$/),
+  challenge: z.string().min(1).max(256),
+  ephemeral_public_key: devicePublicKeySchema,
+  expires_in_seconds: z.number().int().min(60).max(600).default(300),
+});
+
+const pairingJoinSchema = z.object({
+  session_id: z.string().uuid(),
+  secret_plaintext: z.string().min(1).max(512),
+  recipient_device_id: z.string().uuid(),
+  ephemeral_public_key: devicePublicKeySchema,
+});
+
+const pairingConfirmSchema = z.object({
+  session_id: z.string().uuid(),
+  initiator_device_id: z.string().uuid(),
+});
+
+const pairingCompleteSchema = z.object({
+  session_id: z.string().uuid(),
+  recipient_device_id: z.string().uuid(),
+});
+
+const pairingEnvelopeSchema = z.object({
+  session_id: z.string().uuid(),
+  sender_device_id: z.string().uuid(),
+  recipient_device_id: z.string().uuid(),
+  envelope: z.string().min(1).max(100_000),
+  key_version: z.number().int().positive().max(100),
+  algorithm: z.literal("ECDH-P256/HKDF-SHA256/AES-256-KW"),
+});
+
+const pairingSessionReadSchema = z.object({
+  session_id: z.string().uuid(),
+});
+
+export const createHealthPairingSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => pairingSessionSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: sessionId, error } = await context.supabase.rpc(
+      "create_pairing_session",
+      {
+        p_initiator_device_id: data.initiator_device_id,
+        p_secret_hash: data.secret_hash,
+        p_challenge: data.challenge,
+        p_ephemeral_pub: data.ephemeral_public_key,
+        p_expires_in_seconds: data.expires_in_seconds,
+      },
+    );
+    if (error) throw new Error("Impossible de créer la session de couplage.");
+    return { session_id: sessionId };
+  });
+
+export const joinHealthPairingSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => pairingJoinSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.rpc("join_pairing_session", {
+      p_session_id: data.session_id,
+      p_secret_plaintext: data.secret_plaintext,
+      p_recipient_device_id: data.recipient_device_id,
+      p_ephemeral_pub: data.ephemeral_public_key,
+    });
+    if (error) throw new Error("Impossible de rejoindre la session de couplage.");
+    return { joined: true };
+  });
+
+export const getHealthPairingSession = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => pairingSessionReadSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: sessions, error } = await context.supabase.rpc(
+      "get_pairing_session",
+      { p_session_id: data.session_id },
+    );
+    if (error) throw new Error("Impossible de charger la session de couplage.");
+    return { session: sessions?.[0] ?? null };
+  });
+
+export const confirmHealthPairingSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => pairingConfirmSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.rpc("confirm_pairing_session", {
+      p_session_id: data.session_id,
+      p_initiator_device_id: data.initiator_device_id,
+    });
+    if (error) throw new Error("Impossible de confirmer le couplage.");
+    return { confirmed: true };
+  });
+
+export const createHealthPairingEnvelope = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => pairingEnvelopeSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { data: envelopeId, error } = await context.supabase.rpc(
+      "create_pairing_envelope",
+      {
+        p_session_id: data.session_id,
+        p_sender_device_id: data.sender_device_id,
+        p_recipient_device_id: data.recipient_device_id,
+        p_envelope: data.envelope,
+        p_key_version: data.key_version,
+        p_algorithm: data.algorithm,
+      },
+    );
+    if (error) throw new Error("Impossible d'enregistrer l'enveloppe de couplage.");
+    return { envelope_id: envelopeId };
+  });
+
+export const completeHealthPairingSession = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: unknown) => pairingCompleteSchema.parse(d))
+  .handler(async ({ data, context }) => {
+    const { error } = await context.supabase.rpc("complete_pairing_session", {
+      p_session_id: data.session_id,
+      p_recipient_device_id: data.recipient_device_id,
+    });
+    if (error) throw new Error("Impossible de finaliser le couplage.");
+    return { completed: true };
+  });
