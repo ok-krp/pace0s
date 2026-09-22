@@ -197,7 +197,7 @@ export async function setRegisteredHealthDeviceId(deviceId: string): Promise<voi
   await writeStore(DEVICE_ID_ID, deviceId);
 }
 
-async function deriveRecoveryKey(mnemonic: string, salt: Uint8Array): Promise<CryptoKey> {
+async function deriveRecoveryKey(mnemonic: string, salt: Uint8Array<ArrayBuffer>): Promise<CryptoKey> {
   const baseKey = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(mnemonic.normalize("NFKD")), "PBKDF2", false, ["deriveKey"],
   );
@@ -211,7 +211,7 @@ export async function createHealthRecoveryEnvelope(keyVersion?: number) {
   const resolvedVersion = keyVersion ?? await getCurrentHealthKeyVersion();
   const mnemonic = generateMnemonic(128);
   const salt = crypto.getRandomValues(new Uint8Array(16));
-  const recoveryKey = await deriveRecoveryKey(mnemonic, salt);
+  const recoveryKey = await deriveRecoveryKey(mnemonic, salt as Uint8Array<ArrayBuffer>);
   const masterKey = await getHealthEncryptionKey(resolvedVersion);
   const rawMasterKey = await crypto.subtle.exportKey("raw", masterKey);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
@@ -238,7 +238,7 @@ export async function unwrapHealthMasterKeyFromRecovery(
   const [saltB64, ciphertextB64] = envelope.split(".");
   if (!saltB64 || !ciphertextB64) throw new Error("Invalid recovery envelope");
   const salt = fromBase64(saltB64);
-  const recoveryKey = await deriveRecoveryKey(mnemonic.trim(), salt);
+  const recoveryKey = await deriveRecoveryKey(mnemonic.trim(), salt as Uint8Array<ArrayBuffer>);
   const aad = new TextEncoder().encode(`pace-health-recovery-v1:${keyVersion}`);
   const rawMasterKey = await crypto.subtle.decrypt(
     { name: "AES-GCM", iv: fromBase64(nonce), additionalData: new Uint8Array([...salt, ...aad]) },
