@@ -137,16 +137,6 @@ export function useHealthToday() {
         }
       }
 
-      const dedupeBackfillKey = `pace-health-e2ee-dedupe-backfilled:${user.id}`;
-      if (localStorage.getItem(dedupeBackfillKey) !== "1") {
-        try {
-          const backfill = await backfillHealthE2eeDedupeHashes();
-          if (backfill.skipped === 0) localStorage.setItem(dedupeBackfillKey, "1");
-        } catch (error) {
-          console.warn("health E2EE dedupe backfill deferred", error);
-        }
-      }
-
       const response = await fetchEncrypted({ data: { limit: 10000 } });
       const records = response.records as EncryptedHealthRecord[];
       const samples: HealthSample[] = [];
