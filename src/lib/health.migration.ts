@@ -97,3 +97,74 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{
 
   return { migrated, deleted: rows.length };
 }
+
+const BIOMETRIC_PROFILE_FIELDS = [
+  "age",
+  "sex",
+  "height_cm",
+  "weight_kg",
+  "weight_goal_kg",
+  "body_fat_goal_pct",
+  "muscle_mass_goal_pct",
+  "daily_calorie_goal",
+  "daily_protein_goal",
+  "daily_water_ml_goal",
+  "training_goal",
+  "activity_level",
+  "training_sessions_goal",
+] as const;
+
+export async function migrateProfileBiometricsToE2ee(): Promise<boolean> {
+  const { data: userResult, error: userError } = await supabase.auth.getUser();
+  if (userError || !userResult.user) throw new Error("Authenticated user required");
+
+  const { data: profile, error: readError } = await supabase
+    .from("profiles")
+    .select(BIOMETRIC_PROFILE_FIELDS.join(","))
+    .eq("user_id", userResult.user.id)
+    .maybeSingle();
+
+  if (readError) throw new Error("Unable to read legacy profile biometrics");
+  if (!profile) return false;
+
+  const hasBiometrics = BIOMETRIC_PROFILE_FIELDS.some((field) => profile[field] !== null);
+  if (!hasBiometrics) return false;
+
+  const encrypted = await encryptHealthPayload({
+    age: profile.age,
+    sex: profile.sex,
+    height_cm: profile.height_cm,
+    weight_kg: profile.weight_kg,
+    weight_goal_kg: profile.weight_goal_kg,
+    body_fat_goal_pct: profile.body_fat_goal_pct,
+    muscle_mass_goal_pct: profile.muscle_mass_goal_pct,
+    daily_calorie_goal: profile.daily_calorie_goal,
+    daily_protein_goal: profile.daily_protein_goal,
+    daily_water_ml_goal: profile.daily_water_ml_goal,
+    training_goal: profile.training_goal,
+    activity_level: profile.activity_level,
+    training_sessions_goal: profile.training_sessions_goal,
+  }, HEALTH_E2EE_CURRENT_KEY_VERSION);
+
+  const { error: upsertError } = await (supabase as any)
+    .from("user_biometrics_e2ee")
+    .upsert({
+      user_id: userResult.user.id,
+      ...encrypted,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id" });
+
+  if (upsertError) throw new Error("Unable to store encrypted profile biometrics");
+
+  const cleared = Object.fromEntries(BIOMETRIC_PROFILE_FIELDS.map((field) => [field, null]));
+  const { error: clearError } = await supabase
+    .from("profiles")
+    .update(cleared)
+    .eq("user_id", userResult.user.id);
+
+  if (clearError) {
+    throw new Error("Encrypted biometrics stored; legacy profile fields were not cleared");
+  }
+
+  return true;
+}
