@@ -246,6 +246,17 @@ begin
     raise exception 'Session expired';
   end if;
 
+  if (
+    (select count(*)
+     from public.health_e2ee_devices d
+     where d.id in (v_session.initiator_device_id, v_session.recipient_device_id)
+       and d.user_id = auth.uid()
+       and d.revoked_at is null
+       and d.algorithm = 'ECDH-P256') <> 2
+  ) then
+    raise exception 'Pairing devices must be active';
+  end if;
+
   update public.health_e2ee_pairing_sessions
   set status = 'confirmed',
       confirmed_at = now(),
@@ -360,13 +371,14 @@ begin
     raise exception 'Invalid pairing algorithm';
   end if;
 
-  if not exists (
-    select 1
+  if (
+    select count(*)
     from public.health_e2ee_devices d
     where d.id in (p_sender_device_id, p_recipient_device_id)
       and d.user_id = auth.uid()
       and d.revoked_at is null
-  ) then
+      and d.algorithm = 'ECDH-P256'
+  ) <> 2 then
     raise exception 'Pairing devices must be active';
   end if;
 
