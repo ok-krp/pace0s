@@ -249,9 +249,9 @@ export async function unwrapHealthKeyBundle(
     fromBase64Url(envelope.dedupe_root_key.wrapped_key),
     wrappingKey,
     "AES-KW",
-    { name: "AES-GCM", length: 256 },
+    { name: "HMAC", hash: "SHA-256" },
     true,
-    ["encrypt", "decrypt"],
+    ["sign"],
   );
 
   await importHealthMasterKey(
