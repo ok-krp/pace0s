@@ -114,8 +114,14 @@ object PendingHealthQueue {
         val remaining = JSONArray()
         var removed = false
         for (i in 0 until current.length()) {
-            val item = current.optJSONObject(i) ?: continue
-            if (item.optString("id") == id) removed = true else remaining.put(item)
+            val item = current.optJSONObject(i)
+            if (item == null) {
+                remaining.put(current.opt(i))
+            } else if (item.optString("id") == id) {
+                removed = true
+            } else {
+                remaining.put(item)
+            }
         }
         if (!removed) return false
         check(prefs.edit().putString(QUEUE, remaining.toString()).commit()) {
