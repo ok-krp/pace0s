@@ -48,18 +48,8 @@ jobs:
           api-level: 35
           target: google_apis
           arch: x86_64
-          script: |
-            cd android
-            set +e
-            gradle --no-daemon :app:connectedDebugAndroidTest --stacktrace
-            status=$?
-            if [ $status -ne 0 ]; then
-              mkdir -p test-diagnostics
-              adb -s emulator-5554 logcat -d -v threadtime > test-diagnostics/logcat.txt || true
-              cp -r app/build/reports/androidTests/connected/debug test-diagnostics/test-report || true
-              cp -r app/build/outputs/androidTest-results/connected test-diagnostics/test-results || true
-            fi
-            exit $status
+          script: >-
+            cd android; set +e; gradle --no-daemon :app:connectedDebugAndroidTest --stacktrace; status=$?; if [ $status -ne 0 ]; then mkdir -p test-diagnostics; adb -s emulator-5554 logcat -d -v threadtime > test-diagnostics/logcat.txt || true; cp -r app/build/reports/androidTests/connected/debug test-diagnostics/test-report || true; cp -r app/build/outputs/androidTest-results/connected test-diagnostics/test-results || true; fi; exit $status
 
       - name: Upload Android test diagnostics
         if: always()
