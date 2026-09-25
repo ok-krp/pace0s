@@ -8,7 +8,6 @@ import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.SecretKeySpec
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.permission.HealthPermission.Companion.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
@@ -124,7 +123,7 @@ object PendingHealthQueue {
 private object QueueCrypto {
     data class Encrypted(val ciphertext: String, val iv: String)
 
-    private fun key(): SecretKey {
+    private fun keyOrCreate(): SecretKey {
         val keyStore = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val existing = keyStore.getKey(KEY_ALIAS, null)
         if (existing is SecretKey) return existing
@@ -143,9 +142,14 @@ private object QueueCrypto {
         return generator.generateKey()
     }
 
+    private fun existingKeyOrNull(): SecretKey? {
+        val keyStore = java.security.KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        return keyStore.getKey(KEY_ALIAS, null) as? SecretKey
+    }
+
     fun encrypt(plaintext: String): Encrypted {
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(Cipher.ENCRYPT_MODE, key())
+        cipher.init(Cipher.ENCRYPT_MODE, keyOrCreate())
         return Encrypted(
             Base64.encodeToString(cipher.doFinal(plaintext.toByteArray(Charsets.UTF_8)), Base64.NO_WRAP),
             Base64.encodeToString(cipher.iv, Base64.NO_WRAP),
@@ -153,10 +157,11 @@ private object QueueCrypto {
     }
 
     fun decrypt(ciphertext: String, iv: String): String {
+        val key = existingKeyOrNull() ?: throw IllegalStateException("Health queue encryption key is unavailable")
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(
             Cipher.DECRYPT_MODE,
-            key(),
+            key,
             GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP)),
         )
         return String(
