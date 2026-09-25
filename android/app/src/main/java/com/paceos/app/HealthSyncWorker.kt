@@ -121,6 +121,9 @@ object PendingHealthQueue {
 }
 
 private object QueueCrypto {
+    private const val KEY_ALIAS = "pace-health-queue-v1"
+    private const val TRANSFORMATION = "AES/GCM/NoPadding"
+
     data class Encrypted(val ciphertext: String, val iv: String)
 
     private fun keyOrCreate(): SecretKey {
