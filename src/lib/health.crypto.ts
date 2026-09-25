@@ -94,50 +94,6 @@ export async function getHealthEncryptionKey(version?: number): Promise<CryptoKe
 async function requireHealthEncryptionKey(version?: number): Promise<CryptoKey> {
   const resolvedVersion = version ?? await getCurrentHealthKeyVersion();
   const key = await getStoredKey(resolvedVersion);
-  if (!key) {
-    throw new Error(`Health encryption key v\${resolvedVersion} is unavailable on this device`);
-  }
-  return key;
-}
-
-export async function getHealthDedupeRootKey(): Promise<CryptoKey> {
-  const existing = await readStore<CryptoKey>(DEDUPE_ROOT_KEY_ID);
-  if (existing) return existing;
-
-  const masterKey = await requireHealthEncryptionKey(1);
-  const rawMasterKey = await crypto.subtle.exportKey("raw", masterKey);
-  const hkdfKey = await crypto.subtle.importKey("raw", rawMasterKey, "HKDF", false, ["deriveKey"]);
-  const rootKey = await crypto.subtle.deriveKey(
-    {
-      name: "HKDF",
-      hash: "SHA-256",
-      salt: HEALTH_DEDUPE_HKDF_SALT,
-      info: HEALTH_DEDUPE_HKDF_INFO,
-    },
-    hkdfKey,
-    { name: "HMAC", hash: "SHA-256", length: 256 },
-    true,
-    ["sign"],
-  );
-  await writeStore(DEDUPE_ROOT_KEY_ID, rootKey);
-  return rootKey;
-}
-
-export async function importHealthDedupeRootKey(rawKey: ArrayBuffer): Promise<CryptoKey> {
-  const key = await crypto.subtle.importKey(
-    "raw", rawKey, { name: "HMAC", hash: "SHA-256" }, true, ["sign"],
-  );
-  await writeStore(DEDUPE_ROOT_KEY_ID, key);
-  return key;
-}
-
-export async function exportHealthDedupeRootKey(): Promise<ArrayBuffer> {
-  return crypto.subtle.exportKey("raw", await getHealthDedupeRootKey());
-}
-
-async function requireHealthEncryptionKey(version?: number): Promise<CryptoKey> {
-  const resolvedVersion = version ?? await getCurrentHealthKeyVersion();
-  const key = await getStoredKey(resolvedVersion);
   if (!key) throw new Error(`Health encryption key v${resolvedVersion} is unavailable on this device`);
   return key;
 }
