@@ -115,6 +115,24 @@ class PendingHealthQueueInstrumentedTest {
     }
 
     @Test
+    fun acknowledgePreservesMalformedQueueEntries() {
+        val id = PendingHealthQueue.enqueue(
+            context,
+            JSONObject().put("source", "valid").put("samples", JSONArray()),
+        )
+        val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
+        val raw = JSONArray(prefs.getString("pending_queue", "[]"))
+        raw.put("unreadable-entry")
+        assertTrue(prefs.edit().putString("pending_queue", raw.toString()).commit())
+
+        assertTrue(PendingHealthQueue.acknowledge(context, id))
+
+        val persisted = JSONArray(prefs.getString("pending_queue", "[]"))
+        assertEquals(1, persisted.length())
+        assertEquals("unreadable-entry", persisted.getString(0))
+    }
+
+    @Test
     fun legacyPayloadMigratesToCiphertextAndRemainsReadable() {
         val legacy = JSONArray().put(
             JSONObject()
