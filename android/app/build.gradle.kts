@@ -19,7 +19,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 
-dependencies {
+dependencies {\n    testImplementation("junit:junit:4.13.2")\n    androidTestImplementation("androidx.test.ext:junit:1.2.1")\n    androidTestImplementation("androidx.test:runner:1.6.2")
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.activity:activity-ktx:1.10.1")
     implementation("androidx.health.connect:connect-client:1.1.0")
