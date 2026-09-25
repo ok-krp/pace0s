@@ -58,14 +58,23 @@ export function initHealthConnectBridge(onSync?: (result: { inserted: number; so
       }));
 
       let inserted = 0;
-      for (let i = 0; i < samples.length; i += 500) {
-        const chunk = samples.slice(i, i + 500);
+      for (let i = 0; i < samples.length; i += 250) {
+        const chunk = samples.slice(i, i + 250);
         if (!chunk.length) continue;
-        const encrypted = [];
-        for (const sample of chunk) {
-          encrypted.push(await encryptHealthSampleForUpload(sample));
-        }
-        const result = await insertEncryptedHealthSamples({ data: { records: encrypted } });
+
+        const encryptedRecords = await Promise.all(
+          chunk.map((sample) =>
+            encryptHealthSampleForUpload({
+              ...sample,
+              external_id: sample.external_id ?? sample.source_id ??
+                `${sample.source}:${sample.type}:${sample.ts}`,
+            }),
+          ),
+        );
+
+        const result = await insertEncryptedHealthSamples({
+          data: { records: encryptedRecords },
+        });
         inserted += result.inserted;
       }
 
