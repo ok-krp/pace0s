@@ -9,7 +9,6 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import androidx.health.connect.client.HealthConnectClient
-import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.permission.HealthPermission.Companion.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -42,8 +41,12 @@ class HealthSyncWorker(appContext: Context, params: WorkerParameters) : Coroutin
 object PendingHealthQueue {
     private const val PREFS = "pace_health"
     private const val QUEUE = "pending_queue"
-    private const val KEY_ALIAS = "pace-health-queue-v1"
-    private const val TRANSFORMATION = "AES/GCM/NoPadding"
+
+    data class DeliveryResult(
+        val items: JSONArray,
+        val unreadableCount: Int,
+        val keyUnavailable: Boolean,
+    )
 
     @Synchronized
     fun enqueue(context: Context, payload: JSONObject): String {
@@ -58,17 +61,30 @@ object PendingHealthQueue {
                 .put("iv", encrypted.iv)
                 .put("createdAt", System.currentTimeMillis()),
         )
-        prefs.edit().putString(QUEUE, current.toString()).commit()
+        check(prefs.edit().putString(QUEUE, current.toString()).commit()) {
+            "Unable to persist Health Connect queue"
+        }
         return id
     }
 
     @Synchronized
-    fun peek(context: Context): JSONArray {
+    fun peek(context: Context): JSONArray = readForDelivery(context).items
+
+    @Synchronized
+    fun readForDelivery(context: Context): DeliveryResult {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val current = readRaw(prefs)
         val result = JSONArray()
+        var unreadableCount = 0
+        var keyUnavailable = false
+
         for (i in 0 until current.length()) {
-            val item = current.optJSONObject(i) ?: continue
+            val item = current.optJSONObject(i)
+            if (item == null) {
+                unreadableCount++
+                continue
+            }
+
             try {
                 val plaintext = QueueCrypto.decrypt(
                     item.getString("ciphertext"),
@@ -80,11 +96,15 @@ object PendingHealthQueue {
                         .put("payload", JSONObject(plaintext))
                         .put("createdAt", item.optLong("createdAt")),
                 )
+            } catch (error: QueueCrypto.KeyUnavailableException) {
+                keyUnavailable = true
+                unreadableCount++
             } catch (_: Exception) {
-                // Never return malformed/corrupt queue data to the WebView.
+                unreadableCount++
             }
         }
-        return result
+
+        return DeliveryResult(result, unreadableCount, keyUnavailable)
     }
 
     @Synchronized
@@ -97,13 +117,17 @@ object PendingHealthQueue {
             val item = current.optJSONObject(i) ?: continue
             if (item.optString("id") == id) removed = true else remaining.put(item)
         }
-        if (removed) prefs.edit().putString(QUEUE, remaining.toString()).commit()
-        return removed
+        if (!removed) return false
+        check(prefs.edit().putString(QUEUE, remaining.toString()).commit()) {
+            "Unable to acknowledge Health Connect queue item"
+        }
+        return true
     }
 
-    private fun readRaw(prefs: android.content.SharedPreferences): JSONArray = try {
+    private fun readRaw(prefs: android.content.SharedPreferences): JSONArray {
         val raw = JSONArray(prefs.getString(QUEUE, "[]") ?: "[]")
         var migrated = false
+
         for (i in 0 until raw.length()) {
             val item = raw.optJSONObject(i) ?: continue
             val legacyPayload = item.optJSONObject("payload") ?: continue
@@ -113,16 +137,21 @@ object PendingHealthQueue {
             item.put("iv", encrypted.iv)
             migrated = true
         }
-        if (migrated) prefs.edit().putString(QUEUE, raw.toString()).commit()
-        raw
-    } catch (_: Exception) {
-        JSONArray()
+
+        if (migrated) {
+            check(prefs.edit().putString(QUEUE, raw.toString()).commit()) {
+                "Unable to persist migrated Health Connect queue"
+            }
+        }
+        return raw
     }
 }
 
 private object QueueCrypto {
     private const val KEY_ALIAS = "pace-health-queue-v1"
     private const val TRANSFORMATION = "AES/GCM/NoPadding"
+
+    class KeyUnavailableException : IllegalStateException("Health queue encryption key is unavailable")
 
     data class Encrypted(val ciphertext: String, val iv: String)
 
@@ -160,7 +189,7 @@ private object QueueCrypto {
     }
 
     fun decrypt(ciphertext: String, iv: String): String {
-        val key = existingKeyOrNull() ?: throw IllegalStateException("Health queue encryption key is unavailable")
+        val key = existingKeyOrNull() ?: throw KeyUnavailableException()
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(
             Cipher.DECRYPT_MODE,
