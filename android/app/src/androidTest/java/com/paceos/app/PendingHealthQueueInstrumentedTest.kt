@@ -41,9 +41,9 @@ class PendingHealthQueueInstrumentedTest {
 
         val raw = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
             .getString("pending_queue", "") ?: ""
-        assertFalse(raw.contains(""payload""))
-        assertTrue(raw.contains(""ciphertext""))
-        assertTrue(raw.contains(""iv""))
+        assertFalse(raw.contains("\"payload\""))
+        assertTrue(raw.contains("\"ciphertext\""))
+        assertTrue(raw.contains("\"iv\""))
         assertEquals(1, PendingHealthQueue.peek(context).length())
     }
 
