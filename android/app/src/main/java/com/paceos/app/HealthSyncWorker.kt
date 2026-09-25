@@ -103,7 +103,19 @@ object PendingHealthQueue {
     }
 
     private fun readRaw(prefs: android.content.SharedPreferences): JSONArray = try {
-        JSONArray(prefs.getString(QUEUE, "[]") ?: "[]")
+        val raw = JSONArray(prefs.getString(QUEUE, "[]") ?: "[]")
+        var migrated = false
+        for (i in 0 until raw.length()) {
+            val item = raw.optJSONObject(i) ?: continue
+            val legacyPayload = item.optJSONObject("payload") ?: continue
+            val encrypted = QueueCrypto.encrypt(legacyPayload.toString())
+            item.remove("payload")
+            item.put("ciphertext", encrypted.ciphertext)
+            item.put("iv", encrypted.iv)
+            migrated = true
+        }
+        if (migrated) prefs.edit().putString(QUEUE, raw.toString()).commit()
+        raw
     } catch (_: Exception) {
         JSONArray()
     }
