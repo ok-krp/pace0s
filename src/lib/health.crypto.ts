@@ -88,8 +88,7 @@ export async function createHealthMasterKey(version: number): Promise<CryptoKey>
 }
 
 export async function getHealthEncryptionKey(version?: number): Promise<CryptoKey> {
-  const resolvedVersion = version ?? await getCurrentHealthKeyVersion();
-  return createHealthMasterKey(resolvedVersion);
+  return requireHealthEncryptionKey(version);
 }
 
 async function requireHealthEncryptionKey(version?: number): Promise<CryptoKey> {
