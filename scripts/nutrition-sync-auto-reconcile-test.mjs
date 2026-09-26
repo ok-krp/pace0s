@@ -39,3 +39,6 @@ assert.match(engine, /if \(isNutritionSyncKey\(row\.key\)\)/);
 assert.match(engine, /if \(isNutritionSyncKey\(key\)\)/);
 
 console.log("nutrition-sync-auto-reconcile-test: PASS");
+
+// Regression matrix: nutrition conflicts are never surfaced for manual resolution.
+assert.match(engine, /recordConflict = .*isNutritionSyncKey/s);
