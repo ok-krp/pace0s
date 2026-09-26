@@ -123,10 +123,11 @@ function SportPage() {
   }, [setExs, setProgs]);
 
   const lastPerformance = useCallback((exerciseId: string) => {
-    const previous = sessions.filter((session) => session.exercises.some((item) => item.exerciseId === exerciseId)).sort((a, b) => b.date.localeCompare(a.date))[0];
+    const previous = sessions.filter((session) => session.exercises.some((item) => item.exerciseId === exerciseId)).sort((a, b) => b.date.localeCompare(a.date) || b.startedAt - a.startedAt)[0];
     const exercise = previous?.exercises.find((item) => item.exerciseId === exerciseId);
     const done = exercise?.sets.filter((set) => set.done) ?? [];
-    return done.length ? { sets: done.map((set) => ({ ...set })), sessionId: previous!.id } : null;
+    const working = getWorkingSets(done);
+    return working.length ? { sets: working.map((set) => ({ ...set })), sessionId: previous!.id } : null;
   }, [sessions]);
 
   const persistCloudSession = useCallback(async (session: WorkoutSession, availableExercises: Exercise[]) => {
@@ -255,8 +256,9 @@ function SportPage() {
   }, []);  const todayPrograms = progs.filter((p) => !p.isArchived && p.days.includes(todayDow));
   const startSession = (program?: Program) => {
     const exercises: SessionExercise[] = program ? program.items.map((it) => {
+      const target = targets[it.exerciseId];
       const last = lastPerformance(it.exerciseId);
-      const source = last?.sets?.length ? last.sets : Array.from({ length: it.sets }, () => ({ reps: it.reps, weight: it.weight ?? 0, done: false }));
+      const source = target ? Array.from({ length: target.targetSets }, () => ({ reps: target.targetReps, weight: target.targetWeight, done: false })) : last?.sets?.length ? last.sets : Array.from({ length: it.sets }, () => ({ reps: it.reps, weight: it.weight ?? 0, done: false }));
       return { exerciseId: it.exerciseId, sets: source.map((set) => ({ reps: set.reps, weight: set.weight, done: false })) };
     }) : [];
     const s: WorkoutSession = { id: crypto.randomUUID(), date: todayKey(), programId: program?.id, name: program?.name ?? "Séance libre", startedAt: Date.now(), exercises };
