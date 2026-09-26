@@ -161,8 +161,21 @@ function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false
 function isNutritionSyncKey(key: string) {
   return key === "pace.nutrition.items" || key === "pace.nutrition.totals";
 }
-function autoMergeNutritionValues(localValue: unknown, remoteValue: unknown) {
+function isValidNutritionValue(key: string, value: unknown) {
+  if (key === "pace.nutrition.items") {
+    return !!value && typeof value === "object" && !Array.isArray(value) &&
+      Object.values(value as Record<string, unknown>).every((day) => Array.isArray(day));
+  }
+  if (key === "pace.nutrition.totals") {
+    return !!value && typeof value === "object" && !Array.isArray(value) &&
+      Object.values(value as Record<string, unknown>).every((day) => !!day && typeof day === "object" && !Array.isArray(day));
+  }
+  return true;
+}
+function autoMergeNutritionValues(key: string, localValue: unknown, remoteValue: unknown) {
   if (syncValuesEqual(localValue, remoteValue)) return localValue;
+  if (!isValidNutritionValue(key, localValue)) return remoteValue;
+  if (!isValidNutritionValue(key, remoteValue)) return localValue;
   if (isEmptyRecoveredValue(localValue)) return remoteValue;
   if (isEmptyRecoveredValue(remoteValue)) return localValue;
   return mergeRecoveredValues(remoteValue, localValue);
@@ -292,7 +305,7 @@ export function useCloudSyncEngineInternal() {
       const queued = getQueued(row.key);
       if (queued) {
         if (isNutritionSyncKey(row.key)) {
-          const merged = autoMergeNutritionValues(queued.value, row.value);
+          const merged = autoMergeNutritionValues(row.key, queued.value, row.value);
           if (syncValuesEqual(merged, row.value)) {
             applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
             markVersion(row.key, row.updated_at);
@@ -354,7 +367,7 @@ export function useCloudSyncEngineInternal() {
               continue;
             }
             if (isNutritionSyncKey(key)) {
-              const merged = autoMergeNutritionValues(queued.value, mergedValue);
+              const merged = autoMergeNutritionValues(key, queued.value, mergedValue);
               const mergedAt = new Date().toISOString();
               applyRemoteWrite(key, merged, mergedAt);
               queueItem({ key, value: merged, updatedAt: mergedAt, mutationId: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : mergedAt });
