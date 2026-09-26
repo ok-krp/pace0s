@@ -36,8 +36,11 @@ assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 
 // A lost RPC response must be idempotent: retrying an already committed value
 // must drain the queue instead of issuing another cloud write.
-assert.match(engine, /canonical row already contains this exact value/);
-assert.match(engine, /serialize\(existing\.value\) === serialize\(item\.value\)/);
+assert.match(
+  engine,
+  /existing && serialize\(existing\.value\) === serialize\(item\.value\)/,
+  "retry path must acknowledge an already-committed canonical value",
+);
 assert.match(engine, /serialize\(queued\.value\) === serialize\(mergedValue\)/);
 
 // The server RPC is monotonic: an older canonical timestamp must never be
