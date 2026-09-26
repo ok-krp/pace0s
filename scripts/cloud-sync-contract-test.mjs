@@ -34,6 +34,19 @@ assert.match(engine, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 assert.match(engine, /resolveConflict/);
 assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 
+// A lost RPC response must be idempotent: retrying an already committed value
+// must drain the queue instead of issuing another cloud write.
+assert.match(engine, /canonical row already contains this exact value/);
+assert.match(engine, /serialize\(existing\.value\) === serialize\(item\.value\)/);
+assert.match(engine, /serialize\(queued\.value\) === serialize\(mergedValue\)/);
+
+// The server RPC is monotonic: an older canonical timestamp must never be
+// replaced by a newer request carrying an older-than-canonical server timestamp.
+assert.match(
+  read("supabase/migrations/20260926192000_server_ordered_cloud_sync_monotonic_writes.sql"),
+  /WHERE public\.user_state\.updated_at < EXCLUDED\.updated_at/
+);
+
 // Deterministic newest-wins model for two devices and duplicate realtime events.
 const state = { value: "initial", updatedAt: "2026-08-20T10:00:00.000Z", updatedBy: "A" };
 const apply = (candidate) => {
