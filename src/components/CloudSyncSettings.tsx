@@ -5,7 +5,7 @@ import { useAuth } from "@/hooks/use-auth";
 
 export function CloudSyncSettings() {
   const { user } = useAuth();
-  const status = useCloudSyncStatus();
+  const { status } = useCloudSyncStatus();
   const [online, setOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
 
   useEffect(() => {

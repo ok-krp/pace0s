@@ -5,6 +5,7 @@ import { decryptHealthPayload } from "@/lib/health.crypto";
 import { migrateLegacyHealthSamplesToE2ee } from "@/lib/health.migration";
 import { backfillHealthE2eeDedupeHashes } from "@/lib/health.dedupe.backfill";
 import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
 
 export type HealthToday = {
   steps: number; kcalActive: number; kcalTotal: number; distanceM: number; sleepMin: number; exerciseMin: number;
@@ -187,8 +188,46 @@ export function useHealthToday() {
   useEffect(() => {
     const handler = () => void refresh();
     window.addEventListener("pace.health.changed", handler);
-    return () => window.removeEventListener("pace.health.changed", handler);
-  }, [refresh]);
+    const onOnline = () => void refresh();
+    window.addEventListener("online", onOnline);
+    if (!user) {
+      return () => {
+        window.removeEventListener("pace.health.changed", handler);
+        window.removeEventListener("online", onOnline);
+      };
+    }
+
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        void refresh();
+      }, 150);
+    };
+
+    const channel = supabase
+      .channel(`pace-health-e2ee-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "health_samples_e2ee",
+          filter: `user_id=eq.${user.id}`,
+        },
+        scheduleRefresh,
+      );
+
+    void channel.subscribe();
+
+    return () => {
+      window.removeEventListener("pace.health.changed", handler);
+      window.removeEventListener("online", onOnline);
+      if (refreshTimer) clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [refresh, user]);
 
   return { data, loading, refresh };
 }

@@ -88,8 +88,7 @@ export async function createHealthMasterKey(version: number): Promise<CryptoKey>
 }
 
 export async function getHealthEncryptionKey(version?: number): Promise<CryptoKey> {
-  const resolvedVersion = version ?? await getCurrentHealthKeyVersion();
-  return createHealthMasterKey(resolvedVersion);
+  return requireHealthEncryptionKey(version);
 }
 
 async function requireHealthEncryptionKey(version?: number): Promise<CryptoKey> {
@@ -149,7 +148,7 @@ function fromBase64(value: string): Uint8Array<ArrayBuffer> {
 
 export async function encryptHealthPayload(payload: unknown, keyVersion?: number) {
   const resolvedVersion = keyVersion ?? await getCurrentHealthKeyVersion();
-  const key = await getHealthEncryptionKey(resolvedVersion);
+  const key = await createHealthMasterKey(resolvedVersion);
   const nonce = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = new TextEncoder().encode(JSON.stringify(payload));
   const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, plaintext);
