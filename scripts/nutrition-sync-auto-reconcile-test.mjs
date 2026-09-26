@@ -30,7 +30,9 @@ assert.equal(equal(336.4, 336.40000000000003), true);
 assert.match(engine, /function isNutritionSyncKey/);
 assert.match(engine, /pace\.nutrition\.items/);
 assert.match(engine, /pace\.nutrition\.totals/);
+assert.match(engine, /function isValidNutritionValue/);
 assert.match(engine, /function autoMergeNutritionValues/);
+assert.match(engine, /if \(!isValidNutritionValue\(key, localValue\)\) return remoteValue;/);
 assert.match(engine, /if \(isNutritionSyncKey\(row\.key\)\)/);
 assert.match(engine, /if \(isNutritionSyncKey\(key\)\)/);
 
