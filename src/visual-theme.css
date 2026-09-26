@@ -110,8 +110,8 @@
 [data-visual-theme="signal"] [class*="bg-popover"] {
   background: rgb(255 255 255 / 0.02) !important;
   border: 1px solid rgb(255 255 255 / 0.05) !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+  backdrop-filter: blur(20px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(120%) !important;
   border-radius: 0 !important;
   box-shadow: none !important;
 }
@@ -249,6 +249,8 @@
   background: #080808 !important;
   border: 1px solid rgb(255 255 255 / 0.05) !important;
   box-shadow: none !important;
+  backdrop-filter: blur(24px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(120%) !important;
 }
 
 /* Status chips remain informational, never decorative. */
