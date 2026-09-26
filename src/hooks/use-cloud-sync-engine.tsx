@@ -439,7 +439,9 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("pageshow", onPageShow);
     window.addEventListener("pace.legal.changed", onLegalChanged);
     window.addEventListener("pace.sync.conflict.resolved", onConflictResolved);
-    setConflicts(readConflicts());
+    const cleanConflicts = readConflicts().filter((item) => !isNutritionSyncKey(item.key));
+    if (cleanConflicts.length !== readConflicts().length) writeConflicts(cleanConflicts);
+    setConflicts(cleanConflicts);
     void syncNow();
     return () => {
       cancelled = true; offLocal();
