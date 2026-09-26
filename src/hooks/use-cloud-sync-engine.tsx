@@ -180,6 +180,23 @@ export function useCloudSyncEngineInternal() {
 
     const writeItem = async (item: QueueItem): Promise<boolean> => {
       if (conflictForKey(item.key)) return false;
+
+      // A lost RPC response must be idempotent: if the canonical row already
+      // contains this exact value, acknowledge the queue item without writing again.
+      const { data: existingRows, error: existingError } = await supabase
+        .from("user_state")
+        .select("key,value,updated_at,updated_by")
+        .eq("user_id", user.id)
+        .eq("key", item.key)
+        .limit(1);
+      if (existingError) throw existingError;
+      const existing = existingRows?.[0] as SyncRow | undefined;
+      if (existing && serialize(existing.value) === serialize(item.value)) {
+        markVersion(existing.key, existing.updated_at);
+        localStorage.setItem("pace.__last_sync_at", existing.updated_at);
+        return true;
+      }
+
       const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
       const result = await rpc("upsert_user_state_if_newer", {
         p_user_id: user.id,
@@ -286,7 +303,16 @@ export function useCloudSyncEngineInternal() {
           const localIsEmpty = localDomain ? isEmptyRecoveredValue(localDomain.value) : true;
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           const queued = getQueued(key);
-          if (queued) { recordConflict(key, queued.value, mergedValue, updatedAt); continue; }
+          if (queued) {
+            if (serialize(queued.value) === serialize(mergedValue)) {
+              unqueueIfMutation(key, queued.updatedAt);
+              meta[key] = updatedAt;
+              newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
+              continue;
+            }
+            recordConflict(key, queued.value, mergedValue, updatedAt);
+            continue;
+          }
           if (sourceTime <= localTime && !localIsEmpty) continue;
           applyRemoteAndRemember(key, mergedValue, updatedAt, canonical?.updated_by ?? legacy?.updated_by);
           meta[key] = updatedAt;
