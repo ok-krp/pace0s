@@ -33,7 +33,7 @@ assert.match(engine, /pace\.nutrition\.totals/);
 assert.match(engine, /function isValidNutritionValue/);
 assert.match(engine, /function autoMergeNutritionValues/);
 assert.match(engine, /function reconcileNutritionRemoteValue/);
-assert.match(engine, /isNutritionSyncKey\\(key\\) \\? reconcileNutritionRemoteValue/);
+assert.match(engine, /isNutritionSyncKey\(key\) \? reconcileNutritionRemoteValue/);
 assert.match(engine, /if \(!isValidNutritionValue\(key, localValue\)\) return remoteValue;/);
 assert.match(engine, /if \(isNutritionSyncKey\(row\.key\)\)/);
 assert.match(engine, /if \(isNutritionSyncKey\(key\)\)/);
