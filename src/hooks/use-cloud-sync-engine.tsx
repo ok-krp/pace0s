@@ -183,6 +183,16 @@ function autoMergeNutritionValues(key: string, localValue: unknown, remoteValue:
 function isAuthoritativeNutritionWriter(updatedBy: string | null | undefined) {
   return updatedBy === "coach_ai" || updatedBy === "nutrition_state_repair";
 }
+function reconcileNutritionRemoteValue(key: string, incomingValue: unknown, updatedBy?: string | null) {
+  const incoming = key === "pace.nutrition.items" ? unwrapNutritionValue(incomingValue) : incomingValue;
+  if (!isValidNutritionValue(key, incoming)) return incomingValue;
+  const local = readDomain<Record<string, unknown>>(key.slice(PACE_PREFIX.length), {}).value;
+  if (!isValidNutritionValue(key, local) || isEmptyRecoveredValue(local)) return incoming;
+  if (key === "pace.nutrition.items") {
+    return mergeNutritionRemoteValue(incoming, isAuthoritativeNutritionWriter(updatedBy));
+  }
+  return incoming;
+}
 
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
@@ -197,7 +207,7 @@ export function useCloudSyncEngineInternal() {
     if (encoded !== undefined) lastRemoteValues.current[key] = encoded;
   };
   const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string, updatedBy?: string | null) => {
-    const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value, isAuthoritativeNutritionWriter(updatedBy)) : value;
+    const safeValue = isNutritionSyncKey(key) ? reconcileNutritionRemoteValue(key, value, updatedBy) : value;
     rememberRemote(key, safeValue);
     applyRemoteWrite(key, safeValue, updatedAt);
   };
