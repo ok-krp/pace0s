@@ -765,6 +765,35 @@
   }
 }
 
+/* Signal material separation: keep hard edges, add spatial blur so stacked
+   surfaces remain legible without introducing rounded-card styling. */
+[data-visual-theme="signal"] .glass-card,
+[data-visual-theme="signal"] [class*="glass-card"],
+[data-visual-theme="signal"] .glass-thin,
+[data-visual-theme="signal"] .glass-icon,
+[data-visual-theme="signal"] [data-slot="card"],
+[data-visual-theme="signal"] aside,
+[data-visual-theme="signal"] header {
+  backdrop-filter: blur(20px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(120%) !important;
+}
+[data-visual-theme="signal"] .glass-card,
+[data-visual-theme="signal"] [class*="glass-card"],
+[data-visual-theme="signal"] [data-slot="card"] {
+  background: rgb(255 255 255 / 0.035) !important;
+}
+[data-visual-theme="signal"] .glass-thin,
+[data-visual-theme="signal"] .glass-icon {
+  background: rgb(255 255 255 / 0.045) !important;
+}
+[data-visual-theme="signal"] [role="dialog"],
+[data-visual-theme="signal"] [data-radix-popper-content-wrapper] > *,
+[data-visual-theme="signal"] [data-side] {
+  backdrop-filter: blur(24px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(120%) !important;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.45) !important;
+}
+
 /* Preserve Signal's intended subtle geometry rather than globally forcing
    every descendant to a zero-radius rectangle. */
 [data-visual-theme="signal"] .glass-card,
