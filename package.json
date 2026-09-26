@@ -15,7 +15,8 @@
     "test:byok": "node scripts/test-ai-byok-policy.mjs",
     "format": "prettier --write .",
     "test:health-e2ee": "node --experimental-strip-types scripts/health-e2ee-protocol-test.mjs",
-    "test:health-e2ee-realtime": "node scripts/health-e2ee-realtime-contract-test.mjs"
+    "test:health-e2ee-realtime": "node scripts/health-e2ee-realtime-contract-test.mjs",
+    "test:nutrition-sync-auto-reconcile": "node scripts/nutrition-sync-auto-reconcile-test.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.10",
