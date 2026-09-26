@@ -347,33 +347,11 @@ export function useCloudSyncEngineInternal() {
     const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow));
-    let realtimeRetryTimer: ReturnType<typeof setTimeout> | null = null;
-    let realtimeRetryAttempt = 0;
-    const retryRealtime = () => {
-      if (cancelled || realtimeRetryTimer) return;
-      const delay = Math.min(30_000, 1_000 * 2 ** realtimeRetryAttempt);
-      realtimeRetryAttempt = Math.min(realtimeRetryAttempt + 1, 5);
-      realtimeRetryTimer = setTimeout(() => {
-        realtimeRetryTimer = null;
-        if (cancelled) return;
-        void realtimeChannel.subscribe((subscriptionStatus) => {
-          if (subscriptionStatus === "SUBSCRIBED") {
-            realtimeRetryAttempt = 0;
-            void syncNow();
-          } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
-            setStatus(navigator.onLine ? "error" : "offline");
-            retryRealtime();
-          }
-        });
-      }, delay);
-    };
     void realtimeChannel.subscribe((subscriptionStatus) => {
       if (subscriptionStatus === "SUBSCRIBED") {
-        realtimeRetryAttempt = 0;
         void pull();
       } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
         setStatus(navigator.onLine ? "error" : "offline");
-        retryRealtime();
       }
     });
 
@@ -387,14 +365,12 @@ export function useCloudSyncEngineInternal() {
     });
 
     const onOnline = () => {
-      realtimeRetryAttempt = 0;
       void syncNow();
       void realtimeChannel.subscribe();
     };
     const onOffline = () => setStatus("offline");
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        realtimeRetryAttempt = 0;
         void syncNow();
         void realtimeChannel.subscribe();
       }
@@ -421,8 +397,6 @@ export function useCloudSyncEngineInternal() {
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("pace.legal.changed", onLegalChanged);
       window.removeEventListener("pace.sync.conflict.resolved", onConflictResolved);
-      if (realtimeRetryTimer) clearTimeout(realtimeRetryTimer);
-      realtimeRetryTimer = null;
       void supabase.removeChannel(realtimeChannel);
     };
   }, [user]);
