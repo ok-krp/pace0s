@@ -206,9 +206,19 @@ export function useHealthToday() {
       }, 150);
     };
 
-    const channel = supabase
-      .channel(`pace-health-e2ee-${user.id}`)
-      .on(
+    const channelName = `pace-health-e2ee-${user.id}`;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+
+    const subscribeRealtime = async () => {
+      const existing = supabase.getChannels().find((candidate) => candidate.topic === `realtime:${channelName}`);
+      if (existing) {
+        await supabase.removeChannel(existing);
+      }
+      if (cancelled) return;
+
+      channel = supabase.channel(channelName);
+      channel.on(
         "postgres_changes",
         {
           event: "*",
@@ -218,14 +228,17 @@ export function useHealthToday() {
         },
         scheduleRefresh,
       );
+      void channel.subscribe();
+    };
 
-    void channel.subscribe();
+    void subscribeRealtime();
 
     return () => {
+      cancelled = true;
       window.removeEventListener("pace.health.changed", handler);
       window.removeEventListener("online", onOnline);
       if (refreshTimer) clearTimeout(refreshTimer);
-      void supabase.removeChannel(channel);
+      if (channel) void supabase.removeChannel(channel);
     };
   }, [refresh, user]);
 
