@@ -38,10 +38,10 @@ assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 // must drain the queue instead of issuing another cloud write.
 assert.match(
   engine,
-  /existing && serialize\(existing\.value\) === serialize\(item\.value\)/,
+  /existing && syncValuesEqual(existing.value, item.value)/,
   "retry path must acknowledge an already-committed canonical value",
 );
-assert.match(engine, /serialize\(queued\.value\) === serialize\(mergedValue\)/);
+assert.match(engine, /syncValuesEqual(queued.value, mergedValue)/);
 
 // The server RPC is monotonic: an older canonical timestamp must never be
 // replaced by a newer request carrying an older-than-canonical server timestamp.
