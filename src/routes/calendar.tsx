@@ -9,6 +9,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 
 const searchSchema = z.object({ d: z.string().optional() });
@@ -83,8 +84,8 @@ function DayDetails({ date, sleep, water, nutTotal, nutList, routineIds, habits,
     const list = Array.isArray(current.data?.value) ? current.data.value as CalendarEvent[] : [];
     const nextList = [next, ...list.filter((event) => event.id !== next.id)];
     const write = current.data?.id
-      ? await supabase.from("user_state").update({ value: nextList, updated_at: new Date().toISOString(), updated_by: "calendar_ui" }).eq("id", current.data.id).eq("user_id", auth.user.id)
-      : await supabase.from("user_state").insert({ user_id: auth.user.id, key: "pace.calendar.events", value: nextList, updated_at: new Date().toISOString(), updated_by: "calendar_ui" });
+      ? await supabase.from("user_state").update({ value: nextList as unknown as Json, updated_at: new Date().toISOString(), updated_by: "calendar_ui" }).eq("id", current.data.id).eq("user_id", auth.user.id)
+      : await supabase.from("user_state").insert({ user_id: auth.user.id, key: "pace.calendar.events", value: nextList as unknown as Json, updated_at: new Date().toISOString(), updated_by: "calendar_ui" });
     if (write.error) { toast.error("Enregistrement du calendrier impossible."); return; }
     onEventsChange(nextList.filter((event) => event.date === date));
     setEventTitle(""); setEventStart(""); setEventEnd(""); setEventNotes(""); setEventType("personal"); setEventOpen(false);
