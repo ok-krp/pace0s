@@ -38,7 +38,7 @@ assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 // must drain the queue instead of issuing another cloud write.
 assert.match(
   engine,
-  /existing && syncValuesEqual\(existing.value, item.value\)/,
+  /existing && syncValuesEqual\(existing\.value, item\.value\)/,
   "retry path must acknowledge an already-committed canonical value",
 );
 assert.match(engine, /syncValuesEqual(queued.value, mergedValue)/);
