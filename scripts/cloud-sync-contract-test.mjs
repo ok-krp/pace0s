@@ -41,7 +41,7 @@ assert.match(
   /existing && syncValuesEqual\(existing\.value, item\.value\)/,
   "retry path must acknowledge an already-committed canonical value",
 );
-assert.match(engine, /syncValuesEqual(queued.value, mergedValue)/);
+assert.match(engine, /syncValuesEqual\(queued\.value, mergedValue\)/);
 
 // The server RPC is monotonic: an older canonical timestamp must never be
 // replaced by a newer request carrying an older-than-canonical server timestamp.
