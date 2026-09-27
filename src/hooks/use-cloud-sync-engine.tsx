@@ -315,6 +315,13 @@ export function useCloudSyncEngineInternal() {
       const queued = getQueued(row.key);
       if (queued) {
         if (isNutritionSyncKey(row.key)) {
+          if (Date.parse(queued.updatedAt) <= remoteTime) {
+            applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
+            markVersion(row.key, row.updated_at);
+            unqueueIfMutation(row.key, queued.updatedAt);
+            setStatus("ok");
+            return;
+          }
           const merged = autoMergeNutritionValues(row.key, queued.value, row.value);
           if (syncValuesEqual(merged, row.value)) {
             applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
@@ -377,6 +384,13 @@ export function useCloudSyncEngineInternal() {
               continue;
             }
             if (isNutritionSyncKey(key)) {
+              if (Date.parse(queued.updatedAt) <= sourceTime) {
+                applyRemoteAndRemember(key, mergedValue, updatedAt, canonical?.updated_by ?? legacy?.updated_by);
+                meta[key] = updatedAt;
+                unqueueIfMutation(key, queued.updatedAt);
+                newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
+                continue;
+              }
               const merged = autoMergeNutritionValues(key, queued.value, mergedValue);
               const mergedAt = new Date().toISOString();
               applyRemoteWrite(key, merged, mergedAt);
