@@ -132,10 +132,12 @@ function unwrapNutritionValue(value: unknown) {
   return value;
 }
 
-function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false) {
+function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false, currentValue?: unknown) {
   const incoming = unwrapNutritionValue(incomingValue);
   if (authoritative) return sanitizeNutritionItems(incoming);
-  const current = readDomain<Record<string, unknown>>("nutrition.items", {}).value;
+  const current = currentValue === undefined
+    ? readDomain<Record<string, unknown>>("nutrition.items", {}).value
+    : unwrapNutritionValue(currentValue);
   if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || !current || typeof current !== "object" || Array.isArray(current)) return sanitizeNutritionItems(incoming);
   const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
   for (const [day, rawIncoming] of Object.entries(incoming as Record<string, unknown>)) {
@@ -172,13 +174,18 @@ function isValidNutritionValue(key: string, value: unknown) {
   }
   return true;
 }
-function autoMergeNutritionValues(key: string, localValue: unknown, remoteValue: unknown) {
+function autoMergeNutritionValues(key: string, localValue: unknown, remoteValue: unknown, remoteWins = false) {
   if (syncValuesEqual(localValue, remoteValue)) return localValue;
   if (!isValidNutritionValue(key, localValue)) return remoteValue;
   if (!isValidNutritionValue(key, remoteValue)) return localValue;
   if (isEmptyRecoveredValue(localValue)) return remoteValue;
   if (isEmptyRecoveredValue(remoteValue)) return localValue;
-  return mergeRecoveredValues(remoteValue, localValue);
+  if (key === "pace.nutrition.items") {
+    return remoteWins
+      ? mergeNutritionRemoteValue(remoteValue, false, localValue)
+      : mergeNutritionRemoteValue(localValue, false, remoteValue);
+  }
+  return remoteWins ? remoteValue : localValue;
 }
 function isAuthoritativeNutritionWriter(updatedBy: string | null | undefined) {
   return updatedBy === "coach_ai" || updatedBy === "nutrition_state_repair";
@@ -315,14 +322,8 @@ export function useCloudSyncEngineInternal() {
       const queued = getQueued(row.key);
       if (queued) {
         if (isNutritionSyncKey(row.key)) {
-          if (Date.parse(queued.updatedAt) <= remoteTime) {
-            applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
-            markVersion(row.key, row.updated_at);
-            unqueueIfMutation(row.key, queued.updatedAt);
-            setStatus("ok");
-            return;
-          }
-          const merged = autoMergeNutritionValues(row.key, queued.value, row.value);
+          const remoteWins = Date.parse(queued.updatedAt) <= remoteTime;
+          const merged = autoMergeNutritionValues(row.key, queued.value, row.value, remoteWins);
           if (syncValuesEqual(merged, row.value)) {
             applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
             markVersion(row.key, row.updated_at);
@@ -384,14 +385,8 @@ export function useCloudSyncEngineInternal() {
               continue;
             }
             if (isNutritionSyncKey(key)) {
-              if (Date.parse(queued.updatedAt) <= sourceTime) {
-                applyRemoteAndRemember(key, mergedValue, updatedAt, canonical?.updated_by ?? legacy?.updated_by);
-                meta[key] = updatedAt;
-                unqueueIfMutation(key, queued.updatedAt);
-                newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
-                continue;
-              }
-              const merged = autoMergeNutritionValues(key, queued.value, mergedValue);
+              const remoteWins = Date.parse(queued.updatedAt) <= sourceTime;
+              const merged = autoMergeNutritionValues(key, queued.value, mergedValue, remoteWins);
               const mergedAt = new Date().toISOString();
               applyRemoteWrite(key, merged, mergedAt);
               queueItem({ key, value: merged, updatedAt: mergedAt, mutationId: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : mergedAt });
