@@ -36,8 +36,10 @@ assert.match(engine, /function reconcileNutritionRemoteValue/);
 assert.match(engine, /isNutritionSyncKey\(key\) \? reconcileNutritionRemoteValue/);
 assert.match(engine, /if \(!isValidNutritionValue\(key, localValue\)\) return remoteValue;/);
 assert.match(engine, /if \(isNutritionSyncKey\(row\.key\)\)/);
-assert.match(engine, /if \(isNutritionSyncKey\(key\)\)/);\nassert.match(engine, /Date\.parse\(queued\.updatedAt\) <= remoteTime/);
-assert.match(engine, /Date\.parse\(queued\.updatedAt\) <= sourceTime/);\nassert.match(engine, /const remoteWins = Date\.parse\(queued\.updatedAt\) <= remoteTime/);
+assert.match(engine, /if \(isNutritionSyncKey\(key\)\)/);
+assert.match(engine, /Date\.parse\(queued\.updatedAt\) <= remoteTime/);
+assert.match(engine, /Date\.parse\(queued\.updatedAt\) <= sourceTime/);
+assert.match(engine, /const remoteWins = Date\.parse\(queued\.updatedAt\) <= remoteTime/);
 assert.match(engine, /const remoteWins = Date\.parse\(queued\.updatedAt\) <= sourceTime/);
 assert.match(engine, /remoteWins \? mergeNutritionRemoteValue/);
 
