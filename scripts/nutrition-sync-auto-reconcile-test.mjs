@@ -41,7 +41,7 @@ assert.match(engine, /Date\.parse\(queued\.updatedAt\) <= remoteTime/);
 assert.match(engine, /Date\.parse\(queued\.updatedAt\) <= sourceTime/);
 assert.match(engine, /const remoteWins = Date\.parse\(queued\.updatedAt\) <= remoteTime/);
 assert.match(engine, /const remoteWins = Date\.parse\(queued\.updatedAt\) <= sourceTime/);
-assert.match(engine, /remoteWins \? mergeNutritionRemoteValue/);
+assert.match(engine, /remoteWins\s*\?\s*mergeNutritionRemoteValue/);
 
 console.log("nutrition-sync-auto-reconcile-test: PASS");
 
