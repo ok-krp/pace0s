@@ -246,7 +246,7 @@ export function buildIntel(i: IntelInput): DashboardIntel {
       value: (waterMl / 1000).toFixed(1),
       unit: "L",
       pct: clamp01(waterMl / i.goals.waterMl),
-      status: waterLeft === 0 ? "good" : waterMl > i.goals.waterMl * 0.5 ? "warn" : "bad",
+      status: waterMl === 0 ? "neutral" : waterLeft === 0 ? "good" : waterMl > i.goals.waterMl * 0.5 ? "warn" : "bad",
       context: waterLeft === 0
         ? "Objectif atteint"
         : `Reste ${(waterLeft / 1000).toFixed(1)} L à boire`,
@@ -265,7 +265,7 @@ export function buildIntel(i: IntelInput): DashboardIntel {
       value: String(kcal),
       unit: `/ ${kcalTarget} kcal`,
       pct: clamp01(kcal / kcalTarget),
-      status: kcal === 0 ? "bad" : kcal > kcalTarget * 1.1 ? "warn" : kcal > kcalTarget * 0.8 ? "good" : "warn",
+      status: kcal === 0 ? "neutral" : kcal / Math.max(kcalTarget, 1) >= 0.9 && kcal / Math.max(kcalTarget, 1) <= 1.1 ? "good" : "warn",
       context: kcalLeft > 0
         ? `${kcalLeft} kcal restantes aujourd'hui`
         : `${Math.abs(kcalLeft)} kcal au-dessus de la cible`,
@@ -281,7 +281,7 @@ export function buildIntel(i: IntelInput): DashboardIntel {
       label: "Routine",
       value: `${routineDone}/${routineTotal}`,
       pct: routinePct,
-      status: routinePct === 1 ? "good" : routinePct >= 0.5 ? "warn" : "bad",
+      status: routineTotal === 0 ? "neutral" : routinePct === 1 ? "good" : routinePct >= 0.5 ? "warn" : "bad",
       context: routinePct === 1
         ? "Toutes tes habitudes sont faites"
         : `${routineTotal - routineDone} habitude${routineTotal - routineDone > 1 ? "s" : ""} en attente`,
@@ -298,7 +298,7 @@ export function buildIntel(i: IntelInput): DashboardIntel {
       label: "Focus",
       value: `${Math.floor(workMin / 60)}h ${String(workMin % 60).padStart(2, "0")}`,
       pct: focusPct,
-      status: focusPct >= 0.9 ? "good" : focusPct >= 0.5 ? "warn" : "bad",
+      status: workMin === 0 ? "neutral" : focusPct >= 0.9 ? "good" : focusPct >= 0.5 ? "warn" : "bad",
       context: workAvg
         ? `${deltaText(Math.round(workMin - workAvg), " min")} vs ta moyenne`
         : "Objectif · 4h de concentration",
