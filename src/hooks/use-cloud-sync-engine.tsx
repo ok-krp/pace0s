@@ -105,7 +105,36 @@ function isEmptyRecoveredValue(value: unknown): boolean {
   if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length === 0;
   return false;
 }
-function serialize(value: unknown) { try { return JSON.stringify(value); } catch { return undefined; } }
+function serialize(value: unknown): string | undefined {
+  try {
+    const seen = new WeakSet<object>();
+    const normalize = (input: unknown): unknown => {
+      if (input === null || typeof input !== "object") return input;
+      if (seen.has(input)) throw new TypeError("circular sync value");
+      seen.add(input);
+      try {
+        if (Array.isArray(input)) return input.map(normalize);
+        const object = input as Record<string, unknown>;
+        if (
+          object.version === 1 &&
+          typeof object.updatedAt === "string" &&
+          typeof object.mutationId === "string" &&
+          "value" in object
+        ) {
+          return normalize(object.value);
+        }
+        return Object.fromEntries(
+          Object.keys(object).sort().map((key) => [key, normalize(object[key])]),
+        );
+      } finally {
+        seen.delete(input);
+      }
+    };
+    return JSON.stringify(normalize(value));
+  } catch {
+    return undefined;
+  }
+}
 function readConflicts(): SyncConflict[] { try { const raw = JSON.parse(localStorage.getItem(CONFLICTS_KEY) ?? "[]") as SyncConflict[]; return Array.isArray(raw) ? raw.filter((item) => item?.id && item?.key) : []; } catch { return []; } }
 function writeConflicts(items: SyncConflict[]) { try { localStorage.setItem(CONFLICTS_KEY, JSON.stringify(items.slice(-20))); } catch {} }
 function conflictForKey(key: string): SyncConflict | undefined { return readConflicts().find((item) => item.key === key); }
