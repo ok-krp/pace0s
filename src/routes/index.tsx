@@ -192,7 +192,7 @@ function Dashboard() {
       </div>
       <DailyInsight intel={intel} />
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <motion.button type="button" onClick={() => setDialog("score")} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }} whileTap={{ scale: 0.995 }} aria-label="Voir le détail du Daily Rhythm" className="text-left lg:col-span-2 glass-card p-6 md:p-8 relative overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+        <motion.button type="button" onClick={() => setDialog("score")} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }} whileTap={{ scale: 0.995 }} aria-label="Voir le détail du Daily Rhythm" className="text-left lg:col-span-2 glass-card p-4 md:p-8 relative overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
           <div className="pointer-events-none absolute -top-24 -left-16 size-72 rounded-full blur-3xl opacity-60" style={{ background: "radial-gradient(closest-side, oklch(0.82 0.16 55 / 0.35), transparent)" }} />
           <div className="pointer-events-none absolute -bottom-24 -right-16 size-72 rounded-full blur-3xl opacity-60" style={{ background: "radial-gradient(closest-side, oklch(0.6 0.18 255 / 0.32), transparent)" }} />
           <div className="flex items-center justify-between relative">
@@ -203,7 +203,7 @@ function Dashboard() {
             </div>
             <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground/70 flex items-center gap-1"><Sparkles className="size-3" /> Détail →</div>
           </div>
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-[auto_1fr] items-center gap-6 md:gap-10 relative">
+          <div className="mt-4 md:mt-6 grid grid-cols-1 md:grid-cols-[auto_1fr] items-center gap-4 md:gap-10 relative">
             <div className="justify-self-center"><DailyRhythmRing metrics={rhythmMetrics} score={intel.score} size={244} stroke={12} gap={8} /></div>
             <ul className="w-full max-w-sm space-y-2">{intel.rhythmLines.map((l) => <li key={l.label} className="flex items-start gap-2.5"><span className="mt-1.5 size-1.5 rounded-full shrink-0" style={{ background: statusColor[l.status] }} /><div className="min-w-0"><div className="text-[13px] font-medium leading-tight">{l.label}</div><div className="text-[11px] text-muted-foreground leading-snug">{l.text}</div></div></li>)}</ul>
           </div>
