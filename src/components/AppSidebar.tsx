@@ -19,15 +19,6 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
 function BottomNav({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) { return <div className="mt-auto pt-4 border-t border-[color-mix(in_oklab,white_calc(var(--glass-edge)*30%),transparent)] space-y-0.5"><NavLink to="/profile" active={currentPath === "/profile"} onClick={onNavigate} /><NavLink to="/settings" active={currentPath === "/settings"} onClick={onNavigate} /></div>; }
 function SidebarContent({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) {
   return <>
-    <div className="flex-none flex items-center gap-2 px-3 py-2 mb-4">
-      <Link to="/" search={{}} onClick={onNavigate} className="flex items-center gap-2 min-w-0">
-        <div className="size-8 grid place-items-center text-primary"><Sparkles className="size-4" /></div>
-        <div className="min-w-0">
-          <div className="font-display font-semibold text-[15px] tracking-tight text-white drop-shadow-sm">Pace</div>
-          <div className="text-[11px] text-white/50 -mt-0.5 drop-shadow-sm">centre de contrôle</div>
-        </div>
-      </Link>
-    </div>
     <button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} className="flex-none flex items-center gap-2 px-3 py-2 mb-3 rounded-md glass-thin border border-white/20 bg-white/10 backdrop-blur-2xl text-sm text-white/70 transition">
       <Search className="size-3.5" /><span className="flex-1 text-left">Rechercher…</span><kbd className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-mono">⌘K</kbd>
     </button>
