@@ -351,10 +351,10 @@ export function buildIntel(i: IntelInput): DashboardIntel {
   // --- rythme expliqué
   const rhythmLines: RhythmLine[] = [
     { label: "Récupération", text: sleepH ? `${sleepH.toFixed(1)}h · ${recoveryLabel.toLowerCase()}` : "Nuit non renseignée", status: recovery },
-    { label: "Hydratation", text: waterLeft === 0 ? "Objectif atteint" : `${(waterMl / 1000).toFixed(1)} L sur ${(i.goals.waterMl / 1000).toFixed(1)} L`, status: waterLeft === 0 ? "good" : waterMl > i.goals.waterMl / 2 ? "warn" : "bad" },
+    { label: "Hydratation", text: waterMl === 0 ? "Pas encore renseignée" : waterLeft === 0 ? "Objectif atteint" : `${(waterMl / 1000).toFixed(1)} L sur ${(i.goals.waterMl / 1000).toFixed(1)} L`, status: waterMl === 0 ? "neutral" : waterLeft === 0 ? "good" : waterMl > i.goals.waterMl / 2 ? "warn" : "bad" },
     { label: "Nutrition", text: kcalLeft > 0 ? `${kcal} kcal · légèrement sous la cible` : `${kcal} kcal · cible atteinte`, status: kcalLeft > i.goals.kcal * 0.4 ? "warn" : "good" },
     { label: "Routine", text: `${routineDone} sur ${routineTotal} complétée${routineDone > 1 ? "s" : ""}`, status: routinePct === 1 ? "good" : routinePct >= 0.5 ? "warn" : "bad" },
-    { label: "Focus", text: `${Math.floor(workMin / 60)}h ${String(workMin % 60).padStart(2, "0")} de concentration`, status: focusPct >= 0.9 ? "good" : focusPct >= 0.5 ? "warn" : "bad" },
+    { label: "Focus", text: workMin === 0 ? "Pas encore renseigné" : `${Math.floor(workMin / 60)}h ${String(workMin % 60).padStart(2, "0")} de concentration`, status: workMin === 0 ? "neutral" : focusPct >= 0.9 ? "good" : focusPct >= 0.5 ? "warn" : "bad" },
   ];
 
   const goodCount = rhythmLines.filter((l) => l.status === "good").length;
