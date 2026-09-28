@@ -105,7 +105,36 @@ function isEmptyRecoveredValue(value: unknown): boolean {
   if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length === 0;
   return false;
 }
-function serialize(value: unknown) { try { return JSON.stringify(value); } catch { return undefined; } }
+function serialize(value: unknown): string | undefined {
+  try {
+    const seen = new WeakSet<object>();
+    const normalize = (input: unknown): unknown => {
+      if (input === null || typeof input !== "object") return input;
+      if (seen.has(input)) throw new TypeError("circular sync value");
+      seen.add(input);
+      try {
+        if (Array.isArray(input)) return input.map(normalize);
+        const object = input as Record<string, unknown>;
+        if (
+          object.version === 1 &&
+          typeof object.updatedAt === "string" &&
+          typeof object.mutationId === "string" &&
+          "value" in object
+        ) {
+          return normalize(object.value);
+        }
+        return Object.fromEntries(
+          Object.keys(object).sort().map((key) => [key, normalize(object[key])]),
+        );
+      } finally {
+        seen.delete(input);
+      }
+    };
+    return JSON.stringify(normalize(value));
+  } catch {
+    return undefined;
+  }
+}
 function readConflicts(): SyncConflict[] { try { const raw = JSON.parse(localStorage.getItem(CONFLICTS_KEY) ?? "[]") as SyncConflict[]; return Array.isArray(raw) ? raw.filter((item) => item?.id && item?.key) : []; } catch { return []; } }
 function writeConflicts(items: SyncConflict[]) { try { localStorage.setItem(CONFLICTS_KEY, JSON.stringify(items.slice(-20))); } catch {} }
 function conflictForKey(key: string): SyncConflict | undefined { return readConflicts().find((item) => item.key === key); }
@@ -171,11 +200,31 @@ export function useCloudSyncEngineInternal() {
     const allowed = () => { try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; } };
 
     const recordConflict = (key: string, localValue: unknown, remoteValue: unknown, remoteUpdatedAt: string) => {
-      if (serialize(localValue) === serialize(remoteValue)) return;
+      const currentConflicts = readConflicts();
+      if (serialize(localValue) === serialize(remoteValue)) {
+        const remaining = currentConflicts.filter((item) => item.key !== key);
+        if (remaining.length !== currentConflicts.length) {
+          writeConflicts(remaining);
+          setConflicts(remaining);
+        }
+        return;
+      }
       const existing = conflictForKey(key);
-      if (existing && serialize(existing.remoteValue) === serialize(remoteValue)) return;
+      if (existing && serialize(existing.remoteValue) === serialize(remoteValue) && serialize(existing.localValue) === serialize(localValue)) return;
       const next: SyncConflict = { id: `${key}:${Date.now()}`, key, localValue, remoteValue, remoteUpdatedAt, detectedAt: new Date().toISOString() };
-      const all = [...readConflicts().filter((item) => item.key !== key), next]; writeConflicts(all); setConflicts(all);
+      const all = [...currentConflicts.filter((item) => item.key !== key), next];
+      writeConflicts(all);
+      setConflicts(all);
+    };
+
+    const pruneEquivalentConflicts = () => {
+      const currentConflicts = readConflicts();
+      const remaining = currentConflicts.filter((item) => serialize(item.localValue) !== serialize(item.remoteValue));
+      if (remaining.length !== currentConflicts.length) {
+        writeConflicts(remaining);
+        setConflicts(remaining);
+      }
+      return remaining;
     };
 
     const writeItem = async (item: QueueItem): Promise<boolean> => {
@@ -305,6 +354,12 @@ export function useCloudSyncEngineInternal() {
           const queued = getQueued(key);
           if (queued) {
             if (serialize(queued.value) === serialize(mergedValue)) {
+              const currentConflicts = readConflicts();
+              const remainingConflicts = currentConflicts.filter((item) => item.key !== key);
+              if (remainingConflicts.length !== currentConflicts.length) {
+                writeConflicts(remainingConflicts);
+                setConflicts(remainingConflicts);
+              }
               unqueueIfMutation(key, queued.updatedAt);
               meta[key] = updatedAt;
               newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
@@ -340,8 +395,10 @@ export function useCloudSyncEngineInternal() {
 
     const syncNow = async () => {
       if (!allowed()) return;
+      pruneEquivalentConflicts();
       if (!navigator.onLine) { setStatus("offline"); return; }
       await flushQueue(); await pull();
+      pruneEquivalentConflicts();
     };
 
     const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
@@ -387,7 +444,7 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("pageshow", onPageShow);
     window.addEventListener("pace.legal.changed", onLegalChanged);
     window.addEventListener("pace.sync.conflict.resolved", onConflictResolved);
-    setConflicts(readConflicts());
+    pruneEquivalentConflicts();
     void syncNow();
     return () => {
       cancelled = true; offLocal();
