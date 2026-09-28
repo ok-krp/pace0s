@@ -109,19 +109,46 @@ function ago(ms: number, now: number) {
   return `il y a ${h}h${m % 60 ? String(m % 60).padStart(2, "0") : ""}`;
 }
 
+function scoreSleep(hours: number | null) {
+  if (hours == null || hours <= 0) return 0.5;
+  if (hours >= 7 && hours <= 9) return 1;
+  if (hours < 7) return clamp01(hours / 7);
+  return clamp01(1 - (hours - 9) / 3);
+}
+
+function scoreNutrition(kcal: number | null, target: number) {
+  if (kcal == null || kcal <= 0 || target <= 0) return 0.5;
+  const ratio = kcal / target;
+  if (ratio >= 0.9 && ratio <= 1.1) return 1;
+  if (ratio < 0.9) return clamp01(0.5 + ((ratio - 0.5) / 0.4) * 0.5);
+  return clamp01(1 - ((ratio - 1.1) / 0.5) * 0.5);
+}
+
+function scoreProgress(value: number | null, target: number) {
+  if (value == null || value <= 0 || target <= 0) return 0.5;
+  return clamp01(value / target);
+}
+
+/**
+ * Daily Rhythm is a weighted progress score, not a health diagnosis.
+ * Missing entries are neutral (50%) instead of being treated as failures.
+ * Weights: sleep 25%, hydration 20%, nutrition 20%, routine 20%, focus 15%.
+ */
 export function scoreFor(i: IntelInput, d: string) {
-  const s = i.sleep[d]?.hours ?? 0;
-  const w = i.water[d] ?? 0;
-  const k = i.nutrition[d]?.kcal ?? 0;
-  const r = (i.routineDone[d] ?? []).length;
-  const wm = i.work[d] ?? 0;
-  return Math.round(
-    clamp01(s / 8) * 20 +
-      clamp01(w / i.goals.waterMl) * 15 +
-      clamp01(k / i.goals.kcal) * 15 +
-      clamp01(r / Math.max(i.routineTotal, 1)) * 30 +
-      clamp01(wm / 240) * 20,
-  );
+  const sleepH = i.sleep[d]?.hours ?? null;
+  const waterMl = i.water[d] ?? null;
+  const kcal = i.nutrition[d]?.kcal ?? null;
+  const routineDone = (i.routineDone[d] ?? []).length;
+  const workMin = i.work[d] ?? null;
+
+  const weighted =
+    scoreSleep(sleepH) * 25 +
+    scoreProgress(waterMl, i.goals.waterMl) * 20 +
+    scoreNutrition(kcal, i.goals.kcal) * 20 +
+    (i.routineTotal > 0 ? clamp01(routineDone / i.routineTotal) : 0.5) * 20 +
+    scoreProgress(workMin, 240) * 15;
+
+  return Math.round(weighted);
 }
 
 // ---------- moteur ----------
@@ -332,9 +359,9 @@ export function buildIntel(i: IntelInput): DashboardIntel {
 
   const goodCount = rhythmLines.filter((l) => l.status === "good").length;
   const rhythmSummary =
-    score >= 85 ? "Journée maîtrisée"
+    score >= 80 ? "Journée bien maîtrisée"
     : score >= 65 ? "Bon rythme, quelques ajustements"
-    : score >= 40 ? "Rythme en construction"
+    : score >= 50 ? "Rythme en construction"
     : "Journée à relancer";
 
   // --- insights croisés (le système pense globalement)
