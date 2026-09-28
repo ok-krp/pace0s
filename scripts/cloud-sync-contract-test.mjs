@@ -23,6 +23,10 @@ assert.match(storage, /REMOTE_WRITE_EVENT/);
 assert.match(storage, /CustomEvent<LocalWriteDetail>\(LOCAL_WRITE_EVENT/);
 assert.match(engine, /lastRemoteValues/);
 
+assert.match(engine, /Object\.keys\(object\)\.sort\(\)/, "sync comparisons must be key-order independent");
+assert.match(engine, /object\.version === 1.*object\.mutationId === "string"/s, "sync comparisons must unwrap domain envelopes");
+assert.match(engine, /pruneEquivalentConflicts/);
+
 // Rapid mutations are represented by a value + timestamp and coalesced per key.
 assert.match(engine, /type QueueItem = \{ key: string; value: unknown; updatedAt: string/);
 assert.match(engine, /readQueue\(\)\.filter\(\(queued\) => queued\.key !== item\.key\)/);
