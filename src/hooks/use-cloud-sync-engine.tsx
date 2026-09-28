@@ -200,11 +200,30 @@ export function useCloudSyncEngineInternal() {
     const allowed = () => { try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; } };
 
     const recordConflict = (key: string, localValue: unknown, remoteValue: unknown, remoteUpdatedAt: string) => {
-      if (serialize(localValue) === serialize(remoteValue)) return;
+      const currentConflicts = readConflicts();
+      if (serialize(localValue) === serialize(remoteValue)) {
+        const remaining = currentConflicts.filter((item) => item.key !== key);
+        if (remaining.length !== currentConflicts.length) {
+          writeConflicts(remaining);
+          setConflicts(remaining);
+        }
+        return;
+      }
       const existing = conflictForKey(key);
-      if (existing && serialize(existing.remoteValue) === serialize(remoteValue)) return;
+      if (existing && serialize(existing.remoteValue) === serialize(remoteValue) && serialize(existing.localValue) === serialize(localValue)) return;
       const next: SyncConflict = { id: `${key}:${Date.now()}`, key, localValue, remoteValue, remoteUpdatedAt, detectedAt: new Date().toISOString() };
-      const all = [...readConflicts().filter((item) => item.key !== key), next]; writeConflicts(all); setConflicts(all);
+      const all = [...currentConflicts.filter((item) => item.key !== key), next];
+      writeConflicts(all);
+      setConflicts(all);
+    };
+
+    const pruneEquivalentConflicts = () => {
+      const currentConflicts = readConflicts();
+      const remaining = currentConflicts.filter((item) => serialize(item.localValue) !== serialize(item.remoteValue));
+      if (remaining.length !== currentConflicts.length) {
+        writeConflicts(remaining);
+        setConflicts(remaining);
+      }
     };
 
     const writeItem = async (item: QueueItem): Promise<boolean> => {
@@ -416,7 +435,7 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("pageshow", onPageShow);
     window.addEventListener("pace.legal.changed", onLegalChanged);
     window.addEventListener("pace.sync.conflict.resolved", onConflictResolved);
-    setConflicts(readConflicts());
+    pruneEquivalentConflicts();
     void syncNow();
     return () => {
       cancelled = true; offLocal();
