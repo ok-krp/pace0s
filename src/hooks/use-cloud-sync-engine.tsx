@@ -224,6 +224,7 @@ export function useCloudSyncEngineInternal() {
         writeConflicts(remaining);
         setConflicts(remaining);
       }
+      return remaining;
     };
 
     const writeItem = async (item: QueueItem): Promise<boolean> => {
@@ -353,6 +354,12 @@ export function useCloudSyncEngineInternal() {
           const queued = getQueued(key);
           if (queued) {
             if (serialize(queued.value) === serialize(mergedValue)) {
+              const currentConflicts = readConflicts();
+              const remainingConflicts = currentConflicts.filter((item) => item.key !== key);
+              if (remainingConflicts.length !== currentConflicts.length) {
+                writeConflicts(remainingConflicts);
+                setConflicts(remainingConflicts);
+              }
               unqueueIfMutation(key, queued.updatedAt);
               meta[key] = updatedAt;
               newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
@@ -388,8 +395,10 @@ export function useCloudSyncEngineInternal() {
 
     const syncNow = async () => {
       if (!allowed()) return;
+      pruneEquivalentConflicts();
       if (!navigator.onLine) { setStatus("offline"); return; }
       await flushQueue(); await pull();
+      pruneEquivalentConflicts();
     };
 
     const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
