@@ -76,7 +76,7 @@ function NutritionPage() {
     const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
     if (!isLegalCategoryAllowed("ai")) { toast.error("Consentement Analyse IA requis."); return; }
     if (!file.type.startsWith("image/") || !["image/jpeg", "image/png", "image/webp"].includes(file.type)) { toast.error("Format image non autorisé"); return; }
-    if (file.size > MAX_NUTRITION_PHOTO_BYTES) { toast.error("Image trop lourde (max 8 Mo)"); return; }
+    if (file.size > MAX_NUTRITION_PHOTO_BYTES) { toast.error("Image trop lourde (max 25 Mo)"); return; }
 
     setBusy(true);
     const previewUrl = URL.createObjectURL(file);
