@@ -20,6 +20,7 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: node scripts/test-sync-policy.mjs
       - run: npm run test:health-e2ee-realtime
+      - run: npm run test:nutrition-sync-auto-reconcile
       # TanStack Router generates src/routeTree.gen.ts during the Vite build.
       # Run the build before typecheck so newly added file routes are included.
       - run: npm run build

@@ -105,6 +105,21 @@ function isEmptyRecoveredValue(value: unknown): boolean {
   if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length === 0;
   return false;
 }
+function normalizeForSyncEquality(value: unknown): unknown {
+  if (typeof value === "number" && Number.isFinite(value)) return Number(value.toFixed(10));
+  if (Array.isArray(value)) return value.map(normalizeForSyncEquality);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, item]) => [key, normalizeForSyncEquality(item)]),
+    );
+  }
+  return value;
+}
+function syncValuesEqual(left: unknown, right: unknown) {
+  return serialize(normalizeForSyncEquality(left)) === serialize(normalizeForSyncEquality(right));
+}
 function serialize(value: unknown) { try { return JSON.stringify(value); } catch { return undefined; } }
 function readConflicts(): SyncConflict[] { try { const raw = JSON.parse(localStorage.getItem(CONFLICTS_KEY) ?? "[]") as SyncConflict[]; return Array.isArray(raw) ? raw.filter((item) => item?.id && item?.key) : []; } catch { return []; } }
 function writeConflicts(items: SyncConflict[]) { try { localStorage.setItem(CONFLICTS_KEY, JSON.stringify(items.slice(-20))); } catch {} }
@@ -117,10 +132,12 @@ function unwrapNutritionValue(value: unknown) {
   return value;
 }
 
-function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false) {
+function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false, currentValue?: unknown) {
   const incoming = unwrapNutritionValue(incomingValue);
   if (authoritative) return sanitizeNutritionItems(incoming);
-  const current = readDomain<Record<string, unknown>>("nutrition.items", {}).value;
+  const current = currentValue === undefined
+    ? readDomain<Record<string, unknown>>("nutrition.items", {}).value
+    : unwrapNutritionValue(currentValue);
   if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || !current || typeof current !== "object" || Array.isArray(current)) return sanitizeNutritionItems(incoming);
   const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
   for (const [day, rawIncoming] of Object.entries(incoming as Record<string, unknown>)) {
@@ -143,8 +160,45 @@ function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false
   return sanitizeNutritionItems(merged);
 }
 
+function isNutritionSyncKey(key: string) {
+  return key === "pace.nutrition.items" || key === "pace.nutrition.totals";
+}
+function isValidNutritionValue(key: string, value: unknown) {
+  if (key === "pace.nutrition.items") {
+    return !!value && typeof value === "object" && !Array.isArray(value) &&
+      Object.values(value as Record<string, unknown>).every((day) => Array.isArray(day));
+  }
+  if (key === "pace.nutrition.totals") {
+    return !!value && typeof value === "object" && !Array.isArray(value) &&
+      Object.values(value as Record<string, unknown>).every((day) => !!day && typeof day === "object" && !Array.isArray(day));
+  }
+  return true;
+}
+function autoMergeNutritionValues(key: string, localValue: unknown, remoteValue: unknown, remoteWins = false) {
+  if (syncValuesEqual(localValue, remoteValue)) return localValue;
+  if (!isValidNutritionValue(key, localValue)) return remoteValue;
+  if (!isValidNutritionValue(key, remoteValue)) return localValue;
+  if (isEmptyRecoveredValue(localValue)) return remoteValue;
+  if (isEmptyRecoveredValue(remoteValue)) return localValue;
+  if (key === "pace.nutrition.items") {
+    return remoteWins
+      ? mergeNutritionRemoteValue(remoteValue, false, localValue)
+      : mergeNutritionRemoteValue(localValue, false, remoteValue);
+  }
+  return remoteWins ? remoteValue : localValue;
+}
 function isAuthoritativeNutritionWriter(updatedBy: string | null | undefined) {
   return updatedBy === "coach_ai" || updatedBy === "nutrition_state_repair";
+}
+function reconcileNutritionRemoteValue(key: string, incomingValue: unknown, updatedBy?: string | null) {
+  const incoming = key === "pace.nutrition.items" ? unwrapNutritionValue(incomingValue) : incomingValue;
+  if (!isValidNutritionValue(key, incoming)) return incomingValue;
+  const local = readDomain<Record<string, unknown>>(key.slice(PACE_PREFIX.length), {}).value;
+  if (!isValidNutritionValue(key, local) || isEmptyRecoveredValue(local)) return incoming;
+  if (key === "pace.nutrition.items") {
+    return mergeNutritionRemoteValue(incoming, isAuthoritativeNutritionWriter(updatedBy));
+  }
+  return incoming;
 }
 
 export function useCloudSyncEngineInternal() {
@@ -160,7 +214,7 @@ export function useCloudSyncEngineInternal() {
     if (encoded !== undefined) lastRemoteValues.current[key] = encoded;
   };
   const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string, updatedBy?: string | null) => {
-    const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value, isAuthoritativeNutritionWriter(updatedBy)) : value;
+    const safeValue = isNutritionSyncKey(key) ? reconcileNutritionRemoteValue(key, value, updatedBy) : value;
     rememberRemote(key, safeValue);
     applyRemoteWrite(key, safeValue, updatedAt);
   };
@@ -171,7 +225,8 @@ export function useCloudSyncEngineInternal() {
     const allowed = () => { try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; } };
 
     const recordConflict = (key: string, localValue: unknown, remoteValue: unknown, remoteUpdatedAt: string) => {
-      if (serialize(localValue) === serialize(remoteValue)) return;
+      if (syncValuesEqual(localValue, remoteValue)) return;
+      if (isNutritionSyncKey(key)) return;
       const existing = conflictForKey(key);
       if (existing && serialize(existing.remoteValue) === serialize(remoteValue)) return;
       const next: SyncConflict = { id: `${key}:${Date.now()}`, key, localValue, remoteValue, remoteUpdatedAt, detectedAt: new Date().toISOString() };
@@ -191,7 +246,7 @@ export function useCloudSyncEngineInternal() {
         .limit(1);
       if (existingError) throw existingError;
       const existing = existingRows?.[0] as SyncRow | undefined;
-      if (existing && serialize(existing.value) === serialize(item.value)) {
+      if (existing && syncValuesEqual(existing.value, item.value)) {
         markVersion(existing.key, existing.updated_at);
         localStorage.setItem("pace.__last_sync_at", existing.updated_at);
         return true;
@@ -265,7 +320,26 @@ export function useCloudSyncEngineInternal() {
       const knownTime = Date.parse(meta[row.key] ?? "1970-01-01T00:00:00.000Z");
       if (remoteTime <= knownTime) return;
       const queued = getQueued(row.key);
-      if (queued) { recordConflict(row.key, queued.value, row.value, row.updated_at); return; }
+      if (queued) {
+        if (isNutritionSyncKey(row.key)) {
+          const remoteWins = Date.parse(queued.updatedAt) <= remoteTime;
+          const merged = autoMergeNutritionValues(row.key, queued.value, row.value, remoteWins);
+          if (syncValuesEqual(merged, row.value)) {
+            applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
+            markVersion(row.key, row.updated_at);
+            unqueueIfMutation(row.key, queued.updatedAt);
+            setStatus("ok");
+            return;
+          }
+          const updatedAt = new Date().toISOString();
+          applyRemoteWrite(row.key, merged, updatedAt);
+          queueItem({ key: row.key, value: merged, updatedAt, mutationId: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : updatedAt });
+          void pushItem({ key: row.key, value: merged, updatedAt });
+          return;
+        }
+        recordConflict(row.key, queued.value, row.value, row.updated_at);
+        return;
+      }
       const domain = readDomainRecord(row.key);
       if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) return;
       applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
@@ -304,10 +378,20 @@ export function useCloudSyncEngineInternal() {
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           const queued = getQueued(key);
           if (queued) {
-            if (serialize(queued.value) === serialize(mergedValue)) {
+            if (syncValuesEqual(queued.value, mergedValue)) {
               unqueueIfMutation(key, queued.updatedAt);
               meta[key] = updatedAt;
               newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
+              continue;
+            }
+            if (isNutritionSyncKey(key)) {
+              const remoteWins = Date.parse(queued.updatedAt) <= sourceTime;
+              const merged = autoMergeNutritionValues(key, queued.value, mergedValue, remoteWins);
+              const mergedAt = new Date().toISOString();
+              applyRemoteWrite(key, merged, mergedAt);
+              queueItem({ key, value: merged, updatedAt: mergedAt, mutationId: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : mergedAt });
+              unqueueIfMutation(key, queued.updatedAt);
+              void pushItem({ key, value: merged, updatedAt: mergedAt });
               continue;
             }
             recordConflict(key, queued.value, mergedValue, updatedAt);
@@ -387,7 +471,9 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("pageshow", onPageShow);
     window.addEventListener("pace.legal.changed", onLegalChanged);
     window.addEventListener("pace.sync.conflict.resolved", onConflictResolved);
-    setConflicts(readConflicts());
+    const cleanConflicts = readConflicts().filter((item) => !isNutritionSyncKey(item.key));
+    if (cleanConflicts.length !== readConflicts().length) writeConflicts(cleanConflicts);
+    setConflicts(cleanConflicts);
     void syncNow();
     return () => {
       cancelled = true; offLocal();
