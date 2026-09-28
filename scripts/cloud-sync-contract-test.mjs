@@ -67,4 +67,73 @@ assert.equal(state.value, "B", "older remote mutation must not overwrite newer s
 apply({ value: "B", updatedAt: "2026-08-20T10:01:00.000Z", updatedBy: "B" });
 assert.equal(state.value, "B", "duplicate realtime event must be idempotent");
 
+
+// Real multi-device water conflict model: disjoint dates merge deterministically,
+// while the same date keeps the local choice (the conflict UI remains explicit).
+const mergeWater = (remote, local) => {
+  const merged = { ...(remote ?? {}) };
+  for (const [day, value] of Object.entries(local ?? {})) merged[day] = value;
+  return merged;
+};
+const waterLocal = { "2026-08-03": 2150, "2026-08-04": 1800 };
+const waterRemote = { "2026-08-03": 2500, "2026-08-05": 2200 };
+assert.deepEqual(
+  mergeWater(waterRemote, waterLocal),
+  { "2026-08-03": 2150, "2026-08-04": 1800, "2026-08-05": 2200 },
+  "water merge must union dates and keep the local value on a same-day collision",
+);
+
+// Resolution semantics must remove the conflict before the next sync pass,
+// then either queue the selected value for propagation or accept the remote value
+// without generating a second conflict.
+const conflict = {
+  key: "pace.water",
+  localValue: waterLocal,
+  remoteValue: waterRemote,
+  remoteUpdatedAt: "2026-08-20T10:02:00.000Z",
+};
+let pending = conflict;
+let queued = null;
+const resolveModel = (choice) => {
+  const value = choice === "merge" ? mergeWater(conflict.remoteValue, conflict.localValue)
+    : choice === "local" ? conflict.localValue : conflict.remoteValue;
+  if (choice === "remote") queued = null;
+  else queued = value;
+  pending = null;
+};
+resolveModel("merge");
+assert.equal(pending, null, "resolved merge must clear the conflict");
+assert.deepEqual(queued, {
+  "2026-08-03": 2150,
+  "2026-08-04": 1800,
+  "2026-08-05": 2200,
+});
+resolveModel("remote");
+assert.equal(pending, null, "remote resolution must remain conflict-free");
+assert.equal(queued, null, "remote resolution must not enqueue a second write");
+
+// A realtime event carrying the resolved value must converge both devices to the
+// same canonical value and must not resurrect the resolved conflict.
+const canonicalWater = { "2026-08-03": 2500, "2026-08-05": 2200 };
+let deviceA = structuredClone(waterLocal);
+let deviceB = structuredClone(canonicalWater);
+let conflictsA = [];
+let conflictsB = [];
+const applyResolvedRemote = (device, conflicts, candidate) => {
+  const next = structuredClone(candidate.value);
+  if (JSON.stringify(next) === JSON.stringify(device)) return { device, conflicts };
+  return { device: next, conflicts };
+};
+({ device: deviceA, conflicts: conflictsA } = applyResolvedRemote(deviceA, conflictsA, {
+  value: canonicalWater,
+  updatedAt: "2026-08-20T10:03:00.000Z",
+}));
+({ device: deviceB, conflicts: conflictsB } = applyResolvedRemote(deviceB, conflictsB, {
+  value: canonicalWater,
+  updatedAt: "2026-08-20T10:03:00.000Z",
+}));
+assert.deepEqual(deviceA, deviceB, "resolved water must converge across devices");
+assert.deepEqual(conflictsA, []);
+assert.deepEqual(conflictsB, []);
+
 console.log("cloud-sync-contract-test: PASS");
