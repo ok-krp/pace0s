@@ -20,12 +20,12 @@ import { RecipesView } from "@/components/RecipesView";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { fetchProductByBarcode, type OFFProduct } from "@/lib/openfoodfacts";
 import { analyzeFoodPhoto } from "@/lib/nutrition-ai.functions";
-import { analyzeFoodPhotoLocally } from "@/lib/nutrition-ai.local";
 import { sumItems, type FoodAnalysis, type FoodItem } from "@/lib/nutrition-ai.shared";
 import { FoodAnalysisEditor } from "@/components/FoodAnalysisEditor";
 import { NutritionDailyAiChat } from "@/components/NutritionDailyAiChat";
 import { toast } from "sonner";
 import { isLegalCategoryAllowed } from "@/lib/legal";
+import { supabase } from "@/integrations/supabase/client";
 
 const searchSchema = z.object({ tab: z.enum(["nutrition", "recipes", "water"]).optional() });
 export const Route = createFileRoute("/nutrition")({ head: () => ({ meta: [{ title: "Nutrition — Pace" }, { name: "description", content: "Nutrition, recettes et hydratation." }] }), validateSearch: searchSchema, component: NutritionPage });
@@ -52,15 +52,26 @@ function NutritionPage() {
 
     setBusy(true);
     const previewUrl = URL.createObjectURL(file);
+    let storagePath: string | null = null;
     try {
-      const localResult = await analyzeFoodPhotoLocally(file);
-      const res = await analyzePhoto({ data: { vision: localResult } });
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("Session utilisateur indisponible.");
+      const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
+      storagePath = `${authData.user.id}/${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from("nutrition-ai").upload(storagePath, file, {
+        contentType: file.type,
+        upsert: false,
+      });
+      if (uploadError) throw new Error(`Envoi de la photo impossible : ${uploadError.message}`);
+      const res = await analyzePhoto({ data: { storagePath } });
       if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
       const r = res.result as FoodAnalysis;
       setPending({ kind: "photo", photo: previewUrl, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner" });
+      storagePath = null;
     } catch (err) {
       URL.revokeObjectURL(previewUrl);
-      toast.error(err instanceof Error ? err.message : "Erreur IA locale");
+      if (storagePath) await supabase.storage.from("nutrition-ai").remove([storagePath]).catch(() => undefined);
+      toast.error(err instanceof Error ? err.message : "Erreur d’analyse photo");
     } finally {
       setBusy(false);
     }
