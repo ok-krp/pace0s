@@ -1,0 +1,34 @@
+name: temporary bun lockfile sync
+
+on:
+  push:
+    branches:
+      - feat/capacitor-health-connect
+
+permissions:
+  contents: write
+
+jobs:
+  sync-lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/capacitor-health-connect
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Regenerate frozen lockfile
+        run: bun install --lockfile-only
+      - name: Commit lockfile when changed
+        run: |
+          if git diff --quiet -- bun.lock; then
+            echo "bun.lock already matches package.json"
+            exit 0
+          fi
+          git config user.name "pace-bot"
+          git config user.email "pace-bot@users.noreply.github.com"
+          git add bun.lock
+          git commit -m "chore(ci): sync bun lockfile"
+          git push origin HEAD:feat/capacitor-health-connect
