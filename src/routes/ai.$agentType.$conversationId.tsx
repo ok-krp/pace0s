@@ -15,7 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createAiConversation, deleteAiConversation, getAiConversation, listAiConversations, updateAiConversation } from "@/lib/ai-history.functions";
 import type { AgentType, AiConversation } from "@/lib/ai-history.types";
 import { clearPendingMessage, describeChatError, logAiDebug, readPendingMessage, savePendingMessage } from "@/lib/ai-debug";
-import { generateLocalAi, getLocalAiProfile, localAiSupported, warmLocalAi, type LocalAiMessage } from "@/lib/local-ai";
+import { generateLocalAi, getLocalAiProfile, localAiSupported, type LocalAiMessage } from "@/lib/local-ai";
 
 export const Route = createFileRoute("/ai/$agentType/$conversationId")({
   params: { parse: (params) => ({ agentType: params.agentType === "build" ? "build" as const : "coach" as const, conversationId: params.conversationId }) },
@@ -135,7 +135,6 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status, pendingUserText]);
   useEffect(() => { if (error) setFailure(describeChatError(error)); }, [error]);
-  useEffect(() => { if (agentType === "coach" && localAiSupported()) void warmLocalAi(); }, [agentType]);
 
   const chooseImage = (file: File | undefined) => { if (!file) return; if (!file.type.startsWith("image/")) { toast.error("Sélectionnez une image."); return; } if (file.size > MAX_IMAGE_BYTES) { toast.error("L’image doit faire au maximum 5 Mo."); return; } setSelectedImage(file); setFailure(null); };
 
@@ -178,7 +177,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
   const retryPending = useMemo(() => () => { const pending = readPendingMessage(conversationId); if (pending && !busy) void send(pending); }, [busy, conversationId]);
   useEffect(() => { const onOnline = () => retryPending(); window.addEventListener("online", onOnline); return () => window.removeEventListener("online", onOnline); }, [retryPending]);
   const switchAgent = async (next: AgentType) => { if (next === agentType) return; const { data } = await supabase.from("ai_conversations").select("id").eq("agent_type", next).eq("is_archived", false).order("updated_at", { ascending: false }).limit(1).maybeSingle(); let id = data?.id; if (!id) { const user = (await supabase.auth.getUser()).data.user; if (!user) return; const { data: created, error: createError } = await supabase.from("ai_conversations").insert({ agent_type: next, user_id: user.id }).select("id").single(); if (createError) { toast.error(createError.message); return; } id = created.id; } await navigate({ to: "/ai/$agentType/$conversationId", params: { agentType: next, conversationId: id } }); };
-  const toggleEphemeral = (value: boolean) => { onEphemeralChange(value); setMessages([]); toast(value ? "Chat éphémère activé" : "Historique synchronisé activé"); };
+  const toggleEphemeral = (value: boolean) => { onEphemeralChange(value); setMessages([]); };
 
   return <div className="h-[calc(100dvh-7rem)] md:h-[calc(100dvh-5rem)] flex gap-3 overflow-hidden">
     <section className="flex-1 min-w-0 flex flex-col glass-card rounded-[24px] overflow-hidden">
@@ -186,7 +185,6 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
         <div className="md:hidden"><Sheet open={historyOpen} onOpenChange={setHistoryOpen}><SheetTrigger asChild><Button variant="ghost" size="icon" aria-label="Ouvrir les conversations"><Menu className="size-4" /></Button></SheetTrigger><SheetContent side="left" className="w-[min(88vw,360px)] p-4"><ConversationHistory activeId={conversationId} agentType={agentType} onNavigate={() => setHistoryOpen(false)} /></SheetContent></Sheet></div>
         <div className="flex shrink-0 rounded-xl glass-thin p-1">
           <Button className="shrink-0 whitespace-nowrap" size="sm" variant={agentType === "coach" ? "default" : "ghost"} onClick={() => void switchAgent("coach")}><Brain className="size-4 mr-1.5" />Coach IA</Button>
-          {agentType === "build" && <Button className="shrink-0 whitespace-nowrap" size="sm" variant="default" onClick={() => void switchAgent("build")}><Code2 className="size-4 mr-1.5" />BUILD IA</Button>}
         </div>
         <div className="min-w-0 flex-1 hidden sm:block"><div className="text-sm font-medium truncate">{ephemeral ? "Chat éphémère" : title}</div><div className="text-[11px] text-muted-foreground">{agentType === "coach" ? "Suivi personnel & actions santé" : "Bugs, idées & développement"}</div></div>
         <div className="ml-auto shrink-0 flex items-center gap-2"><Clock3 className="size-3.5 text-muted-foreground" /><span className="hidden lg:inline text-xs text-muted-foreground">Éphémère</span><Switch checked={ephemeral} onCheckedChange={toggleEphemeral} /></div>

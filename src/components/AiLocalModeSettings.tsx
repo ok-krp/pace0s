@@ -20,7 +20,6 @@ export function AiLocalModeSettings() {
       <div className="border-l-2 border-border pl-3 text-xs text-muted-foreground">Profil matériel : {localAiSupported() ? getLocalAiProfile() : "WebGPU indisponible"}. Le mode local actuel est volontairement limité aux conversations Coach sans action ni image. Les lectures et modifications personnelles, Nutrition/Sport, ainsi que l’analyse d’image restent Cloud.</div>
       <div className="space-y-0 divide-y divide-border/60">
         <div className="flex items-center justify-between gap-4 py-3"><div><div className="text-sm font-medium">Coach IA</div><div className="text-xs text-muted-foreground">{coachLocal ? "Local" : "Cloud / fournisseur sélectionné"}</div></div><Switch checked={coachLocal} onCheckedChange={(checked) => void toggleCoach(checked)} disabled={busy || !localAiSupported()} /></div>
-        <div className="flex items-center justify-between gap-4 py-3"><div><div className="text-sm font-medium">BUILD IA</div><div className="text-xs text-muted-foreground">Cloud uniquement — le runtime local BUILD n’est pas activé.</div></div><Switch checked={false} disabled aria-label="BUILD IA locale indisponible" /></div>
       </div>
     </div>
   );

@@ -5,7 +5,7 @@ const MODEL_REVISION = "main";
 const READY_KEY = "pace.local-ai.ready.v2";
 const LOCAL_ENABLED_KEY = "pace.ai.local.enabled";
 const LOCAL_DEADLINE_MS = 8_500;
-const MAX_NEW_TOKENS = 160;
+const MAX_NEW_TOKENS = 128;
 
 type LocalGeneratedText = string | Array<{ role?: string; content?: string }>;
 type LocalTextGenerator = {
@@ -31,8 +31,9 @@ function hardwareProfile(): Exclude<LocalAiProfile, "cloud"> | "cloud" {
   if (typeof window === "undefined" || !("gpu" in navigator)) return "cloud";
   const cores = navigator.hardwareConcurrency || 2;
   const memory = browserDeviceMemory();
+  // WebGPU alone is not enough: model download/initialization is expensive on mobile hardware.
   if (cores >= 8 && memory >= 8) return "fast";
-  if (cores >= 4 && memory >= 4) return "standard";
+  if (cores >= 6 && memory >= 6) return "standard";
   return "cloud";
 }
 
