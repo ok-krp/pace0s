@@ -86,7 +86,7 @@ export function AiSettings() {
       }
       setKeys((current) => ({ ...current, [agentType]: "" }));
       await refresh();
-      toast.success(`${agentType === "coach" ? "Coach IA" : "BUILD IA"} configuré`);
+
     } catch (error) { toast.error(error instanceof Error ? error.message : "Impossible d’enregistrer la configuration IA"); }
     finally { setSaving(null); }
   };

@@ -9,7 +9,7 @@ export function WallpaperSettings() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const isCustom = "kind" in choice && choice.kind === "custom";
   const activeId = "id" in choice ? choice.id : null;
-  const onFile = (f: File | null) => { if (!f) return; if (f.size > 4 * 1024 * 1024) { toast.error("Image trop lourde (max 4 Mo)"); return; } const reader = new FileReader(); reader.onload = () => { setCustom(String(reader.result)); toast.success("Fond d'écran mis à jour"); }; reader.readAsDataURL(f); };
+  const onFile = (f: File | null) => { if (!f) return; if (f.size > 4 * 1024 * 1024) { toast.error("Image trop lourde (max 4 Mo)"); return; } const reader = new FileReader(); reader.onload = () => { setCustom(String(reader.result)); }; reader.readAsDataURL(f); };
 
   return (
     <div className="space-y-4 pt-3 border-t border-border">

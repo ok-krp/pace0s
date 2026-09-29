@@ -15,11 +15,11 @@ export function FinanceLockSettings() {
   const [bioOn, setBioOn] = useState(false);
 
   useEffect(() => { setEnabled(!!getStoredHash()); setLockEnter(getLockOnEnter()); setBioOn(isBiometricEnabled()); isBiometricAvailable().then(setBioAvail); }, []);
-  const enable = async () => { if (pin.length < 4) { toast.error("MDP : minimum 4 caractères"); return; } if (pin !== pin2) { toast.error("Les mots de passe ne correspondent pas"); return; } await setPin(pin); setEnabled(true); setLocalPin(""); setPin2(""); toast.success("Protection activée (Finance + Investissements)"); };
-  const disable = () => { if (!confirm("Désactiver la protection ? (Finance ET Investissements seront accessibles sans mot de passe)")) return; clearPin(); setEnabled(false); setBioOn(false); toast.success("Protection désactivée"); };
-  const toggleLockEnter = (v: boolean) => { setLockOnEnter(v); setLockEnter(v); toast.success(v ? "Mot de passe requis à chaque visite" : "Déverrouillage gardé pendant la session"); };
-  const enrollBio = async () => { try { await enrollBiometric(); setBioOn(true); toast.success("Face ID / Empreinte activé"); } catch (e) { toast.error(e instanceof Error ? e.message : "Échec de l'enregistrement"); } };
-  const removeBio = () => { clearBiometric(); setBioOn(false); toast.success("Biométrie désactivée"); };
+  const enable = async () => { if (pin.length < 4) { toast.error("MDP : minimum 4 caractères"); return; } if (pin !== pin2) { toast.error("Les mots de passe ne correspondent pas"); return; } await setPin(pin); setEnabled(true); setLocalPin(""); setPin2(""); };
+  const disable = () => { if (!confirm("Désactiver la protection ? (Finance ET Investissements seront accessibles sans mot de passe)")) return; clearPin(); setEnabled(false); setBioOn(false); };
+  const toggleLockEnter = (v: boolean) => { setLockOnEnter(v); setLockEnter(v); };
+  const enrollBio = async () => { try { await enrollBiometric(); setBioOn(true); } catch (e) { toast.error(e instanceof Error ? e.message : "Échec de l'enregistrement"); } };
+  const removeBio = () => { clearBiometric(); setBioOn(false); };
 
   return (
     <div className="space-y-4">

@@ -12,7 +12,7 @@ export function AiLocalModeSettings() {
   const [coachLocal, setCoachLocal] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => { void load().then((value) => { setCoachLocal(value.coach); setLocalAiEnabled(value.coach); }).catch(() => toast.error("Impossible de charger le mode IA local")); }, [load]);
-  const toggleCoach = async (enabled: boolean) => { if (enabled && !localAiSupported()) { toast.error("Ce navigateur ne peut pas exécuter l’IA locale. WebGPU est requis."); return; } setBusy(true); try { await save({ data: { agentType: "coach", enabled } }); setCoachLocal(enabled); setLocalAiEnabled(enabled); toast.success(enabled ? "IA locale activée" : "IA Cloud activée"); } catch (error) { toast.error(error instanceof Error ? error.message : "Impossible de modifier le mode IA"); } finally { setBusy(false); } };
+  const toggleCoach = async (enabled: boolean) => { if (enabled && !localAiSupported()) { toast.error("Ce navigateur ne peut pas exécuter l’IA locale. WebGPU est requis."); return; } setBusy(true); try { await save({ data: { agentType: "coach", enabled } }); setCoachLocal(enabled); setLocalAiEnabled(enabled); } catch (error) { toast.error(error instanceof Error ? error.message : "Impossible de modifier le mode IA"); } finally { setBusy(false); } };
 
   return (
     <div className="space-y-4 pt-4 border-t border-border">
