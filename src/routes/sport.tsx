@@ -203,7 +203,8 @@ function SportPage() {
 
     // Make retries idempotent: if a previous attempt partially inserted the
     // session before failing on a child row, remove that partial tree first.
-    await supabase.rpc("sport_delete_workout", { p_id: normalizedSession.id });
+    const { error: cleanupError } = await supabase.rpc("sport_delete_workout", { p_id: normalizedSession.id });
+    if (cleanupError) throw cleanupError;
 
     const { error: sessionError } = await supabase.from("sport_workout_sessions").insert({
       id: normalizedSession.id,
@@ -249,7 +250,8 @@ function SportPage() {
         }
       }
     } catch (error) {
-      await supabase.rpc("sport_delete_workout", { p_id: normalizedSession.id });
+      const { error: rollbackError } = await supabase.rpc("sport_delete_workout", { p_id: normalizedSession.id });
+      if (rollbackError) throw rollbackError;
       throw error;
     }
   }, []);  const todayPrograms = progs.filter((p) => !p.isArchived && p.days.includes(todayDow));
