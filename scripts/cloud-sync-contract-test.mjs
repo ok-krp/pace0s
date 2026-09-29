@@ -12,7 +12,7 @@ assert.equal(/setInterval\s*\(/.test(storage), false, "storage must not poll for
 assert.match(storage, /pace\.local\.write/);
 assert.match(engine, /onLocalWrite\(/);
 assert.match(engine, /postgres_changes/);
-assert.equal((engine.match(/realtimeChannel\\.subscribe\\(/g) ?? []).length, 1, "Realtime channel must only be subscribed during initial channel setup");
+assert.equal((engine.match(/realtimeChannel\.subscribe\(/g) ?? []).length, 1, "Realtime channel must only be subscribed during initial channel setup");
 assert.equal(/location\.reload\s*\(/.test(engine), false, "sync must never reload the page");
 
 // Internal persistence keys never become cloud records.
