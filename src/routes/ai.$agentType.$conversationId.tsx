@@ -174,7 +174,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
       setFailure(describeChatError(sendError));
     } finally { inputRef.current?.focus(); }
   };
-  const retryPending = useMemo(() => () => { const pending = readPendingMessage(conversationId); if (pending && !busy) void send(pending); }, [busy, conversationId]);
+  const retryPending = useMemo(() => () => { const pending = readPendingMessage(conversationId); if (pending && !busy) void send(pending); }, [busy, conversationId, send]);
   useEffect(() => { const onOnline = () => retryPending(); window.addEventListener("online", onOnline); return () => window.removeEventListener("online", onOnline); }, [retryPending]);
   const switchAgent = async (next: AgentType) => { if (next === agentType) return; const { data } = await supabase.from("ai_conversations").select("id").eq("agent_type", next).eq("is_archived", false).order("updated_at", { ascending: false }).limit(1).maybeSingle(); let id = data?.id; if (!id) { const user = (await supabase.auth.getUser()).data.user; if (!user) return; const { data: created, error: createError } = await supabase.from("ai_conversations").insert({ agent_type: next, user_id: user.id }).select("id").single(); if (createError) { toast.error(createError.message); return; } id = created.id; } await navigate({ to: "/ai/$agentType/$conversationId", params: { agentType: next, conversationId: id } }); };
   const toggleEphemeral = (value: boolean) => { onEphemeralChange(value); setMessages([]); };
