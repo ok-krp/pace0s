@@ -287,8 +287,6 @@ function SportPage() {
         console.warn("[sport] progression IA indisponible", error);
 
       }
-    } else {
-
     }
     setProgressionLoading(false);
   };
