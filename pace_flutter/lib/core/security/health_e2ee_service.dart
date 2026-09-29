@@ -4,7 +4,7 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'health_adapter.dart';
+import '../platform/health_adapter.dart';
 
 class HealthE2eeService {
   HealthE2eeService({required this.client, FlutterSecureStorage? secureStorage})
