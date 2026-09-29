@@ -229,15 +229,20 @@ export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string
   const safeValue = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(value) ?? value : value;
   const canonicalDomain = canonicalDomainFromRemoteKey(key);
   const storageKey = canonicalDomain ? `pace.domain.${canonicalDomain}` : key;
-  try { localStorage.setItem(storageKey, JSON.stringify(canonicalDomain ? safeValue : safeValue)); } catch {}
+  try { localStorage.setItem(storageKey, JSON.stringify(safeValue)); } catch {}
   if (updatedAt) {
     if (canonicalDomain) applyRemoteDomainRecord(canonicalDomain, safeValue, updatedAt);
     else if (key.startsWith(NEW_PREFIX)) {
       const domain = key.slice(NEW_PREFIX.length);
       if (domain && !domain.startsWith("domain.")) applyRemoteDomainRecord(domain, safeValue, updatedAt);
+    } else if (key.startsWith("pace.") && !key.startsWith("pace.__")) {
+      // Keep the domain-backed representation in lockstep with the raw key.
+      // This is required for useDomainState to observe realtime user_state writes.
+      const domain = key.slice("pace.".length);
+      if (domain && !domain.startsWith("domain.")) applyRemoteDomainRecord(domain, safeValue, updatedAt);
     }
   }
-  window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: canonicalDomain ? storageKey : key, value: safeValue } }));
+  window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: canonicalDomain ? storageKey : key, value: safeValue, updatedAt } }));
 }
 
 export function onLocalWrite(handler: (key: string, value: unknown, updatedAt?: string, mutationId?: string) => void): () => void {

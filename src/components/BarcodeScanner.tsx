@@ -18,6 +18,33 @@ const FORMATS = [
   Html5QrcodeSupportedFormats.PDF_417,
 ];
 
+async function rotateImageFile(file: File, degrees: 90 | 180 | 270): Promise<File> {
+  const url = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("Image QR illisible."));
+      element.src = url;
+    });
+    const quarterTurn = degrees === 90 || degrees === 270;
+    const canvas = document.createElement("canvas");
+    canvas.width = quarterTurn ? image.naturalHeight : image.naturalWidth;
+    canvas.height = quarterTurn ? image.naturalWidth : image.naturalHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Canvas indisponible.");
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate((degrees * Math.PI) / 180);
+    ctx.drawImage(image, -image.naturalWidth / 2, -image.naturalHeight / 2);
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((value) => value ? resolve(value) : reject(new Error("Conversion de l'image impossible.")), file.type || "image/jpeg", 0.95);
+    });
+    return new File([blob], file.name, { type: file.type || "image/jpeg" });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 export function BarcodeScanner({
   onDetected,
   onClose,
@@ -110,15 +137,42 @@ export function BarcodeScanner({
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
     await stopScanner();
-    const scanner = new Html5Qrcode(elId, { verbose: false, formatsToSupport: FORMATS });
-    scannerRef.current = scanner;
+
+    const candidates: File[] = [file];
     try {
-      const result = await scanner.scanFile(file, true);
-      onDetected(result);
+      for (const degrees of [180, 90, 270] as const) {
+        let scanner: Html5Qrcode | null = null;
+        const candidate = candidates[candidates.length - 1];
+        try {
+          scanner = new Html5Qrcode(elId, { verbose: false, formatsToSupport: FORMATS });
+          scannerRef.current = scanner;
+          const result = await scanner.scanFile(candidate, false);
+          onDetected(result);
+          return;
+        } catch {
+          if (scanner) {
+            try { scanner.clear(); } catch {}
+          }
+          if (degrees === 180 || degrees === 90) {
+            candidates.push(await rotateImageFile(file, degrees));
+          }
+        }
+      }
+      const last = await rotateImageFile(file, 270);
+      const scanner = new Html5Qrcode(elId, { verbose: false, formatsToSupport: FORMATS });
+      scannerRef.current = scanner;
+      try {
+        const result = await scanner.scanFile(last, false);
+        onDetected(result);
+        return;
+      } finally {
+        try { scanner.clear(); } catch {}
+      }
     } catch {
-      setErr("Aucun code détecté dans cette image. Essayez une photo plus nette.");
+      setErr("Aucun code détecté. Pace a essayé l'image originale et les rotations 90°, 180° et 270°. Essayez une photo plus nette.");
     }
   };
 

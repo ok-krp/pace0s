@@ -257,8 +257,7 @@ export function useCloudSyncEngineInternal() {
       });
       if (result?.error) throw result.error;
       const payload = result?.data as ServerWriteResult | null;
-      if (!payload || typeof payload.accepted !== "boolean" || typeof payload.updated_at !== "string") {
-        throw new Error("invalid cloud sync write response");
+      if (!payload || typeof payload.accepted !== "boolean" || typeof payload.updated_at !== "string") {        throw new Error("invalid cloud sync write response");
       }
       if (!payload.accepted) {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", item.key).limit(1);
@@ -422,19 +421,17 @@ export function useCloudSyncEngineInternal() {
     });
 
     const onOnline = () => {
+      // Supabase Realtime reconnects its existing channel automatically.
+      // Calling subscribe() again on an already-subscribed channel throws
+      // "cannot add postgres_changes callbacks ... after subscribe()".
       void syncNow();
-      void realtimeChannel.subscribe();
     };
     const onOffline = () => setStatus("offline");
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        void syncNow();
-        void realtimeChannel.subscribe();
-      }
+      if (document.visibilityState === "visible") void syncNow();
     };
     const onPageShow = () => {
       void syncNow();
-      void realtimeChannel.subscribe();
     };
     const onLegalChanged = () => { if (allowed()) void syncNow(); else setStatus("idle"); };
     const onConflictResolved = () => { void syncNow(); };

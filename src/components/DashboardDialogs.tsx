@@ -58,13 +58,32 @@ function ScoreDetails() {
   const today = todayKey();
   const days = lastNDays(7);
 
+  const scoreSleep = (hours: number) => {
+    if (hours <= 0) return 0.5;
+    if (hours >= 7 && hours <= 9) return 1;
+    if (hours < 7) return Math.max(0, hours / 7);
+    return Math.max(0, Math.min(1, 1 - (hours - 9) / 3));
+  };
+  const scoreNutrition = (kcal: number) => {
+    if (kcal <= 0 || goals.kcal <= 0) return 0.5;
+    const ratio = kcal / goals.kcal;
+    if (ratio >= 0.9 && ratio <= 1.1) return 1;
+    if (ratio < 0.9) return Math.max(0, Math.min(1, 0.5 + ((ratio - 0.5) / 0.4) * 0.5));
+    return Math.max(0, Math.min(1, 1 - ((ratio - 1.1) / 0.5) * 0.5));
+  };
   const computeScore = (d: string) => {
     const s = sleep[d]?.hours ?? 0;
     const w = water[d] ?? 0;
     const k = nutrition[d]?.kcal ?? 0;
     const r = (routines[d] ?? []).length;
     const wm = work[d] ?? 0;
-    return Math.round(Math.min(s / 8, 1) * 20 + Math.min(w / goals.waterMl, 1) * 15 + Math.min(k / goals.kcal, 1) * 15 + (r / Math.max(allRoutines.length, 1)) * 30 + Math.min(wm / 240, 1) * 20);
+    return Math.round(
+      scoreSleep(s) * 25 +
+      (w > 0 && goals.waterMl > 0 ? Math.min(w / goals.waterMl, 1) : 0.5) * 20 +
+      scoreNutrition(k) * 20 +
+      (allRoutines.length > 0 ? Math.min(r / allRoutines.length, 1) : 0.5) * 20 +
+      (wm > 0 ? Math.min(wm / 240, 1) : 0.5) * 15,
+    );
   };
 
   const todayScore = computeScore(today);
@@ -79,11 +98,11 @@ function ScoreDetails() {
     const r = (routines[today] ?? []).length;
     const wm = work[today] ?? 0;
     return [
-      { key: "sommeil", label: "Sommeil", pts: Math.round(Math.min(s / 8, 1) * 20), max: 20, detail: `${formatSleepDuration(s)} / 8h` },
-      { key: "eau", label: "Hydratation", pts: Math.round(Math.min(w / goals.waterMl, 1) * 15), max: 15, detail: `${(w / 1000).toFixed(1)}L / ${(goals.waterMl / 1000).toFixed(1)}L` },
-      { key: "kcal", label: "Nutrition", pts: Math.round(Math.min(k / goals.kcal, 1) * 15), max: 15, detail: `${k} / ${goals.kcal} kcal` },
-      { key: "routine", label: "Routine", pts: Math.round((r / Math.max(allRoutines.length, 1)) * 30), max: 30, detail: `${r} / ${Math.max(allRoutines.length, 1)}` },
-      { key: "focus", label: "Focus", pts: Math.round(Math.min(wm / 240, 1) * 20), max: 20, detail: `${Math.floor(wm / 60)}h ${wm % 60}m / 4h` },
+      { key: "sommeil", label: "Sommeil", pts: Math.round(scoreSleep(s) * 25), max: 25, detail: `${formatSleepDuration(s)} / 8h` },
+      { key: "eau", label: "Hydratation", pts: Math.round((w > 0 && goals.waterMl > 0 ? Math.min(w / goals.waterMl, 1) : 0.5) * 20), max: 20, detail: `${(w / 1000).toFixed(1)}L / ${(goals.waterMl / 1000).toFixed(1)}L` },
+      { key: "kcal", label: "Nutrition", pts: Math.round(scoreNutrition(k) * 20), max: 20, detail: `${k} / ${goals.kcal} kcal` },
+      { key: "routine", label: "Routine", pts: Math.round((allRoutines.length > 0 ? Math.min(r / allRoutines.length, 1) : 0.5) * 20), max: 20, detail: `${r} / ${Math.max(allRoutines.length, 1)}` },
+      { key: "focus", label: "Focus", pts: Math.round((wm > 0 ? Math.min(wm / 240, 1) : 0.5) * 15), max: 15, detail: `${Math.floor(wm / 60)}h ${wm % 60}m / 4h` },
     ];
   }, [sleep, water, nutrition, routines, work, allRoutines, goals, today]);
 

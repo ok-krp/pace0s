@@ -14,8 +14,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { supabase } from "@/integrations/supabase/client";
 import { createAiConversation, deleteAiConversation, getAiConversation, listAiConversations, updateAiConversation } from "@/lib/ai-history.functions";
 import type { AgentType, AiConversation } from "@/lib/ai-history.types";
-import { clearAiDebug, clearPendingMessage, describeChatError, getAiDebugEntries, isDebugEnabled, logAiDebug, readPendingMessage, savePendingMessage, setDebugEnabled, subscribeAiDebug } from "@/lib/ai-debug";
-import { generateLocalAi, getLocalAiProfile, localAiSupported, warmLocalAi, type LocalAiMessage } from "@/lib/local-ai";
+import { clearPendingMessage, describeChatError, logAiDebug, readPendingMessage, savePendingMessage } from "@/lib/ai-debug";
+import { generateLocalAi, getLocalAiProfile, localAiSupported, type LocalAiMessage } from "@/lib/local-ai";
 
 export const Route = createFileRoute("/ai/$agentType/$conversationId")({
   params: { parse: (params) => ({ agentType: params.agentType === "build" ? "build" as const : "coach" as const, conversationId: params.conversationId }) },
@@ -135,7 +135,6 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
   useEffect(() => { inputRef.current?.focus(); }, [conversationId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status, pendingUserText]);
   useEffect(() => { if (error) setFailure(describeChatError(error)); }, [error]);
-  useEffect(() => { if (agentType === "coach" && localAiSupported()) void warmLocalAi(); }, [agentType]);
 
   const chooseImage = (file: File | undefined) => { if (!file) return; if (!file.type.startsWith("image/")) { toast.error("Sélectionnez une image."); return; } if (file.size > MAX_IMAGE_BYTES) { toast.error("L’image doit faire au maximum 5 Mo."); return; } setSelectedImage(file); setFailure(null); };
 
@@ -175,16 +174,18 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
       setFailure(describeChatError(sendError));
     } finally { inputRef.current?.focus(); }
   };
-  const retryPending = useMemo(() => () => { const pending = readPendingMessage(conversationId); if (pending && !busy) void send(pending); }, [busy, conversationId]);
+  const retryPending = useMemo(() => () => { const pending = readPendingMessage(conversationId); if (pending && !busy) void send(pending); }, [busy, conversationId, send]);
   useEffect(() => { const onOnline = () => retryPending(); window.addEventListener("online", onOnline); return () => window.removeEventListener("online", onOnline); }, [retryPending]);
   const switchAgent = async (next: AgentType) => { if (next === agentType) return; const { data } = await supabase.from("ai_conversations").select("id").eq("agent_type", next).eq("is_archived", false).order("updated_at", { ascending: false }).limit(1).maybeSingle(); let id = data?.id; if (!id) { const user = (await supabase.auth.getUser()).data.user; if (!user) return; const { data: created, error: createError } = await supabase.from("ai_conversations").insert({ agent_type: next, user_id: user.id }).select("id").single(); if (createError) { toast.error(createError.message); return; } id = created.id; } await navigate({ to: "/ai/$agentType/$conversationId", params: { agentType: next, conversationId: id } }); };
-  const toggleEphemeral = (value: boolean) => { onEphemeralChange(value); setMessages([]); toast(value ? "Chat éphémère activé" : "Historique synchronisé activé"); };
+  const toggleEphemeral = (value: boolean) => { onEphemeralChange(value); setMessages([]); };
 
   return <div className="h-[calc(100dvh-7rem)] md:h-[calc(100dvh-5rem)] flex gap-3 overflow-hidden">
     <section className="flex-1 min-w-0 flex flex-col glass-card rounded-[24px] overflow-hidden">
       <header className="relative z-10 shrink-0 px-2 sm:px-5 py-3 border-b border-border/60 bg-[rgb(var(--glass-tint)/0.12)] backdrop-blur-[5px] flex items-center gap-2 sm:gap-3 overflow-x-auto scrollbar-none">
         <div className="md:hidden"><Sheet open={historyOpen} onOpenChange={setHistoryOpen}><SheetTrigger asChild><Button variant="ghost" size="icon" aria-label="Ouvrir les conversations"><Menu className="size-4" /></Button></SheetTrigger><SheetContent side="left" className="w-[min(88vw,360px)] p-4"><ConversationHistory activeId={conversationId} agentType={agentType} onNavigate={() => setHistoryOpen(false)} /></SheetContent></Sheet></div>
-        <div className="flex shrink-0 rounded-xl glass-thin p-1"><Button className="shrink-0 whitespace-nowrap" size="sm" variant={agentType === "coach" ? "default" : "ghost"} onClick={() => void switchAgent("coach")}><Brain className="size-4 mr-1.5" />Coach IA</Button><Button className="shrink-0 whitespace-nowrap" size="sm" variant={agentType === "build" ? "default" : "ghost"} onClick={() => void switchAgent("build")}><Code2 className="size-4 mr-1.5" />BUILD IA</Button></div>
+        <div className="flex shrink-0 rounded-xl glass-thin p-1">
+          <Button className="shrink-0 whitespace-nowrap" size="sm" variant={agentType === "coach" ? "default" : "ghost"} onClick={() => void switchAgent("coach")}><Brain className="size-4 mr-1.5" />Coach IA</Button>
+        </div>
         <div className="min-w-0 flex-1 hidden sm:block"><div className="text-sm font-medium truncate">{ephemeral ? "Chat éphémère" : title}</div><div className="text-[11px] text-muted-foreground">{agentType === "coach" ? "Suivi personnel & actions santé" : "Bugs, idées & développement"}</div></div>
         <div className="ml-auto shrink-0 flex items-center gap-2"><Clock3 className="size-3.5 text-muted-foreground" /><span className="hidden lg:inline text-xs text-muted-foreground">Éphémère</span><Switch checked={ephemeral} onCheckedChange={toggleEphemeral} /></div>
       </header>
@@ -205,7 +206,7 @@ function ChatWorkspace({ agentType, conversationId, initialMessages, title, ephe
           <Textarea ref={inputRef} autoFocus value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void send(); } }} placeholder={selectedImage ? "Décrivez ce que Pace doit analyser…" : agentType === "coach" ? "Parlez de votre journée ou demandez une action…" : "Décrivez un bug, une idée ou une fonctionnalité…"} rows={1} className="min-h-11 max-h-40 resize-none border-0 bg-transparent focus-visible:ring-0" />
           <Button size="icon" onClick={() => void send()} disabled={(!input.trim() && !selectedImage) || busy} aria-label="Envoyer">{busy ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}</Button>
         </div>
-        <div className="mt-2 flex items-center justify-center gap-3 text-[10px] text-muted-foreground"><span>Les actions et accès aux données respectent vos permissions IA.</span><button type="button" className="underline" onClick={() => setDebugEnabled(!isDebugEnabled())}>Mode développeur</button></div><DebugPanel />
+
       </footer>
     </section>
     <aside className="hidden md:block w-72 shrink-0 glass-card rounded-[24px] p-3 overflow-hidden"><ConversationHistory activeId={conversationId} agentType={agentType} /></aside>
@@ -225,11 +226,4 @@ function ConversationHistory({ activeId, agentType, onNavigate }: { activeId: st
   const goToConversation = async (id: string) => { await navigate({ to: "/ai/$agentType/$conversationId", params: { agentType, conversationId: id } }); onNavigate?.(); };
   const newConversation = async () => { const row = await create({ data: { agentType } }); await goToConversation(row.id); };
   return <div className="h-full flex flex-col"><div className="flex items-center justify-between px-1 pb-3"><div className="font-medium flex items-center gap-2"><History className="size-4" />Conversations</div><Button size="icon" variant="ghost" onClick={() => void newConversation()} aria-label="Nouvelle conversation"><Plus className="size-4" /></Button></div><div className="flex-1 min-h-0 overflow-y-auto space-y-1">{rows.map((row) => <div key={row.id} className={`group flex items-center rounded-xl ${row.id === activeId ? "bg-primary/10 text-foreground" : "hover:bg-muted/50 text-muted-foreground"}`}><Button variant="ghost" className="flex-1 min-w-0 justify-start font-normal" onClick={() => void goToConversation(row.id)}>{row.is_starred && <Star className="size-3.5 fill-current text-amber-500 shrink-0" />}<span className="truncate">{row.title}</span></Button><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="size-8 opacity-60 group-hover:opacity-100"><MoreHorizontal className="size-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onClick={async () => { await update({ data: { id: row.id, isStarred: !row.is_starred } }); await refresh(); }}><Star />{row.is_starred ? "Retirer des favoris" : "Ajouter aux favoris"}</DropdownMenuItem><DropdownMenuItem onClick={async () => { await update({ data: { id: row.id, isArchived: true } }); await refresh(); }}><Archive />Archiver</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={async () => { await remove({ data: { id: row.id } }); const remaining = rows.filter((item) => item.id !== row.id); if (row.id === activeId) { const next = remaining[0] ?? await create({ data: { agentType } }); await goToConversation(next.id); } else await refresh(); }}><Trash2 />Supprimer</DropdownMenuItem></DropdownMenuContent></DropdownMenu></div>)}</div><Button variant="outline" className="mt-3" onClick={() => void navigate({ to: "/ai-activity" })}><Sparkles className="size-4 mr-2" />Historique des actions</Button></div>;
-}
-function DebugPanel() {
-  const [, force] = useState(0); const [enabled, setEnabled] = useState(false);
-  useEffect(() => { setEnabled(isDebugEnabled()); const unsubscribe = subscribeAiDebug(() => { setEnabled(isDebugEnabled()); force((value) => value + 1); }); return () => { unsubscribe(); }; }, []);
-  if (!enabled) return null;
-  const entries = getAiDebugEntries();
-  return <div className="mt-2 glass-thin rounded-xl p-2 max-h-40 overflow-y-auto text-[10px] font-mono"><div className="flex items-center justify-between pb-1"><span className="font-medium">Journal de débogage</span><Button size="sm" variant="ghost" className="h-6 text-[10px]" onClick={clearAiDebug}>Vider</Button></div>{entries.length === 0 ? <div className="text-muted-foreground">Aucune requête enregistrée.</div> : entries.map((entry) => <div key={entry.id} className={entry.phase === "erreur" ? "text-destructive" : "text-muted-foreground"}>{new Date(entry.at).toLocaleTimeString("fr-FR")} · {entry.phase} · {entry.message}{entry.durationMs === undefined ? "" : ` · ${entry.durationMs} ms`}{entry.detail ? ` · ${entry.detail}` : ""}</div>)}</div>;
 }

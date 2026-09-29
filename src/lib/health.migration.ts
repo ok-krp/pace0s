@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { encryptHealthPayload, HEALTH_E2EE_CURRENT_KEY_VERSION } from "@/lib/health.crypto";
 import { generateHealthDedupeHash } from "@/lib/health.dedupe";
+import { getHealthDedupeRootKey } from "@/lib/health.crypto";
 
 type LegacyHealthSample = {
   id: string;
@@ -29,6 +30,7 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{ migrated: nu
 
   const legacyRows = (rows ?? []) as LegacyHealthSample[];
   let migrated = 0;
+  const dedupeRootKey = await getHealthDedupeRootKey();
 
   for (let offset = 0; offset < legacyRows.length; offset += CHUNK_SIZE) {
     const chunk = legacyRows.slice(offset, offset + CHUNK_SIZE);
@@ -53,7 +55,7 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{ migrated: nu
         date: row.ts,
         source: row.source,
         external_id: stableExternalId,
-      });
+      }, dedupeRootKey);
       records.push({
         legacy_id: row.id,
         ciphertext: encrypted.ciphertext,

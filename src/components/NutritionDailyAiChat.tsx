@@ -103,7 +103,25 @@ function DailyChatSession({ conversationId, initialMessages, failure, setFailure
     setNutritionTotals((current) => ({ ...current, [todayKey()]: items.reduce((a, x) => ({ kcal: a.kcal + x.kcal, p: a.p + x.p, c: a.c + x.c, f: a.f + x.f }), { kcal: 0, p: 0, c: 0, f: 0 }) }));
   };
 
-  const { messages, sendMessage, status, addToolApprovalResponse } = useChat({ id: conversationId, messages: initialMessages, transport, throttle: 40, sendAutomaticallyWhen, onFinish: ({ message }) => { void persistNutritionAssistantMessage(conversationId, message).then(() => refreshCanonicalNutrition()).catch((saveError) => console.error("[ai-chat] persistance/refresh Nutrition impossible", saveError)); setFailure(null); }, onError: (error) => setFailure(describeChatError(error)) });
+  const { messages, sendMessage, status, addToolApprovalResponse } = useChat({
+    id: conversationId,
+    messages: initialMessages,
+    transport,
+    throttle: 40,
+    sendAutomaticallyWhen,
+    onFinish: ({ message }) => {
+      // Refresh the visible Nutrition state independently from chat-history persistence.
+      // A secondary ai_messages write must never hide a successful add_food mutation.
+      void refreshCanonicalNutrition().catch((refreshError) => {
+        console.error("[ai-chat] refresh Nutrition impossible", refreshError);
+      });
+      void persistNutritionAssistantMessage(conversationId, message).catch((saveError) => {
+        console.error("[ai-chat] persistance message Nutrition impossible", saveError);
+      });
+      setFailure(null);
+    },
+    onError: (error) => setFailure(describeChatError(error)),
+  });
   const busy = status === "submitted" || status === "streaming";
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" }); }, [messages, status]);
   const send = async () => { const text = input.trim(); if (!text || busy) return; setInput(""); setFailure(null); try { await sendMessage({ text }); } catch (error) { setInput(text); setFailure(describeChatError(error)); } };

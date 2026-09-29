@@ -8,6 +8,8 @@ import {
   setRegisteredHealthDeviceId,
   unwrapHealthMasterKeyFromDevice,
   wrapHealthMasterKeyForDevice,
+  wrapHealthKeyBundleForDevice,
+  unwrapHealthKeyBundleFromDevice,
 } from "@/lib/health.crypto";
 import {
   createHealthE2eeEnvelope,
@@ -62,14 +64,22 @@ export async function acceptHealthDevicePairing(deviceId: string): Promise<numbe
   let highestVersion = await getCurrentHealthKeyVersion();
 
   for (const envelope of envelopes) {
-    if (envelope.algorithm !== "ECDH-P256/AES-256-KW" || envelope.nonce !== null) continue;
     const sender = byId.get(envelope.sender_device_id);
-    if (!sender) continue;
-    await unwrapHealthMasterKeyFromDevice(
-      envelope.envelope,
-      sender.public_key as JsonWebKey,
-      envelope.key_version,
-    );
+    if (!sender || envelope.nonce !== null) continue;
+    if (envelope.algorithm === "ECDH-P256/AES-256-KW") {
+      await unwrapHealthMasterKeyFromDevice(
+        envelope.envelope,
+        sender.public_key as JsonWebKey,
+        envelope.key_version,
+      );
+    } else if (envelope.algorithm === "ECDH-P256/AES-256-KW/KEY-BUNDLE-V1") {
+      await unwrapHealthKeyBundleFromDevice(
+        JSON.parse(envelope.envelope) as import("@/lib/health.crypto").HealthKeyBundleEnvelope,
+        sender.public_key as JsonWebKey,
+      );
+    } else {
+      continue;
+    }
     highestVersion = Math.max(highestVersion, envelope.key_version);
   }
 
@@ -91,14 +101,14 @@ export async function rotateHealthKeyAndRevokeDevice(revokedDeviceId: string | n
   if (!senderDeviceId) throw new Error("Current device is not registered for E2EE pairing.");
 
   for (const device of activeDevices) {
-    const wrapped = await wrapHealthMasterKeyForDevice(device.public_key as JsonWebKey, nextVersion);
+    const wrapped = await wrapHealthKeyBundleForDevice(device.public_key as JsonWebKey, nextVersion);
     await createHealthE2eeEnvelope({
       data: {
         device_id: device.id,
         sender_device_id: senderDeviceId,
-        envelope: wrapped.envelope,
+        envelope: JSON.stringify(wrapped),
         nonce: null,
-        algorithm: wrapped.algorithm,
+        algorithm: "ECDH-P256/AES-256-KW/KEY-BUNDLE-V1",
         key_version: nextVersion,
       },
     });
