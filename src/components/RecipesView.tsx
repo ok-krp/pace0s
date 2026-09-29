@@ -90,7 +90,7 @@ export function RecipesView() {
       if (idx >= 0) { const next = [...p]; next[idx] = r; return next; }
       return [...p, r];
     });
-    toast.success("Recette enregistrée");
+
     setEditOpen(false); setEditing(null);
   };
 
@@ -101,7 +101,7 @@ export function RecipesView() {
 
   const addToLog = (r: Recipe, meal: string) => {
     addNutritionItem({ name: `${r.emoji} ${r.name}`, meal, kcal: r.kcal, p: r.p, c: r.c, f: r.f });
-    toast.success(`${r.name} ajouté à ${meal}`);
+
   };
 
   const addCat = () => {
@@ -308,7 +308,7 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
   const submit = () => {
     if (!name || !kcal) { toast.error("Nom et calories obligatoires"); return; }
     addNutritionItem({ name, meal, kcal: +kcal || 0, p: +p || 0, c: +c || 0, f: +f || 0 });
-    toast.success(`Ajouté à ${meal}`);
+
     onClose();
   };
   return (

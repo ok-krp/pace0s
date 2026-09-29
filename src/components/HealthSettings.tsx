@@ -189,14 +189,14 @@ export function HealthSettings() {
         muscle: reading.muscleKg ?? p[key]?.muscle,
       },
     }));
-    toast.success(`Poids ${reading.weightKg} kg enregistré`);
+
   };
 
   const saveBpm = async () => {
     if (!bpm) return;
     try {
       await insert({ data: { samples: [{ ts: new Date().toISOString(), type: "heart_rate", value: bpm, source: "ble" }] } });
-      toast.success(`BPM ${bpm} enregistré`);
+
       window.dispatchEvent(new Event("pace.health.changed"));
     } catch (e) { toast.error((e as Error).message); }
   };
@@ -215,7 +215,7 @@ export function HealthSettings() {
         const r = await insert({ data: { samples: c } });
         total += r.inserted;
       }
-      toast.success(`${total} échantillons importés`);
+
       window.dispatchEvent(new Event("pace.health.changed"));
       await refresh();
     } catch (err) {

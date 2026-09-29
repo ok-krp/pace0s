@@ -282,13 +282,13 @@ function SportPage() {
         const result = await generateProgression({ data: { sessionId: final.id, exerciseIds: [...new Set(completedExerciseIds)] } });
         if (result.targets?.length) setTargets((current) => ({ ...current, ...Object.fromEntries(result.targets.map((target: ProgressionTarget) => [target.exerciseId, target])) }));
         const preview = (result.targets ?? []).slice(0, 4).map((target: ProgressionTarget) => String(target.targetSets) + " × " + String(target.targetReps) + (target.targetWeight > 0 ? " @ " + String(target.targetWeight) + " kg" : "")).join(" · ");
-        toast.success("Séance terminée — " + String(final.durationMin) + " min", { description: preview ? "Cible IA : " + preview : "Séance enregistrée et progression analysée." });
+
       } catch (error) {
         console.warn("[sport] progression IA indisponible", error);
-        toast.success("Séance terminée — " + String(final.durationMin) + " min", { description: "Séance enregistrée. L'analyse IA sera réessayée à la prochaine séance." });
+
       }
     } else {
-      toast.success("Séance terminée — " + String(final.durationMin) + " min", { description: "Séance enregistrée dans l'historique." });
+
     }
     setProgressionLoading(false);
   };

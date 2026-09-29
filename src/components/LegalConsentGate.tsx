@@ -103,7 +103,7 @@ export function LegalConsentGate() {
       writeLocalLegalConsent(result.opts);
       setOpts(result.opts);
       setOpen(false);
-      toast.success("Préférences enregistrées");
+
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Enregistrement impossible");
     } finally {
