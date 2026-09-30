@@ -1,7 +1,10 @@
 import { pipeline } from "@huggingface/transformers";
 import { PHOTO_INSTRUCTIONS, foodAnalysisSchema, type FoodAnalysis } from "./nutrition-ai.shared";
 
-// 256M keeps the local vision path usable on lower-memory phones.\n// The model family is available in Transformers.js and is substantially smaller\n// than the previous 500M default.\nconst MODEL_ID = "HuggingFaceTB/SmolVLM-256M-Instruct";
+// 256M keeps the local vision path usable on lower-memory phones.
+// The model family is available in Transformers.js and is substantially smaller
+// than the previous 500M default.
+const MODEL_ID = "HuggingFaceTB/SmolVLM-256M-Instruct";
 type VisionPipeline = ((input: unknown, options?: Record<string, unknown>) => Promise<Array<{ generated_text?: string }> | { generated_text?: string }>);
 let pipelinePromise: Promise<VisionPipeline> | null = null;
 
