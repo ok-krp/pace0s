@@ -68,6 +68,7 @@ class HealthE2eeService {
 
   Future<Map<String, dynamic>> devicePublicKey() async {
     final data = await (await _deviceKeyPair()).extract();
+    if (data is! EcKeyPairData) throw StateError('Invalid persisted P-256 device key.');
     return {'kty': 'EC', 'crv': 'P-256', 'x': _b64Url(data.x), 'y': _b64Url(data.y)};
   }
 
