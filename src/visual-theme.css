@@ -16,7 +16,7 @@
   --wallpaper:#f6f7f9; --radius:20px; --radius-sm:10px; --radius-md:14px; --radius-lg:16px; --radius-xl:20px; --radius-2xl:24px; --radius-3xl:28px;
 }
 [data-visual-theme="signal"] body,[data-visual-theme="signal"] h1,[data-visual-theme="signal"] h2,[data-visual-theme="signal"] h3,[data-visual-theme="signal"] h4,[data-visual-theme="signal"] h5,[data-visual-theme="signal"] .font-display { font-family:Inter,ui-sans-serif,system-ui,sans-serif; }
-[data-visual-theme="signal"] body{letter-spacing:.002em}
+[data-visual-theme="signal"] body{letter-spacing:.002em;color:#111315!important}\n[data-visual-theme="signal"] .text-foreground,[data-visual-theme="signal"] .text-muted-foreground,[data-visual-theme="signal"] .text-card-foreground,[data-visual-theme="signal"] [class*="text-muted"]{color:#111315!important}\n[data-visual-theme="signal"] .text-white{color:#111315!important}\n[data-visual-theme="signal"] [data-nav-slot]{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none;touch-action:none}\n[data-visual-theme="signal"] [data-nav-slot] *{pointer-events:none}\n[data-visual-theme="signal"] body{letter-spacing:.002em}
 [data-visual-theme="signal"] h1,[data-visual-theme="signal"] h2,[data-visual-theme="signal"] h3,[data-visual-theme="signal"] h4,[data-visual-theme="signal"] h5,[data-visual-theme="signal"] .font-display{letter-spacing:-.028em}
 [data-visual-theme="signal"] .pace-bg,[data-visual-theme="signal"] .pace-bg::before{background:#f6f7f9!important;background-image:none!important;filter:none!important}
 [data-visual-theme="signal"] .pace-bg::before{opacity:1!important}
