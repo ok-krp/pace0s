@@ -25,7 +25,7 @@ export function setDebugEnabled(enabled: boolean) {
   emit();
 }
 
-export function logAiDebug(_entry: AiDebugEntry): void {
+export function logAiDebug(_entry: Omit<AiDebugEntry, "id" | "at">): void {
   // Debug journal intentionally disabled in the user-facing assistant.
 }
 
