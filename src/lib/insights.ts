@@ -134,19 +134,43 @@ function scoreProgress(value: number | null, target: number) {
  * Missing entries are neutral (50%) instead of being treated as failures.
  * Weights: sleep 25%, hydration 20%, nutrition 20%, routine 20%, focus 15%.
  */
+function dayProgress(i: IntelInput, d: string) {
+  if (d !== i.today) return 1;
+  const start = new Date(i.now);
+  start.setHours(0, 0, 0, 0);
+  const elapsed = Math.max(0, i.now.getTime() - start.getTime());
+  return Math.max(0.1, Math.min(1, elapsed / 86_400_000));
+}
+
+function scoreAgainstExpected(value: number | null, target: number, progress: number) {
+  if (value == null || value <= 0 || target <= 0) return 0.5;
+  const expected = target * progress;
+  if (expected <= 0) return 0.5;
+  const ratio = value / expected;
+  if (ratio >= 0.8 && ratio <= 1.2) return 1;
+  if (ratio < 0.8) return clamp01(ratio / 0.8);
+  return clamp01(1 - ((ratio - 1.2) / 0.8));
+}
+
 export function scoreFor(i: IntelInput, d: string) {
+  const progress = dayProgress(i, d);
   const sleepH = i.sleep[d]?.hours ?? null;
   const waterMl = i.water[d] ?? null;
   const kcal = i.nutrition[d]?.kcal ?? null;
   const routineDone = (i.routineDone[d] ?? []).length;
   const workMin = i.work[d] ?? null;
+  const expectedRoutine = i.routineTotal > 0 ? Math.max(1, Math.ceil(i.routineTotal * progress)) : 0;
 
+  // The score evaluates the day against what should reasonably be completed
+  // by this point in the day. A 09:00 dashboard is no longer penalized as if
+  // the user had to have already completed the whole hydration, nutrition,
+  // routine and focus targets.
   const weighted =
     scoreSleep(sleepH) * 25 +
-    scoreProgress(waterMl, i.goals.waterMl) * 20 +
-    scoreNutrition(kcal, i.goals.kcal) * 20 +
-    (i.routineTotal > 0 ? clamp01(routineDone / i.routineTotal) : 0.5) * 20 +
-    scoreProgress(workMin, 240) * 15;
+    scoreAgainstExpected(waterMl, i.goals.waterMl, progress) * 20 +
+    scoreAgainstExpected(kcal, i.goals.kcal, progress) * 20 +
+    (i.routineTotal > 0 ? clamp01(routineDone / expectedRoutine) : 0.5) * 20 +
+    scoreAgainstExpected(workMin, 240, progress) * 15;
 
   return Math.round(weighted);
 }
