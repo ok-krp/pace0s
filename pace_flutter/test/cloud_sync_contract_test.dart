@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:pace_flutter/core/sync/sync_service.dart';
+import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
   group('CloudSyncWriteResponse', () {
