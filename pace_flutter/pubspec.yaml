@@ -21,6 +21,8 @@ dependencies:
   cross_file: ^0.3.5
   cryptography: ^2.7.0
   flutter_secure_storage: ^9.2.4
+  pointycastle: ^4.0.0
+  unorm_dart: ^0.3.2
 
 dev_dependencies:
   flutter_test:
