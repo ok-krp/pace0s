@@ -59,6 +59,7 @@ export function BarcodeScanner({
   const [cameras, setCameras] = useState<CameraDevice[]>([]);
   const [activeCamId, setActiveCamId] = useState<string | null>(null);
   const [starting, setStarting] = useState(true);
+  const [capturing, setCapturing] = useState(false);
 
   const config = {
     fps: 10,
@@ -133,6 +134,47 @@ export function BarcodeScanner({
     const idx = cameras.findIndex((c) => c.id === activeCamId);
     const next = cameras[(idx + 1) % cameras.length];
     await startWith(next.id);
+  };
+
+  const captureAndScanRotations = async () => {
+    if (capturing) return;
+    const video = document.querySelector<HTMLVideoElement>('#' + elId + ' video');
+    if (!video || video.videoWidth <= 0 || video.videoHeight <= 0) {
+      setErr("Image caméra indisponible. Approchez le code et réessayez.");
+      return;
+    }
+    setCapturing(true);
+    setErr(null);
+    try {
+      const source = document.createElement("canvas");
+      source.width = video.videoWidth;
+      source.height = video.videoHeight;
+      const ctx = source.getContext("2d");
+      if (!ctx) throw new Error("Canvas indisponible.");
+      ctx.drawImage(video, 0, 0, source.width, source.height);
+      const blob = await new Promise<Blob>((resolve, reject) =>
+        source.toBlob((value) => value ? resolve(value) : reject(new Error("Capture impossible.")), "image/jpeg", 0.95),
+      );
+      const original = new File([blob], "pace-code.jpg", { type: "image/jpeg" });
+      const candidates = [original];
+      for (const degrees of [180, 90, 270] as const) candidates.push(await rotateImageFile(original, degrees));
+      for (const candidate of candidates) {
+        const scanner = new Html5Qrcode(elId, { verbose: false, formatsToSupport: FORMATS });
+        try {
+          const result = await scanner.scanFile(candidate, false);
+          await scanner.clear().catch(() => {});
+          onDetected(result);
+          return;
+        } catch {
+          await scanner.clear().catch(() => {});
+        }
+      }
+      setErr("Code non détecté. Pace a testé l'image actuelle et ses rotations. Cadrez entièrement le code et réessayez.");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Lecture du code impossible.");
+    } finally {
+      setCapturing(false);
+    }
   };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -211,6 +253,9 @@ export function BarcodeScanner({
             <RefreshCw className="size-4 mr-1.5" /> Changer de caméra
           </Button>
         )}
+        <Button variant="secondary" size="sm" onClick={() => void captureAndScanRotations()} disabled={capturing || starting} className="rounded-xl">
+          <RefreshCw className={capturing ? "size-4 mr-1.5 animate-spin" : "size-4 mr-1.5"} /> {capturing ? "Lecture…" : "Lire même à l'envers"}
+        </Button>
         <Button variant="ghost" size="sm" onClick={onClose} className="rounded-xl text-white hover:text-white hover:bg-white/10">
           Fermer
         </Button>
