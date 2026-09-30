@@ -66,3 +66,5 @@ $function$;
 
 revoke execute on function public.insert_coach_ai_food_idempotent_v2(uuid, uuid, text, text, text, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, jsonb) from anon;
 grant execute on function public.insert_coach_ai_food_idempotent_v2(uuid, uuid, text, text, text, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, jsonb) to authenticated;
+revoke execute on function public.insert_coach_ai_food_idempotent_v2(uuid, uuid, text, text, text, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, jsonb) from public;
+grant execute on function public.insert_coach_ai_food_idempotent_v2(uuid, uuid, text, text, text, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, numeric, jsonb) to authenticated;
