@@ -164,11 +164,11 @@ export function BarcodeScanner({
         const scanner = new Html5Qrcode(elId, { verbose: false, formatsToSupport: FORMATS });
         try {
           const result = await scanner.scanFile(candidate, false);
-          await scanner.clear().catch(() => {});
+          try { scanner.clear(); } catch {}
           onDetected(result);
           return;
         } catch {
-          await scanner.clear().catch(() => {});
+          try { scanner.clear(); } catch {}
         }
       }
       setErr("Code non détecté. Pace a testé l'image actuelle et ses rotations. Cadrez entièrement le code et réessayez.");
