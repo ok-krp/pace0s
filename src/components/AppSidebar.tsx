@@ -125,6 +125,7 @@ export function MobileTabBar() {
 
   const handlePointerDown = (event: React.PointerEvent, index: number) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     startPoint.current = { x: event.clientX, y: event.clientY };
     setPressed(index);
     pressTimer.current = setTimeout(() => beginDrag(index), 2000);
@@ -148,8 +149,11 @@ export function MobileTabBar() {
     }
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (event?: React.PointerEvent) => {
     if (dragging !== null) suppressClick.current = true;
+    if (event?.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     setDragging(null);
     clearPress();
   };
