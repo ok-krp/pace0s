@@ -201,9 +201,7 @@ class HealthE2eeService {
       if (!sample.value.isFinite) throw ArgumentError('Health sample value must be finite.');
       final timestamp = sample.timestamp.toUtc().toIso8601String();
       final source = sample.source ?? 'manual';
-      final externalId = '$source|${sample.type}|' +
-          sample.timestamp.toUtc().microsecondsSinceEpoch.toString() + '|' +
-          sample.value.toString() + '|' + (sample.unit ?? '');
+      final externalId = '$source|${sample.type}|${sample.timestamp.toUtc().microsecondsSinceEpoch}|${sample.value}|${sample.unit ?? ''}';
 
       final canonical = jsonEncode([
         unorm.nfc(sample.type),
