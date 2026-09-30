@@ -191,8 +191,8 @@ function Dashboard() {
         ))}
       </div>
       <DailyInsight intel={intel} />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
-        <motion.button type="button" onClick={() => setDialog("score")} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }} whileTap={{ scale: 0.995 }} aria-label="Voir le détail du Daily Rhythm" className="text-left lg:col-span-2 glass-card p-4 md:p-8 relative overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
+      <div className="grid grid-cols-1 lg:grid-cols-6 gap-4 mb-4">
+        <motion.button type="button" onClick={() => setDialog("score")} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }} whileTap={{ scale: 0.995 }} aria-label="Voir le détail du Daily Rhythm" className="text-left lg:col-span-4 glass-card p-4 md:p-8 relative overflow-hidden group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40">
           <div className="pointer-events-none absolute -top-24 -left-16 size-72 rounded-full blur-3xl opacity-60" style={{ background: "radial-gradient(closest-side, oklch(0.82 0.16 55 / 0.35), transparent)" }} />
           <div className="pointer-events-none absolute -bottom-24 -right-16 size-72 rounded-full blur-3xl opacity-60" style={{ background: "radial-gradient(closest-side, oklch(0.6 0.18 255 / 0.32), transparent)" }} />
           <div className="flex items-center justify-between relative">
@@ -208,7 +208,7 @@ function Dashboard() {
             <ul className="w-full max-w-sm space-y-2">{intel.rhythmLines.map((l) => <li key={l.label} className="flex items-start gap-2.5"><span className="mt-1.5 size-1.5 rounded-full shrink-0" style={{ background: statusColor[l.status] }} /><div className="min-w-0"><div className="text-[13px] font-medium leading-tight">{l.label}</div><div className="text-[11px] text-muted-foreground leading-snug">{l.text}</div></div></li>)}</ul>
           </div>
         </motion.button>
-        <div className="glass-card p-5 md:p-6 flex flex-col justify-between gap-5">
+        <div className="lg:col-span-2 glass-card p-5 md:p-6 flex flex-col justify-between gap-5">
           <div className="flex items-center justify-between">
             <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-2"><Flame className="size-4" /> Nutrition & hydratation</div>
             <button type="button" onClick={() => navigate({ to: "/nutrition" })} className="text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground transition">Détails →</button>
@@ -232,10 +232,10 @@ function Dashboard() {
         })}
       </div>
       {(health.steps > 0 || health.kcalActive > 0) && (
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <StatCard label="Pas" value={health.steps.toLocaleString()} icon={<Footprints className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" />
-          <StatCard label="Kcal dépensées" value={health.kcalActive} unit="kcal" icon={<Activity className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" />
-          <StatCard label={kcal - health.kcalActive >= 0 ? "Surplus" : "Déficit"} value={Math.abs(kcal - health.kcalActive)} unit="kcal" icon={<Flame className="size-4" />} onClick={() => setDialog("kcal")} hint="Détail" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-4">
+          <div className="lg:col-span-2"><StatCard label="Pas" value={health.steps.toLocaleString()} icon={<Footprints className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" />
+          <div className="lg:col-span-2"><StatCard label="Kcal dépensées" value={health.kcalActive} unit="kcal" icon={<Activity className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" />
+          <div className="lg:col-span-2"><StatCard label={kcal - health.kcalActive >= 0 ? "Surplus" : "Déficit"} value={Math.abs(kcal - health.kcalActive)} unit="kcal" icon={<Flame className="size-4" />} onClick={() => setDialog("kcal")} hint="Détail" />
         </div>
       )}
       {weightSeries.length > 1 && (
