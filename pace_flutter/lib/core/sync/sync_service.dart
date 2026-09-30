@@ -10,11 +10,14 @@ class SyncService {
   final LocalStore localStore;
   final SupabaseClient? client;
   bool _running = false;
+  RealtimeChannel? _realtimeChannel;
+  String? _realtimeUserId;
 
   Future<void> syncNow() async {
     if (_running || client == null || client!.auth.currentUser == null) return;
     _running = true;
     try {
+      await _ensureRealtimeSubscription(user.id);
       final hadLocalAiPreferenceMutation = localStore.pendingOperations().any(
         (operation) => operation['key'] == 'pace.settings.ai.confirm_actions' || operation['key'] == 'pace.settings.ai.memory',
       );
@@ -24,6 +27,68 @@ class SyncService {
     } finally {
       _running = false;
     }
+  }
+
+  Future<void> _ensureRealtimeSubscription(String userId) async {
+    if (_realtimeUserId == userId && _realtimeChannel != null) return;
+
+    if (_realtimeChannel != null) {
+      await client!.removeChannel(_realtimeChannel!);
+      _realtimeChannel = null;
+    }
+
+    final channel = client!.channel('pace-flutter-user-state-$userId');
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'user_state',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'user_id',
+        value: userId,
+      ),
+      callback: (payload) {
+        final record = Map<String, dynamic>.from(payload.newRecord);
+        final key = record['key'];
+        final value = record['value'];
+        final updatedAt = record['updated_at'];
+        if (key is! String || updatedAt is! String) return;
+        unawaited(_applyRealtimeRow(key, value, updatedAt));
+      },
+    );
+    _realtimeChannel = channel;
+    _realtimeUserId = userId;
+
+    try {
+      await channel.subscribe();
+    } catch (_) {
+      // Polling remains the fallback when Realtime is unavailable.
+    }
+  }
+
+  Future<void> _applyRealtimeRow(
+    String key,
+    dynamic value,
+    String updatedAt,
+  ) async {
+    if (_running) {
+      // The regular sync cycle will reconcile this row after its current
+      // mutation batch completes, preventing a transient overwrite.
+      return;
+    }
+
+    final localUpdatedAt = localStore.lastSyncedAt(key);
+    final remoteTime = DateTime.tryParse(updatedAt);
+    final localTime = localUpdatedAt == null ? null : DateTime.tryParse(localUpdatedAt);
+    if (remoteTime == null || (localTime != null && !remoteTime.isAfter(localTime))) {
+      return;
+    }
+
+    if (localStore.pendingOperations().any((operation) => operation['key'] == key)) {
+      return;
+    }
+
+    await localStore.applyRemote(key, value, updatedAt);
   }
 
   Future<void> _pushPending() async {
