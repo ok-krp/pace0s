@@ -31,6 +31,12 @@ class SyncService {
       try {
         final result = await _push(operation);
         if (result.accepted) {
+          if (result.serverUpdatedAt != null) {
+            await localStore.markSyncedAt(
+              operation['key'] as String,
+              result.serverUpdatedAt!,
+            );
+          }
           await localStore.acknowledgeOperation(operation);
           continue;
         }
@@ -66,7 +72,10 @@ class SyncService {
       'p_updated_by': 'flutter-native',
     });
 
-    if (response == true) return const _PushResult.accepted();
+    final write = CloudSyncWriteResponse.fromRpc(response);
+    if (write.accepted) {
+      return _PushResult.accepted(write.updatedAt);
+    }
 
     final rows = await client!
         .from('user_state')
@@ -143,23 +152,52 @@ class SyncService {
   }
 }
 
+/// Validated response contract returned by upsert_user_state_if_newer().
+class CloudSyncWriteResponse {
+  const CloudSyncWriteResponse({
+    required this.accepted,
+    required this.updatedAt,
+  });
+
+  final bool accepted;
+  final String updatedAt;
+
+  factory CloudSyncWriteResponse.fromRpc(dynamic response) {
+    if (response is! Map) {
+      throw const FormatException('invalid cloud sync write response');
+    }
+    final accepted = response['accepted'];
+    final updatedAt = response['updated_at'];
+    if (accepted is! bool || updatedAt is! String || updatedAt.isEmpty) {
+      throw const FormatException('invalid cloud sync write response');
+    }
+    return CloudSyncWriteResponse(
+      accepted: accepted,
+      updatedAt: updatedAt,
+    );
+  }
+}
+
 class _PushResult {
-  const _PushResult.accepted()
+  const _PushResult.accepted(this.serverUpdatedAt)
       : accepted = true,
         remoteValue = null,
         remoteUpdatedAt = null;
 
   const _PushResult.rejected()
       : accepted = false,
+        serverUpdatedAt = null,
         remoteValue = null,
         remoteUpdatedAt = null;
 
   const _PushResult.rejectedWithRemote({
     required this.remoteValue,
     required this.remoteUpdatedAt,
-  }) : accepted = false;
+  })  : accepted = false,
+        serverUpdatedAt = null;
 
   final bool accepted;
+  final String? serverUpdatedAt;
   final dynamic remoteValue;
   final String? remoteUpdatedAt;
 }
