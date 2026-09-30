@@ -69,6 +69,11 @@ class LocalStore {
     await _flush();
   }
 
+  Future<void> markSyncedAt(String key, String updatedAt) async {
+    _setSyncedAt(key, updatedAt);
+    await _flush();
+  }
+
   Map<String, String> syncedMetadata() => Map<String, String>.from(_syncMeta);
 
   Map<String, dynamic> get _syncMeta {
