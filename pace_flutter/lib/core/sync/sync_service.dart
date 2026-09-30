@@ -65,7 +65,7 @@ class SyncService {
     _realtimeUserId = userId;
 
     try {
-      await channel.subscribe();
+      channel.subscribe();
     } catch (_) {
       // Polling remains the fallback when Realtime is unavailable.
     }
