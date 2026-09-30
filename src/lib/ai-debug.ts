@@ -25,10 +25,8 @@ export function setDebugEnabled(enabled: boolean) {
   emit();
 }
 
-export function logAiDebug(entry: Omit<AiDebugEntry, "id" | "at">) {
-  entries = [{ ...entry, id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, at: Date.now() }, ...entries].slice(0, MAX_ENTRIES);
-  if (isDebugEnabled()) console.info(`[ai-chat:${entry.phase}]`, entry.message, entry.detail ?? "");
-  emit();
+export function logAiDebug(_entry: AiDebugEntry): void {
+  // Debug journal intentionally disabled in the user-facing assistant.
 }
 
 export function clearAiDebug() {
