@@ -1,0 +1,4 @@
+-- Historical compatibility migration for Supabase Preview.
+-- Remote migration version 20260902091212 (restore_byok_secret_browser_isolation) is already recorded in Supabase.
+-- Keep this no-op marker in version control so Preview can reconcile local and remote migration histories.
+-- The schema change is represented by the corresponding canonical migration in this repository.

@@ -1,0 +1,4 @@
+-- Historical compatibility migration for Supabase Preview.
+-- Remote migration version 20260906133518 (recover_byok_runtime_on_invalid_secret) is already recorded in Supabase.
+-- Keep this no-op marker in version control so Preview can reconcile local and remote migration histories.
+-- The schema change is represented by the corresponding canonical migration in this repository.

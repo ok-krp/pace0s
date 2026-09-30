@@ -1,0 +1,4 @@
+-- Historical compatibility migration for Supabase Preview.
+-- Remote migration version 20260919092919 (20260919140500_restore_sleep_all_users_non_destructive) is already recorded in Supabase.
+-- Keep this no-op marker in version control so Preview can reconcile local and remote migration histories.
+-- The schema change is represented by the corresponding canonical migration in this repository.
