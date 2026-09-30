@@ -233,9 +233,9 @@ function Dashboard() {
       </div>
       {(health.steps > 0 || health.kcalActive > 0) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 mb-4">
-          <div className="lg:col-span-2"><StatCard label="Pas" value={health.steps.toLocaleString()} icon={<Footprints className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" />
-          <div className="lg:col-span-2"><StatCard label="Kcal dépensées" value={health.kcalActive} unit="kcal" icon={<Activity className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" />
-          <div className="lg:col-span-2"><StatCard label={kcal - health.kcalActive >= 0 ? "Surplus" : "Déficit"} value={Math.abs(kcal - health.kcalActive)} unit="kcal" icon={<Flame className="size-4" />} onClick={() => setDialog("kcal")} hint="Détail" />
+          <div className="lg:col-span-2"><StatCard label="Pas" value={health.steps.toLocaleString()} icon={<Footprints className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" /></div>
+          <div className="lg:col-span-2"><StatCard label="Kcal dépensées" value={health.kcalActive} unit="kcal" icon={<Activity className="size-4" />} onClick={() => navigate({ to: "/settings" })} hint="Montre" /></div>
+          <div className="lg:col-span-2"><StatCard label={kcal - health.kcalActive >= 0 ? "Surplus" : "Déficit"} value={Math.abs(kcal - health.kcalActive)} unit="kcal" icon={<Flame className="size-4" />} onClick={() => setDialog("kcal")} hint="Détail" /></div>
         </div>
       )}
       {weightSeries.length > 1 && (
