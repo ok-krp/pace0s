@@ -45,9 +45,35 @@ class HealthE2eeService {
 
   Future<void> ensureInitialized({String deviceName = 'Pace Flutter'}) async {
     final version = await currentKeyVersion();
-    await _masterKey(version);
-    await _dedupeRootKey();
     await ensureRegisteredDevice(deviceName: deviceName);
+
+    if (await _readMasterKey(version) != null) {
+      if (await _secureStorage.read(key: _dedupeKey) == null) {
+        await _dedupeRootKey();
+      }
+      return;
+    }
+
+    await acceptPendingKeyEnvelopes();
+    if (await _readMasterKey(version) != null) {
+      return;
+    }
+
+    final devices = await client
+        .from('health_e2ee_devices')
+        .select('id')
+        .eq('user_id', _userId())
+        .isFilter('revoked_at', null);
+
+    if (devices.length == 1) {
+      await _masterKey(version);
+      await _dedupeRootKey();
+      return;
+    }
+
+    throw StateError(
+      'Health E2EE key provisioning is required before this device can use health sync.',
+    );
   }
 
   Future<String> ensureRegisteredDevice({String deviceName = 'Pace Flutter'}) async {
@@ -175,7 +201,7 @@ class HealthE2eeService {
       if (!sample.value.isFinite) throw ArgumentError('Health sample value must be finite.');
       final timestamp = sample.timestamp.toUtc().toIso8601String();
       final source = sample.source ?? 'manual';
-      final externalId = source + '|' + sample.type + '|' +
+      final externalId = '$source|${sample.type}|' +
           sample.timestamp.toUtc().microsecondsSinceEpoch.toString() + '|' +
           sample.value.toString() + '|' + (sample.unit ?? '');
 
@@ -292,7 +318,7 @@ class HealthE2eeService {
       mac: Mac(packed.sublist(packed.length - 16)),
     );
     final aad = utf8.encode(
-      'pace-health-e2ee|device=' + deviceId + '|sender=' + senderDeviceId + '|v=' + keyVersion.toString(),
+      'pace-health-e2ee|device=$deviceId|sender=$senderDeviceId|v=$keyVersion',
     );
     await _storeMasterKey(keyVersion, await _aes.decrypt(box, secretKey: shared, aad: aad));
   }
