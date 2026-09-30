@@ -26,7 +26,7 @@ begin
   if p_key is null or p_key = '' then raise exception 'key is required'; end if;
   if p_updated_by is null or pg_catalog.length(pg_catalog.trim(p_updated_by)) = 0 then raise exception 'updated_by is required'; end if;
 
-  pg_catalog.perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_user_id::text || ':' || p_key, 0));
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(p_user_id::text || ':' || p_key, 0));
 
   if p_key = 'pace.nutrition.items' then
     select us.value into current_value
