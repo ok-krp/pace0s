@@ -576,3 +576,62 @@
 .dark[data-visual-theme="signal"] select { background:#111418 !important; color:#f5f7fa !important; border-color:rgb(255 255 255/.12) !important; }
 .dark[data-visual-theme="signal"] aside,
 .dark[data-visual-theme="signal"] header { background:rgb(17 20 24/.92) !important; border-color:rgb(255 255 255/.12) !important; }
+
+
+/* P0 theme stability: one deliberately light frosted blur for every Pace surface. */
+.glass-card,
+.glass-thin,
+.glass-icon,
+[data-slot="card"],
+[data-visual-theme] aside,
+[data-visual-theme] header,
+[data-visual-theme] [role="dialog"],
+[data-visual-theme] [data-radix-popper-content-wrapper] > *,
+[data-visual-theme] [data-side],
+[data-visual-theme] input,
+[data-visual-theme] textarea,
+[data-visual-theme] select {
+  backdrop-filter: blur(6.5px) saturate(115%) !important;
+  -webkit-backdrop-filter: blur(6.5px) saturate(115%) !important;
+}
+
+/* Signal dark palette must override the light Signal surface/text rules above. */
+.dark[data-visual-theme="signal"] body,
+.dark[data-visual-theme="signal"] .pace-bg,
+.dark[data-visual-theme="signal"] .pace-bg::before { background: #090b0e !important; color: #f5f7fa !important; }
+.dark[data-visual-theme="signal"] .glass-card,
+.dark[data-visual-theme="signal"] .glass-thin,
+.dark[data-visual-theme="signal"] .glass-icon,
+.dark[data-visual-theme="signal"] [data-slot="card"],
+.dark[data-visual-theme="signal"] [class*="bg-card"],
+.dark[data-visual-theme="signal"] [class*="bg-popover"] {
+  background: rgb(20 24 29 / .92) !important;
+  border-color: rgb(255 255 255 / .12) !important;
+  color: #f5f7fa !important;
+}
+.dark[data-visual-theme="signal"] aside,
+.dark[data-visual-theme="signal"] header { background: rgb(17 20 24 / .92) !important; border-color: rgb(255 255 255 / .12) !important; }
+.dark[data-visual-theme="signal"] nav a { color: #b8bec7 !important; }
+.dark[data-visual-theme="signal"] nav a:hover,
+.dark[data-visual-theme="signal"] nav a[aria-current="page"],
+.dark[data-visual-theme="signal"] nav a[data-active="true"] { background: #1c2127 !important; color: #f5f7fa !important; }
+.dark[data-visual-theme="signal"] h1,
+.dark[data-visual-theme="signal"] h2,
+.dark[data-visual-theme="signal"] h3,
+.dark[data-visual-theme="signal"] h4,
+.dark[data-visual-theme="signal"] h5,
+.dark[data-visual-theme="signal"] .font-display,
+.dark[data-visual-theme="signal"] .text-foreground,
+.dark[data-visual-theme="signal"] .text-card-foreground,
+.dark[data-visual-theme="signal"] .text-white { color: #f5f7fa !important; }
+.dark[data-visual-theme="signal"] .text-muted-foreground,
+.dark[data-visual-theme="signal"] [class*="text-muted"] { color: #b8bec7 !important; }
+.dark[data-visual-theme="signal"] input,
+.dark[data-visual-theme="signal"] textarea,
+.dark[data-visual-theme="signal"] select { background: #111418 !important; color: #f5f7fa !important; border-color: rgb(255 255 255 / .12) !important; }
+.dark[data-visual-theme="signal"] button,
+.dark[data-visual-theme="signal"] [role="button"] { color: #f5f7fa !important; }
+.dark[data-visual-theme="signal"] [role="dialog"],
+.dark[data-visual-theme="signal"] [data-radix-popper-content-wrapper] > *,
+.dark[data-visual-theme="signal"] [data-side] { background: #111418 !important; color: #f5f7fa !important; border-color: rgb(255 255 255 / .12) !important; }
+.dark[data-visual-theme="signal"] [class*="bg-white"] { background: #111418 !important; }
