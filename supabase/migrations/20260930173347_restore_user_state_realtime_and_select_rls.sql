@@ -1,0 +1,5 @@
+-- Historical compatibility marker for the migration applied directly to Supabase.
+-- Remote migration version 20260930173347 is already recorded in Supabase.
+-- The schema change is represented by the canonical migration
+-- 20260930190000_restore_user_state_realtime_and_select_rls.sql in this repository.
+-- Keep this no-op marker so local and remote migration histories remain aligned.
