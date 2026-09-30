@@ -59,15 +59,14 @@ function SettingsPage() {
     const stored = localStorage.getItem("pace.dark") === "1";
     setSignal(activeSignal);
     setGlass(activeGlass);
-    setDark(activeSignal || activeGlass || stored);
+    setDark(activeGlass || stored);
     if (activeSignal || activeGlass) {
       document.documentElement.dataset.visualTheme = activeSignal ? "signal" : "glass";
-      document.documentElement.classList.add("dark");
     } else {
       delete document.documentElement.dataset.visualTheme;
-      document.documentElement.classList.toggle("dark", stored);
     }
-    setThemeColor(activeSignal || activeGlass || stored, activeSignal, activeGlass);
+    document.documentElement.classList.toggle("dark", activeGlass || stored);
+    setThemeColor(activeGlass || stored, activeSignal, activeGlass);
 
     const handleVisualThemeChange = (event: Event) => {
       const theme = (event as CustomEvent<{ theme?: string; signal?: boolean }>).detail?.theme;
