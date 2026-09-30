@@ -365,7 +365,8 @@ class HealthE2eeService {
     await _secureStorage.write(key: _dedupeKey, value: base64Encode(bytes));
   }
 
-  static String _hex(List<int> bytes) =>\n      bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+  static String _hex(List<int> bytes) =>
+      bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
   static String _b64Url(List<int> bytes) => base64Url.encode(bytes).replaceAll('=', '');
   static List<int> _b64UrlDecode(String value) {
     final normalized = value.replaceAll('-', '+').replaceAll('_', '/');
