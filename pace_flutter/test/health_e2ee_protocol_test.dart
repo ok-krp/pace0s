@@ -51,30 +51,46 @@ void main() {
 
     expect(box.nonce.length, 12);
     expect(box.mac.bytes.length, 16);
-
-    final opened = await aes.decrypt(
-      SecretBox(box.cipherText, nonce: box.nonce, mac: box.mac),
-      secretKey: SecretKeyData(key),
+    expect(
+      await aes.decrypt(box, secretKey: SecretKeyData(key)),
+      plaintext,
     );
-
-    expect(utf8.decode(opened), utf8.decode(plaintext));
   });
 
   test('HKDF and NFC/HMAC dedupe vector matches the Web protocol', () async {
-    final root = await Hkdf(hmac: Hmac.sha256(), outputLength: 32).deriveKey(
-      secretKey: SecretKeyData(List<int>.generate(32, (i) => i)),
-      nonce: utf8.encode('pace-health-e2ee-dedupe-v1'),
-      info: utf8.encode('pace-health-e2ee-dedupe-root-v1'),
+    final master = List<int>.generate(32, (i) => i);
+    final root = await Hkdf(
+      hmac: Hmac.sha256(),
+      outputLength: 32,
+    ).deriveKey(
+      secretKey: SecretKeyData(master),
+      nonce: utf8.encode('paceos-health-e2ee-dedupe-v1'),
+      info: utf8.encode('paceos/health/dedupe-hmac-sha256/v1'),
     );
     final rootBytes = await root.extractBytes();
-    expect(rootBytes.length, 32);
 
-    final hmac = Hmac.sha256();
-    final normalized = unorm.nfc('Épinards');
-    final digest = await hmac.calculateMac(
-      utf8.encode(normalized),
+    expect(
+      _hex(rootBytes),
+      'a446c5456b49ac4a52b9a88e24b8e35ada6ad9e14044070b72d5bafab6e4e548',
+    );
+
+    final canonical = jsonEncode([
+      unorm.nfc('heart_rate'),
+      DateTime.parse('2026-01-02T03:04:05.000Z').toUtc().toIso8601String(),
+      unorm.nfc('HealthKit'),
+      unorm.nfc('external-α'),
+    ]);
+    final mac = await Hmac.sha256().calculateMac(
+      utf8.encode(canonical),
       secretKey: SecretKeyData(rootBytes),
     );
-    expect(digest.bytes.length, 32);
+
+    expect(
+      _hex(mac.bytes),
+      'abac55a54e12eef14b01a5319db1d476e8fd9b5f4148e4b7deee97fff9421f2a',
+    );
   });
 }
+
+String _hex(List<int> bytes) =>
+    bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
