@@ -218,9 +218,9 @@ export function buildIntel(i: IntelInput): DashboardIntel {
   const waterStreak = streak(days, (d) => (i.water[d] ?? 0) >= i.goals.waterMl);
 
   // --- nutrition
-  const kcalLeft = kcalTarget - kcal;
   const burned = i.kcalActive;
   const kcalTarget = i.goals.kcal + (burned > 250 ? Math.round(burned * 0.6) : 0);
+  const kcalLeft = Math.max(0, kcalTarget - kcal);
 
   // --- poids
   const wSeries = days.map((d) => i.weights[d]?.w ?? 0);
