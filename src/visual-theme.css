@@ -635,3 +635,7 @@
 .dark[data-visual-theme="signal"] [data-radix-popper-content-wrapper] > *,
 .dark[data-visual-theme="signal"] [data-side] { background: #111418 !important; color: #f5f7fa !important; border-color: rgb(255 255 255 / .12) !important; }
 .dark[data-visual-theme="signal"] [class*="bg-white"] { background: #111418 !important; }
+
+/* Settings surfaces are frosted too; never fall back to a zero-blur override. */
+.settings-panel .glass-card,
+.settings-panel .glass-thin { backdrop-filter: blur(6.5px) saturate(115%) !important; -webkit-backdrop-filter: blur(6.5px) saturate(115%) !important; }
