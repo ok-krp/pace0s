@@ -161,7 +161,8 @@ export function scoreFor(i: IntelInput, d: string) {
   const workMin = i.work[d] ?? null;
   const burned = d === i.today ? i.kcalActive : 0;
   const kcalTarget = i.goals.kcal + (burned > 250 ? Math.round(burned * 0.6) : 0);
-  const expectedRoutine = i.routineTotal > 0 ? Math.max(1, Math.ceil(i.routineTotal * progress)) : 0;
+  const expectedRoutine = i.routineTotal > 0 ? i.routineTotal * progress : 0;
+  const routineScore = expectedRoutine > 0 ? clamp01(routineDone / expectedRoutine) : 0.5;
 
   // The score evaluates the day against what should reasonably be completed
   // by this point in the day. A 09:00 dashboard is no longer penalized as if
@@ -171,7 +172,7 @@ export function scoreFor(i: IntelInput, d: string) {
     scoreSleep(sleepH) * 25 +
     scoreAgainstExpected(waterMl, i.goals.waterMl, progress) * 20 +
     scoreAgainstExpected(kcal, kcalTarget, progress) * 20 +
-    (i.routineTotal > 0 ? clamp01(routineDone / expectedRoutine) : 0.5) * 20 +
+    routineScore * 20 +
     scoreAgainstExpected(workMin, 240, progress) * 15;
 
   return Math.round(weighted);
