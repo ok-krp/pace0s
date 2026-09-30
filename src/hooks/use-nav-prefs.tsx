@@ -14,9 +14,10 @@ export function useNavPrefs() {
   const cleanOrder = clean(order); const cleanBottom = clean(bottom); const cleanVisible = clean(visible);
   const fullOrder = [...cleanOrder, ...NAV_DEFAULT_ORDER.filter((x) => !cleanOrder.includes(x))];
   const move = (from: number, to: number) => setOrder((prev) => { const src = clean(prev); const next = [...src]; const [item] = next.splice(from, 1); if (item !== undefined) next.splice(to, 0, item); return next; });
+  const moveBottom = (from: number, to: number) => setBottom((prev) => { const src = clean(prev); const next = [...src]; const [item] = next.splice(from, 1); if (item !== undefined) next.splice(to, 0, item); return next; });
   const toggleBottom = (key: NavItemKey) => setBottom((prev) => { const src = clean(prev); return src.includes(key) ? src.filter((x) => x !== key) : [...src, key]; });
   const toggleVisible = (key: NavItemKey) => setVisible((prev) => { const src = clean(prev); if (src.includes(key) && src.length <= 1) return src; return src.includes(key) ? src.filter((x) => x !== key) : [...src, key]; });
   const visibleSet = new Set(cleanVisible.length ? cleanVisible : NAV_DEFAULT_ORDER);
   const visibleOrder = fullOrder.filter((k) => k === "/" || k === "/settings" || visibleSet.has(k));
-  return { order: fullOrder, visibleOrder, setOrder, bottom: cleanBottom, toggleBottom, move, visible: cleanVisible, toggleVisible };
+  return { order: fullOrder, visibleOrder, setOrder, bottom: cleanBottom, toggleBottom, moveBottom, move, visible: cleanVisible, toggleVisible };
 }

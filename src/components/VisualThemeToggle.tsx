@@ -15,10 +15,10 @@ function applyVisualTheme(theme: VisualTheme) {
   const root = document.documentElement;
   if (theme === "default") delete root.dataset.visualTheme;
   else root.dataset.visualTheme = theme;
-  root.classList.toggle("dark", theme !== "default" || localStorage.getItem(DARK_MODE_KEY) === "1");
+  root.classList.toggle("dark", theme === "glass" || (theme === "default" && localStorage.getItem(DARK_MODE_KEY) === "1"));
   localStorage.setItem(VISUAL_THEME_KEY, theme);
   const themeColor = document.querySelector('meta[name="theme-color"]');
-  themeColor?.setAttribute("content", theme === "glass" ? "#070b12" : theme === "signal" ? "#07100b" : root.classList.contains("dark") ? "#1f242c" : "#f8fafc");
+  themeColor?.setAttribute("content", theme === "glass" ? "#070b12" : theme === "signal" ? "#f6f7f9" : root.classList.contains("dark") ? "#1f242c" : "#f8fafc");
   window.dispatchEvent(new CustomEvent("pace.visual-theme.change", { detail: { theme, signal: theme === "signal" } }));
 }
 
