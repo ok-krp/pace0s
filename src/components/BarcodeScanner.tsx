@@ -145,6 +145,7 @@ export function BarcodeScanner({
     }
     setCapturing(true);
     setErr(null);
+    const cameraId = activeCamId;
     try {
       const source = document.createElement("canvas");
       source.width = video.videoWidth;
@@ -156,6 +157,7 @@ export function BarcodeScanner({
         source.toBlob((value) => value ? resolve(value) : reject(new Error("Capture impossible.")), "image/jpeg", 0.95),
       );
       const original = new File([blob], "pace-code.jpg", { type: "image/jpeg" });
+      await stopScanner();
       const candidates = [original];
       for (const degrees of [180, 90, 270] as const) candidates.push(await rotateImageFile(original, degrees));
       for (const candidate of candidates) {
@@ -170,6 +172,7 @@ export function BarcodeScanner({
         }
       }
       setErr("Code non détecté. Pace a testé l'image actuelle et ses rotations. Cadrez entièrement le code et réessayez.");
+      if (cameraId) await startWith(cameraId);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Lecture du code impossible.");
     } finally {
