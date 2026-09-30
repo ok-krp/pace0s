@@ -175,6 +175,9 @@ export function BarcodeScanner({
       if (cameraId) await startWith(cameraId);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Lecture du code impossible.");
+      if (cameraId) {
+        try { await startWith(cameraId); } catch {}
+      }
     } finally {
       setCapturing(false);
     }
