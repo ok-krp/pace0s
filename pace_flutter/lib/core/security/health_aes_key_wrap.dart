@@ -58,7 +58,9 @@ class AesKeyWrap {
         r[i] = Uint8List.fromList(block.sublist(8, 16));
       }
     }
-    if (!_equal(a, _iv)) throw StateError('AES-KW integrity check failed.');
+    if (!_equal(a, _iv)) {
+      throw StateError('AES-KW integrity check failed.');
+    }
     final output = Uint8List(wrapped.length - 8);
     for (var i = 0; i < n; i++) {
       output.setRange(i * 8, (i + 1) * 8, r[i]);
@@ -88,7 +90,9 @@ class AesKeyWrap {
   static bool _equal(List<int> a, List<int> b) {
     if (a.length != b.length) return false;
     var diff = 0;
-    for (var i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+    for (var i = 0; i < a.length; i++) {
+      diff |= a[i] ^ b[i];
+    }
     return diff == 0;
   }
 }
