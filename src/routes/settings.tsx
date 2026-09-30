@@ -59,15 +59,11 @@ function SettingsPage() {
     const stored = localStorage.getItem("pace.dark") === "1";
     setSignal(activeSignal);
     setGlass(activeGlass);
-    setDark(activeSignal || activeGlass || stored);
-    if (activeSignal || activeGlass) {
-      document.documentElement.dataset.visualTheme = activeSignal ? "signal" : "glass";
-      document.documentElement.classList.add("dark");
-    } else {
-      delete document.documentElement.dataset.visualTheme;
-      document.documentElement.classList.toggle("dark", stored);
-    }
-    setThemeColor(activeSignal || activeGlass || stored, activeSignal, activeGlass);
+    setDark(activeGlass || stored);
+    if (activeSignal || activeGlass) document.documentElement.dataset.visualTheme = activeSignal ? "signal" : "glass";
+    else delete document.documentElement.dataset.visualTheme;
+    document.documentElement.classList.toggle("dark", activeGlass || stored);
+    setThemeColor(activeGlass || stored, activeSignal, activeGlass);
 
     const handleVisualThemeChange = (event: Event) => {
       const theme = (event as CustomEvent<{ theme?: string; signal?: boolean }>).detail?.theme;
@@ -75,7 +71,7 @@ function SettingsPage() {
       const nextGlass = theme === "glass";
       setSignal(nextSignal);
       setGlass(nextGlass);
-      setDark(nextSignal || nextGlass || localStorage.getItem("pace.dark") === "1");
+      setDark(nextGlass || localStorage.getItem("pace.dark") === "1");
     };
     window.addEventListener("pace.visual-theme.change", handleVisualThemeChange);
     return () => window.removeEventListener("pace.visual-theme.change", handleVisualThemeChange);
@@ -296,5 +292,5 @@ function PlanCard({ plan, name, price, annual, features, highlighted = false, cu
 */
 
 function Row({ icon, label, desc, children }: { icon: React.ReactNode; label: string; desc: string; children: React.ReactNode }) {
-  return <div className="settings-row flex items-center gap-3 px-2 py-3"><div className="size-8 shrink-0 grid place-items-center text-muted-foreground">{icon}</div><div className="flex-1 min-w-0"><div className="font-medium text-sm text-white drop-shadow-sm">{label}</div><div className="text-xs text-muted-foreground leading-relaxed">{desc}</div></div>{children}</div>;
+  return <div className="settings-row flex items-center gap-3 px-2 py-3"><div className="size-8 shrink-0 grid place-items-center text-muted-foreground">{icon}</div><div className="flex-1 min-w-0"><div className="font-medium text-sm text-foreground">{label}</div><div className="text-xs text-muted-foreground leading-relaxed">{desc}</div></div>{children}</div>;
 }
