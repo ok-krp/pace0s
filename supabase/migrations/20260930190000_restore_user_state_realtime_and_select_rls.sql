@@ -18,12 +18,4 @@ BEGIN
 END
 $$;
 
-DROP POLICY IF EXISTS "Users can read own user_state" ON public.user_state;
-
-CREATE POLICY "Users can read own user_state"
-  ON public.user_state
-  FOR SELECT
-  TO authenticated
-  USING ((SELECT auth.uid()) = user_id);
-
 NOTIFY pgrst, 'reload schema';
