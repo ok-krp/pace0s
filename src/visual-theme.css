@@ -576,3 +576,21 @@
 .dark[data-visual-theme="signal"] select { background:#111418 !important; color:#f5f7fa !important; border-color:rgb(255 255 255/.12) !important; }
 .dark[data-visual-theme="signal"] aside,
 .dark[data-visual-theme="signal"] header { background:rgb(17 20 24/.92) !important; border-color:rgb(255 255 255/.12) !important; }
+
+/* Signal material: keep every frosted case/bar at the same 6.5px blur. */
+[data-visual-theme="signal"] .glass-card,
+[data-visual-theme="signal"] [class*="glass-card"],
+[data-visual-theme="signal"] .glass-thin,
+[data-visual-theme="signal"] .glass-icon,
+[data-visual-theme="signal"] [data-slot="card"],
+[data-visual-theme="signal"] aside,
+[data-visual-theme="signal"] header,
+[data-visual-theme="signal"] [role="dialog"],
+[data-visual-theme="signal"] [data-radix-popper-content-wrapper] > *,
+[data-visual-theme="signal"] [data-side],
+[data-visual-theme="signal"] input,
+[data-visual-theme="signal"] textarea,
+[data-visual-theme="signal"] select {
+  backdrop-filter: blur(6.5px) saturate(115%) !important;
+  -webkit-backdrop-filter: blur(6.5px) saturate(115%) !important;
+}
