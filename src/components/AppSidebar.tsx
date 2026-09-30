@@ -14,7 +14,7 @@ export const NAV_REGISTRY: Record<NavItemKey, { label: string; icon: typeof Layo
 type Group = { id: string; label: string; items: NavItemKey[] };
 const GROUPS: Group[] = [{ id: "assistant", label: "Intelligence Artificielle", items: ["/assistant", "/development", "/ai-activity"] }, { id: "nutrition", label: "Nutrition", items: ["/nutrition", "/courses"] }, { id: "activite", label: "Activité", items: ["/body", "/sport", "/watch", "/sleep", "/calendar", "/work"] }, { id: "finance", label: "Finance", items: ["/finance"] }];
 const getNavItem = (key: string) => NAV_REGISTRY[key as NavItemKey];
-const NavLink = memo(function NavLink({ to, active, onClick, draggable = false, dragging = false }: { to: NavItemKey; active: boolean; onClick?: () => void; draggable?: boolean; dragging?: boolean }) { const it = getNavItem(to); if (!it) return null; const Icon = it.icon; const className = `group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-[background,box-shadow,color,transform,opacity] duration-200 ${interactiveRing} ${dragging ? "scale-[1.04] opacity-70 z-10 shadow-lg bg-primary/10 cursor-grabbing" : ""} ${active ? "text-foreground font-medium bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)+0.16))] shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_calc(var(--glass-edge)*55%),transparent),0_0_0_1px_color-mix(in_oklab,var(--primary)_14%,transparent),0_6px_18px_-12px_color-mix(in_oklab,var(--primary)_50%,transparent)]" : "text-muted-foreground hover:bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.5))]"} ${draggable ? "touch-none select-none" : ""}`; return <NativeNavLink to={to} onClick={onClick} className={className}><Icon className={`size-4 shrink-0 ${active ? "text-primary" : ""}`} /><span>{it.label}</span></NativeNavLink>; });
+const NavLink = memo(function NavLink({ to, active, onClick, draggable = false, dragging = false }: { to: NavItemKey; active: boolean; onClick?: () => void; draggable?: boolean; dragging?: boolean }) { const it = getNavItem(to); if (!it) return null; const Icon = it.icon; const className = `group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-[background,box-shadow,color,transform,opacity] duration-200 ${interactiveRing} ${dragging ? "scale-[1.04] opacity-70 z-10 shadow-lg bg-primary/10 cursor-grabbing" : ""} ${active ? "text-foreground font-medium bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)+0.16))] shadow-[inset_0_1px_0_0_color-mix(in_oklab,white_calc(var(--glass-edge)*55%),transparent),0_0_0_1px_color-mix(in_oklab,var(--primary)_14%,transparent),0_6px_18px_-12px_color-mix(in_oklab,var(--primary)_50%,transparent)]" : "text-muted-foreground hover:bg-[rgb(var(--glass-tint)/calc(var(--glass-tint-strength)*0.5))]"} ${draggable ? "touch-none select-none" : ""}`; return <NativeNavLink to={to} onClick={onClick} className={className} draggable={false} onDragStart={(e) => e.preventDefault()}><Icon className={`size-4 shrink-0 ${active ? "text-primary" : ""}`} /><span>{it.label}</span></NativeNavLink>; });
 
 function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) {
   const [openMap, setOpenMap] = useLocalState<Record<string, boolean>>("pace.sidebar.groups", { assistant: true, nutrition: true, activite: true, finance: true });
@@ -39,12 +39,14 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
 
   const startLongPress = (groupId: string, key: NavItemKey, e: React.PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    clearTimer(`${groupId}:${key}`);
-    timers.current[`${groupId}:${key}`] = setTimeout(() => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    clearTimer(groupId + ":" + key);
+    timers.current[groupId + ":" + key] = setTimeout(() => {
       setDragging({ groupId, key });
       suppressClick.current = true;
       if (navigator.vibrate) navigator.vibrate(18);
-    }, 1000);
+    }, 500);
   };
 
   const handleMove = (groupId: string, key: NavItemKey, e: React.PointerEvent) => {
@@ -66,8 +68,9 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
     });
   };
 
-  const endPointer = (groupId: string, key: NavItemKey) => {
-    clearTimer(`${groupId}:${key}`);
+  const endPointer = (groupId: string, key: NavItemKey, e?: React.PointerEvent) => {
+    clearTimer(groupId + ":" + key);
+    if (e && e.currentTarget.hasPointerCapture?.(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     if (dragging?.groupId === groupId && dragging.key === key) setDragging(null);
   };
 
@@ -83,13 +86,13 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
           <span>{g.label}</span><motion.span animate={{ rotate: open ? 180 : 0 }} transition={springSoft} className="inline-flex"><ChevronDown className="size-3" /></motion.span>
         </CollapsibleTrigger>
         <CollapsibleContent className="flex flex-col gap-0.5 mt-0.5">
-          {items.map((to) => <div key={to} data-sidebar-item={to} data-sidebar-group={g.id} onPointerDown={(e) => startLongPress(g.id, to, e)} onPointerMove={(e) => handleMove(g.id, to, e)} onPointerUp={() => endPointer(g.id, to)} onPointerCancel={() => endPointer(g.id, to)}>
+          {items.map((to) => <div key={to} data-sidebar-item={to} data-sidebar-group={g.id} onPointerDown={(e) => startLongPress(g.id, to, e)} onPointerMove={(e) => handleMove(g.id, to, e)} onPointerUp={(e) => endPointer(g.id, to, e)} onPointerCancel={(e) => endPointer(g.id, to, e)} onDragStart={(e) => e.preventDefault()}>
             <NavLink to={to} active={currentPath === to} onClick={() => { if (suppressClick.current) { suppressClick.current = false; return; } onNavigate?.(); }} draggable dragging={dragging?.groupId === g.id && dragging.key === to} />
           </div>)}
         </CollapsibleContent>
       </Collapsible>;
     })}
-    {dragging && <div className="px-3 pt-1 text-[10px] text-muted-foreground">Maintenir 1 s, puis glisser pour réorganiser</div>}
+    {dragging && <div className="px-3 pt-1 text-[10px] text-muted-foreground">Maintenir 0,5 s, puis glisser pour réorganiser</div>}
   </nav>;
 }
 
