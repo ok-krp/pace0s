@@ -242,7 +242,7 @@ class HealthE2eeService {
     return bundle;
   }
 
-  Future<CryptoKeyPair> _deviceKeyPair() async {
+  Future<KeyPair> _deviceKeyPair() async {
     final encoded = await _secureStorage.read(key: _deviceKey);
     if (encoded != null) {
       final value = jsonDecode(encoded) as Map<String, dynamic>;
