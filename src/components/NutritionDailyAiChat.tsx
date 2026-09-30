@@ -167,7 +167,22 @@ function MealToRecipeButton() {
 }
 
 function NutritionMessage({ message, onApproval }: { message: UIMessage; onApproval: (id: string, approved: boolean) => void }) {
-  const assistant = message.role === "assistant"; const text = message.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n");
-  const approvals = message.parts.map((part) => { const candidate = part as unknown as Record<string, unknown>; const approval = candidate.approval; if (candidate.state !== "approval-requested" || typeof approval !== "object" || approval === null) return null; const value = approval as Record<string, unknown>; return typeof value.id === "string" ? value.id : null; }).filter((id): id is string => Boolean(id));
-  return <div className={`flex ${assistant ? "justify-start" : "justify-end"}`}><div className={`max-w-[88%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${assistant ? "glass-thin" : "bg-primary text-primary-foreground"}`}>{text || (assistant ? "Action nutrition en cours…" : "")}{approvals.map((id) => <div key={id} className="mt-3 flex gap-2"><Button size="sm" onClick={() => onApproval(id, true)}><Check className="size-3.5 mr-1" />Ajouter</Button><Button size="sm" variant="outline" onClick={() => onApproval(id, false)}><X className="size-3.5 mr-1" />Refuser</Button></div>)}</div></div>;
+  const assistant = message.role === "assistant";
+  const text = message.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n");
+  const approvals = message.parts.map((part) => {
+    const candidate = part as unknown as Record<string, unknown>;
+    const approval = candidate.approval;
+    if (candidate.state !== "approval-requested" || typeof approval !== "object" || approval === null) return null;
+    const value = approval as Record<string, unknown>;
+    return typeof value.id === "string" ? value.id : null;
+  }).filter((id): id is string => Boolean(id));
+  const toolMessages = message.parts.map((part) => {
+    const candidate = part as unknown as Record<string, unknown>;
+    const output = candidate.output;
+    if (candidate.state !== "output-available" || !output || typeof output !== "object") return null;
+    const value = output as Record<string, unknown>;
+    return typeof value.message === "string" ? value.message : null;
+  }).filter((value): value is string => Boolean(value));
+  const visibleText = [text, ...toolMessages].filter(Boolean).join("\n");
+  return <div className={`flex ${assistant ? "justify-start" : "justify-end"}`}><div className={`max-w-[88%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap ${assistant ? "glass-thin" : "bg-primary text-primary-foreground"}`}>{visibleText || (assistant ? "Action nutrition en cours…" : "")}{approvals.map((id) => <div key={id} className="mt-3 flex gap-2"><Button size="sm" onClick={() => onApproval(id, true)}><Check className="size-3.5 mr-1" />Ajouter</Button><Button size="sm" variant="outline" onClick={() => onApproval(id, false)}><X className="size-3.5 mr-1" />Refuser</Button></div>)}</div></div>;
 }
