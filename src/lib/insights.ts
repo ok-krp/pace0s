@@ -218,7 +218,7 @@ export function buildIntel(i: IntelInput): DashboardIntel {
   const waterStreak = streak(days, (d) => (i.water[d] ?? 0) >= i.goals.waterMl);
 
   // --- nutrition
-  const kcalLeft = i.goals.kcal - kcal;
+  const kcalLeft = kcalTarget - kcal;
   const burned = i.kcalActive;
   const kcalTarget = i.goals.kcal + (burned > 250 ? Math.round(burned * 0.6) : 0);
 
