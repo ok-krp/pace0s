@@ -215,7 +215,7 @@ export function MobileTabBar() {
     event.preventDefault();
     startPoint.current = { x: event.clientX, y: event.clientY };
     setPressed(index);
-    pressTimer.current = setTimeout(() => beginDrag(index), 2000);
+    pressTimer.current = setTimeout(() => beginDrag(index), 500);
   };
 
   const handlePointerMove = (event: React.PointerEvent) => {
@@ -275,6 +275,8 @@ export function MobileTabBar() {
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
+                onDragStart={(e) => e.preventDefault()}
+                draggable={false}
               >
                 <Icon className="size-[18px] shrink-0" />
                 <span className="truncate max-w-full">{it.label}</span>
@@ -282,7 +284,7 @@ export function MobileTabBar() {
             );
           })}
         </div>
-        <div className="text-center text-[8px] text-muted-foreground/45 pt-0.5">Maintenir 2 s pour réorganiser</div>
+        <div className="text-center text-[8px] text-muted-foreground/45 pt-0.5">Maintenir 0,5 s pour réorganiser</div>
       </div>
     </nav>
   );
