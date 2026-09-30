@@ -1,0 +1,2 @@
+-- Historical migration marker for the Supabase Preview migration history.
+-- The migration was already applied on the preview branch; this file preserves its version locally.
