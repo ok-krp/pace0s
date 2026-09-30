@@ -19,9 +19,6 @@ function GroupedNav({ currentPath, onNavigate }: { currentPath: string; onNaviga
 function BottomNav({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) { return <div className="mt-auto pt-4 border-t border-[color-mix(in_oklab,white_calc(var(--glass-edge)*30%),transparent)] space-y-0.5"><NavLink to="/profile" active={currentPath === "/profile"} onClick={onNavigate} /><NavLink to="/settings" active={currentPath === "/settings"} onClick={onNavigate} /></div>; }
 function SidebarContent({ currentPath, onNavigate }: { currentPath: string; onNavigate?: () => void }) {
   return <>
-    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-      <GroupedNav currentPath={currentPath} onNavigate={onNavigate} />
-    </div>
     <button
       type="button"
       onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))}
@@ -31,6 +28,9 @@ function SidebarContent({ currentPath, onNavigate }: { currentPath: string; onNa
       <span className="flex-1 text-left">Rechercher…</span>
       <kbd className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-mono">⌘K</kbd>
     </button>
+    <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
+      <GroupedNav currentPath={currentPath} onNavigate={onNavigate} />
+    </div>
     <BottomNav currentPath={currentPath} onNavigate={onNavigate} />
     <div className="flex-none px-3 pt-3 text-[11px] text-muted-foreground">v2 · cloud sync</div>
   </>;

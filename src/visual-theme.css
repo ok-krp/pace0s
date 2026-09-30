@@ -547,3 +547,32 @@
 [data-visual-theme="signal"] [data-slot="card"] {
   border-radius: var(--radius) !important;
 }
+
+
+/* Signal supports both light and dark palettes. Dark follows Pace's existing dark preference. */
+.dark[data-visual-theme="signal"] {
+  color-scheme: dark;
+  --background:#090b0e; --foreground:#f5f7fa; --card:rgb(20 24 29/.92); --card-foreground:#f5f7fa;
+  --popover:#111418; --popover-foreground:#f5f7fa; --primary:#f5f7fa; --primary-foreground:#111418;
+  --secondary:#1c2127; --secondary-foreground:#f5f7fa; --muted:#1c2127; --muted-foreground:#b8bec7;
+  --accent:#242a31; --accent-foreground:#fff; --border:rgb(255 255 255/.12); --input:rgb(255 255 255/.10); --ring:#f5f7fa;
+  --sidebar:#111418; --sidebar-foreground:#f5f7fa; --sidebar-primary:#f5f7fa; --sidebar-primary-foreground:#111418;
+  --sidebar-accent:#1c2127; --sidebar-accent-foreground:#fff; --sidebar-border:rgb(255 255 255/.10); --sidebar-ring:#f5f7fa;
+  --glass-tint:255 255 255; --glass-tint-base:.08; --glass-tint-strength:.08; --glass-edge:.12; --wallpaper:#090b0e;
+}
+.dark[data-visual-theme="signal"] body { background:#090b0e !important; color:#f5f7fa !important; }
+.dark[data-visual-theme="signal"] .text-foreground,
+.dark[data-visual-theme="signal"] .text-card-foreground { color:#f5f7fa !important; }
+.dark[data-visual-theme="signal"] .text-muted-foreground,
+.dark[data-visual-theme="signal"] [class*="text-muted"] { color:#b8bec7 !important; }
+.dark[data-visual-theme="signal"] .bg-white\/5,
+.dark[data-visual-theme="signal"] .bg-white\/10 { background:rgb(255 255 255/.06) !important; }
+.dark[data-visual-theme="signal"] .border-white\/20 { border-color:rgb(255 255 255/.12) !important; }
+.dark[data-visual-theme="signal"] .glass-card,
+.dark[data-visual-theme="signal"] .glass-thin,
+.dark[data-visual-theme="signal"] [data-slot="card"] { background:rgb(255 255 255/.055) !important; border-color:rgb(255 255 255/.12) !important; }
+.dark[data-visual-theme="signal"] input,
+.dark[data-visual-theme="signal"] textarea,
+.dark[data-visual-theme="signal"] select { background:#111418 !important; color:#f5f7fa !important; border-color:rgb(255 255 255/.12) !important; }
+.dark[data-visual-theme="signal"] aside,
+.dark[data-visual-theme="signal"] header { background:rgb(17 20 24/.92) !important; border-color:rgb(255 255 255/.12) !important; }
