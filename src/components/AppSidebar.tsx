@@ -21,10 +21,16 @@ function SidebarContent({ currentPath, onNavigate }: { currentPath: string; onNa
   return <>
     <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
       <GroupedNav currentPath={currentPath} onNavigate={onNavigate} />
-      <button onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))} className="flex-none w-full flex items-center gap-2 px-3 py-2 mt-3 rounded-xl glass-thin border border-white/20 bg-white/10 backdrop-blur-2xl text-sm text-muted-foreground transition">
-        <Search className="size-3.5" /><span className="flex-1 text-left">Rechercher…</span><kbd className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-mono">⌘K</kbd>
-      </button>
     </div>
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event("pace.command-palette.open"))}
+      className="flex-none w-full flex items-center gap-2 px-3 py-2 mt-3 mb-1 rounded-xl glass-thin border border-white/20 bg-white/10 backdrop-blur-2xl text-sm text-foreground transition"
+    >
+      <Search className="size-3.5 shrink-0" />
+      <span className="flex-1 text-left">Rechercher…</span>
+      <kbd className="text-[10px] px-1.5 py-0.5 rounded bg-muted font-mono">⌘K</kbd>
+    </button>
     <BottomNav currentPath={currentPath} onNavigate={onNavigate} />
     <div className="flex-none px-3 pt-3 text-[11px] text-muted-foreground">v2 · cloud sync</div>
   </>;
@@ -126,6 +132,7 @@ export function MobileTabBar() {
   const handlePointerDown = (event: React.PointerEvent, index: number) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     event.currentTarget.setPointerCapture?.(event.pointerId);
+    event.preventDefault();
     startPoint.current = { x: event.clientX, y: event.clientY };
     setPressed(index);
     pressTimer.current = setTimeout(() => beginDrag(index), 2000);
@@ -183,6 +190,7 @@ export function MobileTabBar() {
                 data-nav-slot={index}
                 className={className}
                 onClick={onClick}
+                onContextMenu={(e) => e.preventDefault()}
                 onPointerDown={(e) => handlePointerDown(e, index)}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
