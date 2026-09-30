@@ -11,6 +11,13 @@ create index if not exists health_samples_e2ee_user_created_idx on public.health
 alter table public.health_samples_e2ee enable row level security;
 revoke all on public.health_samples_e2ee from anon;
 grant select, insert, delete on public.health_samples_e2ee to authenticated;
+
+-- Preview branches may already contain these policies from the base schema.
+-- Make this historical migration safe to replay without changing its final policy state.
+drop policy if exists health_samples_e2ee_select_own on public.health_samples_e2ee;
+drop policy if exists health_samples_e2ee_insert_own on public.health_samples_e2ee;
+drop policy if exists health_samples_e2ee_delete_own on public.health_samples_e2ee;
+
 create policy health_samples_e2ee_select_own on public.health_samples_e2ee for select to authenticated using ((select auth.uid()) = user_id);
 create policy health_samples_e2ee_insert_own on public.health_samples_e2ee for insert to authenticated with check ((select auth.uid()) = user_id);
 create policy health_samples_e2ee_delete_own on public.health_samples_e2ee for delete to authenticated using ((select auth.uid()) = user_id);
