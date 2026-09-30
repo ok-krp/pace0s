@@ -159,6 +159,8 @@ export function scoreFor(i: IntelInput, d: string) {
   const kcal = i.nutrition[d]?.kcal ?? null;
   const routineDone = (i.routineDone[d] ?? []).length;
   const workMin = i.work[d] ?? null;
+  const burned = d === i.today ? i.kcalActive : 0;
+  const kcalTarget = i.goals.kcal + (burned > 250 ? Math.round(burned * 0.6) : 0);
   const expectedRoutine = i.routineTotal > 0 ? Math.max(1, Math.ceil(i.routineTotal * progress)) : 0;
 
   // The score evaluates the day against what should reasonably be completed
@@ -168,7 +170,7 @@ export function scoreFor(i: IntelInput, d: string) {
   const weighted =
     scoreSleep(sleepH) * 25 +
     scoreAgainstExpected(waterMl, i.goals.waterMl, progress) * 20 +
-    scoreAgainstExpected(kcal, i.goals.kcal, progress) * 20 +
+    scoreAgainstExpected(kcal, kcalTarget, progress) * 20 +
     (i.routineTotal > 0 ? clamp01(routineDone / expectedRoutine) : 0.5) * 20 +
     scoreAgainstExpected(workMin, 240, progress) * 15;
 
@@ -220,7 +222,9 @@ export function buildIntel(i: IntelInput): DashboardIntel {
   // --- nutrition
   const burned = i.kcalActive;
   const kcalTarget = i.goals.kcal + (burned > 250 ? Math.round(burned * 0.6) : 0);
-  const kcalLeft = Math.max(0, kcalTarget - kcal);
+  const kcalDelta = kcalTarget - kcal;
+  const kcalLeft = Math.max(0, kcalDelta);
+  const kcalOver = Math.max(0, -kcalDelta);
 
   // --- poids
   const wSeries = days.map((d) => i.weights[d]?.w ?? 0);
@@ -292,7 +296,7 @@ export function buildIntel(i: IntelInput): DashboardIntel {
       status: kcal === 0 ? "neutral" : kcal / Math.max(kcalTarget, 1) >= 0.9 && kcal / Math.max(kcalTarget, 1) <= 1.1 ? "good" : "warn",
       context: kcalLeft > 0
         ? `${kcalLeft} kcal restantes aujourd'hui`
-        : `${Math.abs(kcalLeft)} kcal au-dessus de la cible`,
+        : `${kcalOver} kcal au-dessus de la cible`,
       detail: [
         kcalAvg ? `Moyenne 7 j · ${Math.round(kcalAvg)} kcal` : `Objectif · ${i.goals.kcal} kcal`,
         burned > 250 ? `Cible ajustée · +${Math.round(burned * 0.6)} kcal (sport)` : "",
@@ -376,7 +380,7 @@ export function buildIntel(i: IntelInput): DashboardIntel {
   const rhythmLines: RhythmLine[] = [
     { label: "Récupération", text: sleepH ? `${sleepH.toFixed(1)}h · ${recoveryLabel.toLowerCase()}` : "Nuit non renseignée", status: recovery },
     { label: "Hydratation", text: waterMl === 0 ? "Pas encore renseignée" : waterLeft === 0 ? "Objectif atteint" : `${(waterMl / 1000).toFixed(1)} L sur ${(i.goals.waterMl / 1000).toFixed(1)} L`, status: waterMl === 0 ? "neutral" : waterLeft === 0 ? "good" : waterMl > i.goals.waterMl / 2 ? "warn" : "bad" },
-    { label: "Nutrition", text: kcalLeft > 0 ? `${kcal} kcal · légèrement sous la cible` : `${kcal} kcal · cible atteinte`, status: kcalLeft > i.goals.kcal * 0.4 ? "warn" : "good" },
+    { label: "Nutrition", text: kcalLeft > 0 ? `${kcal} kcal · ${kcalLeft} kcal restantes` : kcalOver > 0 ? `${kcal} kcal · ${kcalOver} kcal au-dessus de la cible` : `${kcal} kcal · cible atteinte`, status: kcalLeft > kcalTarget * 0.4 ? "warn" : kcalOver > 0 ? "warn" : "good" },
     { label: "Routine", text: `${routineDone} sur ${routineTotal} complétée${routineDone > 1 ? "s" : ""}`, status: routinePct === 1 ? "good" : routinePct >= 0.5 ? "warn" : "bad" },
     { label: "Focus", text: workMin === 0 ? "Pas encore renseigné" : `${Math.floor(workMin / 60)}h ${String(workMin % 60).padStart(2, "0")} de concentration`, status: workMin === 0 ? "neutral" : focusPct >= 0.9 ? "good" : focusPct >= 0.5 ? "warn" : "bad" },
   ];
@@ -395,7 +399,7 @@ export function buildIntel(i: IntelInput): DashboardIntel {
   if (waterLeft === 0 && focusPct < 0.9) cross.push({ text: "Hydratation optimale : ta concentration devrait rester stable cet après-midi.", status: "good" });
   if (burned > 300) cross.push({ text: `${burned} kcal dépensées : ta cible nutritionnelle a été relevée automatiquement.`, status: "good" });
   if (overBudget) cross.push({ text: "Budget dépassé aujourd'hui : limite les dépenses non essentielles d'ici demain.", status: "bad" });
-  if (kcal > 0 && kcal < i.goals.kcal * 0.5 && period === "evening") cross.push({ text: "Apport faible en fin de journée : un repas complet aidera la récupération nocturne.", status: "warn" });
+  if (kcal > 0 && kcal < kcalTarget * 0.5 && period === "evening") cross.push({ text: "Apport faible en fin de journée : un repas complet aidera la récupération nocturne.", status: "warn" });
   if (i.steps > 9000) cross.push({ text: `${i.steps.toLocaleString("fr-FR")} pas : excellente activité de fond.`, status: "good" });
 
   // --- succès discrets
