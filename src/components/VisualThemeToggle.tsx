@@ -15,7 +15,9 @@ function applyVisualTheme(theme: VisualTheme) {
   const root = document.documentElement;
   if (theme === "default") delete root.dataset.visualTheme;
   else root.dataset.visualTheme = theme;
-  // Signal supports both light and dark. Only Glass forces dark.\n  const dark = theme === "glass" || localStorage.getItem(DARK_MODE_KEY) === "1";\n  root.classList.toggle("dark", dark);
+  // Signal supports both light and dark. Only Glass forces dark.
+  const dark = theme === "glass" || localStorage.getItem(DARK_MODE_KEY) === "1";
+  root.classList.toggle("dark", dark);
   localStorage.setItem(VISUAL_THEME_KEY, theme);
   const themeColor = document.querySelector('meta[name="theme-color"]');
   themeColor?.setAttribute("content", theme === "glass" ? "#070b12" : theme === "signal" ? dark ? "#090b0e" : "#f6f7f9" : dark ? "#1f242c" : "#f8fafc");
