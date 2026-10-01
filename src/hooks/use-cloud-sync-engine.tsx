@@ -402,13 +402,6 @@ export function useCloudSyncEngineInternal() {
     };
     const onOffline = () => setStatus("offline");
 
-    // Realtime is the fast path, not the delivery guarantee. A sleeping tab,
-    // transient websocket failure, or missed channel event must not leave
-    // another device stale indefinitely. Reconcile the authoritative cloud
-    // state while the app is visible; this also heals missed Realtime events.
-    const reconcileTimer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void syncNow();
-    }, 5000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") void syncNow();
     };
@@ -429,7 +422,6 @@ export function useCloudSyncEngineInternal() {
       cancelled = true; offLocal();
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
-      window.clearInterval(reconcileTimer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("pace.legal.changed", onLegalChanged);
