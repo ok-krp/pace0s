@@ -52,7 +52,8 @@ function localDayBounds(timeZone: string) {
   );
   const localDate = `${parts.year}-${parts.month}-${parts.day}`;
   const start = new Date(`${localDate}T00:00:00`);
-  const next = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  const next = new Date(start);
+  next.setDate(next.getDate() + 1);
   return { localDate, start, next };
 }
 
@@ -102,6 +103,7 @@ export function useHealthToday() {
   const [loading, setLoading] = useState(false);
   const encryptedRecordsRef = useRef(new Map<string, EncryptedHealthRecord>());
   const decryptedSamplesRef = useRef(new Map<string, HealthSample>());
+  const refreshRunningRef = useRef(false);
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -109,6 +111,8 @@ export function useHealthToday() {
       return;
     }
 
+    if (refreshRunningRef.current) return;
+    refreshRunningRef.current = true;
     setLoading(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -142,20 +146,30 @@ export function useHealthToday() {
       }
 
       const dedupeBackfillKey = `pace-health-e2ee-dedupe-backfilled:${user.id}`;
+      const dedupeBackfillAttemptsKey = `pace-health-e2ee-dedupe-backfill-attempts:${user.id}`;
       if (localStorage.getItem(dedupeBackfillKey) !== "1") {
+        let backfillAttempts = 0;
         try {
-          const backfill = await backfillHealthE2eeDedupeHashes();
-          if (backfill.skipped === 0) localStorage.setItem(dedupeBackfillKey, "1");
-        } catch (error) {
-          console.warn("health E2EE dedupe backfill deferred", error);
+          backfillAttempts = Number(sessionStorage.getItem(dedupeBackfillAttemptsKey) ?? "0");
+        } catch {
+          backfillAttempts = 0;
+        }
+        if (backfillAttempts < 2) {
+          try {
+            try {
+              sessionStorage.setItem(dedupeBackfillAttemptsKey, String(backfillAttempts + 1));
+            } catch {
+              // Session storage is best-effort; a failed marker must not block health reads.
+            }
+            const backfill = await backfillHealthE2eeDedupeHashes();
+            if (backfill.skipped === 0) localStorage.setItem(dedupeBackfillKey, "1");
+          } catch (error) {
+            console.warn("health E2EE dedupe backfill deferred", error);
+          }
         }
       }
 
-      const now = new Date();
-      const dayStart = new Date(now);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(dayStart);
-      dayEnd.setDate(dayEnd.getDate() + 1);
+      const { start: dayStart, next: dayEnd } = localDayBounds(timeZone);
 
       const response = await fetchEncrypted({
         data: {
@@ -195,6 +209,7 @@ export function useHealthToday() {
       setData(EMPTY);
     } finally {
       setLoading(false);
+      refreshRunningRef.current = false;
     }
   }, [user, fetchEncrypted]);
 
