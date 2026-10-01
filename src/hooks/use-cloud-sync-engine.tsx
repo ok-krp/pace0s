@@ -149,27 +149,6 @@ function unwrapNutritionValue(value: unknown) {
 
 function mergeNutritionRemoteValue(incomingValue: unknown) {
   return sanitizeNutritionItems(unwrapNutritionValue(incomingValue));
-  const current = readDomain<Record<string, unknown>>("nutrition.items", {}).value;
-  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || !current || typeof current !== "object" || Array.isArray(current)) return sanitizeNutritionItems(incoming);
-  const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
-  for (const [day, rawIncoming] of Object.entries(incoming as Record<string, unknown>)) {
-    if (!Array.isArray(rawIncoming)) continue;
-    const local = Array.isArray(merged[day]) ? merged[day] as unknown[] : [];
-    const byId = new Set(local.map((item) => item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "").filter(Boolean));
-    const output = [...local];
-    for (const item of rawIncoming) {
-      const id = item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "";
-      if (id && byId.has(id)) {
-        const index = output.findIndex((existing) => existing && typeof existing === "object" && String((existing as Record<string, unknown>).id ?? "") === id);
-        if (index >= 0) output[index] = item;
-      } else {
-        output.push(item);
-        if (id) byId.add(id);
-      }
-    }
-    merged[day] = output;
-  }
-  return sanitizeNutritionItems(merged);
 }
 
 
