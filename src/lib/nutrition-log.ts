@@ -84,47 +84,61 @@ function nutritionRows(value: unknown) {
 
 let lastBridgedNutrition = readNutritionItems();
 let nutritionBridgePromise: Promise<void> | null = null;
+let pendingNutritionValue: unknown = null;
+let hasPendingNutritionValue = false;
+
+async function bridgeNutritionStateToFoodLog(value: unknown) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const nextRows = nutritionRows(value);
+  const previousRows = nutritionRows(lastBridgedNutrition);
+  const previousIds = new Set(previousRows.map((row) => row.id));
+  const nextIds = new Set(nextRows.map((row) => row.id));
+  const { data: existing, error: selectError } = await supabase.from("food_log").select("id").eq("user_id", user.id);
+  if (selectError) throw selectError;
+  const existingIds = new Set((existing ?? []).map((row) => row.id));
+  for (const { id, day, item } of nextRows) {
+    const payload = { id, user_id: user.id, log_date: day, meal: item.meal, name: item.name, kcal: Number(item.kcal || 0), protein_g: Number(item.p || 0), carbs_g: Number(item.c || 0), fat_g: Number(item.f || 0), fiber_g: Number(item.fiber || 0), sugar_g: Number(item.sugar || 0), sodium_mg: Number(item.sodium || 0), source: existingIds.has(id) ? undefined : "manual", meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } } };
+    if (existingIds.has(id)) {
+      const { source: _source, ...update } = payload;
+      const { error } = await supabase.from("food_log").update(update).eq("id", id).eq("user_id", user.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("food_log").insert(payload);
+      if (error) throw error;
+    }
+  }
+  for (const id of previousIds) {
+    if (nextIds.has(id)) continue;
+    const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
+    if (error) throw error;
+  }
+  lastBridgedNutrition = value && typeof value === "object" && !Array.isArray(value) ? value as NutritionMap : {};
+}
 
 export function syncNutritionStateToFoodLog(value: unknown): Promise<void> {
   if (typeof window === "undefined") return Promise.resolve();
+  pendingNutritionValue = value;
+  hasPendingNutritionValue = true;
   if (nutritionBridgePromise) return nutritionBridgePromise;
   nutritionBridgePromise = (async () => {
     try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const nextRows = nutritionRows(value);
-    const previousRows = nutritionRows(lastBridgedNutrition);
-    const previousIds = new Set(previousRows.map((row) => row.id));
-    const nextIds = new Set(nextRows.map((row) => row.id));
-    const { data: existing, error: selectError } = await supabase.from("food_log").select("id").eq("user_id", user.id);
-    if (selectError) throw selectError;
-    const existingIds = new Set((existing ?? []).map((row) => row.id));
-    for (const { id, day, item } of nextRows) {
-      const payload = { id, user_id: user.id, log_date: day, meal: item.meal, name: item.name, kcal: Number(item.kcal || 0), protein_g: Number(item.p || 0), carbs_g: Number(item.c || 0), fat_g: Number(item.f || 0), fiber_g: Number(item.fiber || 0), sugar_g: Number(item.sugar || 0), sodium_mg: Number(item.sodium || 0), source: existingIds.has(id) ? undefined : "manual", meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } } };
-      if (existingIds.has(id)) {
-        const { source: _source, ...update } = payload;
-        const { error } = await supabase.from("food_log").update(update).eq("id", id).eq("user_id", user.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("food_log").insert(payload);
-        if (error) throw error;
+      while (hasPendingNutritionValue) {
+        const nextValue = pendingNutritionValue;
+        pendingNutritionValue = null;
+        hasPendingNutritionValue = false;
+        try {
+          await bridgeNutritionStateToFoodLog(nextValue);
+        } catch (error) {
+          console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
+        }
       }
-    }
-    for (const id of previousIds) {
-      if (nextIds.has(id)) continue;
-      const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
-      if (error) throw error;
-    }
-    lastBridgedNutrition = value && typeof value === "object" && !Array.isArray(value) ? value as NutritionMap : {};
-  } catch (error) {
-    console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
     } finally {
       nutritionBridgePromise = null;
     }
   })();
   return nutritionBridgePromise;
 }
-
 if (typeof window !== "undefined") {
   onLocalWrite((key, value) => {
     if (key !== "pace.nutrition.items") return;
