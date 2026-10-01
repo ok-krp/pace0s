@@ -230,22 +230,9 @@ export function useCloudSyncEngineInternal() {
     const writeItem = async (item: QueueItem): Promise<boolean> => {
       if (conflictForKey(item.key)) return false;
 
-      // A lost RPC response must be idempotent: if the canonical row already
-      // contains this exact value, acknowledge the queue item without writing again.
-      const { data: existingRows, error: existingError } = await supabase
-        .from("user_state")
-        .select("key,value,updated_at,updated_by")
-        .eq("user_id", user.id)
-        .eq("key", item.key)
-        .limit(1);
-      if (existingError) throw existingError;
-      const existing = existingRows?.[0] as SyncRow | undefined;
-      if (existing && serialize(existing.value) === serialize(item.value)) {
-        markVersion(existing.key, existing.updated_at);
-        localStorage.setItem("pace.__last_sync_at", existing.updated_at);
-        return true;
-      }
-
+      // Let the monotonic RPC be the single write authority. Avoid a pre-write
+      // SELECT on every queued mutation; if the server rejects the write because
+      // a newer row exists, fetch that row once to reconcile the client.
       const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
       const result = await rpc("upsert_user_state_if_newer", {
         p_user_id: user.id,
@@ -400,13 +387,17 @@ export function useCloudSyncEngineInternal() {
       pruneEquivalentConflicts();
     };
 
+    let realtimeHealthy = false;
+
     const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow));
     void realtimeChannel.subscribe((subscriptionStatus) => {
       if (subscriptionStatus === "SUBSCRIBED") {
+        realtimeHealthy = true;
         void pull();
       } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
+        realtimeHealthy = false;
         setStatus(navigator.onLine ? "error" : "offline");
       }
     });
@@ -425,13 +416,13 @@ export function useCloudSyncEngineInternal() {
     };
     const onOffline = () => setStatus("offline");
 
-    // Realtime is the fast path, not the delivery guarantee. A sleeping tab,
-    // transient websocket failure, or missed channel event must not leave
-    // another device stale indefinitely. Reconcile the authoritative cloud
-    // state while the app is visible; this also heals missed Realtime events.
+    // Realtime is the fast path. Periodic polling is only a recovery path
+    // for a channel that is not healthy; visible/online/page-show events still
+    // trigger an immediate reconciliation. This avoids full-table egress every
+    // few seconds while preserving recovery when Realtime is unavailable.
     const reconcileTimer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void syncNow();
-    }, 5000);
+      if (document.visibilityState === "visible" && !realtimeHealthy) void syncNow();
+    }, 60_000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") void syncNow();
     };
