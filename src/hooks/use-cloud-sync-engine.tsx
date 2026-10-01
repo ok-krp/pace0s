@@ -400,13 +400,17 @@ export function useCloudSyncEngineInternal() {
       pruneEquivalentConflicts();
     };
 
+    let realtimeHealthy = false;
+
     const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow));
     void realtimeChannel.subscribe((subscriptionStatus) => {
       if (subscriptionStatus === "SUBSCRIBED") {
+        realtimeHealthy = true;
         void pull();
       } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
+        realtimeHealthy = false;
         setStatus(navigator.onLine ? "error" : "offline");
       }
     });
@@ -430,7 +434,7 @@ export function useCloudSyncEngineInternal() {
     // another device stale indefinitely. Reconcile the authoritative cloud
     // state while the app is visible; this also heals missed Realtime events.
     const reconcileTimer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void syncNow();
+      if (document.visibilityState === "visible" && !realtimeHealthy) void syncNow();
     }, 60_000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") void syncNow();
