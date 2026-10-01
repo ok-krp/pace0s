@@ -56,9 +56,10 @@ export async function persistNutritionItem(item: Omit<NutritionItem, "id" | "qty
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Session utilisateur indisponible.");
   const meta = { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } };
-  const { data, error } = await supabase.from("food_log").insert({ user_id: user.id, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source, meta }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
-  if (error || !data) throw new Error(error?.message ?? "Enregistrement nutritionnel impossible.");
-  return { id: data.id, name: data.name, meal: data.meal, kcal: Number(data.kcal ?? 0), p: Number(data.protein_g ?? 0), c: Number(data.carbs_g ?? 0), f: Number(data.fat_g ?? 0), fiber: Number(data.fiber_g ?? 0), sugar: Number(data.sugar_g ?? 0), sodium: Number(data.sodium_mg ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1 };
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from("food_log").insert({ id, user_id: user.id, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source, meta });
+  if (error) throw new Error(error.message);
+  return { id, name: item.name, meal: item.meal, kcal: Number(item.kcal ?? 0), p: Number(item.p ?? 0), c: Number(item.c ?? 0), f: Number(item.f ?? 0), fiber: Number(item.fiber ?? 0), sugar: Number(item.sugar ?? 0), sodium: Number(item.sodium ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1 };
 }
 
 export async function deletePersistedNutritionItem(id: string): Promise<void> {
@@ -85,35 +86,65 @@ function nutritionRows(value: unknown) {
 let lastBridgedNutrition = readNutritionItems();
 let nutritionBridgeRunning = false;
 
+function nutritionRowPayload(userId: string, day: string, item: NutritionItem) {
+  return {
+    id: item.id,
+    user_id: userId,
+    log_date: day,
+    meal: item.meal,
+    name: item.name,
+    kcal: Number(item.kcal || 0),
+    protein_g: Number(item.p || 0),
+    carbs_g: Number(item.c || 0),
+    fat_g: Number(item.f || 0),
+    fiber_g: Number(item.fiber || 0),
+    sugar_g: Number(item.sugar || 0),
+    sodium_mg: Number(item.sodium || 0),
+    source: "manual",
+    meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } },
+  };
+}
+
+function nutritionRowSignature(day: string, item: NutritionItem) {
+  return JSON.stringify([day, item.meal, item.name, Number(item.kcal || 0), Number(item.p || 0), Number(item.c || 0), Number(item.f || 0), Number(item.fiber || 0), Number(item.sugar || 0), Number(item.sodium || 0), item.sat ?? null, item.salt ?? null, item.iron ?? null, item.calcium ?? null, item.vitC ?? null]);
+}
+
 async function bridgeLocalNutritionToFoodLog(value: unknown) {
   if (nutritionBridgeRunning || typeof window === "undefined") return;
   nutritionBridgeRunning = true;
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
     const nextRows = nutritionRows(value);
     const previousRows = nutritionRows(lastBridgedNutrition);
-    const previousIds = new Set(previousRows.map((row) => row.id));
-    const nextIds = new Set(nextRows.map((row) => row.id));
-    const { data: existing, error: selectError } = await supabase.from("food_log").select("id").eq("user_id", user.id);
-    if (selectError) throw selectError;
-    const existingIds = new Set((existing ?? []).map((row) => row.id));
-    for (const { id, day, item } of nextRows) {
-      const payload = { id, user_id: user.id, log_date: day, meal: item.meal, name: item.name, kcal: Number(item.kcal || 0), protein_g: Number(item.p || 0), carbs_g: Number(item.c || 0), fat_g: Number(item.f || 0), fiber_g: Number(item.fiber || 0), sugar_g: Number(item.sugar || 0), sodium_mg: Number(item.sodium || 0), source: existingIds.has(id) ? undefined : "manual", meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } } };
-      if (existingIds.has(id)) {
-        const { source: _source, ...update } = payload;
-        const { error } = await supabase.from("food_log").update(update).eq("id", id).eq("user_id", user.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("food_log").insert(payload);
-        if (error) throw error;
-      }
-    }
-    for (const id of previousIds) {
-      if (nextIds.has(id)) continue;
-      const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
+    const previousById = new Map(previousRows.map((row) => [row.id, row]));
+    const nextById = new Map(nextRows.map((row) => [row.id, row]));
+
+    const changedRows = [...nextById.entries()]
+      .filter(([id, row]) => {
+        const previous = previousById.get(id);
+        return !previous || nutritionRowSignature(previous.day, previous.item) !== nutritionRowSignature(row.day, row.item);
+      })
+      .map(([, row]) => nutritionRowPayload(user.id, row.day, row.item));
+
+    if (changedRows.length > 0) {
+      const { error } = await supabase
+        .from("food_log")
+        .upsert(changedRows, { onConflict: "id", ignoreDuplicates: false });
       if (error) throw error;
     }
+
+    const removedIds = [...previousById.keys()].filter((id) => !nextById.has(id));
+    if (removedIds.length > 0) {
+      const { error } = await supabase
+        .from("food_log")
+        .delete()
+        .in("id", removedIds)
+        .eq("user_id", user.id);
+      if (error) throw error;
+    }
+
     lastBridgedNutrition = value && typeof value === "object" && !Array.isArray(value) ? value as NutritionMap : {};
   } catch (error) {
     console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
