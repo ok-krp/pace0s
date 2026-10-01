@@ -108,7 +108,7 @@ function nutritionRowSignature(day: string, item: NutritionItem) {
   return JSON.stringify([day, item.meal, item.name, Number(item.kcal || 0), Number(item.p || 0), Number(item.c || 0), Number(item.f || 0), Number(item.fiber || 0), Number(item.sugar || 0), Number(item.sodium || 0), item.sat ?? null, item.salt ?? null, item.iron ?? null, item.calcium ?? null, item.vitC ?? null]);
 }
 
-async function bridgeLocalNutritionToFoodLog(value: unknown) {
+export async function syncNutritionStateToFoodLog(value: unknown) {
   if (nutritionBridgeRunning || typeof window === "undefined") return;
   nutritionBridgeRunning = true;
   try {
@@ -155,9 +155,9 @@ async function bridgeLocalNutritionToFoodLog(value: unknown) {
 if (typeof window !== "undefined") {
   onLocalWrite((key, value) => {
     if (key !== "pace.nutrition.items") return;
-    void bridgeLocalNutritionToFoodLog(value);
+    void syncNutritionStateToFoodLog(value);
   });
-  void bridgeLocalNutritionToFoodLog(lastBridgedNutrition);
+  void syncNutritionStateToFoodLog(lastBridgedNutrition);
 }
 
 export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, operationId?: string): boolean {
