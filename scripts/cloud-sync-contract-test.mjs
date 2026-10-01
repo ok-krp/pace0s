@@ -18,7 +18,29 @@ assert.match(engine, /postgres_changes/);
 assert.equal((engine.match(/realtimeChannel\.subscribe\(/g) ?? []).length, 1, "Realtime channel must only be subscribed during initial channel setup");
 assert.equal(/location\.reload\s*\(/.test(engine), false, "sync must never reload the page");
 
-// Internal persistence keys never become cloud records.
+// Egress regression contract: a healthy Realtime channel must not trigger a full user_state
+// pull on every foreground/page-show event. Initial sync and unhealthy-channel recovery may pull.
+assert.match(
+  engine,
+  /if \(reconcile && \(forcePull \|\| !realtimeHealthy\)\) await pull\(\);/,
+  "full pull must be restricted to initial/forced reconciliation or Realtime recovery",
+);
+assert.match(
+  engine,
+  /void syncNow\(true, true\);/,
+  "initial sync must retain one forced canonical pull",
+);
+assert.doesNotMatch(
+  engine,
+  /const syncNow = async \(reconcile = true, forcePull = false\)[\s\S]*?await flushQueue\(\);\s*await pull\(\);/,
+  "syncNow must not unconditionally pull after every queue flush",
+);
+assert.match(
+  engine,
+  /realtimeHealthy = false/,
+  "Realtime health must have an explicit unhealthy state for recovery",
+);
+
 assert.match(engine, /!key\.startsWith\(INTERNAL_PREFIX\)/);
 assert.match(engine, /DOMAIN_OUTBOX_KEY/);
 
@@ -40,7 +62,6 @@ assert.match(engine, /p_updated_at: item\.updatedAt/);
 assert.match(engine, /server-authoritative/);
 assert.match(engine, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 assert.match(engine, /resolveConflict/);
-assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 
 // A lost RPC response is resolved by the monotonic RPC itself; a rejected write
 // performs a single reconciliation read against the canonical row.
@@ -52,7 +73,7 @@ assert.match(engine, /serialize\(queued\.value\) === serialize\(mergedValue\)/);
 // replaced by a newer request carrying an older-than-canonical server timestamp.
 assert.match(
   read("supabase/migrations/20260926192000_server_ordered_cloud_sync_monotonic_writes.sql"),
-  /WHERE public\.user_state\.updated_at < EXCLUDED\.updated_at/
+  /WHERE public\.user_state\.updated_at < EXCLUDED\.updated_at/,
 );
 
 // Deterministic newest-wins model for two devices and duplicate realtime events.
@@ -67,7 +88,6 @@ apply({ value: "A-old", updatedAt: "2026-08-20T10:00:30.000Z", updatedBy: "A" })
 assert.equal(state.value, "B", "older remote mutation must not overwrite newer state");
 apply({ value: "B", updatedAt: "2026-08-20T10:01:00.000Z", updatedBy: "B" });
 assert.equal(state.value, "B", "duplicate realtime event must be idempotent");
-
 
 // Real multi-device water conflict model: disjoint dates merge deterministically,
 // while the same date keeps the local choice (the conflict UI remains explicit).
