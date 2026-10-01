@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listEncryptedHealthSamples } from "@/lib/health.functions";
 import { decryptHealthPayload } from "@/lib/health.crypto";
@@ -28,10 +28,12 @@ type HealthSample = {
 };
 
 type EncryptedHealthRecord = {
+  id: string;
   ciphertext: string;
   nonce: string;
   algorithm: "AES-256-GCM";
   key_version: number;
+  created_at: string;
 };
 
 const SAMPLE_TYPES = new Set([
@@ -98,6 +100,7 @@ export function useHealthToday() {
   const fetchEncrypted = useServerFn(listEncryptedHealthSamples);
   const [data, setData] = useState<HealthToday>(EMPTY);
   const [loading, setLoading] = useState(false);
+  const encryptedRecordsRef = useRef(new Map<string, EncryptedHealthRecord>());
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -161,9 +164,10 @@ export function useHealthToday() {
         },
       });
       const records = response.records as EncryptedHealthRecord[];
+      encryptedRecordsRef.current = new Map(records.map((record) => [record.id, record]));
       const samples: HealthSample[] = [];
 
-      for (const record of records) {
+      for (const record of encryptedRecordsRef.current.values()) {
         try {
           if (record.algorithm !== "AES-256-GCM" || !Number.isInteger(record.key_version) || record.key_version < 1) continue;
           const payload = await decryptHealthPayload(record.ciphertext, record.nonce, record.key_version);
@@ -209,15 +213,6 @@ export function useHealthToday() {
       };
     }
 
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleRefresh = () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => {
-        refreshTimer = null;
-        void refresh();
-      }, 150);
-    };
-
     const channelName = `pace-health-e2ee-${user.id}`;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
@@ -237,8 +232,50 @@ export function useHealthToday() {
           schema: "public",
           table: "health_samples_e2ee",
           filter: `user_id=eq.${user.id}`,
+          select: ["id", "ciphertext", "nonce", "algorithm", "key_version", "created_at"],
         },
-        scheduleRefresh,
+        async (payload) => {
+          const eventType = payload.eventType;
+          const record = payload.new as Partial<EncryptedHealthRecord>;
+          if (eventType === "DELETE") {
+            const deletedId = (payload.old as { id?: string })?.id;
+            if (deletedId) encryptedRecordsRef.current.delete(deletedId);
+          } else if (
+            typeof record?.id === "string" &&
+            typeof record?.created_at === "string" &&
+            typeof record?.ciphertext === "string" &&
+            typeof record?.nonce === "string" &&
+            record.algorithm === "AES-256-GCM" &&
+            Number.isInteger(record.key_version)
+          ) {
+            encryptedRecordsRef.current.set(record.id, record as EncryptedHealthRecord);
+          } else {
+            return;
+          }
+
+          const samples: HealthSample[] = [];
+          for (const current of encryptedRecordsRef.current.values()) {
+            try {
+              if (current.algorithm !== "AES-256-GCM" || !Number.isInteger(current.key_version) || current.key_version < 1) continue;
+              const payload = await decryptHealthPayload(current.ciphertext, current.nonce, current.key_version);
+              if (
+                payload &&
+                typeof payload === "object" &&
+                "ts" in payload &&
+                "type" in payload &&
+                "value" in payload &&
+                typeof (payload as HealthSample).ts === "string" &&
+                typeof (payload as HealthSample).type === "string" &&
+                typeof (payload as HealthSample).value === "number"
+              ) {
+                samples.push(payload as HealthSample);
+              }
+            } catch (error) {
+              console.warn("Skipping undecryptable health realtime record", error);
+            }
+          }
+          setData(aggregateHealthSamples(samples, timeZone));
+        },
       );
       void channel.subscribe();
     };
@@ -249,7 +286,6 @@ export function useHealthToday() {
       cancelled = true;
       window.removeEventListener("pace.health.changed", handler);
       window.removeEventListener("online", onOnline);
-      if (refreshTimer) clearTimeout(refreshTimer);
       if (channel) void supabase.removeChannel(channel);
     };
   }, [refresh, user]);
