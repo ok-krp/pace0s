@@ -19,6 +19,7 @@ export type NutritionItem = {
   calcium?: number;
   vitC?: number;
   qty: number;
+  source?: PersistedNutritionSource;
 };
 
 const DOMAIN_ITEMS = "nutrition.items";
@@ -28,7 +29,7 @@ const completedOperations = new Map<string, number>();
 const recentAdds = new Map<string, number>();
 
 function addFingerprint(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }) {
-  return JSON.stringify({ name: item.name.trim(), meal: item.meal.trim(), kcal: Number(item.kcal || 0), p: Number(item.p || 0), c: Number(item.c || 0), f: Number(item.f || 0), fiber: Number(item.fiber || 0), sugar: Number(item.sugar || 0), sodium: Number(item.sodium || 0), qty: Number(item.qty ?? 1) });
+  return JSON.stringify({ name: item.name.trim(), meal: item.meal.trim(), kcal: Number(item.kcal || 0), p: Number(item.p || 0), c: Number(item.c || 0), f: Number(item.f || 0), fiber: Number(item.fiber || 0), sugar: Number(item.sugar || 0), sodium: Number(item.sodium || 0), qty: Number(item.qty ?? 1), source: item.source ?? "manual" });
 }
 
 export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
@@ -59,7 +60,7 @@ export async function persistNutritionItem(item: Omit<NutritionItem, "id" | "qty
   const id = crypto.randomUUID();
   const { error } = await supabase.from("food_log").insert({ id, user_id: user.id, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source, meta });
   if (error) throw new Error(error.message);
-  return { id, name: item.name, meal: item.meal, kcal: Number(item.kcal ?? 0), p: Number(item.p ?? 0), c: Number(item.c ?? 0), f: Number(item.f ?? 0), fiber: Number(item.fiber ?? 0), sugar: Number(item.sugar ?? 0), sodium: Number(item.sodium ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1 };
+  return { id, name: item.name, meal: item.meal, kcal: Number(item.kcal ?? 0), p: Number(item.p ?? 0), c: Number(item.c ?? 0), f: Number(item.f ?? 0), fiber: Number(item.fiber ?? 0), sugar: Number(item.sugar ?? 0), sodium: Number(item.sodium ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1, source: item.source ?? "manual" };
 }
 
 export async function deletePersistedNutritionItem(id: string): Promise<void> {
@@ -100,7 +101,7 @@ function nutritionRowPayload(userId: string, day: string, item: NutritionItem) {
     fiber_g: Number(item.fiber || 0),
     sugar_g: Number(item.sugar || 0),
     sodium_mg: Number(item.sodium || 0),
-    source: "manual",
+    source: item.source ?? "manual",
     meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } },
   };
 }
