@@ -101,6 +101,7 @@ export function useHealthToday() {
   const [data, setData] = useState<HealthToday>(EMPTY);
   const [loading, setLoading] = useState(false);
   const encryptedRecordsRef = useRef(new Map<string, EncryptedHealthRecord>());
+  const decryptedSamplesRef = useRef(new Map<string, HealthSample>());
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -165,7 +166,7 @@ export function useHealthToday() {
       });
       const records = response.records as EncryptedHealthRecord[];
       encryptedRecordsRef.current = new Map(records.map((record) => [record.id, record]));
-      const samples: HealthSample[] = [];
+      decryptedSamplesRef.current = new Map();
 
       for (const record of encryptedRecordsRef.current.values()) {
         try {
@@ -181,14 +182,14 @@ export function useHealthToday() {
             typeof (payload as HealthSample).type === "string" &&
             typeof (payload as HealthSample).value === "number"
           ) {
-            samples.push(payload as HealthSample);
+            decryptedSamplesRef.current.set(record.id, payload as HealthSample);
           }
         } catch (error) {
           console.warn("Skipping undecryptable health record", error);
         }
       }
 
-      setData(aggregateHealthSamples(samples, timeZone));
+      setData(aggregateHealthSamples([...decryptedSamplesRef.current.values()], timeZone));
     } catch (error) {
       console.error("health refresh", error);
       setData(EMPTY);
@@ -239,7 +240,10 @@ export function useHealthToday() {
           const record = payload.new as Partial<EncryptedHealthRecord>;
           if (eventType === "DELETE") {
             const deletedId = (payload.old as { id?: string })?.id;
-            if (deletedId) encryptedRecordsRef.current.delete(deletedId);
+            if (deletedId) {
+              encryptedRecordsRef.current.delete(deletedId);
+              decryptedSamplesRef.current.delete(deletedId);
+            }
           } else if (
             typeof record?.id === "string" &&
             typeof record?.created_at === "string" &&
@@ -248,33 +252,33 @@ export function useHealthToday() {
             record.algorithm === "AES-256-GCM" &&
             Number.isInteger(record.key_version)
           ) {
-            encryptedRecordsRef.current.set(record.id, record as EncryptedHealthRecord);
+            const nextRecord = record as EncryptedHealthRecord;
+            encryptedRecordsRef.current.set(nextRecord.id, nextRecord);
+            try {
+              const decrypted = await decryptHealthPayload(nextRecord.ciphertext, nextRecord.nonce, nextRecord.key_version);
+              if (
+                decrypted &&
+                typeof decrypted === "object" &&
+                "ts" in decrypted &&
+                "type" in decrypted &&
+                "value" in decrypted &&
+                typeof (decrypted as HealthSample).ts === "string" &&
+                typeof (decrypted as HealthSample).type === "string" &&
+                typeof (decrypted as HealthSample).value === "number"
+              ) {
+                decryptedSamplesRef.current.set(nextRecord.id, decrypted as HealthSample);
+              } else {
+                decryptedSamplesRef.current.delete(nextRecord.id);
+              }
+            } catch (error) {
+              decryptedSamplesRef.current.delete(nextRecord.id);
+              console.warn("Skipping undecryptable health realtime record", error);
+            }
           } else {
             return;
           }
 
-          const samples: HealthSample[] = [];
-          for (const current of encryptedRecordsRef.current.values()) {
-            try {
-              if (current.algorithm !== "AES-256-GCM" || !Number.isInteger(current.key_version) || current.key_version < 1) continue;
-              const payload = await decryptHealthPayload(current.ciphertext, current.nonce, current.key_version);
-              if (
-                payload &&
-                typeof payload === "object" &&
-                "ts" in payload &&
-                "type" in payload &&
-                "value" in payload &&
-                typeof (payload as HealthSample).ts === "string" &&
-                typeof (payload as HealthSample).type === "string" &&
-                typeof (payload as HealthSample).value === "number"
-              ) {
-                samples.push(payload as HealthSample);
-              }
-            } catch (error) {
-              console.warn("Skipping undecryptable health realtime record", error);
-            }
-          }
-          setData(aggregateHealthSamples(samples, timeZone));
+          setData(aggregateHealthSamples([...decryptedSamplesRef.current.values()], timeZone));
         },
       );
       void channel.subscribe();
