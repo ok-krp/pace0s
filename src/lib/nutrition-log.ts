@@ -85,7 +85,7 @@ function nutritionRows(value: unknown) {
 let lastBridgedNutrition = readNutritionItems();
 let nutritionBridgeRunning = false;
 
-async function bridgeLocalNutritionToFoodLog(value: unknown) {
+export async function syncNutritionStateToFoodLog(value: unknown) {
   if (nutritionBridgeRunning || typeof window === "undefined") return;
   nutritionBridgeRunning = true;
   try {
@@ -125,9 +125,9 @@ async function bridgeLocalNutritionToFoodLog(value: unknown) {
 if (typeof window !== "undefined") {
   onLocalWrite((key, value) => {
     if (key !== "pace.nutrition.items") return;
-    void bridgeLocalNutritionToFoodLog(value);
+    void syncNutritionStateToFoodLog(value);
   });
-  void bridgeLocalNutritionToFoodLog(lastBridgedNutrition);
+  void syncNutritionStateToFoodLog(lastBridgedNutrition);
 }
 
 export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, operationId?: string): boolean {
