@@ -44,4 +44,76 @@ void main() {
       );
     });
   });
+
+  group('Flutter user_state Realtime ordering', () {
+    final local = DateTime.parse('2026-09-30T07:30:00Z');
+    final newer = DateTime.parse('2026-09-30T07:31:00Z');
+    final older = DateTime.parse('2026-09-30T07:29:00Z');
+
+    test('applies a newer remote row when there is no local mutation', () {
+      expect(
+        shouldApplyRealtimeUserState(
+          remoteTime: newer,
+          localTime: local,
+          hasPendingMutation: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('ignores stale Realtime rows', () {
+      expect(
+        shouldApplyRealtimeUserState(
+          remoteTime: older,
+          localTime: local,
+          hasPendingMutation: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('ignores an event equal to the local checkpoint', () {
+      expect(
+        shouldApplyRealtimeUserState(
+          remoteTime: local,
+          localTime: local,
+          hasPendingMutation: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('does not let Realtime overwrite a pending local mutation', () {
+      expect(
+        shouldApplyRealtimeUserState(
+          remoteTime: newer,
+          localTime: local,
+          hasPendingMutation: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('applies a remote row when no local checkpoint exists', () {
+      expect(
+        shouldApplyRealtimeUserState(
+          remoteTime: newer,
+          localTime: null,
+          hasPendingMutation: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('ignores malformed timestamps', () {
+      expect(
+        shouldApplyRealtimeUserState(
+          remoteTime: null,
+          localTime: local,
+          hasPendingMutation: false,
+        ),
+        isFalse,
+      );
+    });
+  });
 }

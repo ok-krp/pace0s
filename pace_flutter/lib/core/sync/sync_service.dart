@@ -38,35 +38,76 @@ class SyncService {
     if (_realtimeUserId == userId && _realtimeChannel != null) return;
 
     if (_realtimeChannel != null) {
-      client!.removeChannel(_realtimeChannel!);
+      await client!.removeChannel(_realtimeChannel!);
       _realtimeChannel = null;
+      _realtimeUserId = null;
     }
 
     final channel = client!.channel('pace-flutter-user-state-$userId');
-    channel.onPostgresChanges(
-      event: PostgresChangeEvent.all,
-      schema: 'public',
-      table: 'user_state',
-      filter: PostgresChangeFilter(
-        type: PostgresChangeFilterType.eq,
-        column: 'user_id',
-        value: userId,
-      ),
-      callback: (payload) {
-        final record = Map<String, dynamic>.from(payload.newRecord);
-        final key = record['key'];
-        final value = record['value'];
-        final updatedAt = record['updated_at'];
-        if (key is! String || updatedAt is! String) return;
-        unawaited(_applyRealtimeRow(key, value, updatedAt));
-      },
-    );
+
+    void handlePayload(PostgresChangePayload payload) {
+      // P1.1 deliberately handles INSERT/UPDATE only. DELETE/tombstone
+      // semantics are implemented in P1.3 so a DELETE can never be mistaken
+      // for an empty user_state value here.
+      final record = Map<String, dynamic>.from(payload.newRecord);
+      final key = record['key'];
+      final value = record['value'];
+      final updatedAt = record['updated_at'];
+      if (key is! String || updatedAt is! String) return;
+      unawaited(_applyRealtimeRow(key, value, updatedAt));
+    }
+
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'user_state',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: handlePayload,
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'user_state',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: handlePayload,
+        );
+
     _realtimeChannel = channel;
     _realtimeUserId = userId;
 
     try {
-      channel.subscribe();
+      channel.subscribe((status, error) {
+        switch (status) {
+          case RealtimeSubscribeStatus.subscribed:
+            // Reconcile immediately after the websocket is confirmed. This
+            // closes the race where an event was emitted before subscription
+            // became active.
+            unawaited(syncNow());
+            break;
+          case RealtimeSubscribeStatus.channelError:
+          case RealtimeSubscribeStatus.timedOut:
+          case RealtimeSubscribeStatus.closed:
+            // The next syncNow() must create a fresh channel rather than
+            // reusing a channel that is no longer subscribed.
+            if (identical(_realtimeChannel, channel)) {
+              _realtimeChannel = null;
+              _realtimeUserId = null;
+            }
+            break;
+        }
+      });
     } catch (_) {
+      _realtimeChannel = null;
+      _realtimeUserId = null;
       // Polling remains the fallback when Realtime is unavailable.
     }
   }
@@ -86,14 +127,13 @@ class SyncService {
     final remoteTime = DateTime.tryParse(updatedAt);
     final localTime =
         localUpdatedAt == null ? null : DateTime.tryParse(localUpdatedAt);
-    if (remoteTime == null ||
-        (localTime != null && !remoteTime.isAfter(localTime))) {
-      return;
-    }
-
-    if (localStore
-        .pendingOperations()
-        .any((operation) => operation['key'] == key)) {
+    if (!shouldApplyRealtimeUserState(
+      remoteTime: remoteTime,
+      localTime: localTime,
+      hasPendingMutation: localStore
+          .pendingOperations()
+          .any((operation) => operation['key'] == key),
+    )) {
       return;
     }
 
@@ -248,6 +288,20 @@ class SyncService {
       await localStore.applyRemote(key, row['value'], remoteUpdatedAt);
     }
   }
+}
+
+/// Returns whether a Realtime user_state row is newer than the local
+/// checkpoint and safe to apply.
+///
+/// Pending local mutations always win over a Realtime event. The normal sync
+/// cycle will reconcile the cloud state after the local write has completed.
+bool shouldApplyRealtimeUserState({
+  required DateTime? remoteTime,
+  required DateTime? localTime,
+  required bool hasPendingMutation,
+}) {
+  if (hasPendingMutation || remoteTime == null) return false;
+  return localTime == null || remoteTime.isAfter(localTime);
 }
 
 /// Validated response contract returned by upsert_user_state_if_newer().
