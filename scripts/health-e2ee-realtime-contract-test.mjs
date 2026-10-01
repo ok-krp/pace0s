@@ -16,4 +16,23 @@ assert.ok(subscribe > callbackRegistration, "health E2EE channel must subscribe 
 assert.match(source, /supabase\.getChannels\(\)\.find/);
 assert.match(source, /await supabase\.removeChannel\(existing\)/);
 
+// Refreshes must not overlap: a realtime/online/local event arriving while a
+// full E2EE reconciliation is running must not create concurrent cloud reads.
+assert.match(source, /refreshRunningRef/);
+assert.match(source, /if \(refreshRunningRef\.current\) return;/);
+
+// Day boundaries must advance by calendar day, not a fixed 24-hour duration;
+// fixed durations are wrong across DST transitions.
+assert.match(source, /next\.setDate\(next\.getDate\(\) \+ 1\)/);
+assert.doesNotMatch(source, /start\.getTime\(\) \+ 24 \* 60 \* 60 \* 1000/);
+
+// The one-time dedupe backfill is bounded to two attempts per browser session;
+// repeated health refreshes must not amplify egress after a persistent failure.
+assert.match(source, /dedupeBackfillAttemptsKey/);
+assert.match(source, /backfillAttempts < 2/);
+
+// The initial reconciliation is bounded to the current calendar day.
+assert.match(source, /const \{ start: dayStart, next: dayEnd \} = localDayBounds\(timeZone\)/);
+assert.match(source, /limit: 10000/);
+
 console.log("health E2EE realtime contract: PASS");
