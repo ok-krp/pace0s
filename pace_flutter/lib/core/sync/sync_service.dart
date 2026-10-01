@@ -103,9 +103,6 @@ class SyncService {
               _realtimeUserId = null;
             }
             break;
-          case RealtimeSubscribeStatus.joined:
-          case RealtimeSubscribeStatus.leaving:
-            break;
         }
       });
     } catch (_) {
