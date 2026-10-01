@@ -388,6 +388,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     let realtimeHealthy = false;
+    let initialSyncStarted = false;
 
     const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow))
@@ -395,7 +396,7 @@ export function useCloudSyncEngineInternal() {
     void realtimeChannel.subscribe((subscriptionStatus) => {
       if (subscriptionStatus === "SUBSCRIBED") {
         realtimeHealthy = true;
-        void pull();
+        if (initialSyncStarted) void pull();
       } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
         realtimeHealthy = false;
         setStatus(navigator.onLine ? "error" : "offline");
@@ -438,6 +439,7 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("pace.legal.changed", onLegalChanged);
     window.addEventListener("pace.sync.conflict.resolved", onConflictResolved);
     pruneEquivalentConflicts();
+    initialSyncStarted = true;
     void syncNow();
     return () => {
       cancelled = true; offLocal();
