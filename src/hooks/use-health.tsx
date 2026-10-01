@@ -215,6 +215,7 @@ export function useHealthToday() {
     }
 
     const channelName = `pace-health-e2ee-${user.id}`;
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
 
