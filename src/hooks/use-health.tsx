@@ -232,7 +232,19 @@ export function useHealthToday() {
     const channelName = `pace-health-e2ee-${user.id}`;
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectAttempt = 0;
     let cancelled = false;
+
+    const scheduleReconnect = () => {
+      if (cancelled || reconnectTimer) return;
+      const delay = Math.min(30_000, 1_000 * 2 ** reconnectAttempt);
+      reconnectAttempt = Math.min(reconnectAttempt + 1, 5);
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        void subscribeRealtime();
+      }, delay);
+    };
 
     const subscribeRealtime = async () => {
       const existing = supabase.getChannels().find((candidate) => candidate.topic === `realtime:${channelName}`);
@@ -297,13 +309,25 @@ export function useHealthToday() {
           setData(aggregateHealthSamples([...decryptedSamplesRef.current.values()], timeZone));
         },
       );
-      void channel.subscribe();
+      void channel.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          reconnectAttempt = 0;
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          scheduleReconnect();
+        }
+      });
     };
 
     void subscribeRealtime();
 
     return () => {
       cancelled = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       window.removeEventListener("pace.health.changed", handler);
       window.removeEventListener("online", onOnline);
       if (channel) void supabase.removeChannel(channel);
