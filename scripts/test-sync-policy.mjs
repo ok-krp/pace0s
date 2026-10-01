@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-assert.match(syncSource, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
 import { readFile } from "node:fs/promises";
 
 const engine = await readFile("src/hooks/use-cloud-sync-engine.tsx", "utf8");
@@ -12,6 +11,7 @@ const profileMigration = await readFile("supabase/migrations/20260821090000_prof
 const migrations = await readFile("supabase/migrations/20260902092340_fix_event_driven_sync_timestamp_reconciliation.sql", "utf8");
 
 assert.match(engine, /setInterval\s*\(.*60000/s, "sync engine must reconcile periodically");
+assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
 assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
 assert.equal(engine.includes("location.reload"), false, "sync engine must not reload the app");
 assert.match(engine, /onLocalWrite\(/, "local writes must be observed through an explicit mutation event");
