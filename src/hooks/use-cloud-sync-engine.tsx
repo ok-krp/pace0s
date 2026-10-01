@@ -431,7 +431,7 @@ export function useCloudSyncEngineInternal() {
     // state while the app is visible; this also heals missed Realtime events.
     const reconcileTimer = window.setInterval(() => {
       if (document.visibilityState === "visible") void syncNow();
-    }, 5000);
+    }, 60_000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") void syncNow();
     };
