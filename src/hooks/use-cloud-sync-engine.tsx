@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 import { readDomain, sanitizeNutritionItems } from "@/lib/domain-store";
-import { syncNutritionStateToFoodLog } from "@/lib/nutrition-log";
 
 const PACE_PREFIX = "pace.";
 const INTERNAL_PREFIX = "pace.__";
@@ -229,7 +228,6 @@ export function useCloudSyncEngineInternal() {
     };
 
     const writeItem = async (item: QueueItem): Promise<boolean> => {
-      if (item.key === "pace.nutrition.items") await syncNutritionStateToFoodLog(item.value);
       if (conflictForKey(item.key)) return false;
 
       // Let the monotonic RPC be the single write authority. Avoid a pre-write
