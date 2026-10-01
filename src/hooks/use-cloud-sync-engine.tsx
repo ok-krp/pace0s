@@ -206,22 +206,9 @@ export function useCloudSyncEngineInternal() {
     const writeItem = async (item: QueueItem): Promise<boolean> => {
       if (conflictForKey(item.key)) return false;
 
-      // A lost RPC response must be idempotent: if the canonical row already
-      // contains this exact value, acknowledge the queue item without writing again.
-      const { data: existingRows, error: existingError } = await supabase
-        .from("user_state")
-        .select("key,value,updated_at,updated_by")
-        .eq("user_id", user.id)
-        .eq("key", item.key)
-        .limit(1);
-      if (existingError) throw existingError;
-      const existing = existingRows?.[0] as SyncRow | undefined;
-      if (existing && serialize(existing.value) === serialize(item.value)) {
-        markVersion(existing.key, existing.updated_at);
-        localStorage.setItem("pace.__last_sync_at", existing.updated_at);
-        return true;
-      }
-
+      // Let the monotonic RPC be the single write authority. Avoid a pre-write
+      // SELECT on every queued mutation; if the server rejects the write because
+      // a newer row exists, fetch that row once to reconcile the client.
       if (item.key === "pace.nutrition.items") await syncNutritionStateToFoodLog(item.value);
       const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
       const result = await rpc("upsert_user_state_if_newer", {
