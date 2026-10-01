@@ -1,0 +1,11 @@
+{
+  "git": {
+    "deploymentEnabled": {
+      "main": true,
+      "fix/p0-stability-themes-sync-nutrition-ai": true,
+      "fix/health-egress-current-day-only": false,
+      "fix/nutrition-egress-amplification": false,
+      "fix/supabase-egress-sync-polling": false
+    }
+  }
+}
