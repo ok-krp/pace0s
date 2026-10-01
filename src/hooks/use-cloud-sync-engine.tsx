@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 import { readDomain, sanitizeNutritionItems } from "@/lib/domain-store";
+import { syncNutritionStateToFoodLog } from "@/lib/nutrition-log";
 
 const PACE_PREFIX = "pace.";
 const INTERNAL_PREFIX = "pace.__";
@@ -148,7 +149,7 @@ function unwrapNutritionValue(value: unknown) {
 
 function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false) {
   const incoming = unwrapNutritionValue(incomingValue);
-  if (authoritative) return sanitizeNutritionItems(incoming);
+  if (authoritative || true) return sanitizeNutritionItems(incoming);
   const current = readDomain<Record<string, unknown>>("nutrition.items", {}).value;
   if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || !current || typeof current !== "object" || Array.isArray(current)) return sanitizeNutritionItems(incoming);
   const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
@@ -246,6 +247,7 @@ export function useCloudSyncEngineInternal() {
         return true;
       }
 
+      if (item.key === "pace.nutrition.items") await syncNutritionStateToFoodLog(item.value);
       const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
       const result = await rpc("upsert_user_state_if_newer", {
         p_user_id: user.id,
