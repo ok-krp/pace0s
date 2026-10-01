@@ -83,12 +83,13 @@ function nutritionRows(value: unknown) {
 }
 
 let lastBridgedNutrition = readNutritionItems();
-let nutritionBridgeRunning = false;
+let nutritionBridgePromise: Promise<void> | null = null;
 
-export async function syncNutritionStateToFoodLog(value: unknown) {
-  if (nutritionBridgeRunning || typeof window === "undefined") return;
-  nutritionBridgeRunning = true;
-  try {
+export function syncNutritionStateToFoodLog(value: unknown): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  if (nutritionBridgePromise) return nutritionBridgePromise;
+  nutritionBridgePromise = (async () => {
+    try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const nextRows = nutritionRows(value);
@@ -117,9 +118,11 @@ export async function syncNutritionStateToFoodLog(value: unknown) {
     lastBridgedNutrition = value && typeof value === "object" && !Array.isArray(value) ? value as NutritionMap : {};
   } catch (error) {
     console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
-  } finally {
-    nutritionBridgeRunning = false;
-  }
+    } finally {
+      nutritionBridgePromise = null;
+    }
+  })();
+  return nutritionBridgePromise;
 }
 
 if (typeof window !== "undefined") {
