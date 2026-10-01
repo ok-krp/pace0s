@@ -34,7 +34,8 @@ assert.match(profileSync, /postgres_changes/, "profiles must use Realtime");
 assert.match(profileSync, /updated_by === deviceId/, "profile self-originated events must be ignored");
 assert.match(profileRoute, /upsert_profile_if_newer/, "profile writes must use the version-safe RPC");
 assert.match(profileRoute, /PROFILE_REMOTE_EVENT/, "profile UI must consume centralized remote events");
-assert.match(goals, /PROFILE_REMOTE_EVENT/, "derived profile consumers must receive remote changes");\nassert.match(healthFunctions, /has_current_health_e2ee_consent/, "health E2EE consent must use the consolidated consent RPC");
+assert.match(goals, /PROFILE_REMOTE_EVENT/, "derived profile consumers must receive remote changes");
+assert.match(healthFunctions, /has_current_health_e2ee_consent/, "health E2EE consent must use the consolidated consent RPC");
 assert.doesNotMatch(healthFunctions, /from\("consent_records"\)\.select\("granted"\)/, "health E2EE paths must not perform repeated consent row reads");
 assert.match(healthFunctions, /since: z\.string\(\)\.datetime\(\)\.optional\(\)/, "health reads must support bounded time windows");
 
