@@ -67,13 +67,8 @@ export const insertEncryptedHealthSamples = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => encryptedInsertSchema.parse(d))
   .handler(async ({ data, context }) => {
-    const { data: healthConsent } = await context.supabase
-      .from("consent_records").select("granted").eq("consent_type", "health_data")
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const { data: cloudConsent } = await context.supabase
-      .from("consent_records").select("granted").eq("consent_type", "health_cloud_sync")
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (healthConsent?.granted !== true || cloudConsent?.granted !== true) {
+    const { data: hasConsent, error: consentError } = await context.supabase.rpc("has_current_health_e2ee_consent");
+    if (consentError || hasConsent !== true) {
       throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
     }
     const rows = data.records.map((record) => ({
@@ -91,20 +86,24 @@ export const insertEncryptedHealthSamples = createServerFn({ method: "POST" })
 
 export const listEncryptedHealthSamples = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .validator((d: unknown) => z.object({ limit: z.number().int().min(1).max(10000).default(10000) }).parse(d ?? {}))
+  .validator((d: unknown) => z.object({
+    limit: z.number().int().min(1).max(10000).default(10000),
+    since: z.string().datetime().optional(),
+    until: z.string().datetime().optional(),
+  }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
-    const { data: healthConsent } = await context.supabase.from("consent_records")
-      .select("granted").eq("consent_type", "health_data")
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const { data: cloudConsent } = await context.supabase.from("consent_records")
-      .select("granted").eq("consent_type", "health_cloud_sync")
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (healthConsent?.granted !== true || cloudConsent?.granted !== true) {
+    const { data: hasConsent, error: consentError } = await context.supabase.rpc("has_current_health_e2ee_consent");
+    if (consentError || hasConsent !== true) {
       throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
     }
-    const result = await (context.supabase as any).from("health_samples_e2ee")
+    let query = (context.supabase as any).from("health_samples_e2ee")
       .select("id,ciphertext,nonce,algorithm,key_version,created_at")
-      .eq("user_id", context.userId).order("created_at", { ascending: false }).limit(data.limit);
+      .eq("user_id", context.userId)
+      .order("created_at", { ascending: false })
+      .limit(data.limit);
+    if (data.since) query = query.gte("created_at", data.since);
+    if (data.until) query = query.lt("created_at", data.until);
+    const result = await query;
     if (result.error) throw new Error("Impossible de charger les données de santé chiffrées.");
     return { records: result.data ?? [] };
   });

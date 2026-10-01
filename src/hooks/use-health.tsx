@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listEncryptedHealthSamples } from "@/lib/health.functions";
 import { decryptHealthPayload } from "@/lib/health.crypto";
@@ -28,10 +28,12 @@ type HealthSample = {
 };
 
 type EncryptedHealthRecord = {
+  id: string;
   ciphertext: string;
   nonce: string;
   algorithm: "AES-256-GCM";
   key_version: number;
+  created_at: string;
 };
 
 const SAMPLE_TYPES = new Set([
@@ -98,6 +100,8 @@ export function useHealthToday() {
   const fetchEncrypted = useServerFn(listEncryptedHealthSamples);
   const [data, setData] = useState<HealthToday>(EMPTY);
   const [loading, setLoading] = useState(false);
+  const encryptedRecordsRef = useRef(new Map<string, EncryptedHealthRecord>());
+  const decryptedSamplesRef = useRef(new Map<string, HealthSample>());
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -147,11 +151,24 @@ export function useHealthToday() {
         }
       }
 
-      const response = await fetchEncrypted({ data: { limit: 10000 } });
-      const records = response.records as EncryptedHealthRecord[];
-      const samples: HealthSample[] = [];
+      const now = new Date();
+      const dayStart = new Date(now);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
 
-      for (const record of records) {
+      const response = await fetchEncrypted({
+        data: {
+          limit: 10000,
+          since: dayStart.toISOString(),
+          until: dayEnd.toISOString(),
+        },
+      });
+      const records = response.records as EncryptedHealthRecord[];
+      encryptedRecordsRef.current = new Map(records.map((record) => [record.id, record]));
+      decryptedSamplesRef.current = new Map();
+
+      for (const record of encryptedRecordsRef.current.values()) {
         try {
           if (record.algorithm !== "AES-256-GCM" || !Number.isInteger(record.key_version) || record.key_version < 1) continue;
           const payload = await decryptHealthPayload(record.ciphertext, record.nonce, record.key_version);
@@ -165,14 +182,14 @@ export function useHealthToday() {
             typeof (payload as HealthSample).type === "string" &&
             typeof (payload as HealthSample).value === "number"
           ) {
-            samples.push(payload as HealthSample);
+            decryptedSamplesRef.current.set(record.id, payload as HealthSample);
           }
         } catch (error) {
           console.warn("Skipping undecryptable health record", error);
         }
       }
 
-      setData(aggregateHealthSamples(samples, timeZone));
+      setData(aggregateHealthSamples([...decryptedSamplesRef.current.values()], timeZone));
     } catch (error) {
       console.error("health refresh", error);
       setData(EMPTY);
@@ -197,16 +214,8 @@ export function useHealthToday() {
       };
     }
 
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleRefresh = () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => {
-        refreshTimer = null;
-        void refresh();
-      }, 150);
-    };
-
     const channelName = `pace-health-e2ee-${user.id}`;
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let cancelled = false;
 
@@ -225,8 +234,53 @@ export function useHealthToday() {
           schema: "public",
           table: "health_samples_e2ee",
           filter: `user_id=eq.${user.id}`,
+          select: ["id", "ciphertext", "nonce", "algorithm", "key_version", "created_at"],
         },
-        scheduleRefresh,
+        async (payload) => {
+          const eventType = payload.eventType;
+          const record = payload.new as Partial<EncryptedHealthRecord>;
+          if (eventType === "DELETE") {
+            const deletedId = (payload.old as { id?: string })?.id;
+            if (deletedId) {
+              encryptedRecordsRef.current.delete(deletedId);
+              decryptedSamplesRef.current.delete(deletedId);
+            }
+          } else if (
+            typeof record?.id === "string" &&
+            typeof record?.created_at === "string" &&
+            typeof record?.ciphertext === "string" &&
+            typeof record?.nonce === "string" &&
+            record.algorithm === "AES-256-GCM" &&
+            Number.isInteger(record.key_version)
+          ) {
+            const nextRecord = record as EncryptedHealthRecord;
+            encryptedRecordsRef.current.set(nextRecord.id, nextRecord);
+            try {
+              const decrypted = await decryptHealthPayload(nextRecord.ciphertext, nextRecord.nonce, nextRecord.key_version);
+              if (
+                decrypted &&
+                typeof decrypted === "object" &&
+                "ts" in decrypted &&
+                "type" in decrypted &&
+                "value" in decrypted &&
+                typeof (decrypted as HealthSample).ts === "string" &&
+                typeof (decrypted as HealthSample).type === "string" &&
+                typeof (decrypted as HealthSample).value === "number"
+              ) {
+                decryptedSamplesRef.current.set(nextRecord.id, decrypted as HealthSample);
+              } else {
+                decryptedSamplesRef.current.delete(nextRecord.id);
+              }
+            } catch (error) {
+              decryptedSamplesRef.current.delete(nextRecord.id);
+              console.warn("Skipping undecryptable health realtime record", error);
+            }
+          } else {
+            return;
+          }
+
+          setData(aggregateHealthSamples([...decryptedSamplesRef.current.values()], timeZone));
+        },
       );
       void channel.subscribe();
     };
@@ -237,7 +291,6 @@ export function useHealthToday() {
       cancelled = true;
       window.removeEventListener("pace.health.changed", handler);
       window.removeEventListener("online", onOnline);
-      if (refreshTimer) clearTimeout(refreshTimer);
       if (channel) void supabase.removeChannel(channel);
     };
   }, [refresh, user]);
