@@ -379,11 +379,18 @@ export function useCloudSyncEngineInternal() {
       } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
     };
 
-    const syncNow = async () => {
+    const syncNow = async (reconcile = true) => {
       if (!allowed()) return;
       pruneEquivalentConflicts();
       if (!navigator.onLine) { setStatus("offline"); return; }
-      await flushQueue(); await pull();
+      await flushQueue();
+
+      // Realtime is the primary remote-change transport. A healthy channel does
+      // not need a full-table pull on every foreground/page-show event; doing so
+      // would recreate avoidable egress even though no recovery is required.
+      // Pull only for the initial/recovery reconciliation path.
+      if (reconcile && !realtimeHealthy) await pull();
+
       pruneEquivalentConflicts();
     };
 
