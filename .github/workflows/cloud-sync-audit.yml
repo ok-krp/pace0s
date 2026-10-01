@@ -9,6 +9,7 @@ on:
       - "supabase/migrations/**"
       - "scripts/cloud-sync-contract-test.mjs"
       - "package.json"
+      - "bun.lock"
       - ".github/workflows/cloud-sync-audit.yml"
   push:
     branches: [main]
@@ -19,6 +20,7 @@ on:
       - "supabase/migrations/**"
       - "scripts/cloud-sync-contract-test.mjs"
       - "package.json"
+      - "bun.lock"
       - ".github/workflows/cloud-sync-audit.yml"
 
 jobs:
@@ -26,13 +28,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-      - run: npm install --no-audit --no-fund
-      - run: npm run test:sync
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run test:sync
       # TanStack Router generates src/routeTree.gen.ts during the Vite build.
       # Run the build before typecheck so newly added file routes are included.
-      - run: npm run build
-      - run: npm run typecheck
-      - run: npm run lint
+      - run: bun run build
+      - run: bun run typecheck
+      - run: bun run lint

@@ -5,8 +5,11 @@ on:
     paths:
       - "src/**"
       - "supabase/**"
+      - "scripts/cloud-sync-contract-test.mjs"
       - "scripts/test-sync-policy.mjs"
+      - "scripts/health-e2ee-realtime-contract-test.mjs"
       - "package.json"
+      - "bun.lock"
       - ".github/workflows/sync-audit.yml"
 
 jobs:
@@ -14,14 +17,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-      - run: npm install --no-audit --no-fund
-      - run: node scripts/test-sync-policy.mjs
-      - run: npm run test:health-e2ee-realtime
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run test:sync
+      - run: bun run test:health-e2ee-realtime
       # TanStack Router generates src/routeTree.gen.ts during the Vite build.
       # Run the build before typecheck so newly added file routes are included.
-      - run: npm run build
-      - run: npm run lint
-      - run: npm run typecheck
+      - run: bun run build
+      - run: bun run lint
+      - run: bun run typecheck
