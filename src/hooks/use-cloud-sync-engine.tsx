@@ -379,7 +379,7 @@ export function useCloudSyncEngineInternal() {
       } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
     };
 
-    const syncNow = async (reconcile = true) => {
+    const syncNow = async (reconcile = true, forcePull = false) => {
       if (!allowed()) return;
       pruneEquivalentConflicts();
       if (!navigator.onLine) { setStatus("offline"); return; }
@@ -389,7 +389,7 @@ export function useCloudSyncEngineInternal() {
       // not need a full-table pull on every foreground/page-show event; doing so
       // would recreate avoidable egress even though no recovery is required.
       // Pull only for the initial/recovery reconciliation path.
-      if (reconcile && !realtimeHealthy) await pull();
+      if (reconcile && (forcePull || !realtimeHealthy)) await pull();
 
       pruneEquivalentConflicts();
     };
@@ -447,7 +447,7 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("pace.sync.conflict.resolved", onConflictResolved);
     pruneEquivalentConflicts();
     initialSyncStarted = true;
-    void syncNow();
+    void syncNow(true, true);
     return () => {
       cancelled = true; offLocal();
       window.removeEventListener("online", onOnline);
