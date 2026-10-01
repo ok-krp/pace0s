@@ -149,7 +149,8 @@ function unwrapNutritionValue(value: unknown) {
 
 function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false) {
   const incoming = unwrapNutritionValue(incomingValue);
-  if (authoritative || true) return sanitizeNutritionItems(incoming);
+  if (authoritative) return sanitizeNutritionItems(incoming);
+  return sanitizeNutritionItems(incoming);
   const current = readDomain<Record<string, unknown>>("nutrition.items", {}).value;
   if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || !current || typeof current !== "object" || Array.isArray(current)) return sanitizeNutritionItems(incoming);
   const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
