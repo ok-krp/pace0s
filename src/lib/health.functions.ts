@@ -92,13 +92,8 @@ export const listEncryptedHealthSamples = createServerFn({ method: "GET" })
     until: z.string().datetime().optional(),
   }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
-    const { data: healthConsent } = await context.supabase.from("consent_records")
-      .select("granted").eq("consent_type", "health_data")
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    const { data: cloudConsent } = await context.supabase.from("consent_records")
-      .select("granted").eq("consent_type", "health_cloud_sync")
-      .order("created_at", { ascending: false }).limit(1).maybeSingle();
-    if (healthConsent?.granted !== true || cloudConsent?.granted !== true) {
+    const { data: hasConsent, error: consentError } = await context.supabase.rpc("has_current_health_e2ee_consent");
+    if (consentError || hasConsent !== true) {
       throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
     }
     let query = (context.supabase as any).from("health_samples_e2ee")
