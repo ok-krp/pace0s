@@ -47,7 +47,7 @@ assert.doesNotMatch(
   /existing && serialize\(existing\.value\) === serialize\(item\.value\)/,
   "sync must not perform a pre-write canonical SELECT",
 );
-assert.match(engine, /if \(!payload\.accepted\)[\\s\\S]*?from\("user_state"\)\.select\("key,value,updated_at,updated_by"\)/);
+assert.match(engine, /if \(!payload\.accepted\)[\s\S]*?from\("user_state"\)\.select\("key,value,updated_at,updated_by"\)/);
 assert.match(engine, /serialize\(queued\.value\) === serialize\(mergedValue\)/);
 
 // The server RPC is monotonic: an older canonical timestamp must never be
