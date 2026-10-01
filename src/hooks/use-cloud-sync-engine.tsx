@@ -429,10 +429,10 @@ export function useCloudSyncEngineInternal() {
     };
     const onOffline = () => setStatus("offline");
 
-    // Realtime is the fast path, not the delivery guarantee. A sleeping tab,
-    // transient websocket failure, or missed channel event must not leave
-    // another device stale indefinitely. Reconcile the authoritative cloud
-    // state while the app is visible; this also heals missed Realtime events.
+    // Realtime is the fast path. Periodic polling is only a recovery path
+    // for a channel that is not healthy; visible/online/page-show events still
+    // trigger an immediate reconciliation. This avoids full-table egress every
+    // few seconds while preserving recovery when Realtime is unavailable.
     const reconcileTimer = window.setInterval(() => {
       if (document.visibilityState === "visible" && !realtimeHealthy) void syncNow();
     }, 60_000);
