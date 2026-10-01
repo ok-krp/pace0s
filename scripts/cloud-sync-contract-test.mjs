@@ -7,8 +7,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
 
-assert.match(engine, /setInterval\s*\(.*5000/s, "sync engine must reconcile periodically");
-assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
+assert.doesNotMatch(engine, /setInterval\s*\(/, "sync engine must not use periodic polling");
+assert.match(engine, /document\.visibilityState === "visible"/, "visibility changes must trigger event-driven reconciliation");
 assert.equal(/setInterval\s*\(/.test(storage), false, "storage must not poll for local changes");
 assert.match(storage, /pace\.local\.write/);
 assert.match(engine, /onLocalWrite\(/);
