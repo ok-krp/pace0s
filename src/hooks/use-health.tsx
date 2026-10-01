@@ -147,7 +147,19 @@ export function useHealthToday() {
         }
       }
 
-      const response = await fetchEncrypted({ data: { limit: 10000 } });
+      const now = new Date();
+      const dayStart = new Date(now);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(dayStart);
+      dayEnd.setDate(dayEnd.getDate() + 1);
+
+      const response = await fetchEncrypted({
+        data: {
+          limit: 10000,
+          since: dayStart.toISOString(),
+          until: dayEnd.toISOString(),
+        },
+      });
       const records = response.records as EncryptedHealthRecord[];
       const samples: HealthSample[] = [];
 
