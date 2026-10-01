@@ -120,16 +120,27 @@ async function bridgeLocalNutritionToFoodLog(value: unknown) {
     const previousById = new Map(previousRows.map((row) => [row.id, row]));
     const nextById = new Map(nextRows.map((row) => [row.id, row]));
 
-    for (const [id, row] of nextById) {
-      const previous = previousById.get(id);
-      if (previous && nutritionRowSignature(previous.day, previous.item) === nutritionRowSignature(row.day, row.item)) continue;
-      const { error } = await supabase.from("food_log").upsert(nutritionRowPayload(user.id, row.day, row.item), { onConflict: "id", ignoreDuplicates: false });
+    const changedRows = [...nextById.entries()]
+      .filter(([id, row]) => {
+        const previous = previousById.get(id);
+        return !previous || nutritionRowSignature(previous.day, previous.item) !== nutritionRowSignature(row.day, row.item);
+      })
+      .map(([, row]) => nutritionRowPayload(user.id, row.day, row.item));
+
+    if (changedRows.length > 0) {
+      const { error } = await supabase
+        .from("food_log")
+        .upsert(changedRows, { onConflict: "id", ignoreDuplicates: false });
       if (error) throw error;
     }
 
-    for (const id of previousById.keys()) {
-      if (nextById.has(id)) continue;
-      const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
+    const removedIds = [...previousById.keys()].filter((id) => !nextById.has(id));
+    if (removedIds.length > 0) {
+      const { error } = await supabase
+        .from("food_log")
+        .delete()
+        .in("id", removedIds)
+        .eq("user_id", user.id);
       if (error) throw error;
     }
 
