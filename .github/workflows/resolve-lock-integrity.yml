@@ -15,4 +15,10 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: bun install --frozen-lockfile --force
+      - name: Clean-cache frozen install
+        env:
+          BUN_INSTALL_CACHE_DIR: /tmp/pace-bun-cache
+        run: |
+          rm -rf "$BUN_INSTALL_CACHE_DIR"
+          mkdir -p "$BUN_INSTALL_CACHE_DIR"
+          bun install --frozen-lockfile
