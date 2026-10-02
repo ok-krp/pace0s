@@ -159,5 +159,16 @@ assert.deepEqual(conflictsB, []);
 
 console.log("cloud-sync-contract-test: PASS");
 
+
+// The latest migration must restore the nutrition disjoint-day merge that was
+// accidentally removed by the earlier RPC simplification.
+const nutritionMerge = read("supabase/migrations/20261002210000_restore_nutrition_state_merge.sql");
+assert.match(nutritionMerge, /p_key = 'pace\.nutrition\.items'/);
+assert.match(nutritionMerge, /jsonb_object_keys\(current_value\)/);
+assert.match(nutritionMerge, /jsonb_array_elements\(current_day\)/);
+assert.match(nutritionMerge, /distinct on \(coalesce\(item ->> 'id', item::text\)\)/);
+assert.match(nutritionMerge, /pg_advisory_xact_lock/);
+assert.match(nutritionMerge, /updated_at < excluded\.updated_at/);
+
 assert.match(engine, /pruneEquivalentConflicts\(\);\n      if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
 assert.match(engine, /remainingConflicts = currentConflicts\.filter\(\(item\) => item\.key !== key\)/, "queued equivalent values must clear stale conflicts");
