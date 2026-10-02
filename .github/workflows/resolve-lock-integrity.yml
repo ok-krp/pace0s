@@ -16,7 +16,6 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --lockfile-only
-      - name: Show TanStack resolutions
+      - name: Show regenerated lock diff
         run: |
-          grep -n '"@tanstack/react-router@' bun.lock
-          grep -n '"@tanstack/router-plugin@' bun.lock
+          git diff -- bun.lock
