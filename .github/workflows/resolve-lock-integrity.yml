@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   resolve:
@@ -16,6 +16,16 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --lockfile-only
-      - name: Show regenerated lock diff
+      - name: Commit regenerated lockfile and remove helper workflow
+        shell: bash
         run: |
-          git diff -- bun.lock
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bun.lock
+          git rm .github/workflows/resolve-lock-integrity.yml
+          if git diff --cached --quiet; then
+            echo "No lockfile changes required."
+            exit 0
+          fi
+          git commit -m "ci: regenerate bun lockfile"
+          git push
