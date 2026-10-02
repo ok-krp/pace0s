@@ -17,7 +17,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       # Bun 1.4.x currently rejects this project's TanStack Router tarball
       # during integrity extraction even though npm registry integrity matches.
       # Use npm for CI installation; application runtime/build remains unchanged.
