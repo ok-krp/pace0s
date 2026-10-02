@@ -1,0 +1,18 @@
+name: Resolve lock integrity
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Inspect npm integrity
+        run: |
+          npm view @tanstack/react-router@1.170.41 dist.integrity
+          npm view @tanstack/router-plugin@1.168.40 dist.integrity
