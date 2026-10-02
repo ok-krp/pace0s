@@ -25,6 +25,8 @@ on:
 permissions:
   contents: read
 
+# PR checks are triggered from repository-authored commits; no workflow writes back to the branch.
+
 jobs:
   audit:
     runs-on: ubuntu-latest
