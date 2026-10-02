@@ -11,8 +11,15 @@ jobs:
   resolve:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      - run: bun install --frozen-lockfile --registry=https://registry.npmjs.org/
+      - name: Isolated TanStack Router install
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/tanstack-test
+          mkdir -p /tmp/tanstack-test
+          cd /tmp/tanstack-test
+          printf '{"name":"tanstack-test","private":true,"dependencies":{"@tanstack/react-router":"1.170.41"}}\n' > package.json
+          bun install --frozen-lockfile
