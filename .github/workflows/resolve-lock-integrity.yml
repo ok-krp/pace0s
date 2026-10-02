@@ -19,6 +19,10 @@ jobs:
       - name: Commit regenerated lockfile and remove helper workflow
         shell: bash
         run: |
+          cp bun.lock /tmp/generated-bun.lock
+          git fetch origin fix/p0-stability-themes-sync-nutrition-ai
+          git checkout -B fix/p0-stability-themes-sync-nutrition-ai origin/fix/p0-stability-themes-sync-nutrition-ai
+          cp /tmp/generated-bun.lock bun.lock
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add bun.lock
