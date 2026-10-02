@@ -28,4 +28,4 @@ jobs:
             exit 0
           fi
           git commit -m "ci: regenerate bun lockfile"
-          git push
+          git push origin HEAD:fix/p0-stability-themes-sync-nutrition-ai
