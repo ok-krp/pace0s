@@ -20,6 +20,10 @@ on:
       - "scripts/cloud-sync-contract-test.mjs"
       - "package.json"
       - ".github/workflows/cloud-sync-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   audit:
