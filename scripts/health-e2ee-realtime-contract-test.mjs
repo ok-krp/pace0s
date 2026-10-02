@@ -7,7 +7,7 @@ const source = fs.readFileSync(path.join(root, "src/hooks/use-health.tsx"), "utf
 
 const channelSetup = source.indexOf("channel = supabase.channel(channelName);");
 const callbackRegistration = source.indexOf('channel.on(\n        "postgres_changes"');
-const subscribe = source.indexOf("void channel.subscribe();");
+const subscribe = source.indexOf("void channel.subscribe((status) =>");
 
 assert.ok(channelSetup >= 0, "health E2EE realtime channel must be created");
 assert.ok(callbackRegistration > channelSetup, "health E2EE postgres_changes callback must be registered after channel creation");
@@ -34,5 +34,14 @@ assert.match(source, /backfillAttempts < 2/);
 // The initial reconciliation is bounded to the current calendar day.
 assert.match(source, /const \{ start: dayStart, next: dayEnd \} = localDayBounds\(timeZone\)/);
 assert.match(source, /limit: 10000/);
+
+// Realtime disconnects must schedule bounded reconnects rather than silently
+// leaving the health view stale until a separate online/local event occurs.
+assert.match(source, /void channel\.subscribe\(\(status\) =>/);
+assert.match(source, /status === "CHANNEL_ERROR"/);
+assert.match(source, /status === "TIMED_OUT"/);
+assert.match(source, /status === "CLOSED"/);
+assert.match(source, /scheduleReconnect/);
+assert.match(source, /Math\.min\(30_000/);
 
 console.log("health E2EE realtime contract: PASS");
