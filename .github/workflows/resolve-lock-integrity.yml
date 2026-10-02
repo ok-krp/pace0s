@@ -11,12 +11,8 @@ jobs:
   resolve:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect npm tarball
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm pack @tanstack/react-router@1.170.41 --silent
-          file=$(ls tanstack-react-router-1.170.41.tgz)
-          echo "tarball=$file"
-          sha512sum "$file"
-          npm view @tanstack/react-router@1.170.41 dist.integrity
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile --force
