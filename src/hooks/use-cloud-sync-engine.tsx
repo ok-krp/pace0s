@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 import { readDomain, sanitizeNutritionItems } from "@/lib/domain-store";
+import { syncNutritionStateToFoodLog } from "@/lib/nutrition-log";
 
 const PACE_PREFIX = "pace.";
 const INTERNAL_PREFIX = "pace.__";
@@ -146,35 +147,10 @@ function unwrapNutritionValue(value: unknown) {
   return value;
 }
 
-function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false) {
-  const incoming = unwrapNutritionValue(incomingValue);
-  if (authoritative) return sanitizeNutritionItems(incoming);
-  const current = readDomain<Record<string, unknown>>("nutrition.items", {}).value;
-  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || !current || typeof current !== "object" || Array.isArray(current)) return sanitizeNutritionItems(incoming);
-  const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
-  for (const [day, rawIncoming] of Object.entries(incoming as Record<string, unknown>)) {
-    if (!Array.isArray(rawIncoming)) continue;
-    const local = Array.isArray(merged[day]) ? merged[day] as unknown[] : [];
-    const byId = new Set(local.map((item) => item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "").filter(Boolean));
-    const output = [...local];
-    for (const item of rawIncoming) {
-      const id = item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "";
-      if (id && byId.has(id)) {
-        const index = output.findIndex((existing) => existing && typeof existing === "object" && String((existing as Record<string, unknown>).id ?? "") === id);
-        if (index >= 0) output[index] = item;
-      } else {
-        output.push(item);
-        if (id) byId.add(id);
-      }
-    }
-    merged[day] = output;
-  }
-  return sanitizeNutritionItems(merged);
+function mergeNutritionRemoteValue(incomingValue: unknown) {
+  return sanitizeNutritionItems(unwrapNutritionValue(incomingValue));
 }
 
-function isAuthoritativeNutritionWriter(updatedBy: string | null | undefined) {
-  return updatedBy === "coach_ai" || updatedBy === "nutrition_state_repair";
-}
 
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
@@ -189,7 +165,7 @@ export function useCloudSyncEngineInternal() {
     if (encoded !== undefined) lastRemoteValues.current[key] = encoded;
   };
   const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string, updatedBy?: string | null) => {
-    const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value, isAuthoritativeNutritionWriter(updatedBy)) : value;
+    const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value) : value;
     rememberRemote(key, safeValue);
     applyRemoteWrite(key, safeValue, updatedAt);
   };
@@ -230,22 +206,10 @@ export function useCloudSyncEngineInternal() {
     const writeItem = async (item: QueueItem): Promise<boolean> => {
       if (conflictForKey(item.key)) return false;
 
-      // A lost RPC response must be idempotent: if the canonical row already
-      // contains this exact value, acknowledge the queue item without writing again.
-      const { data: existingRows, error: existingError } = await supabase
-        .from("user_state")
-        .select("key,value,updated_at,updated_by")
-        .eq("user_id", user.id)
-        .eq("key", item.key)
-        .limit(1);
-      if (existingError) throw existingError;
-      const existing = existingRows?.[0] as SyncRow | undefined;
-      if (existing && serialize(existing.value) === serialize(item.value)) {
-        markVersion(existing.key, existing.updated_at);
-        localStorage.setItem("pace.__last_sync_at", existing.updated_at);
-        return true;
-      }
-
+      // Let the monotonic RPC be the single write authority. Avoid a pre-write
+      // SELECT on every queued mutation; if the server rejects the write because
+      // a newer row exists, fetch that row once to reconcile the client.
+      if (item.key === "pace.nutrition.items") await syncNutritionStateToFoodLog(item.value);
       const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
       const result = await rpc("upsert_user_state_if_newer", {
         p_user_id: user.id,
@@ -425,13 +389,6 @@ export function useCloudSyncEngineInternal() {
     };
     const onOffline = () => setStatus("offline");
 
-    // Realtime is the fast path, not the delivery guarantee. A sleeping tab,
-    // transient websocket failure, or missed channel event must not leave
-    // another device stale indefinitely. Reconcile the authoritative cloud
-    // state while the app is visible; this also heals missed Realtime events.
-    const reconcileTimer = window.setInterval(() => {
-      if (document.visibilityState === "visible") void syncNow();
-    }, 5000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") void syncNow();
     };
@@ -452,7 +409,6 @@ export function useCloudSyncEngineInternal() {
       cancelled = true; offLocal();
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
-      window.clearInterval(reconcileTimer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("pace.legal.changed", onLegalChanged);

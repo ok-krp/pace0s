@@ -7,8 +7,8 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
 
-assert.match(engine, /setInterval\s*\(.*5000/s, "sync engine must reconcile periodically");
-assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
+assert.doesNotMatch(engine, /setInterval\s*\(/, "sync engine must not use periodic polling");
+assert.match(engine, /document\.visibilityState === "visible"/, "visibility changes must trigger event-driven reconciliation");
 assert.equal(/setInterval\s*\(/.test(storage), false, "storage must not poll for local changes");
 assert.match(storage, /pace\.local\.write/);
 assert.match(engine, /onLocalWrite\(/);
@@ -40,13 +40,14 @@ assert.match(engine, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 assert.match(engine, /resolveConflict/);
 assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 
-// A lost RPC response must be idempotent: retrying an already committed value
-// must drain the queue instead of issuing another cloud write.
-assert.match(
+// Writes use the monotonic RPC as the primary idempotency boundary.
+// A rejected write reconciles from the canonical row exactly once.
+assert.doesNotMatch(
   engine,
   /existing && serialize\(existing\.value\) === serialize\(item\.value\)/,
-  "retry path must acknowledge an already-committed canonical value",
+  "sync must not perform a pre-write canonical SELECT",
 );
+assert.match(engine, /if \(!payload\.accepted\)[\s\S]*?from\("user_state"\)\.select\("key,value,updated_at,updated_by"\)/);
 assert.match(engine, /serialize\(queued\.value\) === serialize\(mergedValue\)/);
 
 // The server RPC is monotonic: an older canonical timestamp must never be
