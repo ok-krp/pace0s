@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { TablesInsert } from "@/integrations/supabase/types";
 
 const SampleType = z.enum(["steps", "kcal_active", "kcal_total", "heart_rate", "resting_heart_rate", "distance_m", "sleep_min", "exercise_duration_min", "weight_kg", "oxygen_saturation", "temperature_c", "cadence_rpm", "power_w"]);
 const insertSchema = z.object({ samples: z.array(z.object({ ts: z.string(), type: SampleType, value: z.number().finite(), source: z.string().max(128).default("manual"), source_id: z.string().max(128).optional(), external_id: z.string().max(256).optional(), metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional() })).min(1).max(5000) });
@@ -12,21 +11,6 @@ export const insertHealthSamples = createServerFn({ method: "POST" })
   .handler(async (): Promise<{ inserted: number }> => {
     throw new Error("Plaintext health ingestion is disabled. Use client-side E2EE.");
   });
-
-function localDayRange(timeZone: string | undefined) {
-  const zone = timeZone || "UTC";
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date()).filter((p) => p.type !== "literal").map((p) => [p.type, p.value]));
-  const localMidnight = `${parts.year}-${parts.month}-${parts.day}T00:00:00`;
-  const guess = new Date(`${localMidnight}Z`);
-  const offset = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" }).formatToParts(guess).find((p) => p.type === "timeZoneName")?.value?.replace("GMT", "") || "+00:00";
-  const start = new Date(`${localMidnight}${offset}`);
-  const nextLocal = new Date(start.getTime() + 36 * 60 * 60 * 1000);
-  const nextParts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(nextLocal).filter((p) => p.type !== "literal").map((p) => [p.type, p.value]));
-  const nextMidnight = `${nextParts.year}-${nextParts.month}-${nextParts.day}T00:00:00`;
-  const nextGuess = new Date(`${nextMidnight}Z`);
-  const nextOffset = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longOffset" }).formatToParts(nextGuess).find((p) => p.type === "timeZoneName")?.value?.replace("GMT", "") || "+00:00";
-  return { start, end: new Date(`${nextMidnight}${nextOffset}`) };
-}
 
 const encryptedInsertSchema = z.object({
   records: z.array(z.object({
