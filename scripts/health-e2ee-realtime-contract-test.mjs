@@ -58,4 +58,21 @@ assert.match(pairingConsentMigration, /before insert or update on public.health_
 assert.match(pairingConsentMigration, /before insert on public.health_e2ee_key_envelopes/);
 assert.match(pairingConsentMigration, /Health E2EE cloud-sync consent is required/);
 
+const privilegedDataRpcMigration = fs.readFileSync(
+  path.join(root, "supabase/migrations/20261003123000_harden_health_e2ee_privileged_data_rpcs.sql"),
+  "utf8",
+);
+
+assert.match(privilegedDataRpcMigration, /backfill_health_e2ee_dedupe_hashes/);
+assert.match(privilegedDataRpcMigration, /migrate_health_legacy_chunk/);
+assert.match(privilegedDataRpcMigration, /security definer/);
+assert.match(privilegedDataRpcMigration, /set search_path = ''/);
+assert.match(privilegedDataRpcMigration, /if \(!public\.has_current_health_e2ee_consent\(\)\)/);
+assert.match(privilegedDataRpcMigration, /Health E2EE cloud-sync consent is required/);
+assert.match(privilegedDataRpcMigration, /where target\.id = row_id/);
+assert.match(privilegedDataRpcMigration, /target\.user_id = auth\.uid\(\)/);
+assert.match(privilegedDataRpcMigration, /where legacy_sample_id = legacy_id/);
+assert.match(privilegedDataRpcMigration, /user_id = auth\.uid\(\)/);
+
+
 console.log("health E2EE realtime contract: PASS");
