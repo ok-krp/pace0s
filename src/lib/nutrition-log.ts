@@ -60,7 +60,7 @@ export async function persistNutritionItem(item: Omit<NutritionItem, "id" | "qty
   const id = crypto.randomUUID();
   const { error } = await supabase.from("food_log").insert({ id, user_id: user.id, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source, meta });
   if (error) throw new Error(error.message);
-  return { id, name: item.name, meal: item.meal, kcal: Number(item.kcal ?? 0), p: Number(item.p ?? 0), c: Number(item.c ?? 0), f: Number(item.f ?? 0), fiber: Number(item.fiber ?? 0), sugar: Number(item.sugar ?? 0), sodium: Number(item.sodium ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1, source: item.source ?? "manual" };
+  return { id, name: item.name, meal: item.meal, kcal: Number(item.kcal ?? 0), p: Number(item.p ?? 0), c: Number(item.c ?? 0), f: Number(item.f ?? 0), fiber: Number(item.fiber ?? 0), sugar: Number(item.sugar ?? 0), sodium: Number(item.sodium ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1, source };
 }
 
 export async function deletePersistedNutritionItem(id: string): Promise<void> {
@@ -107,7 +107,7 @@ function nutritionRowPayload(userId: string, day: string, item: NutritionItem) {
 }
 
 function nutritionRowSignature(day: string, item: NutritionItem) {
-  return JSON.stringify([day, item.meal, item.name, Number(item.kcal || 0), Number(item.p || 0), Number(item.c || 0), Number(item.f || 0), Number(item.fiber || 0), Number(item.sugar || 0), Number(item.sodium || 0), item.sat ?? null, item.salt ?? null, item.iron ?? null, item.calcium ?? null, item.vitC ?? null]);
+  return JSON.stringify([day, item.meal, item.name, Number(item.kcal || 0), Number(item.p || 0), Number(item.c || 0), Number(item.f || 0), Number(item.fiber || 0), Number(item.sugar || 0), Number(item.sodium || 0), item.sat ?? null, item.salt ?? null, item.iron ?? null, item.calcium ?? null, item.vitC ?? null, item.source ?? "manual"]);
 }
 
 async function bridgeLocalNutritionToFoodLog(value: unknown) {
