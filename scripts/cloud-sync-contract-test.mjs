@@ -6,6 +6,8 @@ const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
+const nutritionLog = read("src/lib/nutrition-log.ts");
+const domainStore = read("src/lib/domain-store.ts");
 
 assert.match(engine, /setInterval\s*\(\s*\(\s*\)\s*=>[\s\S]*?60_000\s*\)/, "sync engine must use a 60s recovery interval");
 assert.doesNotMatch(engine, /setInterval\s*\(\s*\(\s*\)\s*=>[\s\S]*?5000\s*\)/, "sync engine must not poll user_state every 5s");
@@ -172,3 +174,9 @@ assert.match(nutritionMerge, /updated_at < excluded\.updated_at/);
 
 assert.match(engine, /pruneEquivalentConflicts\(\);\n      if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
 assert.match(engine, /remainingConflicts = currentConflicts\.filter\(\(item\) => item\.key !== key\)/, "queued equivalent values must clear stale conflicts");
+
+
+assert.match(nutritionLog, /source: item\.source \?\? "manual"/, "food_log bridge payload must preserve nutrition provenance");
+assert.match(nutritionLog, /item\.source \?\? "manual"\]\);/, "nutrition bridge signature must include provenance");
+assert.match(nutritionLog, /return \{ id, name: item\.name[\s\S]*source \};/, "persistNutritionItem must honor its explicit source argument");
+assert.match(domainStore, /sodium: Number\(x\.sodium \?\? 0\), qty: Number\(x\.qty \?\? 1\), source: x\.source \?\? "manual"/, "local nutrition dedupe must retain provenance");
