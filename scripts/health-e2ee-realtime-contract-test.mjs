@@ -44,4 +44,18 @@ assert.match(source, /status === "CLOSED"/);
 assert.match(source, /scheduleReconnect/);
 assert.match(source, /Math\.min\(30_000/);
 
+
+const pairingConsentMigration = fs.readFileSync(
+  path.join(root, "supabase/migrations/20261003114000_harden_health_e2ee_pairing_consent.sql"),
+  "utf8",
+);
+
+assert.match(pairingConsentMigration, /enforce_health_e2ee_pairing_consent/);
+assert.match(pairingConsentMigration, /has_current_health_e2ee_consent/);
+assert.match(pairingConsentMigration, /security definer/);
+assert.match(pairingConsentMigration, /set search_path = ''/);
+assert.match(pairingConsentMigration, /before insert or update on public.health_e2ee_pairing_sessions/);
+assert.match(pairingConsentMigration, /before insert on public.health_e2ee_key_envelopes/);
+assert.match(pairingConsentMigration, /Health E2EE cloud-sync consent is required/);
+
 console.log("health E2EE realtime contract: PASS");
