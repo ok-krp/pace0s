@@ -86,6 +86,8 @@ function nutritionRows(value: unknown) {
 
 let lastBridgedNutrition = readNutritionItems();
 let nutritionBridgeRunning = false;
+let nutritionBridgePending = false;
+let nutritionBridgePendingValue: unknown = null;
 
 function nutritionRowPayload(userId: string, day: string, item: NutritionItem) {
   return {
@@ -151,13 +153,28 @@ async function bridgeLocalNutritionToFoodLog(value: unknown) {
     console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
   } finally {
     nutritionBridgeRunning = false;
+    if (nutritionBridgePending) {
+      const nextValue = nutritionBridgePendingValue;
+      nutritionBridgePending = false;
+      nutritionBridgePendingValue = null;
+      void bridgeLocalNutritionToFoodLog(nextValue);
+    }
   }
+}
+
+function scheduleNutritionBridge(value: unknown) {
+  if (nutritionBridgeRunning) {
+    nutritionBridgePending = true;
+    nutritionBridgePendingValue = value;
+    return;
+  }
+  void bridgeLocalNutritionToFoodLog(value);
 }
 
 if (typeof window !== "undefined") {
   onLocalWrite((key, value) => {
     if (key !== "pace.nutrition.items") return;
-    void bridgeLocalNutritionToFoodLog(value);
+    scheduleNutritionBridge(value);
   });
   void bridgeLocalNutritionToFoodLog(lastBridgedNutrition);
 }
