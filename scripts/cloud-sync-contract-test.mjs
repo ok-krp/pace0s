@@ -179,4 +179,7 @@ assert.match(engine, /remainingConflicts = currentConflicts\.filter\(\(item\) =>
 assert.match(nutritionLog, /source: item\.source \?\? "manual"/, "food_log bridge payload must preserve nutrition provenance");
 assert.match(nutritionLog, /item\.source \?\? "manual"\]\);/, "nutrition bridge signature must include provenance");
 assert.match(nutritionLog, /return \{ id, name: item\.name[\s\S]*source \};/, "persistNutritionItem must honor its explicit source argument");
+assert.match(nutritionLog, /let nutritionBridgePending = false;/, "nutrition bridge must retain a write that arrives while a previous bridge is in flight");
+assert.match(nutritionLog, /nutritionBridgePendingValue = value;/, "nutrition bridge must retain the latest pending nutrition value");
+assert.match(nutritionLog, /if \(nutritionBridgePending\)[\s\S]*?void bridgeLocalNutritionToFoodLog\(nextValue\);/, "nutrition bridge must drain a queued write after the in-flight write completes");
 assert.match(domainStore, /sodium: Number\(x\.sodium \?\? 0\), qty: Number\(x\.qty \?\? 1\), source: x\.source \?\? "manual"/, "local nutrition dedupe must retain provenance");
