@@ -11,6 +11,18 @@ on:
       - "package.json"
       - "bun.lock"
       - ".github/workflows/sync-audit.yml"
+  push:
+    branches:
+      - "fix/health-egress-consent-reads"
+    paths:
+      - "src/**"
+      - "supabase/**"
+      - "scripts/cloud-sync-contract-test.mjs"
+      - "scripts/test-sync-policy.mjs"
+      - "scripts/health-e2ee-realtime-contract-test.mjs"
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/sync-audit.yml"
 
 jobs:
   sync-audit:
@@ -23,8 +35,6 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test:sync
       - run: bun run test:health-e2ee-realtime
-      # TanStack Router generates src/routeTree.gen.ts during the Vite build.
-      # Run the build before typecheck so newly added file routes are included.
       - run: bun run build
       - run: bun run lint
       - run: bun run typecheck
