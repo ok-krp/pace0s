@@ -74,5 +74,20 @@ assert.match(privilegedDataRpcMigration, /target\.user_id = auth\.uid\(\)/);
 assert.match(privilegedDataRpcMigration, /where legacy_sample_id = legacy_id/);
 assert.match(privilegedDataRpcMigration, /user_id = auth\.uid\(\)/);
 
+const remainingDefinerMigration = fs.readFileSync(
+  path.join(root, "supabase/migrations/20261004120000_harden_health_e2ee_remaining_definer_rpcs.sql"),
+  "utf8",
+);
+
+assert.match(remainingDefinerMigration, /create or replace function public\\.get_pairing_session/);
+assert.match(remainingDefinerMigration, /create or replace function public\\.rotate_health_e2ee_key/);
+assert.match(remainingDefinerMigration, /security definer/);
+assert.match(remainingDefinerMigration, /set search_path = ''/);
+assert.match(remainingDefinerMigration, /if auth\\.uid\\(\\) is null/);
+assert.match(remainingDefinerMigration, /if not public\\.has_current_health_e2ee_consent\\(\\)/);
+assert.match(remainingDefinerMigration, /s\\.user_id = auth\\.uid\\(\\)/);
+assert.match(remainingDefinerMigration, /where user_id = auth\\.uid\\(\\)/);
+assert.match(remainingDefinerMigration, /where id = p_revoked_device_id and user_id = auth\\.uid\\(\\)/);
+assert.match(remainingDefinerMigration, /Device does not belong to current user/);
 
 console.log("health E2EE realtime contract: PASS");
