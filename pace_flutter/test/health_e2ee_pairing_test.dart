@@ -1,6 +1,5 @@
 import 'dart:convert';
 
-import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -45,7 +44,7 @@ void main() {
       'f25e983db5136bae11f78f5e7ea4b854b9b949858cc98c41327c6146f988dea7',
     );
 
-    final sas = await pairing.derivePairingSas(
+    final sas = await pairing.derivePairingSasFromSharedSecret(
       sharedSecret: shared,
       context: context,
     );
