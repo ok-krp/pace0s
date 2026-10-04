@@ -70,7 +70,7 @@ class HealthE2eePairing {
 
   Future<List<int>> derivePairingBits({required List<int> sharedSecret, required HealthPairingContext context, required String purpose}) async {
     if(purpose!='wrap' && purpose!='sas') throw ArgumentError.value(purpose,'purpose');
-    final salt=utf8.encode(protocolVersion+'/'+purpose+'/'+context.sessionId);
+    final salt=utf8.encode('$protocolVersion/$purpose/${context.sessionId}');
     final info=utf8.encode(jsonEncode([purpose,context.contextBytes()]));
     final key=await Hkdf(hmac:Hmac.sha256(),outputLength:32).deriveKey(secretKey:SecretKeyData(sharedSecret),nonce:salt,info:info);
     return key.extractBytes();
@@ -80,7 +80,7 @@ class HealthE2eePairing {
   }
   Future<String> derivePairingSas({required KeyPair localPrivateKey,required Map<String,dynamic> peerPublicKey,required HealthPairingContext context}) async {
     final bits=await derivePairingBits(sharedSecret:await _shared(localPrivateKey,peerPublicKey),context:context,purpose:'sas');
-    var value=BigInt.zero; for(final b in bits.take(8)){value=(value<<8)|BigInt.from(b);} value%=BigInt.from(1000000000); final s=value.toString().padLeft(9,'0'); return s.substring(0,3)+'-'+s.substring(3,6)+'-'+s.substring(6);
+    var value=BigInt.zero; for(final b in bits.take(8)){value=(value<<8)|BigInt.from(b);} value%=BigInt.from(1000000000); final s=value.toString().padLeft(9,'0'); return '${s.substring(0,3)}-${s.substring(3,6)}-${s.substring(6)}';
   }
   Future<String> derivePairingSasFromSharedSecret({required List<int> sharedSecret, required HealthPairingContext context}) async {
     final bits=await derivePairingBits(sharedSecret:sharedSecret,context:context,purpose:'sas');
@@ -106,7 +106,7 @@ class HealthE2eePairing {
     final remote=EcPublicKey(x:_b64UrlDecode(peer['x'] as String),y:_b64UrlDecode(peer['y'] as String),type:KeyPairType.p256); return (await _ecdh.sharedSecretKey(keyPair:privateKey,remotePublicKey:remote)).extractBytes();
   }
   static List<int> _randomBytes(int n){final r=Random.secure();return List<int>.generate(n,(_)=>r.nextInt(256));}
-  static String _key(String id,String suffix)=>_prefix+id+'.'+suffix;
+  static String _key(String id,String suffix)=>'$_prefix$id.$suffix';
   static String _b64Url(List<int> b)=>base64Url.encode(b).replaceAll('=','');
   static List<int> _b64UrlDecode(String v){final n=v.replaceAll('-','+').replaceAll('_','/');return base64Decode(n.padRight((n.length+3)~/4*4,'='));}
   static String _hex(List<int> b)=>b.map((x)=>x.toRadixString(16).padLeft(2,'0')).join();
