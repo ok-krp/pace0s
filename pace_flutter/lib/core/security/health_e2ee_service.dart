@@ -344,6 +344,35 @@ class HealthE2eeService {
     return bytes;
   }
 
+  Future<List<int>> readMasterKeyForPairing(int version) async {
+    final key = await _readMasterKey(version);
+    if (key == null) {
+      throw StateError('Health Master Key version $version is not available on this device.');
+    }
+    return key;
+  }
+
+  Future<List<int>> readDedupeRootKeyForPairing() async {
+    final encoded = await _secureStorage.read(key: _dedupeKey);
+    if (encoded == null) {
+      throw StateError('Dedupe Root Key is not available on this device.');
+    }
+    return base64Decode(encoded);
+  }
+
+  Future<void> importPairingKeys({
+    required int masterVersion,
+    required List<int> masterKey,
+    required List<int> dedupeRootKey,
+  }) async {
+    await _storeMasterKey(masterVersion, masterKey);
+    await _storeDedupeRootKey(dedupeRootKey);
+    final current = await currentKeyVersion();
+    if (masterVersion > current) {
+      await _secureStorage.write(key: _versionKey, value: masterVersion.toString());
+    }
+  }
+
   Future<List<int>?> _readMasterKey(int version) async {
     final value = await _secureStorage.read(key: _masterPrefix + version.toString());
     return value == null ? null : base64Decode(value);
