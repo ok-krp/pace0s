@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -13,7 +14,7 @@ class HealthPairingContext {
   final String sessionId, challenge, senderDeviceId, recipientDeviceId;
   final int keyVersion;
   final Map<String, dynamic> senderEphemeralPublicKey, recipientEphemeralPublicKey;
-  List<int> contextBytes() => utf8.encode(jsonEncode(['pace-health-pairing-v1', unorm.nfc(sessionId), unorm.nfc(challenge), unorm.nfc(senderDeviceId), unorm.nfc(recipientDeviceId), keyVersion, _canonical(senderEphemeralPublicKey), _canonical(recipientEphemeralPublicKey)]));
+  List<int> contextBytes() => utf8.encode(jsonEncode(['pace-health-pairing-v1', unorm.nfc(sessionId), unorm.nfc(challenge), unorm.nfc(senderDeviceId), unorm.nfc(recipientDeviceId), keyVersion, _canonicalPublicKey(senderEphemeralPublicKey), _canonicalPublicKey(recipientEphemeralPublicKey)]));
 }
 
 class HealthPairingSessionMaterial {
@@ -81,7 +82,7 @@ class HealthE2eePairing {
     final bits=await derivePairingBits(sharedSecret:await _shared(localPrivateKey,peerPublicKey),context:context,purpose:'sas');
     var value=BigInt.zero; for(final b in bits.take(8)){value=(value<<8)|BigInt.from(b);} value%=BigInt.from(1000000000); final s=value.toString().padLeft(9,'0'); return s.substring(0,3)+'-'+s.substring(3,6)+'-'+s.substring(6);
   }
-  Future<Map<String,dynamic>> buildKeyBundle({required KeyPair localEphemeralKey,required Map<String,dynamic> peerEphemeralPublicKey,required HealthPairingContext context}) async {
+  Future<String> derivePairingSasFromSharedSecret({required List<int> sharedSecret, required HealthPairingContext context}) async {\n    final bits=await derivePairingBits(sharedSecret:sharedSecret,context:context,purpose:'sas');\n    var value=BigInt.zero; for(final b in bits.take(8)){value=(value<<8)|BigInt.from(b);} value%=BigInt.from(1000000000); final s=value.toString().padLeft(9,'0'); return s.substring(0,3)+'-'+s.substring(3,6)+'-'+s.substring(6);\n  }\n  Future<Map<String,dynamic>> buildKeyBundle({required KeyPair localEphemeralKey,required Map<String,dynamic> peerEphemeralPublicKey,required HealthPairingContext context}) async {
     final kek=await (await derivePairingWrappingKey(privateKey:localEphemeralKey,peerPublicKey:peerEphemeralPublicKey,context:context)).extractBytes();
     final master=await healthE2ee.readMasterKeyForPairing(context.keyVersion); final dedupe=await healthE2ee.readDedupeRootKeyForPairing();
     return {'version':1,'health_master_key':{'wrapped_key':_b64Url(AesKeyWrap.wrap(kek,master)),'key_version':context.keyVersion},'dedupe_root_key':{'wrapped_key':_b64Url(AesKeyWrap.wrap(kek,dedupe))}};
@@ -101,10 +102,10 @@ class HealthE2eePairing {
     final remote=EcPublicKey(x:_b64UrlDecode(peer['x'] as String),y:_b64UrlDecode(peer['y'] as String),type:KeyPairType.p256); return (await _ecdh.sharedSecretKey(keyPair:privateKey,remotePublicKey:remote)).extractBytes();
   }
   static String _canonical(Map<String,dynamic> key){if(key['kty']!='EC'||key['crv']!='P-256'||key['x'] is! String||key['y'] is! String) throw StateError('Invalid ECDH P-256 public key.'); return jsonEncode({'crv':key['crv'],'kty':key['kty'],'x':key['x'],'y':key['y']});}
-  static List<int> _randomBytes(int n){final r=Cryptography.instance.getRandom();return List<int>.generate(n,(_)=>r.nextInt(256));}
+  static List<int> _randomBytes(int n){final r=Random.secure();return List<int>.generate(n,(_)=>r.nextInt(256));}
   static String _key(String id,String suffix)=>_prefix+id+'.'+suffix;
   static String _b64Url(List<int> b)=>base64Url.encode(b).replaceAll('=','');
   static List<int> _b64UrlDecode(String v){final n=v.replaceAll('-','+').replaceAll('_','/');return base64Decode(n.padRight((n.length+3)~/4*4,'='));}
   static String _hex(List<int> b)=>b.map((x)=>x.toRadixString(16).padLeft(2,'0')).join();
   Future<void> _clear(String id) async {await _secureStorage.delete(key:_key(id,'ephemeral'));await _secureStorage.delete(key:_key(id,'secret'));}
-}
+}\n\nMap<String,dynamic> _canonicalPublicKey(Map<String,dynamic> key){if(key['kty']!='EC'||key['crv']!='P-256'||key['x'] is! String||key['y'] is! String) throw StateError('Invalid ECDH P-256 public key.'); return {'crv':key['crv'],'kty':key['kty'],'x':key['x'],'y':key['y']};}\n
