@@ -5,128 +5,127 @@
 - Repository: `ok-krp/pace0s`
 - Single PR: #292
 - Branch: `fix/health-egress-consent-reads`
-- HEAD at handoff: `9b37bffc8d6149a1cf71eb976e59acf83e194c98`
 - Merge: **forbidden**
-- Source project: `jayzswkabxfhzmftagku` / `PaceOS`
-- Target project: `oqaqolvjxhrkvscsqhzp` / `PaceOS-Migrated`
+- Source project: `jayzswkabxfhzmftagku`
+- Active target project: `cduyjejftorfuxuwhbqt` / **PaceOS**
+- Target region: `eu-west-1` / West EU (Ireland)
+- Target URL: `https://cduyjejftorfuxuwhbqt.supabase.co`
 
 ## Current Cloud state
 
-Source `PaceOS` is `ACTIVE_HEALTHY`, PostgreSQL 17.6.1.
-Target `PaceOS-Migrated` is `INACTIVE`, PostgreSQL 17.11.0.
+The target is now active and reachable. The migration is in the verification/hardening phase; the production application has **not** been cut over.
 
-Attempting to restore the target was rejected by Supabase because the organization is under service restrictions. The target cannot currently accept connections or be verified. **No destructive operation and no source-data mutation was performed.**
+No source data was deleted or mutated.
 
-The migration therefore remains in the audit/preparation phase until the target becomes accessible.
+## Verified target parity
 
-## Source public inventory observed
+Compact source/target verification currently shows:
 
-All observed public tables have RLS enabled. Current row counts from the live source include:
+- public tables: **45 / 45**
+- public row-count differences: **0**
+- primary keys: **45 / 45**
+- foreign keys: **39 / 39**
+- UNIQUE constraints: **15 / 15**
+- CHECK constraints: **77 / 77**
+- indexes: **126 / 126**
+- policies: **93 / 93**
+- all 45 public tables have RLS enabled
+- index and constraint hashes match
+- policy hash matches
+- `auth.users`: 3 / 3
+- `auth.identities`: 3 / 3
+- `storage.buckets`: 1 / 1
+- `storage.objects`: 0 / 0
+- Realtime publication entries match for `health_samples_e2ee`, `profiles`, and `user_state`
 
-- profiles 3
-- food_log 324
-- health_samples 384 (legacy plaintext)
-- user_state 225
-- ai_conversations 11
-- ai_messages 132
-- ai_action_log 3797
-- consent_records 6
-- health_legacy_migration_map 384
-- health_samples_e2ee 0
-- health_e2ee_devices 0
-- health_e2ee_key_envelopes 0
-- health_e2ee_recovery_envelopes 0
-- health_e2ee_pairing_sessions 0
-- plus the nutrition, sport, billing, notification, AI and compliance tables listed by the live schema inventory.
+Transient target auth sessions/tokens were intentionally not copied.
 
-Source has no deployed Supabase Edge Functions.
+## Target corrections already applied
 
-## Security findings
+- Removed target-only `public.food_log.source DEFAULT 'manual'`.
+- Removed target-only `NOT NULL` from `public.health_e2ee_key_envelopes.nonce`.
+- Removed target-only direct SELECT policies from `health_e2ee_pairing_sessions` and `health_legacy_migration_map`; these remain RPC-mediated.
+- Revoked anonymous EXECUTE on `public.has_current_health_e2ee_consent()`.
 
-The source security advisor currently reports:
+## Health/E2EE database-boundary hardening applied to target
 
-1. `health_e2ee_pairing_sessions` and `health_legacy_migration_map` have RLS enabled without direct policies. This is currently intentional for privileged/RPC-mediated access and must be preserved only after the RPC ownership checks are verified.
-2. Eleven SECURITY DEFINER functions are executable by `authenticated`. This is expected for RPC entry points, but each must enforce authentication and ownership/consent as appropriate.
-3. Auth leaked-password protection is disabled. This is recorded as a source configuration finding; it must not be disabled in the migrated environment as a way to hide a regression.
+The target now contains the branch hardening for all identified privileged Health/E2EE paths:
 
-## Health/E2EE contract
+- `enforce_health_e2ee_pairing_consent()`
+- `health_e2ee_pairing_consent_guard`
+- `health_e2ee_pairing_envelope_consent_guard`
+- `backfill_health_e2ee_dedupe_hashes(jsonb)`
+- `migrate_health_legacy_chunk(jsonb)`
+- `get_pairing_session(uuid)`
+- `rotate_health_e2ee_key(integer, uuid)`
 
-`has_current_health_e2ee_consent()` is SECURITY INVOKER and binds both consent checks to `auth.uid()`.
+The pairing trigger function is SECURITY DEFINER with an empty `search_path`, requires `auth.uid()`, and requires current Health E2EE/cloud-sync consent. Its EXECUTE ACL is locked to the database owner; it is not exposed to `anon` or `authenticated`.
 
-The branch already contains database-boundary hardening for:
+The four privileged maintenance/read/key-rotation RPCs now explicitly require both authentication and `has_current_health_e2ee_consent()`, while retaining user ownership predicates.
 
-- pairing-session/envelope writes;
-- `backfill_health_e2ee_dedupe_hashes`;
-- `migrate_health_legacy_chunk`;
-- `get_pairing_session`;
-- `rotate_health_e2ee_key`.
+Pairing create/join/confirm/complete/envelope RPCs remain ownership-bound and are protected at the table boundary by the consent triggers.
 
-These changes are in migration files and must be applied to the target before Health/E2EE acceptance testing.
+## Health/E2EE RLS audit
 
-## Backup/migration tooling
+Source and target policy semantics match for:
 
-`scripts/migrate-supabase-local.ps1` already performs source schema/data exports, SHA-256 manifest creation, local reconstruction, and restore without mutating the cloud source.
+- `health_e2ee_devices`
+- `health_e2ee_key_envelopes`
+- `health_e2ee_key_versions`
+- `health_e2ee_recovery_envelopes`
+- `health_samples_e2ee`
 
-A target migration must not be considered complete until:
-- source backup files are non-empty and hashed;
-- target schema/function/RLS/Realtime/Storage/Auth inventories match the expected source contract;
-- row counts and key integrity checks match;
-- CRUD/RLS/SECURITY DEFINER/Health-E2EE/Realtime/Storage/Auth tests pass;
-- multi-device sync is verified on the target;
-- rollback artifacts are retained.
+The device/envelope/sample access paths bind rows to `auth.uid()`; device/envelope/sample cloud-sync operations additionally require current Health E2EE consent.
 
-## Latest verified audit cycle
+`health_e2ee_pairing_sessions` and `health_legacy_migration_map` intentionally have RLS enabled without direct client policies and are accessed through ownership-checked privileged RPCs.
 
-- CI run 848 for HEAD `27b12e9d0fb596415f2209c0d972cde22b1c1d80`: **PASS**.
-- `test:sync`: PASS.
-- `test:health-e2ee-realtime`: PASS.
-- build: PASS.
-- lint: PASS.
-- typecheck: PASS.
-- Source currently exposes 23 SECURITY DEFINER functions; 11 are callable by authenticated RPC clients; none are executable by anon.
-- Source has 40 public tables in the current inventory. RLS is enabled on all observed tables.
-- Realtime publication currently contains `health_samples_e2ee`, `profiles`, and `user_state`.
-- Extensions observed: pg_stat_statements 1.11, pgcrypto 1.3, plpgsql 1.0, supabase_vault 0.3.1, uuid-ossp 1.1.
-- Index inventory and the complete policy matrix were extracted from the live source.
-- The Health E2EE callable definers were checked for authentication and ownership; branch-side consent hardening remains ahead of the live source and is intentionally not applied to the source Cloud during preparation.
-- Direct-policy-free tables include `health_e2ee_pairing_sessions` and `health_legacy_migration_map`; these remain intentionally RPC-mediated and require preservation of the privileged ownership checks during migration.
+## Current security-advisor state
 
-## Cost-controlled migration preflight — 2026-10-04
+Target security advisor no longer reports an anonymous SECURITY DEFINER finding for the pairing trigger.
 
-- Target `oqaqolvjxhrkvscsqhzp` checked once this cycle: **INACTIVE**; PostgreSQL 17.11. No restore retry was issued.
-- Source volume was estimated from PostgreSQL statistics, not row downloads:
-  - public: ~5,951 estimated rows / 36,298,752 bytes table+index footprint
-  - auth: ~661 estimated rows / 1,826,816 bytes table+index footprint
-  - storage metadata: ~74 rows / 368,640 bytes database footprint
-  - Storage object payload size is not inferable from the observed `storage.objects.metadata->size`; object inventory currently returned 0 rows with a usable size field. No files were downloaded.
-- Largest public footprints: `user_state` ~22.0 MB, `ai_messages` ~7.2 MB, `ai_action_log` ~3.7 MB. These are catalog/statistics estimates; they are not an export.
-- A compact preflight script and compact post-import verification SQL were added to PR #292:
-  - `scripts/supabase-migration-preflight.ps1`
-  - `scripts/supabase-migration-verification.sql`
-- No data export was started. Existing `scripts/migrate-supabase-local.ps1` remains the eventual explicit export/import mechanism; the current cycle deliberately did not invoke it.
-- Supabase's current platform guidance is relevant to the target reconstruction: new public tables may require explicit Data API grants as the rollout reaches all projects on 2026-10-30, while RLS remains a separate authorization layer. citeturn0search2
-- Repository dependency audit found the shared client in `src/integrations/supabase/client.ts` still contains a source-project URL and publishable-key fallback. This is a migration-basis issue: production must use environment configuration before target cutover; no production switch was made while the target is inactive.
-- `.env.example` already defines `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and server-only `SUPABASE_SECRET_KEY`. No secret values were copied into the handoff.
-- Current Supabase changelog review found no breaking change requiring modification of the source during this preparation cycle; the notable 2026-07 Realtime schema lock means migration tooling must not attempt to recreate/alter Supabase-managed `realtime` objects directly. citeturn0search0
+Remaining findings are:
 
-## SECURITY DEFINER matrix — source live audit
+- 2 INFO: RLS enabled without direct policies on the intentionally RPC-mediated pairing/legacy-map tables.
+- 11 WARN: authenticated-callable SECURITY DEFINER RPCs. These are intentional RPC entry points and are being audited function-by-function rather than blanket-revoked.
+- 1 WARN: leaked-password protection disabled. This remains a recorded readiness item and is **not** enabled during this migration cycle.
 
-- 23 public SECURITY DEFINER functions were checked in one metadata/function-definition query.
-- 11 are executable by `authenticated`; 0 by `anon`.
-- All 23 explicitly define a `search_path` setting.
-- 12 contain an explicit `auth.uid()` check in the live definition.
-- The live source's Health/E2EE pairing RPCs are authenticated-only and contain user-context checks; the branch adds the stricter consent/ownership hardening for the remaining Health/E2EE data RPCs.
-- Internal trigger/helper definers such as `handle_new_user`, `prevent_audit_log_mutation`, `prevent_consent_mutation`, `rls_auto_enable`, and timestamp/archive helpers are not client-callable and therefore are not candidates for blanket `REVOKE authenticated` changes.
-- No Cloud function definition was modified during this audit cycle.
+## Function inventory
 
-## Exact next cycle
+Current target counts now match source:
 
-1. Re-check target service status.
-2. If target becomes accessible, inventory target and diff against source.
-3. Export/verify source backup before any target write.
-4. Reconstruct target schema from migrations.
-5. Restore data and managed Auth/Storage data using a verified path.
-6. Migrate/verify Realtime, Storage policies, Auth configuration and any functions.
-7. Switch application configuration only after target validation.
-8. Run full regression and multi-device sync tests.
-9. Keep PR #292 open; never merge automatically.
+- public functions: **38 / 38**
+- SECURITY DEFINER functions: **23 / 23**
+- public triggers: **27 / 27** at the information-schema event-row inventory level
+
+The previously missing target function `enforce_health_e2ee_pairing_consent()` and its two consent triggers are now present.
+
+## Cost-controlled migration constraints
+
+- No repeated full export was performed after parity was established.
+- No large `SELECT *` export was used for verification.
+- Storage payloads were not downloaded because `storage.objects` is empty.
+- Source data remains untouched.
+- Verification uses compact metadata, hashes, counts and targeted definitions.
+
+## Cutover gate
+
+Production configuration must remain on the source until all of the following are green:
+
+1. target function/trigger/RLS/constraint/index/policy parity;
+2. Auth fresh sign-in/session creation against target;
+3. Health/E2EE regression including consent-denied and consent-granted paths;
+4. Realtime verification;
+5. Storage verification;
+6. CRUD and sync regression;
+7. multi-device sync test;
+8. CI/build/lint/typecheck;
+9. only then environment cutover to `https://cduyjejftorfuxuwhbqt.supabase.co`.
+
+Never expose a service-role/secret key in the browser.
+
+## Repository / PR policy
+
+- PR #292 only.
+- **Never merge automatically.**
+- Do not create a second migration PR for this work.
+- Continue fixing/verifying within #292 until the acceptance gate is satisfied.
