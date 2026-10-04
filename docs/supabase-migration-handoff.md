@@ -132,10 +132,13 @@ Never expose a service-role/secret key in the browser.
 
 ## Latest repository/deployment verification — 2026-10-04
 
-- Latest migration commit: `a1bb769248e500c2751b8bd8076421fee3299673`.
-- Supabase target migration version: `20261004135850_remove_target_only_compatibility_columns_20261004`.
+- Latest migration commit: `c70e05e80ec4ce2b79629d2331bea8de56941f68`.
+- Supabase target migrations applied for schema parity:
+  - `20261004135850_remove_target_only_compatibility_columns_20261004`
+  - `20261004140134_align_profiles_column_semantics_20261004`
 - Target public columns now match source: **452 / 452**.
-- Vercel preview for the previous exact HEAD was READY with a successful build and 0 runtime errors; the new migration commit requires a fresh preview deployment check.
+- Column semantic hash (type/nullability/default, order-independent) now matches source.
+- Vercel preview deployment for the latest commit requires final readiness check.
 - Production was not promoted; this remains a preview/cutover-gate validation.
 
 ## Schema-drift resolution
@@ -149,3 +152,5 @@ They were removed through the target migration:
 `20261004135850_remove_target_only_compatibility_columns_20261004`
 
 The source database was not modified. The target now reports the same total public column count as source (**452**), and the three column names are absent from the target.
+
+A follow-up semantic drift was then found in `profiles`: target had a default on `id` and `NOT NULL` on `training_sessions_goal` that source did not. Both were corrected; the order-independent column semantic hash is now identical.
