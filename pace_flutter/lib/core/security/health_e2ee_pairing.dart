@@ -113,4 +113,4 @@ class HealthE2eePairing {
   Future<void> _clear(String id) async {await _secureStorage.delete(key:_key(id,'ephemeral'));await _secureStorage.delete(key:_key(id,'secret'));}
 }
 
-Map<String,dynamic> _canonicalPublicKey(Map<String,dynamic> key){if(key['kty']!='EC'||key['crv']!='P-256'||key['x'] is! String||key['y'] is! String) throw StateError('Invalid ECDH P-256 public key.'); return {'crv':key['crv'],'kty':key['kty'],'x':key['x'],'y':key['y']};}
+String _canonicalPublicKey(Map<String,dynamic> key){if(key['kty']!='EC'||key['crv']!='P-256'||key['x'] is! String||key['y'] is! String) throw StateError('Invalid ECDH P-256 public key.'); return jsonEncode({'crv':key['crv'],'kty':key['kty'],'x':key['x'],'y':key['y']});}
