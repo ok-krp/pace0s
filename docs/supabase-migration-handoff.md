@@ -138,3 +138,14 @@ Never expose a service-role/secret key in the browser.
 - Vercel runtime error scan for the last hour: **0 runtime errors**.
 - GitHub commit status for Vercel: **success**.
 - Production was not promoted; this remains a preview/cutover-gate validation.
+
+## Schema-drift finding requiring preservation decision
+
+A deeper column-level audit found a **3-column target-only schema delta** that was not visible in the previous table/constraint/index parity checks:
+
+- `nutrition_reference_foods`: target-only `created_at`, `updated_at`
+- `profiles`: target-only `created_at`
+
+These columns contain live target data (20/20 nutrition rows and 3/3 profile rows have timestamps). They were therefore **not dropped**: removing them now would be destructive and could lose target-side state. This is now an explicit cutover blocker until the canonical schema direction is established from the source/repository migrations.
+
+The remaining `profiles` target-only `created_at` plus the two nutrition timestamp columns explain the column inventory difference: source **452** columns vs target **455**. All other compact structural inventories checked so far remain aligned.
