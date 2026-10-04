@@ -67,7 +67,7 @@ assert.match(privilegedDataRpcMigration, /backfill_health_e2ee_dedupe_hashes/);
 assert.match(privilegedDataRpcMigration, /migrate_health_legacy_chunk/);
 assert.match(privilegedDataRpcMigration, /security definer/);
 assert.match(privilegedDataRpcMigration, /set search_path = ''/);
-assert.match(privilegedDataRpcMigration, /if \(!public\.has_current_health_e2ee_consent\(\)\)/);
+assert.match(privilegedDataRpcMigration, /if not public\\.has_current_health_e2ee_consent\\(\\)/);
 assert.match(privilegedDataRpcMigration, /Health E2EE cloud-sync consent is required/);
 assert.match(privilegedDataRpcMigration, /where target\.id = row_id/);
 assert.match(privilegedDataRpcMigration, /target\.user_id = auth\.uid\(\)/);
