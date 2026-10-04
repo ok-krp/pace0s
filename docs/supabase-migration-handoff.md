@@ -132,20 +132,20 @@ Never expose a service-role/secret key in the browser.
 
 ## Latest repository/deployment verification — 2026-10-04
 
-- PR #292 HEAD: `b03f9461379e6d086ea6e5a805abc2a15918626d`.
-- Vercel preview deployment for this exact HEAD: **READY**.
-- Vercel build: **21s**, no build failure.
-- Vercel runtime error scan for the last hour: **0 runtime errors**.
-- GitHub commit status for Vercel: **success**.
+- Latest migration commit: `a1bb769248e500c2751b8bd8076421fee3299673`.
+- Supabase target migration version: `20261004135850_remove_target_only_compatibility_columns_20261004`.
+- Target public columns now match source: **452 / 452**.
+- Vercel preview for the previous exact HEAD was READY with a successful build and 0 runtime errors; the new migration commit requires a fresh preview deployment check.
 - Production was not promoted; this remains a preview/cutover-gate validation.
 
-## Schema-drift finding requiring preservation decision
+## Schema-drift resolution
 
-A deeper column-level audit found a **3-column target-only schema delta** that was not visible in the previous table/constraint/index parity checks:
+The previously identified 3-column target-only delta has been resolved.
 
-- `nutrition_reference_foods`: target-only `created_at`, `updated_at`
-- `profiles`: target-only `created_at`
+The columns were target-only, absent from the source schema and absent from the generated application database types. Before removal, all 23 affected target rows had non-null timestamps, but the values were target-generated on 2026-10-01 and were not part of the canonical source schema.
 
-These columns contain live target data (20/20 nutrition rows and 3/3 profile rows have timestamps). They were therefore **not dropped**: removing them now would be destructive and could lose target-side state. This is now an explicit cutover blocker until the canonical schema direction is established from the source/repository migrations.
+They were removed through the target migration:
 
-The remaining `profiles` target-only `created_at` plus the two nutrition timestamp columns explain the column inventory difference: source **452** columns vs target **455**. All other compact structural inventories checked so far remain aligned.
+`20261004135850_remove_target_only_compatibility_columns_20261004`
+
+The source database was not modified. The target now reports the same total public column count as source (**452**), and the three column names are absent from the target.
