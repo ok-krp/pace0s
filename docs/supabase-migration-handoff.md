@@ -75,6 +75,22 @@ A target migration must not be considered complete until:
 - multi-device sync is verified on the target;
 - rollback artifacts are retained.
 
+## Latest verified audit cycle
+
+- CI run 848 for HEAD `27b12e9d0fb596415f2209c0d972cde22b1c1d80`: **PASS**.
+- `test:sync`: PASS.
+- `test:health-e2ee-realtime`: PASS.
+- build: PASS.
+- lint: PASS.
+- typecheck: PASS.
+- Source currently exposes 23 SECURITY DEFINER functions; 11 are callable by authenticated RPC clients; none are executable by anon.
+- Source has 40 public tables in the current inventory. RLS is enabled on all observed tables.
+- Realtime publication currently contains `health_samples_e2ee`, `profiles`, and `user_state`.
+- Extensions observed: pg_stat_statements 1.11, pgcrypto 1.3, plpgsql 1.0, supabase_vault 0.3.1, uuid-ossp 1.1.
+- Index inventory and the complete policy matrix were extracted from the live source.
+- The Health E2EE callable definers were checked for authentication and ownership; branch-side consent hardening remains ahead of the live source and is intentionally not applied to the source Cloud during preparation.
+- Direct-policy-free tables include `health_e2ee_pairing_sessions` and `health_legacy_migration_map`; these remain intentionally RPC-mediated and require preservation of the privileged ownership checks during migration.
+
 ## Exact next cycle
 
 1. Re-check target service status.
