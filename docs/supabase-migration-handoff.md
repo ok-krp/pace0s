@@ -91,6 +91,24 @@ A target migration must not be considered complete until:
 - The Health E2EE callable definers were checked for authentication and ownership; branch-side consent hardening remains ahead of the live source and is intentionally not applied to the source Cloud during preparation.
 - Direct-policy-free tables include `health_e2ee_pairing_sessions` and `health_legacy_migration_map`; these remain intentionally RPC-mediated and require preservation of the privileged ownership checks during migration.
 
+## Cost-controlled migration preflight — 2026-10-04
+
+- Target `oqaqolvjxhrkvscsqhzp` checked once this cycle: **INACTIVE**; PostgreSQL 17.11. No restore retry was issued.
+- Source volume was estimated from PostgreSQL statistics, not row downloads:
+  - public: ~5,951 estimated rows / 36,298,752 bytes table+index footprint
+  - auth: ~661 estimated rows / 1,826,816 bytes table+index footprint
+  - storage metadata: ~74 rows / 368,640 bytes database footprint
+  - Storage object payload size is not inferable from the observed `storage.objects.metadata->size`; object inventory currently returned 0 rows with a usable size field. No files were downloaded.
+- Largest public footprints: `user_state` ~22.0 MB, `ai_messages` ~7.2 MB, `ai_action_log` ~3.7 MB. These are catalog/statistics estimates; they are not an export.
+- A compact preflight script and compact post-import verification SQL were added to PR #292:
+  - `scripts/supabase-migration-preflight.ps1`
+  - `scripts/supabase-migration-verification.sql`
+- No data export was started. Existing `scripts/migrate-supabase-local.ps1` remains the eventual explicit export/import mechanism; the current cycle deliberately did not invoke it.
+- Supabase's current platform guidance is relevant to the target reconstruction: new public tables may require explicit Data API grants as the rollout reaches all projects on 2026-10-30, while RLS remains a separate authorization layer. citeturn0search2
+- Repository dependency audit found the shared client in `src/integrations/supabase/client.ts` still contains a source-project URL and publishable-key fallback. This is a migration-basis issue: production must use environment configuration before target cutover; no production switch was made while the target is inactive.
+- `.env.example` already defines `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and server-only `SUPABASE_SECRET_KEY`. No secret values were copied into the handoff.
+- Current Supabase changelog review found no breaking change requiring modification of the source during this preparation cycle; the notable 2026-07 Realtime schema lock means migration tooling must not attempt to recreate/alter Supabase-managed `realtime` objects directly. citeturn0search0
+
 ## Exact next cycle
 
 1. Re-check target service status.
