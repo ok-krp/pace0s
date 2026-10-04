@@ -188,3 +188,15 @@ The database structural migration is no longer blocked by schema/constraint/inde
 8. only then switch application runtime configuration from source to target.
 
 Leaked-password protection remains disabled by explicit migration policy and is not a cutover blocker unless separately required by product policy.
+
+
+## Vercel target-environment validation — 2026-10-04
+
+- Production Vercel environment variables for `SUPABASE_URL`, `VITE_SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and `VITE_SUPABASE_PUBLISHABLE_KEY` are configured for the active target project.
+- A fresh Vercel redeployment was materialized from commit `a52de71796cacc66fd4d6e043085d0b1fc5dbfb4`: deployment `dpl_6Dx8LDQqdD8MmKoyVdkfNg9jqnEP`.
+- Deployment state: **READY**.
+- Preview alias: `pace0s-git-fix-health-egress-consent-reads-ok-s-projects25.vercel.app`.
+- Direct HTTP validation of the deployed root returned **HTTP 200**.
+- Vercel production runtime error query for the last 24h: **0 errors**; production error logs: **none**.
+- The deployment is still a preview/cutover validation. No promotion and no PR merge were performed.
+- `VITE_SUPABASE_PROJECT_ID` remains an existing encrypted Vercel variable and was not modified because its runtime usage was not established; this must be audited before final production cutover.
