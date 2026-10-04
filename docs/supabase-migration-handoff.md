@@ -109,6 +109,16 @@ A target migration must not be considered complete until:
 - `.env.example` already defines `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and server-only `SUPABASE_SECRET_KEY`. No secret values were copied into the handoff.
 - Current Supabase changelog review found no breaking change requiring modification of the source during this preparation cycle; the notable 2026-07 Realtime schema lock means migration tooling must not attempt to recreate/alter Supabase-managed `realtime` objects directly. citeturn0search0
 
+## SECURITY DEFINER matrix — source live audit
+
+- 23 public SECURITY DEFINER functions were checked in one metadata/function-definition query.
+- 11 are executable by `authenticated`; 0 by `anon`.
+- All 23 explicitly define a `search_path` setting.
+- 12 contain an explicit `auth.uid()` check in the live definition.
+- The live source's Health/E2EE pairing RPCs are authenticated-only and contain user-context checks; the branch adds the stricter consent/ownership hardening for the remaining Health/E2EE data RPCs.
+- Internal trigger/helper definers such as `handle_new_user`, `prevent_audit_log_mutation`, `prevent_consent_mutation`, `rls_auto_enable`, and timestamp/archive helpers are not client-callable and therefore are not candidates for blanket `REVOKE authenticated` changes.
+- No Cloud function definition was modified during this audit cycle.
+
 ## Exact next cycle
 
 1. Re-check target service status.
