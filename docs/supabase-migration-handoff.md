@@ -129,3 +129,12 @@ Never expose a service-role/secret key in the browser.
 - **Never merge automatically.**
 - Do not create a second migration PR for this work.
 - Continue fixing/verifying within #292 until the acceptance gate is satisfied.
+
+## Latest repository/deployment verification — 2026-10-04
+
+- PR #292 HEAD: `b03f9461379e6d086ea6e5a805abc2a15918626d`.
+- Vercel preview deployment for this exact HEAD: **READY**.
+- Vercel build: **21s**, no build failure.
+- Vercel runtime error scan for the last hour: **0 runtime errors**.
+- GitHub commit status for Vercel: **success**.
+- Production was not promoted; this remains a preview/cutover-gate validation.
