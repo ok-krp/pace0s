@@ -95,7 +95,7 @@ Current target counts now match source:
 
 - public functions: **38 / 38**
 - SECURITY DEFINER functions: **23 / 23**
-- public triggers: **27 / 27** at the information-schema event-row inventory level
+- public triggers: **19 / 19** (non-internal public triggers)
 
 The previously missing target function `enforce_health_e2ee_pairing_consent()` and its two consent triggers are now present.
 
@@ -132,13 +132,15 @@ Never expose a service-role/secret key in the browser.
 
 ## Latest repository/deployment verification — 2026-10-04
 
-- Latest migration commit: `c70e05e80ec4ce2b79629d2331bea8de56941f68`.
+- Latest verified repository commit: `7d2b4e64d7cf36ee0cf9459f7a7e059c54cc6292`.
 - Supabase target migrations applied for schema parity:
   - `20261004135850_remove_target_only_compatibility_columns_20261004`
   - `20261004140134_align_profiles_column_semantics_20261004`
 - Target public columns now match source: **452 / 452**.
 - Column semantic hash (type/nullability/default, order-independent) now matches source.
-- Vercel preview deployment for the latest commit requires final readiness check.
+- Vercel preview for the latest verified commit: **READY**.
+- Vercel GitHub status: **success**.
+- Runtime errors: **0** in the last hour.
 - Production was not promoted; this remains a preview/cutover-gate validation.
 
 ## Schema-drift resolution
@@ -154,3 +156,35 @@ They were removed through the target migration:
 The source database was not modified. The target now reports the same total public column count as source (**452**), and the three column names are absent from the target.
 
 A follow-up semantic drift was then found in `profiles`: target had a default on `id` and `NOT NULL` on `training_sessions_goal` that source did not. Both were corrected; the order-independent column semantic hash is now identical.
+
+## Final structural verification — 2026-10-04
+
+- Public column inventory: **452 / 452**.
+- Public table RLS state hash: **identical**; 45 / 45 tables have RLS and 0 / 0 have FORCE RLS.
+- Policies: **93 / 93**, policy hash **e3bbd77fd46c8d36fdd075b93c07fee0** on both projects.
+- Indexes: **126 / 126**, index hash **5caf0903c25518a2d86c32f0c4092115** on both projects.
+- Constraints: **176 / 176**, constraint-definition hash **ad19418e4d1461e2c9135e94f2525c5f** on both projects.
+- Public functions: **38 / 38**; SECURITY DEFINER: **23 / 23**.
+- Public triggers: **19 / 19**, with identical trigger inventory and definitions.
+- Function-definition inventory differs only in the four intentionally hardened Health/E2EE functions: backfill_health_e2ee_dedupe_hashes, get_pairing_session, migrate_health_legacy_chunk, rotate_health_e2ee_key. The target versions add authentication/consent/ownership hardening and are intentionally retained; source remains untouched.
+- SECURITY DEFINER execution ACL surface matches: 0 anonymous-executable SECURITY DEFINER functions; 11 authenticated-callable intentional RPC entry points.
+- Profiles: 3 / 3 rows.
+- Nutrition reference foods: 20 / 20 rows.
+- User state: 225 / 225 rows.
+- Health E2EE devices: 0 / 0 rows.
+- Vercel latest verified deployment: **READY**; GitHub status **success**; runtime errors **0** in the last hour.
+
+## Remaining cutover blockers
+
+The database structural migration is no longer blocked by schema/constraint/index/policy/trigger parity. Remaining acceptance gates are functional rather than structural:
+
+1. fresh Auth sign-in/session creation against target;
+2. Health/E2EE consent-denied and consent-granted regression;
+3. Realtime verification;
+4. Storage verification;
+5. CRUD + cloud-sync regression;
+6. real multi-device sync test;
+7. CI build/lint/typecheck on the final code state;
+8. only then switch application runtime configuration from source to target.
+
+Leaked-password protection remains disabled by explicit migration policy and is not a cutover blocker unless separately required by product policy.
