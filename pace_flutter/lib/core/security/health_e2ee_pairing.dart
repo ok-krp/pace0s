@@ -84,7 +84,7 @@ class HealthE2eePairing {
   }
   Future<String> derivePairingSasFromSharedSecret({required List<int> sharedSecret, required HealthPairingContext context}) async {
     final bits=await derivePairingBits(sharedSecret:sharedSecret,context:context,purpose:'sas');
-    var value=BigInt.zero; for(final b in bits.take(8)){value=(value<<8)|BigInt.from(b);} value%=BigInt.from(1000000000); final s=value.toString().padLeft(9,'0'); return s.substring(0,3)+'-'+s.substring(3,6)+'-'+s.substring(6);
+    var value=BigInt.zero; for(final b in bits.take(8)){value=(value<<8)|BigInt.from(b);} value%=BigInt.from(1000000000); final s=value.toString().padLeft(9,'0'); return '${s.substring(0,3)}-${s.substring(3,6)}-${s.substring(6)}';
   }
   Future<Map<String,dynamic>> buildKeyBundle({required KeyPair localEphemeralKey,required Map<String,dynamic> peerEphemeralPublicKey,required HealthPairingContext context}) async {
     final kek=await (await derivePairingWrappingKey(privateKey:localEphemeralKey,peerPublicKey:peerEphemeralPublicKey,context:context)).extractBytes();
