@@ -365,7 +365,7 @@ class HealthE2eeService {
 
   static String _hex(List<int> bytes) =>
       bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-  static String _b64Url(List<int> bytes) => base64Url.encode(bytes).replaceAll('=', '');
+  static String _b64Url(List<int> bytes) {\n    return base64Url.encode(bytes).replaceAll('=', '');\n  }
   static List<int> _b64UrlDecode(String value) {
     final normalized = value.replaceAll('-', '+').replaceAll('_', '/');
     return base64Decode(normalized.padRight((normalized.length + 3) ~/ 4 * 4, '='));
