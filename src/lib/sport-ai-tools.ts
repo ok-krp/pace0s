@@ -113,6 +113,85 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
   const removeExerciseFromProgram = tool({ description: "Retirer un exercice d'un programme Sport.", inputSchema: z.object({ programId: z.string().uuid(), exerciseId: z.string().uuid() }),
     execute: guard("remove_exercise_from_program", async (input) => programItem.execute!({ operation: "remove", ...input }, {} as ToolExecutionOptions<any>) as Promise<Output>) });
 
+  const logWorkout = tool({
+    description: "ENREGISTRER DIRECTEMENT une séance déjà réalisée à partir du texte de l'utilisateur. À utiliser quand l'utilisateur dit qu'il a fait sa séance et donne des exercices, séries, répétitions et poids. Ne demande PAS de démarrer une séance au préalable. Crée les exercices manquants, crée la séance, ajoute tous les exercices et toutes les séries, puis termine la séance. Une seule action logique pour toute la séance.",
+    inputSchema: z.object({
+      name: z.string().min(1),
+      workoutDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(),
+      notes: z.string().optional(),
+      exercises: z.array(z.object({
+        name: z.string().min(1),
+        muscle: z.string().min(1).default("inconnu"),
+        equipment: z.string().optional(),
+        sets: z.array(z.object({
+          reps: z.number().int().positive(),
+          weight: z.number().nonnegative(),
+          done: z.boolean().default(true)
+        })).min(1)
+      })).min(1)
+    }),
+    execute: guard("log_workout", async (input) => {
+      const workoutDate = input.workoutDate ?? new Date().toISOString().slice(0, 10);
+      const sessionId = uuid();
+      const { error: sessionError } = await client.from("sport_workout_sessions").insert({
+        id: sessionId, user_id: userId, name: input.name.trim(), workout_date: workoutDate,
+        started_at: new Date().toISOString(), ended_at: new Date().toISOString(), notes: input.notes ?? null
+      });
+      if (sessionError) {
+        await logAction("log_workout", "Échec enregistrement séance", input, "failed");
+        return { ok: false, message: "Impossible d'enregistrer la séance." };
+      }
+
+      const recorded: Array<{ name: string; sets: number }> = [];
+      for (let position = 0; position < input.exercises.length; position++) {
+        const ex = input.exercises[position];
+        let { data: exercise } = await client.from("sport_exercises").select("id,name").eq("user_id", userId).ilike("name", ex.name.trim()).maybeSingle();
+        if (!exercise) {
+          const exerciseId = uuid();
+          const { error } = await client.from("sport_exercises").insert({
+            id: exerciseId, user_id: userId, name: ex.name.trim(), muscle: ex.muscle.trim(),
+            equipment: ex.equipment ?? null
+          });
+          if (error) {
+            await client.from("sport_workout_sessions").delete().eq("id", sessionId).eq("user_id", userId);
+            await logAction("log_workout", "Échec création exercice pendant enregistrement", { exercise: ex.name, error: error.message }, "failed");
+            return { ok: false, message: `Impossible d'enregistrer l'exercice « ${ex.name} ».` };
+          }
+          exercise = { id: exerciseId, name: ex.name.trim() };
+        }
+
+        const { data: workoutExercise, error: workoutExerciseError } = await client
+          .from("sport_workout_exercises")
+          .insert({ session_id: sessionId, exercise_id: exercise.id, position })
+          .select("id")
+          .single();
+        if (workoutExerciseError || !workoutExercise) {
+          await client.from("sport_workout_sessions").delete().eq("id", sessionId).eq("user_id", userId);
+          await logAction("log_workout", "Échec ajout exercice à la séance", { exercise: ex.name }, "failed");
+          return { ok: false, message: `Impossible d'ajouter « ${ex.name} » à la séance.` };
+        }
+
+        const rows = ex.sets.map((set, i) => ({
+          workout_exercise_id: workoutExercise.id, set_number: i + 1,
+          reps: set.reps, weight: set.weight, done: set.done
+        }));
+        const { error: setsError } = await client.from("sport_workout_sets").insert(rows);
+        if (setsError) {
+          await client.from("sport_workout_sessions").delete().eq("id", sessionId).eq("user_id", userId);
+          await logAction("log_workout", "Échec ajout séries", { exercise: ex.name }, "failed");
+          return { ok: false, message: `Impossible d'enregistrer les séries de « ${ex.name} ».` };
+        }
+        recorded.push({ name: exercise.name, sets: rows.length });
+      }
+
+      await logAction("log_workout", `Séance ${input.name} enregistrée`, { ...input, sessionId }, "executed");
+      return {
+        ok: true, id: sessionId,
+        message: `Séance « ${input.name} » enregistrée dans Sport : ${recorded.map((x) => `${x.name} (${x.sets} série(s))`).join(", ")}.`
+      };
+    })
+  });
+
   const startWorkout = tool({ description: "Démarrer et persister une séance Sport.", inputSchema: z.object({ id: z.string().uuid().optional(), programId: z.string().uuid().optional(), name: z.string().min(1), workoutDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(), startedAt: z.string().datetime().optional(), notes: z.string().optional() }),
     execute: guard("start_workout", async (input) => {
       const id = input.id ?? uuid();
@@ -205,6 +284,7 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
     delete_program: deleteProgram,
     add_exercise_to_program: addExerciseToProgram,
     remove_exercise_from_program: removeExerciseFromProgram,
+    log_workout: logWorkout,
     start_workout: startWorkout,
     add_workout_exercise: addWorkoutExercise,
     add_workout_set: addWorkoutSet,
