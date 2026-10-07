@@ -10,7 +10,9 @@ const goals = await readFile("src/hooks/use-user-goals.tsx", "utf8");
 const profileMigration = await readFile("supabase/migrations/20260821090000_profile_sync_hardening.sql", "utf8");
 const migrations = await readFile("supabase/migrations/20260902092340_fix_event_driven_sync_timestamp_reconciliation.sql", "utf8");
 
-assert.equal(/setInterval\s*\(|setTimeout\s*\(/.test(engine), false, "sync engine must not poll with timers");
+assert.match(engine, /setInterval\s*\(.*60(?:000|_000)/s, "sync engine must reconcile periodically");
+assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
+assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
 assert.equal(engine.includes("location.reload"), false, "sync engine must not reload the app");
 assert.match(engine, /onLocalWrite\(/, "local writes must be observed through an explicit mutation event");
 assert.match(engine, /postgres_changes/, "remote changes must use Supabase Realtime");

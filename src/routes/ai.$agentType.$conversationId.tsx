@@ -19,7 +19,7 @@ import { generateLocalAi, getLocalAiProfile, localAiSupported, type LocalAiMessa
 
 export const Route = createFileRoute("/ai/$agentType/$conversationId")({
   params: { parse: (params) => ({ agentType: params.agentType === "build" ? "build" as const : "coach" as const, conversationId: params.conversationId }) },
-  head: ({ params }) => ({ meta: [{ title: `${params.agentType === "build" ? "BUILD IA" : "Coach IA"} — Pace` }, { name: "description", content: "Assistant intelligent Pace avec historique synchronisé et actions transparentes." }, { property: "og:title", content: `${params.agentType === "build" ? "BUILD IA" : "Coach IA"} — Pace` }, { property: "og:description", content: "Assistant intelligent Pace avec historique synchronisé." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
+  head: ({ params }) => ({ meta: [{ title: `${params.agentType === "build" ? "Assistant IA" : "Coach IA"} — Pace` }, { name: "description", content: "Assistant intelligent Pace avec historique synchronisé et actions transparentes." }, { property: "og:title", content: `${params.agentType === "build" ? "Assistant IA" : "Coach IA"} — Pace` }, { property: "og:description", content: "Assistant intelligent Pace avec historique synchronisé." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
   component: AiConversationPage,
 });
 

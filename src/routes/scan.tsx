@@ -204,7 +204,7 @@ function ScanPage() {
       meta: { grams: productGrams },
     });
     if (error) toast.error(error.message);
-    else { toast.success("Ajouté au journal"); setProduct(null); setScoreInfo(null); }
+    else { setProduct(null); setScoreInfo(null); }
   };
 
   const addAiToLog = async () => {
@@ -225,7 +225,7 @@ function ScanPage() {
       meta: { quality: aiResult.quality, confidence: aiResult.confidence, items: aiItems, grams: Math.round(t.grams) },
     });
     if (error) toast.error(error.message);
-    else { toast.success("Repas ajouté au journal"); setAiResult(null); setAiItems([]); setPhoto(null); }
+    else { setAiResult(null); setAiItems([]); setPhoto(null); }
   };
 
   return (

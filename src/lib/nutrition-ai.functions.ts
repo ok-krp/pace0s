@@ -24,7 +24,7 @@ function isTransientVisionCapacityError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? "");
   const candidate = error as { status?: unknown } | null;
   const status = typeof candidate?.status === "number" ? candidate.status : 0;
-  return status === 429 || status === 503 || /high demand|overloaded|resource.?exhausted|rate.?limit|too many requests|temporarily unavailable/i.test(message);
+  return status === 400 || status === 404 || status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504 || /model.*not found|unsupported.*model|high demand|overloaded|resource.?exhausted|rate.?limit|too many requests|temporarily unavailable|timeout/i.test(message);
 }
 
 async function generateFoodVision(prompt: string, imageDataUrl: string, contentType: string) {

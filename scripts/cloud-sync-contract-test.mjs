@@ -7,7 +7,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
 
-assert.equal(/setInterval\s*\(/.test(engine), false, "sync engine must not poll with setInterval");
+assert.match(engine, /setInterval\s*\(.*60(?:000|_000)/s, "sync engine must reconcile periodically");
+assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
+assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
 assert.equal(/setInterval\s*\(/.test(storage), false, "storage must not poll for local changes");
 assert.match(storage, /pace\.local\.write/);
 assert.match(engine, /onLocalWrite\(/);
@@ -39,13 +41,10 @@ assert.match(engine, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 assert.match(engine, /resolveConflict/);
 assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 
-// A lost RPC response must be idempotent: retrying an already committed value
-// must drain the queue instead of issuing another cloud write.
-assert.match(
-  engine,
-  /existing && serialize\(existing\.value\) === serialize\(item\.value\)/,
-  "retry path must acknowledge an already-committed canonical value",
-);
+// A lost RPC response is resolved by the monotonic RPC itself; a rejected write
+// performs a single reconciliation read against the canonical row.
+assert.match(engine, /if \(!payload\.accepted\)/);
+assert.match(engine, /supabase\.from\("user_state"\)\.select\("key,value,updated_at,updated_by"\)/);
 assert.match(engine, /serialize\(queued\.value\) === serialize\(mergedValue\)/);
 
 // The server RPC is monotonic: an older canonical timestamp must never be

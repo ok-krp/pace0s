@@ -5,7 +5,7 @@ import { Loader2 } from "lucide-react";
 import { createAiConversation, listAiConversations } from "@/lib/ai-history.functions";
 
 export const Route = createFileRoute("/assistant")({
-  head: () => ({ meta: [{ title: "Intelligence Artificielle — Pace" }, { name: "description", content: "Accédez à Coach IA et BUILD IA dans Pace." }, { property: "og:title", content: "Intelligence Artificielle — Pace" }, { property: "og:description", content: "Deux assistants spécialisés pour votre suivi et le développement de Pace." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
+  head: () => ({ meta: [{ title: "Intelligence Artificielle — Pace" }, { name: "description", content: "Accédez à Coach IA dans Pace." }, { property: "og:title", content: "Intelligence Artificielle — Pace" }, { property: "og:description", content: "Accédez à Coach IA dans Pace." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
   component: AssistantEntry,
 });
 

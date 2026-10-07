@@ -1,0 +1,43 @@
+name: Flutter Health E2EE P0.4
+
+on:
+  pull_request:
+    paths:
+      - "pace_flutter/**"
+      - ".github/workflows/flutter-health-e2ee.yml"
+  push:
+    branches:
+      - "feat/**"
+      - "fix/**"
+    paths:
+      - "pace_flutter/**"
+      - ".github/workflows/flutter-health-e2ee.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  health-e2ee:
+    name: Flutter Health E2EE protocol + cloud roundtrip
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pace_flutter
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run Health E2EE tests
+        run: flutter test test/health_e2ee_protocol_test.dart test/health_e2ee_cloud_roundtrip_test.dart
