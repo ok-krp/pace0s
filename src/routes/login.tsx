@@ -20,8 +20,7 @@ function safeNext(next: string): string {
 }
 
 function getAppOrigin(): string {
-  const configured = import.meta.env.VITE_SITE_URL?.trim().replace(/\/$/, "");
-  return configured || window.location.origin;
+  return window.location.origin;
 }
 
 function getRedirectUrl(target: string): string {
