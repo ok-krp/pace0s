@@ -61,7 +61,7 @@ Deno.serve(async (request) => {
     const runId = String(claims.run_id ?? "unknown");
     const runAttempt = String(claims.run_attempt ?? "1");
     const email = "paceos-e2e+" + runId + "-" + runAttempt + "-" + crypto.randomUUID() + "@example.com";
-    const password = crypto.randomUUID() + "-" + crypto.randomUUID();
+    const password = crypto.randomUUID() + "-" + crypto.randomUUID().slice(0, 16);
 
     const { data: created, error: createError } = await admin.auth.admin.createUser({
       email,
