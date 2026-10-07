@@ -8,6 +8,7 @@ on:
       - "src/lib/storage.ts"
       - "supabase/migrations/**"
       - "scripts/cloud-sync-contract-test.mjs"
+      - "scripts/real-auth-multi-device-test.ts"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/cloud-sync-audit.yml"
@@ -38,3 +39,20 @@ jobs:
       - run: bun run build
       - run: bun run typecheck
       - run: bun run lint
+
+  real-auth-multi-device:
+    if: ${{ secrets.PACEOS_E2E_EMAIL != '' && secrets.PACEOS_E2E_PASSWORD != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Real-auth multi-device Realtime test
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          E2E_TEST_EMAIL: ${{ secrets.PACEOS_E2E_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.PACEOS_E2E_PASSWORD }}
+        run: bun --experimental-strip-types scripts/real-auth-multi-device-test.ts
