@@ -367,6 +367,21 @@ export function useCloudSyncEngineInternal() {
             recordConflict(key, queued.value, mergedValue, updatedAt);
             continue;
           }
+          // If this device already has a newer local domain record than the
+          // cloud copy, the old engine simply kept the local value and stopped.
+          // That made pre-existing phone data invisible on every other device.
+          // Promote the newer local record into the normal write queue instead.
+          if (localDomain && !localIsEmpty && localTime > sourceTime) {
+            queueItem({
+              key,
+              value: localDomain.value,
+              updatedAt: localDomain.updatedAt,
+              mutationId: localDomain.mutationId,
+            });
+            meta[key] = localDomain.updatedAt;
+            newest = newest && Date.parse(newest) > localTime ? newest : localDomain.updatedAt;
+            continue;
+          }
           if (sourceTime <= localTime && !localIsEmpty) continue;
           applyRemoteAndRemember(key, mergedValue, updatedAt, canonical?.updated_by ?? legacy?.updated_by);
           meta[key] = updatedAt;
@@ -386,6 +401,28 @@ export function useCloudSyncEngineInternal() {
             } catch {}
           }
         }
+        // Bootstrap pre-existing local domain state that has no cloud row yet.
+        // This makes data created on the phone before cloud sync was initialized
+        // visible on the PC without requiring the user to re-enter it.
+        try {
+          for (const storageKey of Object.keys(localStorage)) {
+            if (!storageKey.startsWith(DOMAIN_PREFIX)) continue;
+            const domain = storageKey.slice(DOMAIN_PREFIX.length);
+            if (!domain || domain.startsWith("__")) continue;
+            const key = PACE_PREFIX + domain;
+            if (!isSyncableKey(key) || grouped.has(key)) continue;
+            const localDomain = readDomainRecord(key);
+            if (!localDomain || isEmptyRecoveredValue(localDomain.value)) continue;
+            queueItem({
+              key,
+              value: localDomain.value,
+              updatedAt: localDomain.updatedAt,
+              mutationId: localDomain.mutationId,
+            });
+            meta[key] = localDomain.updatedAt;
+            newest = newest && Date.parse(newest) > Date.parse(localDomain.updatedAt) ? newest : localDomain.updatedAt;
+          }
+        } catch {}
         writeMeta(meta);
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (newest) setStatus("ok");
