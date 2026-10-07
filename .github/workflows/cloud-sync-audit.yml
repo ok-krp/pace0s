@@ -7,6 +7,8 @@ on:
       - "src/hooks/use-cloud-sync.tsx"
       - "src/lib/storage.ts"
       - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - "supabase/config.toml"
       - "scripts/cloud-sync-contract-test.mjs"
       - "scripts/real-auth-multi-device-test.ts"
       - "package.json"
@@ -19,7 +21,10 @@ on:
       - "src/hooks/use-cloud-sync.tsx"
       - "src/lib/storage.ts"
       - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - "supabase/config.toml"
       - "scripts/cloud-sync-contract-test.mjs"
+      - "scripts/real-auth-multi-device-test.ts"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/cloud-sync-audit.yml"
@@ -34,14 +39,15 @@ jobs:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - run: bun run test:sync
-      # TanStack Router generates src/routeTree.gen.ts during the Vite build.
-      # Run the build before typecheck so newly added file routes are included.
       - run: bun run build
       - run: bun run typecheck
       - run: bun run lint
 
   real-auth-multi-device:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -52,6 +58,4 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          PACEOS_E2E_GOOGLE_ID_TOKEN: ${{ secrets.PACEOS_E2E_GOOGLE_ID_TOKEN }}
-          PACEOS_E2E_GOOGLE_ACCESS_TOKEN: ${{ secrets.PACEOS_E2E_GOOGLE_ACCESS_TOKEN }}
         run: bun --experimental-strip-types scripts/real-auth-multi-device-test.ts
