@@ -14,11 +14,22 @@ const brokerUrl = new URL("/functions/v1/github-e2e-auth", url).toString();
 async function getGithubOidcToken() {
   const requestUrl = new URL(oidcRequestUrl);
   requestUrl.searchParams.set("audience", "paceos-supabase-e2e");
-  const response = await fetch(requestUrl, { headers: { Authorization: "bearer " + oidcRequestToken } });
-  if (!response.ok) throw new Error("GitHub OIDC token request failed: HTTP " + response.status);
-  const body = await response.json() as { value?: string };
-  if (!body.value) throw new Error("GitHub OIDC token response did not contain a value");
-  return body.value;
+  let lastStatus = 0;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const response = await fetch(requestUrl, { headers: { Authorization: "bearer " + oidcRequestToken } });
+    if (response.ok) {
+      const body = await response.json() as { value?: string };
+      if (!body.value) throw new Error("GitHub OIDC token response did not contain a value");
+      return body.value;
+    }
+    lastStatus = response.status;
+    if (attempt < 4 && (response.status === 408 || response.status === 429 || response.status >= 500)) {
+      await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+      continue;
+    }
+    break;
+  }
+  throw new Error("GitHub OIDC token request failed: HTTP " + lastStatus);
 }
 
 async function createRealAuthSessions(oidcToken: string) {
