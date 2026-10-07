@@ -171,7 +171,7 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
           return { ok: false, message: `Impossible d'ajouter « ${ex.name} » à la séance.` };
         }
 
-        const rows = ex.sets.map((set, i) => ({
+        const rows = ex.sets.map((set: { reps: number; weight: number; done: boolean }, i: number) => ({
           workout_exercise_id: workoutExercise.id, set_number: i + 1,
           reps: set.reps, weight: set.weight, done: set.done
         }));
