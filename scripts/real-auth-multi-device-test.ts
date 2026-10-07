@@ -2,49 +2,62 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_PUBLISHABLE_KEY;
-const googleIdToken = process.env.PACEOS_E2E_GOOGLE_ID_TOKEN;
-const googleAccessToken = process.env.PACEOS_E2E_GOOGLE_ACCESS_TOKEN;
+const oidcRequestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL;
+const oidcRequestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN;
 
 if (!url || !key) throw new Error("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required");
-if (!googleIdToken) throw new Error("PACEOS_E2E_GOOGLE_ID_TOKEN is required");
+if (!oidcRequestUrl || !oidcRequestToken) throw new Error("GitHub Actions OIDC is not available; grant id-token: write to this job");
 
 const timeoutMs = 20_000;
+const brokerUrl = new URL("/functions/v1/github-e2e-auth", url).toString();
 
-async function session(label: string) {
-  const client = createClient(url!, key!, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
-  const { data, error } = await client.auth.signInWithIdToken({
-    provider: "google",
-    token: googleIdToken!,
-    ...(googleAccessToken ? { access_token: googleAccessToken } : {}),
-  });
-  if (error || !data.session || !data.user) {
-    throw new Error(label + " Google OAuth sign-in failed: " + (error?.message ?? "missing session"));
-  }
-  return { client, user: data.user, session: data.session };
+async function getGithubOidcToken() {
+  const requestUrl = new URL(oidcRequestUrl);
+  requestUrl.searchParams.set("audience", "paceos-supabase-e2e");
+  const response = await fetch(requestUrl, { headers: { Authorization: "bearer " + oidcRequestToken } });
+  if (!response.ok) throw new Error("GitHub OIDC token request failed: HTTP " + response.status);
+  const body = await response.json() as { value?: string };
+  if (!body.value) throw new Error("GitHub OIDC token response did not contain a value");
+  return body.value;
 }
 
-function subscribeForEvent(
-  client: SupabaseClient,
-  channelName: string,
-  event: "INSERT" | "UPDATE",
-  userId: string,
-  predicate: (payload: any) => boolean,
-) {
+async function createRealAuthSessions(oidcToken: string) {
+  const response = await fetch(brokerUrl, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + oidcToken, "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "create" }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error("E2E auth broker failed: " + (body.error ?? "HTTP " + response.status));
+  return body as { user_id: string; a: { access_token: string; refresh_token: string }; b: { access_token: string; refresh_token: string } };
+}
+
+async function cleanupRealAuthUser(oidcToken: string, userId: string) {
+  const response = await fetch(brokerUrl, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + oidcToken, "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "cleanup", user_id: userId }),
+  });
+  if (!response.ok) console.error("E2E auth cleanup failed: HTTP " + response.status + " " + await response.text());
+}
+
+async function clientFromSession(session: { access_token: string; refresh_token: string }) {
+  const client = createClient(url!, key!, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+  const { error } = await client.auth.setSession(session);
+  if (error) throw new Error("Failed to install E2E session: " + error.message);
+  client.realtime.setAuth(session.access_token);
+  return client;
+}
+
+function subscribeForEvent(client: SupabaseClient, channelName: string, event: "INSERT" | "UPDATE", userId: string, predicate: (payload: any) => boolean) {
   let channel: ReturnType<SupabaseClient["channel"]>;
   let settled = false;
   let readyResolve!: () => void;
   let readyReject!: (error: Error) => void;
   let eventResolve!: (payload: any) => void;
   let eventReject!: (error: Error) => void;
-
-  const ready = new Promise<void>((resolve, reject) => {
-    readyResolve = resolve;
-    readyReject = reject;
-  });
-  const received = new Promise<any>((resolve, reject) => {
-    eventResolve = resolve;
-    eventReject = reject;
-  });
+  const ready = new Promise<void>((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
+  const received = new Promise<any>((resolve, reject) => { eventResolve = resolve; eventReject = reject; });
 
   const timer = setTimeout(() => {
     if (settled) return;
@@ -85,27 +98,38 @@ function subscribeForEvent(
 
 const suffix = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
 const keyName = "__paceos_real_auth_e2e__" + suffix;
-
-let aSession: Awaited<ReturnType<typeof session>> | null = null;
-let bSession: Awaited<ReturnType<typeof session>> | null = null;
+let oidcToken: string | null = null;
+let userId: string | null = null;
+let aClient: SupabaseClient | null = null;
+let bClient: SupabaseClient | null = null;
 
 try {
-  aSession = await session("A");
-  console.log("A authenticated via Google OAuth");
-  bSession = await session("B");
-  console.log("B authenticated via Google OAuth");
+  oidcToken = await getGithubOidcToken();
+  const sessions = await createRealAuthSessions(oidcToken);
+  userId = sessions.user_id;
 
-  if (aSession.user.id !== bSession.user.id) throw new Error("A and B are not the same Auth user");
+  aClient = await clientFromSession(sessions.a);
+  console.log("A authenticated via ephemeral Supabase E2E account");
+  bClient = await clientFromSession(sessions.b);
+  console.log("B authenticated via ephemeral Supabase E2E account");
 
-  const bListener = subscribeForEvent(bSession.client, "paceos-e2e-B", "INSERT", aSession.user.id, (p) => p.new?.key === keyName && p.new?.value?.phase === "A");
-  const aListener = subscribeForEvent(aSession.client, "paceos-e2e-A", "UPDATE", aSession.user.id, (p) => p.new?.key === keyName && p.new?.value?.phase === "B");
+  const [{ data: aUser, error: aUserError }, { data: bUser, error: bUserError }] = await Promise.all([
+    aClient.auth.getUser(),
+    bClient.auth.getUser(),
+  ]);
+  if (aUserError) throw new Error("A getUser failed: " + aUserError.message);
+  if (bUserError) throw new Error("B getUser failed: " + bUserError.message);
+  if (!aUser || !bUser || aUser.user.id !== bUser.user.id || aUser.user.id !== userId) throw new Error("A and B are not the same Auth user");
+
+  const bListener = subscribeForEvent(bClient, "paceos-e2e-B", "INSERT", userId, (p) => p.new?.key === keyName && p.new?.value?.phase === "A");
+  const aListener = subscribeForEvent(aClient, "paceos-e2e-A", "UPDATE", userId, (p) => p.new?.key === keyName && p.new?.value?.phase === "B");
 
   await Promise.all([bListener.ready, aListener.ready]);
   console.log("A realtime: SUBSCRIBED");
   console.log("B realtime: SUBSCRIBED");
 
-  const { error: insertError } = await aSession.client.from("user_state").upsert(
-    { user_id: aSession.user.id, key: keyName, value: { phase: "A", source: "device-A" }, updated_by: "device-A" },
+  const { error: insertError } = await aClient.from("user_state").upsert(
+    { user_id: userId, key: keyName, value: { phase: "A", source: "device-A" }, updated_by: "device-A" },
     { onConflict: "user_id,key" },
   );
   if (insertError) throw new Error("A write failed: " + insertError.message);
@@ -113,17 +137,17 @@ try {
   const insertPayload = await bListener.received;
   console.log("B received realtime INSERT from A");
 
-  const { error: updateError } = await bSession.client.from("user_state").update(
+  const { error: updateError } = await bClient.from("user_state").update(
     { value: { phase: "B", source: "device-B" }, updated_by: "device-B" },
-  ).eq("user_id", aSession.user.id).eq("key", keyName);
+  ).eq("user_id", userId).eq("key", keyName);
   if (updateError) throw new Error("B write failed: " + updateError.message);
   console.log("B write: phase=B");
   const updatePayload = await aListener.received;
   console.log("A received realtime UPDATE from B");
 
   const [{ data: finalA, error: finalAError }, { data: finalB, error: finalBError }] = await Promise.all([
-    aSession.client.from("user_state").select("key,value,updated_by").eq("user_id", aSession.user.id).eq("key", keyName).single(),
-    bSession.client.from("user_state").select("key,value,updated_by").eq("user_id", aSession.user.id).eq("key", keyName).single(),
+    aClient.from("user_state").select("key,value,updated_by").eq("user_id", userId).eq("key", keyName).single(),
+    bClient.from("user_state").select("key,value,updated_by").eq("user_id", userId).eq("key", keyName).single(),
   ]);
   if (finalAError) throw new Error("A final read failed: " + finalAError.message);
   if (finalBError) throw new Error("B final read failed: " + finalBError.message);
@@ -140,11 +164,7 @@ try {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 } finally {
-  if (aSession) {
-    await aSession.client.from("user_state").delete().eq("user_id", aSession.user.id).eq("key", keyName).catch(() => undefined);
-  }
-  await Promise.allSettled([
-    aSession?.client.auth.signOut(),
-    bSession?.client.auth.signOut(),
-  ]);
+  if (aClient && userId) await aClient.from("user_state").delete().eq("user_id", userId).eq("key", keyName).catch(() => undefined);
+  await Promise.allSettled([aClient?.auth.signOut(), bClient?.auth.signOut()]);
+  if (oidcToken && userId) await cleanupRealAuthUser(oidcToken, userId);
 }
