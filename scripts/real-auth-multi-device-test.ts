@@ -2,18 +2,24 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_PUBLISHABLE_KEY;
-const email = process.env.E2E_TEST_EMAIL;
-const password = process.env.E2E_TEST_PASSWORD;
+const googleIdToken = process.env.PACEOS_E2E_GOOGLE_ID_TOKEN;
+const googleAccessToken = process.env.PACEOS_E2E_GOOGLE_ACCESS_TOKEN;
 
 if (!url || !key) throw new Error("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required");
-if (!email || !password) throw new Error("E2E_TEST_EMAIL and E2E_TEST_PASSWORD are required");
+if (!googleIdToken) throw new Error("PACEOS_E2E_GOOGLE_ID_TOKEN is required");
 
 const timeoutMs = 20_000;
 
 async function session(label: string) {
   const client = createClient(url!, key!, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
-  const { data, error } = await client.auth.signInWithPassword({ email: email!, password: password! });
-  if (error || !data.session || !data.user) throw new Error(label + " sign-in failed: " + (error?.message ?? "missing session"));
+  const { data, error } = await client.auth.signInWithIdToken({
+    provider: "google",
+    token: googleIdToken!,
+    ...(googleAccessToken ? { access_token: googleAccessToken } : {}),
+  });
+  if (error || !data.session || !data.user) {
+    throw new Error(label + " Google OAuth sign-in failed: " + (error?.message ?? "missing session"));
+  }
   return { client, user: data.user, session: data.session };
 }
 
@@ -85,9 +91,9 @@ let bSession: Awaited<ReturnType<typeof session>> | null = null;
 
 try {
   aSession = await session("A");
-  console.log("A authenticated");
+  console.log("A authenticated via Google OAuth");
   bSession = await session("B");
-  console.log("B authenticated");
+  console.log("B authenticated via Google OAuth");
 
   if (aSession.user.id !== bSession.user.id) throw new Error("A and B are not the same Auth user");
 
