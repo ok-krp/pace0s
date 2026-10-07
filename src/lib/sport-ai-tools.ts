@@ -117,7 +117,7 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
     description: "ENREGISTRER DIRECTEMENT une séance déjà réalisée à partir du texte de l'utilisateur. À utiliser quand l'utilisateur dit qu'il a fait sa séance et donne des exercices, séries, répétitions et poids. Ne demande PAS de démarrer une séance au préalable. Crée les exercices manquants, crée la séance, ajoute tous les exercices et toutes les séries, puis termine la séance. Une seule action logique pour toute la séance.",
     inputSchema: z.object({
       name: z.string().min(1),
-      workoutDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(),
+      workoutDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       notes: z.string().optional(),
       exercises: z.array(z.object({
         name: z.string().min(1),
@@ -143,6 +143,13 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
       }
 
       const recorded: Array<{ name: string; sets: number }> = [];
+      const createdExerciseIds: string[] = [];
+      const cleanup = async () => {
+        await client.from("sport_workout_sessions").delete().eq("id", sessionId).eq("user_id", userId);
+        for (const exerciseId of createdExerciseIds) {
+          await client.from("sport_exercises").delete().eq("id", exerciseId).eq("user_id", userId);
+        }
+      };
       for (let position = 0; position < input.exercises.length; position++) {
         const ex = input.exercises[position];
         let { data: exercise } = await client.from("sport_exercises").select("id,name").eq("user_id", userId).ilike("name", ex.name.trim()).maybeSingle();
@@ -153,11 +160,12 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
             equipment: ex.equipment ?? null
           });
           if (error) {
-            await client.from("sport_workout_sessions").delete().eq("id", sessionId).eq("user_id", userId);
+            await cleanup();
             await logAction("log_workout", "Échec création exercice pendant enregistrement", { exercise: ex.name, error: error.message }, "failed");
             return { ok: false, message: `Impossible d'enregistrer l'exercice « ${ex.name} ».` };
           }
           exercise = { id: exerciseId, name: ex.name.trim() };
+          createdExerciseIds.push(exerciseId);
         }
 
         const { data: workoutExercise, error: workoutExerciseError } = await client
@@ -166,7 +174,7 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
           .select("id")
           .single();
         if (workoutExerciseError || !workoutExercise) {
-          await client.from("sport_workout_sessions").delete().eq("id", sessionId).eq("user_id", userId);
+          await cleanup();
           await logAction("log_workout", "Échec ajout exercice à la séance", { exercise: ex.name }, "failed");
           return { ok: false, message: `Impossible d'ajouter « ${ex.name} » à la séance.` };
         }
@@ -177,7 +185,7 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
         }));
         const { error: setsError } = await client.from("sport_workout_sets").insert(rows);
         if (setsError) {
-          await client.from("sport_workout_sessions").delete().eq("id", sessionId).eq("user_id", userId);
+          await cleanup();
           await logAction("log_workout", "Échec ajout séries", { exercise: ex.name }, "failed");
           return { ok: false, message: `Impossible d'enregistrer les séries de « ${ex.name} ».` };
         }
@@ -192,7 +200,7 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
     })
   });
 
-  const startWorkout = tool({ description: "Démarrer et persister une séance Sport.", inputSchema: z.object({ id: z.string().uuid().optional(), programId: z.string().uuid().optional(), name: z.string().min(1), workoutDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(), startedAt: z.string().datetime().optional(), notes: z.string().optional() }),
+  const startWorkout = tool({ description: "Démarrer et persister une séance Sport.", inputSchema: z.object({ id: z.string().uuid().optional(), programId: z.string().uuid().optional(), name: z.string().min(1), workoutDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), startedAt: z.string().datetime().optional(), notes: z.string().optional() }),
     execute: guard("start_workout", async (input) => {
       const id = input.id ?? uuid();
       const { error } = await client.from("sport_workout_sessions").insert({ id, user_id: userId, program_id: input.programId ?? null, name: input.name.trim(), workout_date: input.workoutDate ?? new Date().toISOString().slice(0, 10), started_at: input.startedAt ?? new Date().toISOString(), notes: input.notes ?? null });
@@ -249,7 +257,7 @@ export function canonicalSportTools(client: Client, userId: string, permissionsE
       await logAction("finish_workout", "Séance terminée", input, "executed"); return { ok: true, id: input.id, message: "Séance Sport terminée." };
     }) });
 
-  const getHistory = tool({ description: "Lire l'historique des séances Sport de l'utilisateur, avec exercices et séries.", inputSchema: z.object({ limit: z.number().int().positive().max(100).default(20), fromDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional(), toDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/).optional() }),
+  const getHistory = tool({ description: "Lire l'historique des séances Sport de l'utilisateur, avec exercices et séries.", inputSchema: z.object({ limit: z.number().int().positive().max(100).default(20), fromDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), toDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }),
     execute: guard("get_workout_history", async (input) => {
       let query = client.from("sport_workout_sessions").select("id,program_id,name,workout_date,started_at,ended_at,duration_min,notes,sport_workout_exercises(id,exercise_id,position,note,sport_workout_sets(id,set_number,reps,weight,done))").eq("user_id", userId).order("workout_date", { ascending: false }).limit(input.limit);
       if (input.fromDate) query = query.gte("workout_date", input.fromDate);
