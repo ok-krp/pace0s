@@ -1,1 +1,4 @@
 project_id = "cduyjejftorfuxuwhbqt"
+
+[functions.github-e2e-auth]
+verify_jwt = false
