@@ -1,4 +1,4 @@
-name: Pace sync audit
+name: Cloud Sync Audit
 
 on:
   pull_request:
