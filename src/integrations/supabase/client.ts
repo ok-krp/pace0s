@@ -27,6 +27,8 @@ function createSupabaseClient() {
       storage: typeof window !== "undefined" ? localStorage : undefined,
       persistSession: true,
       autoRefreshToken: true,
+      flowType: "pkce",
+      detectSessionInUrl: false,
     },
   });
 }
