@@ -20,6 +20,12 @@ assert.match(source, /await supabase\.removeChannel\(existing\)/);
 // full E2EE reconciliation is running must not create concurrent cloud reads.
 assert.match(source, /refreshRunningRef/);
 assert.match(source, /if \(refreshRunningRef\.current\) return;/);
+assert.match(source, /realtimeTouchedIdsRef/);
+assert.match(source, /realtimeDeletedIdsRef/);
+assert.match(source, /Reconcile only Realtime ids touched while this refresh was in flight/);
+assert.match(source, /refreshedEncryptedRecords\.set\(id, realtimeRecord\)/);
+assert.match(source, /refreshedDecryptedSamples\.set\(id, realtimeSample\)/);
+assert.match(source, /realtimeDeletedIdsRef\.current\.has\(id\)/);
 
 // Day boundaries must advance by calendar day, not a fixed 24-hour duration;
 // fixed durations are wrong across DST transitions.
