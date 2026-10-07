@@ -111,5 +111,6 @@
     "typescript-eslint": "^8.56.1",
     "vite": "^8.0.16",
     "@capacitor/cli": "^8.5.2"
-  }
+  },
+  "packageManager": "bun@1.4.1"
 }
