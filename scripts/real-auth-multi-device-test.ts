@@ -19,24 +19,35 @@ async function session(label: string) {
 
 async function waitForEvent(client: SupabaseClient, channelName: string, event: "INSERT" | "UPDATE", userId: string, predicate: (payload: any) => boolean) {
   return await new Promise<any>((resolve, reject) => {
+    let subscribed = false;
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      void client.removeChannel(channel);
+      reject(new Error("Timed out waiting for Realtime " + event + " on " + channelName));
+    }, timeoutMs);
     const channel = client.channel(channelName)
       .on("postgres_changes", { event, schema: "public", table: "user_state", filter: "user_id=eq." + userId }, (payload) => {
-        if (!predicate(payload)) return;
+        if (!subscribed || !predicate(payload) || settled) return;
+        settled = true;
         clearTimeout(timer);
         void client.removeChannel(channel);
         resolve(payload);
       })
       .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          subscribed = true;
+          return;
+        }
         if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          if (settled) return;
+          settled = true;
           clearTimeout(timer);
           void client.removeChannel(channel);
           reject(new Error("Realtime subscription " + channelName + " failed: " + status));
         }
       });
-    const timer = setTimeout(() => {
-      void client.removeChannel(channel);
-      reject(new Error("Timed out waiting for Realtime " + event));
-    }, timeoutMs);
   });
 }
 
