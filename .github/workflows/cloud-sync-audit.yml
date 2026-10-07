@@ -41,7 +41,6 @@ jobs:
       - run: bun run lint
 
   real-auth-multi-device:
-    if: ${{ secrets.PACEOS_E2E_EMAIL != '' && secrets.PACEOS_E2E_PASSWORD != '' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
