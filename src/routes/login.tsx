@@ -25,7 +25,9 @@ function getAppOrigin(): string {
 }
 
 function getRedirectUrl(target: string): string {
-  return new URL(target, `${getAppOrigin()}/`).toString();
+  const callback = new URL("/auth/callback", getAppOrigin() + "/");
+  callback.searchParams.set("next", target);
+  return callback.toString();
 }
 
 function validatePassword(password: string, email: string): string | null {
