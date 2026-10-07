@@ -52,6 +52,6 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          E2E_TEST_EMAIL: ${{ secrets.PACEOS_E2E_EMAIL }}
-          E2E_TEST_PASSWORD: ${{ secrets.PACEOS_E2E_PASSWORD }}
+          PACEOS_E2E_GOOGLE_ID_TOKEN: ${{ secrets.PACEOS_E2E_GOOGLE_ID_TOKEN }}
+          PACEOS_E2E_GOOGLE_ACCESS_TOKEN: ${{ secrets.PACEOS_E2E_GOOGLE_ACCESS_TOKEN }}
         run: bun --experimental-strip-types scripts/real-auth-multi-device-test.ts
