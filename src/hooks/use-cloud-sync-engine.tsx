@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 import { readDomain, sanitizeNutritionItems } from "@/lib/domain-store";
-import { syncNutritionStateToFoodLog } from "@/lib/nutrition-log";
 
 const PACE_PREFIX = "pace.";
 const INTERNAL_PREFIX = "pace.__";
@@ -147,10 +146,35 @@ function unwrapNutritionValue(value: unknown) {
   return value;
 }
 
-function mergeNutritionRemoteValue(incomingValue: unknown) {
-  return sanitizeNutritionItems(unwrapNutritionValue(incomingValue));
+function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false) {
+  const incoming = unwrapNutritionValue(incomingValue);
+  if (authoritative) return sanitizeNutritionItems(incoming);
+  const current = readDomain<Record<string, unknown>>("nutrition.items", {}).value;
+  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || !current || typeof current !== "object" || Array.isArray(current)) return sanitizeNutritionItems(incoming);
+  const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
+  for (const [day, rawIncoming] of Object.entries(incoming as Record<string, unknown>)) {
+    if (!Array.isArray(rawIncoming)) continue;
+    const local = Array.isArray(merged[day]) ? merged[day] as unknown[] : [];
+    const byId = new Set(local.map((item) => item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "").filter(Boolean));
+    const output = [...local];
+    for (const item of rawIncoming) {
+      const id = item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "";
+      if (id && byId.has(id)) {
+        const index = output.findIndex((existing) => existing && typeof existing === "object" && String((existing as Record<string, unknown>).id ?? "") === id);
+        if (index >= 0) output[index] = item;
+      } else {
+        output.push(item);
+        if (id) byId.add(id);
+      }
+    }
+    merged[day] = output;
+  }
+  return sanitizeNutritionItems(merged);
 }
 
+function isAuthoritativeNutritionWriter(updatedBy: string | null | undefined) {
+  return updatedBy === "coach_ai" || updatedBy === "nutrition_state_repair";
+}
 
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
@@ -165,7 +189,7 @@ export function useCloudSyncEngineInternal() {
     if (encoded !== undefined) lastRemoteValues.current[key] = encoded;
   };
   const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string, updatedBy?: string | null) => {
-    const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value) : value;
+    const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value, isAuthoritativeNutritionWriter(updatedBy)) : value;
     rememberRemote(key, safeValue);
     applyRemoteWrite(key, safeValue, updatedAt);
   };
@@ -209,7 +233,6 @@ export function useCloudSyncEngineInternal() {
       // Let the monotonic RPC be the single write authority. Avoid a pre-write
       // SELECT on every queued mutation; if the server rejects the write because
       // a newer row exists, fetch that row once to reconcile the client.
-      if (item.key === "pace.nutrition.items") await syncNutritionStateToFoodLog(item.value);
       const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
       const result = await rpc("upsert_user_state_if_newer", {
         p_user_id: user.id,
@@ -356,21 +379,33 @@ export function useCloudSyncEngineInternal() {
       } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
     };
 
-    const syncNow = async () => {
+    const syncNow = async (reconcile = true, forcePull = false) => {
       if (!allowed()) return;
       pruneEquivalentConflicts();
       if (!navigator.onLine) { setStatus("offline"); return; }
-      await flushQueue(); await pull();
+      await flushQueue();
+
+      // Realtime is the primary remote-change transport. A healthy channel does
+      // not need a full-table pull on every foreground/page-show event; doing so
+      // would recreate avoidable egress even though no recovery is required.
+      // Pull only for the initial/recovery reconciliation path.
+      if (reconcile && (forcePull || !realtimeHealthy)) await pull();
+
       pruneEquivalentConflicts();
     };
+
+    let realtimeHealthy = false;
+    let initialSyncStarted = false;
 
     const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow));
     void realtimeChannel.subscribe((subscriptionStatus) => {
       if (subscriptionStatus === "SUBSCRIBED") {
-        void pull();
+        realtimeHealthy = true;
+        if (initialSyncStarted) void pull();
       } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
+        realtimeHealthy = false;
         setStatus(navigator.onLine ? "error" : "offline");
       }
     });
@@ -389,6 +424,13 @@ export function useCloudSyncEngineInternal() {
     };
     const onOffline = () => setStatus("offline");
 
+    // Realtime is the fast path. Periodic polling is only a recovery path
+    // for a channel that is not healthy; visible/online/page-show events still
+    // trigger an immediate reconciliation. This avoids full-table egress every
+    // few seconds while preserving recovery when Realtime is unavailable.
+    const reconcileTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible" && !realtimeHealthy) void syncNow();
+    }, 60_000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") void syncNow();
     };
@@ -404,11 +446,13 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("pace.legal.changed", onLegalChanged);
     window.addEventListener("pace.sync.conflict.resolved", onConflictResolved);
     pruneEquivalentConflicts();
-    void syncNow();
+    initialSyncStarted = true;
+    void syncNow(true, true);
     return () => {
       cancelled = true; offLocal();
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
+      window.clearInterval(reconcileTimer);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("pace.legal.changed", onLegalChanged);

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listEncryptedHealthSamples } from "@/lib/health.functions";
 import { decryptHealthPayload } from "@/lib/health.crypto";
@@ -28,10 +28,12 @@ type HealthSample = {
 };
 
 type EncryptedHealthRecord = {
+  id: string;
   ciphertext: string;
   nonce: string;
   algorithm: "AES-256-GCM";
   key_version: number;
+  created_at: string;
 };
 
 const SAMPLE_TYPES = new Set([
@@ -50,7 +52,8 @@ function localDayBounds(timeZone: string) {
   );
   const localDate = `${parts.year}-${parts.month}-${parts.day}`;
   const start = new Date(`${localDate}T00:00:00`);
-  const next = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+  const next = new Date(start);
+  next.setDate(next.getDate() + 1);
   return { localDate, start, next };
 }
 
@@ -98,6 +101,13 @@ export function useHealthToday() {
   const fetchEncrypted = useServerFn(listEncryptedHealthSamples);
   const [data, setData] = useState<HealthToday>(EMPTY);
   const [loading, setLoading] = useState(false);
+  const encryptedRecordsRef = useRef(new Map<string, EncryptedHealthRecord>());
+  const decryptedSamplesRef = useRef(new Map<string, HealthSample>());
+  const refreshRunningRef = useRef(false);
+  // Realtime events can arrive while the bounded HTTP refresh is decrypting its snapshot.
+  // Keep track of touched ids so the snapshot cannot overwrite those newer events.
+  const realtimeTouchedIdsRef = useRef(new Set<string>());
+  const realtimeDeletedIdsRef = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -105,6 +115,8 @@ export function useHealthToday() {
       return;
     }
 
+    if (refreshRunningRef.current) return;
+    refreshRunningRef.current = true;
     setLoading(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
@@ -138,20 +150,30 @@ export function useHealthToday() {
       }
 
       const dedupeBackfillKey = `pace-health-e2ee-dedupe-backfilled:${user.id}`;
+      const dedupeBackfillAttemptsKey = `pace-health-e2ee-dedupe-backfill-attempts:${user.id}`;
       if (localStorage.getItem(dedupeBackfillKey) !== "1") {
+        let backfillAttempts = 0;
         try {
-          const backfill = await backfillHealthE2eeDedupeHashes();
-          if (backfill.skipped === 0) localStorage.setItem(dedupeBackfillKey, "1");
-        } catch (error) {
-          console.warn("health E2EE dedupe backfill deferred", error);
+          backfillAttempts = Number(sessionStorage.getItem(dedupeBackfillAttemptsKey) ?? "0");
+        } catch {
+          backfillAttempts = 0;
+        }
+        if (backfillAttempts < 2) {
+          try {
+            try {
+              sessionStorage.setItem(dedupeBackfillAttemptsKey, String(backfillAttempts + 1));
+            } catch {
+              // Session storage is best-effort; a failed marker must not block health reads.
+            }
+            const backfill = await backfillHealthE2eeDedupeHashes();
+            if (backfill.skipped === 0) localStorage.setItem(dedupeBackfillKey, "1");
+          } catch (error) {
+            console.warn("health E2EE dedupe backfill deferred", error);
+          }
         }
       }
 
-      const now = new Date();
-      const dayStart = new Date(now);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(dayStart);
-      dayEnd.setDate(dayEnd.getDate() + 1);
+      const { start: dayStart, next: dayEnd } = localDayBounds(timeZone);
 
       const response = await fetchEncrypted({
         data: {
@@ -161,9 +183,10 @@ export function useHealthToday() {
         },
       });
       const records = response.records as EncryptedHealthRecord[];
-      const samples: HealthSample[] = [];
+      const refreshedEncryptedRecords = new Map(records.map((record) => [record.id, record]));
+      const refreshedDecryptedSamples = new Map<string, HealthSample>();
 
-      for (const record of records) {
+      for (const record of refreshedEncryptedRecords.values()) {
         try {
           if (record.algorithm !== "AES-256-GCM" || !Number.isInteger(record.key_version) || record.key_version < 1) continue;
           const payload = await decryptHealthPayload(record.ciphertext, record.nonce, record.key_version);
@@ -177,19 +200,38 @@ export function useHealthToday() {
             typeof (payload as HealthSample).type === "string" &&
             typeof (payload as HealthSample).value === "number"
           ) {
-            samples.push(payload as HealthSample);
+            refreshedDecryptedSamples.set(record.id, payload as HealthSample);
           }
         } catch (error) {
           console.warn("Skipping undecryptable health record", error);
         }
       }
 
-      setData(aggregateHealthSamples(samples, timeZone));
+      // Reconcile only Realtime ids touched while this refresh was in flight.
+      // Unrelated rows still come exclusively from the bounded HTTP snapshot.
+      for (const id of realtimeTouchedIdsRef.current) {
+        if (realtimeDeletedIdsRef.current.has(id)) {
+          refreshedEncryptedRecords.delete(id);
+          refreshedDecryptedSamples.delete(id);
+          continue;
+        }
+        const realtimeRecord = encryptedRecordsRef.current.get(id);
+        const realtimeSample = decryptedSamplesRef.current.get(id);
+        if (realtimeRecord) refreshedEncryptedRecords.set(id, realtimeRecord);
+        if (realtimeSample) refreshedDecryptedSamples.set(id, realtimeSample);
+      }
+      realtimeTouchedIdsRef.current.clear();
+      realtimeDeletedIdsRef.current.clear();
+      encryptedRecordsRef.current = refreshedEncryptedRecords;
+      decryptedSamplesRef.current = refreshedDecryptedSamples;
+
+      setData(aggregateHealthSamples([...decryptedSamplesRef.current.values()], timeZone));
     } catch (error) {
       console.error("health refresh", error);
       setData(EMPTY);
     } finally {
       setLoading(false);
+      refreshRunningRef.current = false;
     }
   }, [user, fetchEncrypted]);
 
@@ -209,18 +251,22 @@ export function useHealthToday() {
       };
     }
 
-    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-    const scheduleRefresh = () => {
-      if (refreshTimer) clearTimeout(refreshTimer);
-      refreshTimer = setTimeout(() => {
-        refreshTimer = null;
-        void refresh();
-      }, 150);
-    };
-
     const channelName = `pace-health-e2ee-${user.id}`;
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
     let channel: ReturnType<typeof supabase.channel> | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectAttempt = 0;
     let cancelled = false;
+
+    const scheduleReconnect = () => {
+      if (cancelled || reconnectTimer) return;
+      const delay = Math.min(30_000, 1_000 * 2 ** reconnectAttempt);
+      reconnectAttempt = Math.min(reconnectAttempt + 1, 5);
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        void subscribeRealtime();
+      }, delay);
+    };
 
     const subscribeRealtime = async () => {
       const existing = supabase.getChannels().find((candidate) => candidate.topic === `realtime:${channelName}`);
@@ -237,19 +283,79 @@ export function useHealthToday() {
           schema: "public",
           table: "health_samples_e2ee",
           filter: `user_id=eq.${user.id}`,
+          select: ["id", "ciphertext", "nonce", "algorithm", "key_version", "created_at"],
         },
-        scheduleRefresh,
+        async (payload) => {
+          const eventType = payload.eventType;
+          const record = payload.new as Partial<EncryptedHealthRecord>;
+          if (eventType === "DELETE") {
+            const deletedId = (payload.old as { id?: string })?.id;
+            if (deletedId) {
+              realtimeTouchedIdsRef.current.add(deletedId);
+              realtimeDeletedIdsRef.current.add(deletedId);
+              encryptedRecordsRef.current.delete(deletedId);
+              decryptedSamplesRef.current.delete(deletedId);
+            }
+          } else if (
+            typeof record?.id === "string" &&
+            typeof record?.created_at === "string" &&
+            typeof record?.ciphertext === "string" &&
+            typeof record?.nonce === "string" &&
+            record.algorithm === "AES-256-GCM" &&
+            Number.isInteger(record.key_version)
+          ) {
+            const nextRecord = record as EncryptedHealthRecord;
+            realtimeTouchedIdsRef.current.add(nextRecord.id);
+            realtimeDeletedIdsRef.current.delete(nextRecord.id);
+            encryptedRecordsRef.current.set(nextRecord.id, nextRecord);
+            try {
+              const decrypted = await decryptHealthPayload(nextRecord.ciphertext, nextRecord.nonce, nextRecord.key_version);
+              if (
+                decrypted &&
+                typeof decrypted === "object" &&
+                "ts" in decrypted &&
+                "type" in decrypted &&
+                "value" in decrypted &&
+                typeof (decrypted as HealthSample).ts === "string" &&
+                typeof (decrypted as HealthSample).type === "string" &&
+                typeof (decrypted as HealthSample).value === "number"
+              ) {
+                decryptedSamplesRef.current.set(nextRecord.id, decrypted as HealthSample);
+              } else {
+                decryptedSamplesRef.current.delete(nextRecord.id);
+              }
+            } catch (error) {
+              decryptedSamplesRef.current.delete(nextRecord.id);
+              console.warn("Skipping undecryptable health realtime record", error);
+            }
+          } else {
+            return;
+          }
+
+          setData(aggregateHealthSamples([...decryptedSamplesRef.current.values()], timeZone));
+        },
       );
-      void channel.subscribe();
+      void channel.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          reconnectAttempt = 0;
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          scheduleReconnect();
+        }
+      });
     };
 
     void subscribeRealtime();
 
     return () => {
       cancelled = true;
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = null;
+      }
       window.removeEventListener("pace.health.changed", handler);
       window.removeEventListener("online", onOnline);
-      if (refreshTimer) clearTimeout(refreshTimer);
       if (channel) void supabase.removeChannel(channel);
     };
   }, [refresh, user]);
