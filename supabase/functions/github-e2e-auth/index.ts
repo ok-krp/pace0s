@@ -30,7 +30,14 @@ async function authorize(request: Request) {
   });
   if (payload.repository !== "ok-krp/pace0s") throw new Error("GitHub repository is not allowed");
   if (payload.workflow !== "Cloud Sync Audit") throw new Error("GitHub workflow is not allowed");
-  if (payload.event_name !== "pull_request") throw new Error("GitHub event is not allowed");
+  const eventName = String(payload.event_name ?? "");
+  if (eventName === "pull_request") {
+    // PR-triggered runs are allowed for this workflow.
+  } else if (eventName === "push" && payload.ref === "refs/heads/fix/health-egress-consent-reads") {
+    // The dedicated E2E workflow also runs on pushes to the PR branch.
+  } else {
+    throw new Error("GitHub event is not allowed");
+  }
   if (payload.actor !== "ok-krp") throw new Error("GitHub actor is not allowed");
   return payload;
 }
