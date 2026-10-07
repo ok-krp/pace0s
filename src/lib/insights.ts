@@ -110,14 +110,14 @@ function ago(ms: number, now: number) {
 }
 
 function scoreSleep(hours: number | null) {
-  if (hours == null || hours <= 0) return 0.5;
+  if (hours == null || hours <= 0) return 0;
   if (hours >= 7 && hours <= 9) return 1;
   if (hours < 7) return clamp01(hours / 7);
   return clamp01(1 - (hours - 9) / 3);
 }
 
 function scoreNutrition(kcal: number | null, target: number) {
-  if (kcal == null || kcal <= 0 || target <= 0) return 0.5;
+  if (kcal == null || kcal <= 0 || target <= 0) return 0;
   const ratio = kcal / target;
   if (ratio >= 0.9 && ratio <= 1.1) return 1;
   if (ratio < 0.9) return clamp01(0.5 + ((ratio - 0.5) / 0.4) * 0.5);
@@ -125,13 +125,13 @@ function scoreNutrition(kcal: number | null, target: number) {
 }
 
 function scoreProgress(value: number | null, target: number) {
-  if (value == null || value <= 0 || target <= 0) return 0.5;
+  if (value == null || value <= 0 || target <= 0) return 0;
   return clamp01(value / target);
 }
 
 /**
  * Daily Rhythm is a weighted progress score, not a health diagnosis.
- * Missing entries are neutral (50%) instead of being treated as failures.
+ * Missing entries contribute 0 points instead of a neutral 50% placeholder.
  * Weights: sleep 25%, hydration 20%, nutrition 20%, routine 20%, focus 15%.
  */
 function dayProgress(i: IntelInput, d: string) {
@@ -143,7 +143,7 @@ function dayProgress(i: IntelInput, d: string) {
 }
 
 function scoreAgainstExpected(value: number | null, target: number, progress: number) {
-  if (value == null || value <= 0 || target <= 0) return 0.5;
+  if (value == null || value <= 0 || target <= 0) return 0;
   const expected = target * progress;
   if (expected <= 0) return 0.5;
   const ratio = value / expected;
