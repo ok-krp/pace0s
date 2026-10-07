@@ -67,7 +67,10 @@ function subscribeForEvent(client: SupabaseClient, channelName: string, event: "
   let readyReject!: (error: Error) => void;
   let eventResolve!: (payload: any) => void;
   let eventReject!: (error: Error) => void;
+  let backendReadyResolve!: () => void;
+  let backendReadyReject!: (error: Error) => void;
   const ready = new Promise<void>((resolve, reject) => { readyResolve = resolve; readyReject = reject; });
+  const backendReady = new Promise<void>((resolve, reject) => { backendReadyResolve = resolve; backendReadyReject = reject; });
   const received = new Promise<any>((resolve, reject) => { eventResolve = resolve; eventReject = reject; });
 
   const timer = setTimeout(() => {
@@ -75,11 +78,18 @@ function subscribeForEvent(client: SupabaseClient, channelName: string, event: "
     settled = true;
     const error = new Error("Timed out waiting for Realtime " + event + " on " + channelName);
     readyReject(error);
+    backendReadyReject(error);
     eventReject(error);
     void client.removeChannel(channel);
   }, timeoutMs);
 
   channel = client.channel(channelName)
+    .on("system", "*", (payload) => {
+      if (payload?.extension === "postgres_changes" && payload?.status === "ok") {
+        console.log(channelName + ": postgres_changes READY");
+        backendReadyResolve();
+      }
+    })
     .on("postgres_changes", { event, schema: "public", table: "user_state", filter: "user_id=eq." + userId }, (payload) => {
       if (!predicate(payload) || settled) return;
       settled = true;
@@ -99,12 +109,13 @@ function subscribeForEvent(client: SupabaseClient, channelName: string, event: "
         clearTimeout(timer);
         const error = new Error("Realtime subscription " + channelName + " failed: " + status);
         readyReject(error);
+        backendReadyReject(error);
         eventReject(error);
         void client.removeChannel(channel);
       }
     });
 
-  return { ready, received };
+  return { ready, backendReady, received };
 }
 
 const suffix = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
@@ -135,9 +146,11 @@ try {
   const bListener = subscribeForEvent(bClient, "paceos-e2e-B", "INSERT", userId, (p) => p.new?.key === keyName && p.new?.value?.phase === "A");
   const aListener = subscribeForEvent(aClient, "paceos-e2e-A", "UPDATE", userId, (p) => p.new?.key === keyName && p.new?.value?.phase === "B");
 
-  await Promise.all([bListener.ready, aListener.ready]);
+  await Promise.all([bListener.ready, aListener.ready, bListener.backendReady, aListener.backendReady]);
   console.log("A realtime: SUBSCRIBED");
   console.log("B realtime: SUBSCRIBED");
+  console.log("A realtime: postgres_changes READY");
+  console.log("B realtime: postgres_changes READY");
 
   const { error: insertError } = await aClient.from("user_state").upsert(
     { user_id: userId, key: keyName, value: { phase: "A", source: "device-A" }, updated_by: "device-A" },
@@ -175,7 +188,13 @@ try {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 } finally {
-  if (aClient && userId) await aClient.from("user_state").delete().eq("user_id", userId).eq("key", keyName).catch(() => undefined);
+  if (aClient && userId) {
+    try {
+      await aClient.from("user_state").delete().eq("user_id", userId).eq("key", keyName);
+    } catch {
+      // Cleanup continues through the privileged broker even if the row delete fails.
+    }
+  }
   await Promise.allSettled([aClient?.auth.signOut(), bClient?.auth.signOut()]);
   if (oidcToken && userId) await cleanupRealAuthUser(oidcToken, userId);
 }
