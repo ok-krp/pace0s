@@ -44,6 +44,9 @@ jobs:
   real-auth-multi-device-test:
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -54,6 +57,4 @@ jobs:
         env:
           SUPABASE_URL: https://cduyjejftorfuxuwhbqt.supabase.co
           SUPABASE_PUBLISHABLE_KEY: sb_publishable_HWlyOrqPkDAdibQIKl-RCQ_i8ihwcyO
-          E2E_TEST_EMAIL: ${{ secrets.PACEOS_E2E_EMAIL }}
-          E2E_TEST_PASSWORD: ${{ secrets.PACEOS_E2E_PASSWORD }}
         run: bun run scripts/real-auth-multi-device-test.ts
