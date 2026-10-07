@@ -56,8 +56,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Real-auth multi-device Realtime test
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: https://cduyjejftorfuxuwhbqt.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_HWlyOrqPkDAdibQIKl-RCQ_i8ihwcyO
         run: bun --experimental-strip-types scripts/real-auth-multi-device-test.ts
       - name: Confirm real-auth test completed
         run: echo "real-auth-multi-device completed on ${GITHUB_SHA}"
