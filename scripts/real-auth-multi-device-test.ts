@@ -2,13 +2,17 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 const url = process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_PUBLISHABLE_KEY;
+const email = process.env.E2E_TEST_EMAIL;
+const password = process.env.E2E_TEST_PASSWORD;
+
 if (!url || !key) throw new Error("SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required");
+if (!email || !password) throw new Error("E2E_TEST_EMAIL and E2E_TEST_PASSWORD are required");
 
 const timeoutMs = 20_000;
 
-async function session(label: string, email: string, password: string) {
+async function session(label: string) {
   const client = createClient(url!, key!, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
-  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  const { data, error } = await client.auth.signInWithPassword({ email: email!, password: password! });
   if (error || !data.session || !data.user) throw new Error(label + " sign-in failed: " + (error?.message ?? "missing session"));
   return { client, user: data.user, session: data.session };
 }
@@ -23,7 +27,7 @@ async function waitForEvent(client: SupabaseClient, channelName: string, event: 
         resolve(payload);
       })
       .subscribe((status) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
           clearTimeout(timer);
           void client.removeChannel(channel);
           reject(new Error("Realtime subscription " + channelName + " failed: " + status));
@@ -37,19 +41,15 @@ async function waitForEvent(client: SupabaseClient, channelName: string, event: 
 }
 
 const suffix = Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
-const email = "paceos-realtime-e2e-" + suffix + "@example.com";
-const password = "PaceOS-E2E-" + crypto.randomUUID() + "!aA9";
 const keyName = "__paceos_real_auth_e2e__" + suffix;
-const a = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+
+let aSession: Awaited<ReturnType<typeof session>> | null = null;
+let bSession: Awaited<ReturnType<typeof session>> | null = null;
 
 try {
-  const signup = await a.auth.signUp({ email, password });
-  if (signup.error) throw new Error("A sign-up failed: " + signup.error.message);
-  if (!signup.data.user) throw new Error("A sign-up returned no user");
-  if (!signup.data.session) throw new Error("A sign-up returned no session; email confirmation is required.");
+  aSession = await session("A");
+  bSession = await session("B");
 
-  const bSession = await session("B", email, password);
-  const aSession = { client: a, user: signup.data.user, session: signup.data.session };
   if (aSession.user.id !== bSession.user.id) throw new Error("A and B are not the same Auth user");
 
   const insertSeenByB = waitForEvent(bSession.client, "paceos-e2e-B", "INSERT", aSession.user.id, (p) => p.new?.key === keyName && p.new?.value?.phase === "A");
@@ -78,12 +78,18 @@ try {
   if (insertPayload.new?.value?.phase !== "A") throw new Error("B did not observe A");
   if (updatePayload.new?.value?.phase !== "B") throw new Error("A did not observe B");
 
-  await aSession.client.from("user_state").delete().eq("user_id", aSession.user.id).eq("key", keyName);
-  await Promise.allSettled([aSession.client.auth.signOut(), bSession.client.auth.signOut()]);
   console.log("real-auth-multi-device-test: PASS");
   console.log("A -> Realtime -> B -> B update -> Realtime -> A: PASS");
 } catch (error) {
   console.error("real-auth-multi-device-test: FAIL");
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
+} finally {
+  if (aSession) {
+    await aSession.client.from("user_state").delete().eq("user_id", aSession.user.id).eq("key", keyName).catch(() => undefined);
+  }
+  await Promise.allSettled([
+    aSession?.client.auth.signOut(),
+    bSession?.client.auth.signOut(),
+  ]);
 }
