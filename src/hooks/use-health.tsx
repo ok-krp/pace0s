@@ -104,6 +104,10 @@ export function useHealthToday() {
   const encryptedRecordsRef = useRef(new Map<string, EncryptedHealthRecord>());
   const decryptedSamplesRef = useRef(new Map<string, HealthSample>());
   const refreshRunningRef = useRef(false);
+  // Realtime events can arrive while the bounded HTTP refresh is decrypting its snapshot.
+  // Keep track of touched ids so the snapshot cannot overwrite those newer events.
+  const realtimeTouchedIdsRef = useRef(new Set<string>());
+  const realtimeDeletedIdsRef = useRef(new Set<string>());
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -179,10 +183,10 @@ export function useHealthToday() {
         },
       });
       const records = response.records as EncryptedHealthRecord[];
-      encryptedRecordsRef.current = new Map(records.map((record) => [record.id, record]));
-      decryptedSamplesRef.current = new Map();
+      const refreshedEncryptedRecords = new Map(records.map((record) => [record.id, record]));
+      const refreshedDecryptedSamples = new Map<string, HealthSample>();
 
-      for (const record of encryptedRecordsRef.current.values()) {
+      for (const record of refreshedEncryptedRecords.values()) {
         try {
           if (record.algorithm !== "AES-256-GCM" || !Number.isInteger(record.key_version) || record.key_version < 1) continue;
           const payload = await decryptHealthPayload(record.ciphertext, record.nonce, record.key_version);
@@ -196,12 +200,30 @@ export function useHealthToday() {
             typeof (payload as HealthSample).type === "string" &&
             typeof (payload as HealthSample).value === "number"
           ) {
-            decryptedSamplesRef.current.set(record.id, payload as HealthSample);
+            refreshedDecryptedSamples.set(record.id, payload as HealthSample);
           }
         } catch (error) {
           console.warn("Skipping undecryptable health record", error);
         }
       }
+
+      // Reconcile only Realtime ids touched while this refresh was in flight.
+      // Unrelated rows still come exclusively from the bounded HTTP snapshot.
+      for (const id of realtimeTouchedIdsRef.current) {
+        if (realtimeDeletedIdsRef.current.has(id)) {
+          refreshedEncryptedRecords.delete(id);
+          refreshedDecryptedSamples.delete(id);
+          continue;
+        }
+        const realtimeRecord = encryptedRecordsRef.current.get(id);
+        const realtimeSample = decryptedSamplesRef.current.get(id);
+        if (realtimeRecord) refreshedEncryptedRecords.set(id, realtimeRecord);
+        if (realtimeSample) refreshedDecryptedSamples.set(id, realtimeSample);
+      }
+      realtimeTouchedIdsRef.current.clear();
+      realtimeDeletedIdsRef.current.clear();
+      encryptedRecordsRef.current = refreshedEncryptedRecords;
+      decryptedSamplesRef.current = refreshedDecryptedSamples;
 
       setData(aggregateHealthSamples([...decryptedSamplesRef.current.values()], timeZone));
     } catch (error) {
@@ -269,6 +291,8 @@ export function useHealthToday() {
           if (eventType === "DELETE") {
             const deletedId = (payload.old as { id?: string })?.id;
             if (deletedId) {
+              realtimeTouchedIdsRef.current.add(deletedId);
+              realtimeDeletedIdsRef.current.add(deletedId);
               encryptedRecordsRef.current.delete(deletedId);
               decryptedSamplesRef.current.delete(deletedId);
             }
@@ -281,6 +305,8 @@ export function useHealthToday() {
             Number.isInteger(record.key_version)
           ) {
             const nextRecord = record as EncryptedHealthRecord;
+            realtimeTouchedIdsRef.current.add(nextRecord.id);
+            realtimeDeletedIdsRef.current.delete(nextRecord.id);
             encryptedRecordsRef.current.set(nextRecord.id, nextRecord);
             try {
               const decrypted = await decryptHealthPayload(nextRecord.ciphertext, nextRecord.nonce, nextRecord.key_version);
