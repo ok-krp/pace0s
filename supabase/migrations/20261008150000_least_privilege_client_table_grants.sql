@@ -16,21 +16,17 @@ revoke all on all tables in schema public from authenticated;
 revoke all on all sequences in schema public from anon;
 revoke all on all sequences in schema public from authenticated;
 
--- The live target currently has broad default ACLs for BOTH postgres and
--- supabase_admin (tables, sequences, and function EXECUTE). Revoke for each
--- object-creating role; otherwise future objects silently regain client access.
+-- The live target has broad default ACLs for both postgres and
+-- supabase_admin. The migration connection is postgres, which is neither
+-- superuser nor a member of supabase_admin, so PostgreSQL will reject attempts
+-- to alter supabase_admin's default ACLs here. Revoke postgres-owned defaults
+-- in this migration; the supabase_admin defaults are an explicit pre-apply
+-- blocker requiring an authorized supabase_admin session or role membership.
 alter default privileges for role postgres in schema public
   revoke all on tables from anon, authenticated;
 alter default privileges for role postgres in schema public
   revoke all on sequences from anon, authenticated;
 alter default privileges for role postgres in schema public
-  revoke execute on functions from anon, authenticated;
-
-alter default privileges for role supabase_admin in schema public
-  revoke all on tables from anon, authenticated;
-alter default privileges for role supabase_admin in schema public
-  revoke all on sequences from anon, authenticated;
-alter default privileges for role supabase_admin in schema public
   revoke execute on functions from anon, authenticated;
 
 -- User-owned CRUD tables: RLS remains the authorization boundary.
