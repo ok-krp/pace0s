@@ -14,6 +14,13 @@
 revoke all on all tables in schema public from anon;
 revoke all on all tables in schema public from authenticated;
 
+-- Supabase's current default ACLs re-grant table and sequence privileges to
+-- client roles for future objects. Close that path for the migration owner too.
+alter default privileges for role supabase_admin in schema public
+  revoke all on tables from anon, authenticated;
+alter default privileges for role supabase_admin in schema public
+  revoke all on sequences from anon, authenticated;
+
 -- User-owned CRUD tables: RLS remains the authorization boundary.
 grant select, insert, update, delete on table public.ai_conversations to authenticated;
 grant select, insert on table public.ai_messages to authenticated;
