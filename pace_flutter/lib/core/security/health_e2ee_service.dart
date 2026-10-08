@@ -232,7 +232,7 @@ class HealthE2eeService {
       });
     }
 
-    await client.from('health_samples_e2ee').upsert(records, onConflict: 'user_id,dedupe_hash');
+    await client.from('health_samples_e2ee').upsert(records, onConflict: 'user_id,dedupe_hash', ignoreDuplicates: true);
     return records.length;
   }
 
