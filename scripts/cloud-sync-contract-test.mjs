@@ -6,9 +6,13 @@ const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
+const nutritionLog = read("src/lib/nutrition-log.ts");
+const domainStore = read("src/lib/domain-store.ts");
 
-assert.doesNotMatch(engine, /setInterval\s*\(/, "sync engine must not use periodic polling");
-assert.match(engine, /document\.visibilityState === "visible"/, "visibility changes must trigger event-driven reconciliation");
+assert.match(engine, /setInterval\s*\(\s*\(\s*\)\s*=>[\s\S]*?60_000\s*\)/, "sync engine must use a 60s recovery interval");
+assert.doesNotMatch(engine, /setInterval\s*\(\s*\(\s*\)\s*=>[\s\S]*?5000\s*\)/, "sync engine must not poll user_state every 5s");
+assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
+assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
 assert.equal(/setInterval\s*\(/.test(storage), false, "storage must not poll for local changes");
 assert.match(storage, /pace\.local\.write/);
 assert.match(engine, /onLocalWrite\(/);
@@ -16,7 +20,29 @@ assert.match(engine, /postgres_changes/);
 assert.equal((engine.match(/realtimeChannel\.subscribe\(/g) ?? []).length, 1, "Realtime channel must only be subscribed during initial channel setup");
 assert.equal(/location\.reload\s*\(/.test(engine), false, "sync must never reload the page");
 
-// Internal persistence keys never become cloud records.
+// Egress regression contract: a healthy Realtime channel must not trigger a full user_state
+// pull on every foreground/page-show event. Initial sync and unhealthy-channel recovery may pull.
+assert.match(
+  engine,
+  /if \(reconcile && \(forcePull \|\| !realtimeHealthy\)\) await pull\(\);/,
+  "full pull must be restricted to initial/forced reconciliation or Realtime recovery",
+);
+assert.match(
+  engine,
+  /void syncNow\(true, true\);/,
+  "initial sync must retain one forced canonical pull",
+);
+assert.doesNotMatch(
+  engine,
+  /const syncNow = async \(reconcile = true, forcePull = false\)[\s\S]*?await flushQueue\(\);\s*await pull\(\);/,
+  "syncNow must not unconditionally pull after every queue flush",
+);
+assert.match(
+  engine,
+  /realtimeHealthy = false/,
+  "Realtime health must have an explicit unhealthy state for recovery",
+);
+
 assert.match(engine, /!key\.startsWith\(INTERNAL_PREFIX\)/);
 assert.match(engine, /DOMAIN_OUTBOX_KEY/);
 
@@ -38,23 +64,18 @@ assert.match(engine, /p_updated_at: item\.updatedAt/);
 assert.match(engine, /server-authoritative/);
 assert.match(engine, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 assert.match(engine, /resolveConflict/);
-assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 
-// Writes use the monotonic RPC as the primary idempotency boundary.
-// A rejected write reconciles from the canonical row exactly once.
-assert.doesNotMatch(
-  engine,
-  /existing && serialize\(existing\.value\) === serialize\(item\.value\)/,
-  "sync must not perform a pre-write canonical SELECT",
-);
-assert.match(engine, /if \(!payload\.accepted\)[\s\S]*?from\("user_state"\)\.select\("key,value,updated_at,updated_by"\)/);
+// A lost RPC response is resolved by the monotonic RPC itself; a rejected write
+// performs a single reconciliation read against the canonical row.
+assert.match(engine, /if \(!payload\.accepted\)/);
+assert.match(engine, /supabase\.from\("user_state"\)\.select\("key,value,updated_at,updated_by"\)/);
 assert.match(engine, /serialize\(queued\.value\) === serialize\(mergedValue\)/);
 
 // The server RPC is monotonic: an older canonical timestamp must never be
 // replaced by a newer request carrying an older-than-canonical server timestamp.
 assert.match(
   read("supabase/migrations/20260926192000_server_ordered_cloud_sync_monotonic_writes.sql"),
-  /WHERE public\.user_state\.updated_at < EXCLUDED\.updated_at/
+  /WHERE public\.user_state\.updated_at < EXCLUDED\.updated_at/,
 );
 
 // Deterministic newest-wins model for two devices and duplicate realtime events.
@@ -69,7 +90,6 @@ apply({ value: "A-old", updatedAt: "2026-08-20T10:00:30.000Z", updatedBy: "A" })
 assert.equal(state.value, "B", "older remote mutation must not overwrite newer state");
 apply({ value: "B", updatedAt: "2026-08-20T10:01:00.000Z", updatedBy: "B" });
 assert.equal(state.value, "B", "duplicate realtime event must be idempotent");
-
 
 // Real multi-device water conflict model: disjoint dates merge deterministically,
 // while the same date keeps the local choice (the conflict UI remains explicit).
@@ -141,5 +161,66 @@ assert.deepEqual(conflictsB, []);
 
 console.log("cloud-sync-contract-test: PASS");
 
+
+// The latest migration must restore the nutrition disjoint-day merge that was
+// accidentally removed by the earlier RPC simplification.
+const nutritionMerge = read("supabase/migrations/20261002210000_restore_nutrition_state_merge.sql");
+assert.match(nutritionMerge, /p_key = 'pace\.nutrition\.items'/);
+assert.match(nutritionMerge, /jsonb_object_keys\(current_value\)/);
+assert.match(nutritionMerge, /jsonb_array_elements\(current_day\)/);
+assert.match(nutritionMerge, /distinct on \(coalesce\(item ->> 'id', item::text\)\)/);
+assert.match(nutritionMerge, /pg_advisory_xact_lock/);
+assert.match(nutritionMerge, /updated_at < excluded\.updated_at/);
+
 assert.match(engine, /pruneEquivalentConflicts\(\);\n      if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
 assert.match(engine, /remainingConflicts = currentConflicts\.filter\(\(item\) => item\.key !== key\)/, "queued equivalent values must clear stale conflicts");
+
+
+assert.match(nutritionLog, /source: item\.source \?\? "manual"/, "food_log bridge payload must preserve nutrition provenance");
+assert.match(nutritionLog, /item\.source \?\? "manual"\]\);/, "nutrition bridge signature must include provenance");
+assert.match(nutritionLog, /return \{ id, name: item\.name[\s\S]*source \};/, "persistNutritionItem must honor its explicit source argument");
+assert.match(nutritionLog, /let nutritionBridgePending = false;/, "nutrition bridge must retain a write that arrives while a previous bridge is in flight");
+assert.match(nutritionLog, /nutritionBridgePendingValue = value;/, "nutrition bridge must retain the latest pending nutrition value");
+assert.match(nutritionLog, /if \(nutritionBridgePending\)[\s\S]*?void bridgeLocalNutritionToFoodLog\(nextValue\);/, "nutrition bridge must drain a queued write after the in-flight write completes");
+assert.match(domainStore, /sodium: Number\(x\.sodium \?\? 0\), qty: Number\(x\.qty \?\? 1\), source: x\.source \?\? "manual"/, "local nutrition dedupe must retain provenance");
+
+
+// Coach AI food writes are privileged; they must be bound to the caller and
+// to a conversation owned by that caller, not just to a caller-supplied user_id.
+const coachFoodSecurity = read("supabase/migrations/20261008120000_harden_coach_ai_food_rpc_authorization.sql");
+assert.match(coachFoodSecurity, /auth\.uid\(\) is null or p_user_id is distinct from auth\.uid\(\)/);
+assert.match(coachFoodSecurity, /c\.id = p_conversation_id[\s\S]*?c\.user_id = auth\.uid\(\)/);
+assert.match(coachFoodSecurity, /set search_path = ''/);
+assert.match(coachFoodSecurity, /i\.user_id = p_user_id/);
+assert.match(coachFoodSecurity, /i\.conversation_id = p_conversation_id/);
+assert.match(coachFoodSecurity, /fl\.user_id = p_user_id/);
+assert.match(coachFoodSecurity, /pg_catalog\.length\(p_tool_call_id\) > 200/);
+
+
+// Consent history is newest-first. The first record per category must win even
+// when it is a denial, otherwise an older grant can silently reactivate consent.
+const legalConsent = read("src/lib/legal.functions.ts");
+assert.match(legalConsent, /const seenConsentTypes = new Set/);
+assert.match(legalConsent, /seenConsentTypes\.has\(consentType\)/);
+assert.match(legalConsent, /opts\[consentType\] = record\.granted/);
+assert.match(legalConsent, /seenConsentTypes\.add\(consentType\)/);
+
+
+// Data-subject exports must paginate beyond Supabase's default row cap and
+// include user-owned records while never returning encrypted BYOK key material.
+const privacyFunctions = read("src/lib/privacy.functions.ts");
+assert.match(privacyFunctions, /const pageSize = 500/);
+assert.match(privacyFunctions, /\.range\(from, from \+ pageSize - 1\)/);
+for (const table of [
+  "ai_tool_idempotency",
+  "audit_log",
+  "data_deletion_requests",
+  "health_e2ee_key_versions",
+  "health_e2ee_recovery_envelopes",
+  "health_legacy_migration_map",
+  "user_biometrics_e2ee",
+]) {
+  assert.match(privacyFunctions, new RegExp('"' + table + '"'), `privacy export must include ${table}`);
+}
+assert.match(privacyFunctions, /select\("provider,key_last4,created_at,updated_at"\)/);
+assert.match(privacyFunctions, /never return encrypted API-key material/);

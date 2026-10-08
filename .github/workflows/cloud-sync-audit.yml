@@ -7,8 +7,13 @@ on:
       - "src/hooks/use-cloud-sync.tsx"
       - "src/lib/storage.ts"
       - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - "supabase/config.toml"
       - "scripts/cloud-sync-contract-test.mjs"
+      - "scripts/real-auth-multi-device-test.ts"
+      - "scripts/test-least-privilege-migration.mjs"
       - "package.json"
+      - "bun.lock"
       - ".github/workflows/cloud-sync-audit.yml"
   push:
     branches: [main]
@@ -17,28 +22,45 @@ on:
       - "src/hooks/use-cloud-sync.tsx"
       - "src/lib/storage.ts"
       - "supabase/migrations/**"
+      - "supabase/functions/**"
+      - "supabase/config.toml"
       - "scripts/cloud-sync-contract-test.mjs"
+      - "scripts/real-auth-multi-device-test.ts"
+      - "scripts/test-least-privilege-migration.mjs"
       - "package.json"
+      - "bun.lock"
       - ".github/workflows/cloud-sync-audit.yml"
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-# PR checks are triggered from repository-authored commits; no workflow writes back to the branch.
 
 jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-      - run: npm install --no-audit --no-fund
-      - run: npm run test:sync
-      # TanStack Router generates src/routeTree.gen.ts during the Vite build.
-      # Run the build before typecheck so newly added file routes are included.
-      - run: npm run build
-      - run: npm run typecheck
-      - run: npm run lint
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run test:sync
+      - run: bun run test:least-privilege
+      - run: bun run build
+      - run: bun run typecheck
+      - run: bun run lint
+
+  real-auth-multi-device:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Real-auth multi-device Realtime test
+        env:
+          SUPABASE_URL: https://cduyjejftorfuxuwhbqt.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_HWlyOrqPkDAdibQIKl-RCQ_i8ihwcyO
+        run: bun --experimental-strip-types scripts/real-auth-multi-device-test.ts
+      - name: Confirm real-auth test completed
+        run: echo "real-auth-multi-device completed on ${GITHUB_SHA}"

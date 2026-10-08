@@ -7,12 +7,14 @@ const domainStore = await readFile("src/lib/domain-store.ts", "utf8");
 const profileSync = await readFile("src/hooks/use-profile-realtime.ts", "utf8");
 const profileRoute = await readFile("src/routes/profile.tsx", "utf8");
 const goals = await readFile("src/hooks/use-user-goals.tsx", "utf8");
+const healthFunctions = await readFile("src/lib/health.functions.ts", "utf8");
 const profileMigration = await readFile("supabase/migrations/20260821090000_profile_sync_hardening.sql", "utf8");
 const migrations = await readFile("supabase/migrations/20260902092340_fix_event_driven_sync_timestamp_reconciliation.sql", "utf8");
 
-assert.doesNotMatch(engine, /setInterval\s*\(/, "sync engine must not use periodic polling");
-assert.doesNotMatch(engine, /setInterval\s*\(.*5000/s, "sync engine must not run a 5s reconciliation poll");
-assert.match(engine, /document\.visibilityState === "visible"/, "foreground visibility must still trigger event-driven reconciliation");
+assert.match(engine, /setInterval\s*\(\s*\(\s*\)\s*=>[\s\S]*?60_000\s*\)/, "sync engine must use a 60s recovery interval");
+assert.doesNotMatch(engine, /setInterval\s*\(\s*\(\s*\)\s*=>[\s\S]*?5000\s*\)/, "sync engine must not poll user_state every 5s");
+assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
+assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
 assert.equal(engine.includes("location.reload"), false, "sync engine must not reload the app");
 assert.match(engine, /onLocalWrite\(/, "local writes must be observed through an explicit mutation event");
 assert.match(engine, /postgres_changes/, "remote changes must use Supabase Realtime");
@@ -34,6 +36,10 @@ assert.match(profileSync, /updated_by === deviceId/, "profile self-originated ev
 assert.match(profileRoute, /upsert_profile_if_newer/, "profile writes must use the version-safe RPC");
 assert.match(profileRoute, /PROFILE_REMOTE_EVENT/, "profile UI must consume centralized remote events");
 assert.match(goals, /PROFILE_REMOTE_EVENT/, "derived profile consumers must receive remote changes");
+assert.match(healthFunctions, /has_current_health_e2ee_consent/, "health E2EE consent must use the consolidated consent RPC");
+assert.doesNotMatch(healthFunctions, /from\("consent_records"\)\.select\("granted"\)/, "health E2EE paths must not perform repeated consent row reads");
+assert.match(healthFunctions, /since: z\.string\(\)\.datetime\(\)\.optional\(\)/, "health reads must support bounded time windows");
+
 assert.match(profileMigration, /upsert_profile_if_newer/, "profile conflict RPC must exist");
 assert.match(profileMigration, /auth\.uid\(\) IS NULL OR auth\.uid\(\) <> p_user_id/, "profile RPC must enforce ownership");
 

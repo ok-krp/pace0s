@@ -19,6 +19,7 @@ export type NutritionItem = {
   calcium?: number;
   vitC?: number;
   qty: number;
+  source?: PersistedNutritionSource;
 };
 
 const DOMAIN_ITEMS = "nutrition.items";
@@ -28,7 +29,7 @@ const completedOperations = new Map<string, number>();
 const recentAdds = new Map<string, number>();
 
 function addFingerprint(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }) {
-  return JSON.stringify({ name: item.name.trim(), meal: item.meal.trim(), kcal: Number(item.kcal || 0), p: Number(item.p || 0), c: Number(item.c || 0), f: Number(item.f || 0), fiber: Number(item.fiber || 0), sugar: Number(item.sugar || 0), sodium: Number(item.sodium || 0), qty: Number(item.qty ?? 1) });
+  return JSON.stringify({ name: item.name.trim(), meal: item.meal.trim(), kcal: Number(item.kcal || 0), p: Number(item.p || 0), c: Number(item.c || 0), f: Number(item.f || 0), fiber: Number(item.fiber || 0), sugar: Number(item.sugar || 0), sodium: Number(item.sodium || 0), qty: Number(item.qty ?? 1), source: item.source ?? "manual" });
 }
 
 export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
@@ -56,9 +57,10 @@ export async function persistNutritionItem(item: Omit<NutritionItem, "id" | "qty
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Session utilisateur indisponible.");
   const meta = { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } };
-  const { data, error } = await supabase.from("food_log").insert({ user_id: user.id, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source, meta }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
-  if (error || !data) throw new Error(error?.message ?? "Enregistrement nutritionnel impossible.");
-  return { id: data.id, name: data.name, meal: data.meal, kcal: Number(data.kcal ?? 0), p: Number(data.protein_g ?? 0), c: Number(data.carbs_g ?? 0), f: Number(data.fat_g ?? 0), fiber: Number(data.fiber_g ?? 0), sugar: Number(data.sugar_g ?? 0), sodium: Number(data.sodium_mg ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1 };
+  const id = crypto.randomUUID();
+  const { error } = await supabase.from("food_log").insert({ id, user_id: user.id, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source, meta });
+  if (error) throw new Error(error.message);
+  return { id, name: item.name, meal: item.meal, kcal: Number(item.kcal ?? 0), p: Number(item.p ?? 0), c: Number(item.c ?? 0), f: Number(item.f ?? 0), fiber: Number(item.fiber ?? 0), sugar: Number(item.sugar ?? 0), sodium: Number(item.sodium ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1, source };
 }
 
 export async function deletePersistedNutritionItem(id: string): Promise<void> {
@@ -84,6 +86,8 @@ function nutritionRows(value: unknown) {
 
 let lastBridgedNutrition = readNutritionItems();
 let nutritionBridgeRunning = false;
+let nutritionBridgePending = false;
+let nutritionBridgePendingValue: unknown = null;
 
 function nutritionRowPayload(userId: string, day: string, item: NutritionItem) {
   return {
@@ -99,16 +103,16 @@ function nutritionRowPayload(userId: string, day: string, item: NutritionItem) {
     fiber_g: Number(item.fiber || 0),
     sugar_g: Number(item.sugar || 0),
     sodium_mg: Number(item.sodium || 0),
-    source: "manual",
+    source: item.source ?? "manual",
     meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } },
   };
 }
 
 function nutritionRowSignature(day: string, item: NutritionItem) {
-  return JSON.stringify([day, item.meal, item.name, Number(item.kcal || 0), Number(item.p || 0), Number(item.c || 0), Number(item.f || 0), Number(item.fiber || 0), Number(item.sugar || 0), Number(item.sodium || 0), item.sat ?? null, item.salt ?? null, item.iron ?? null, item.calcium ?? null, item.vitC ?? null]);
+  return JSON.stringify([day, item.meal, item.name, Number(item.kcal || 0), Number(item.p || 0), Number(item.c || 0), Number(item.f || 0), Number(item.fiber || 0), Number(item.sugar || 0), Number(item.sodium || 0), item.sat ?? null, item.salt ?? null, item.iron ?? null, item.calcium ?? null, item.vitC ?? null, item.source ?? "manual"]);
 }
 
-export async function syncNutritionStateToFoodLog(value: unknown) {
+async function bridgeLocalNutritionToFoodLog(value: unknown) {
   if (nutritionBridgeRunning || typeof window === "undefined") return;
   nutritionBridgeRunning = true;
   try {
@@ -149,15 +153,30 @@ export async function syncNutritionStateToFoodLog(value: unknown) {
     console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
   } finally {
     nutritionBridgeRunning = false;
+    if (nutritionBridgePending) {
+      const nextValue = nutritionBridgePendingValue;
+      nutritionBridgePending = false;
+      nutritionBridgePendingValue = null;
+      void bridgeLocalNutritionToFoodLog(nextValue);
+    }
   }
+}
+
+function scheduleNutritionBridge(value: unknown) {
+  if (nutritionBridgeRunning) {
+    nutritionBridgePending = true;
+    nutritionBridgePendingValue = value;
+    return;
+  }
+  void bridgeLocalNutritionToFoodLog(value);
 }
 
 if (typeof window !== "undefined") {
   onLocalWrite((key, value) => {
     if (key !== "pace.nutrition.items") return;
-    void syncNutritionStateToFoodLog(value);
+    scheduleNutritionBridge(value);
   });
-  void syncNutritionStateToFoodLog(lastBridgedNutrition);
+  void bridgeLocalNutritionToFoodLog(lastBridgedNutrition);
 }
 
 export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, operationId?: string): boolean {

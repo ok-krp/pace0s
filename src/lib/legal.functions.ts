@@ -58,10 +58,14 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
     }
 
     const opts = { ...DEFAULT_LEGAL_OPTS };
+    const seenConsentTypes = new Set<(typeof GRANULAR_TYPES)[number]>();
+    // Records are ordered newest-first. A latest denial (false) is a real choice,
+    // not an "unset" marker; never let an older grant override it.
     for (const record of records ?? []) {
-      if (!GRANULAR_TYPES.includes(record.consent_type as (typeof GRANULAR_TYPES)[number])) continue;
-      const key = record.consent_type as keyof LegalConsentOptions;
-      if (opts[key] === false) opts[key] = record.granted;
+      const consentType = record.consent_type as (typeof GRANULAR_TYPES)[number];
+      if (!GRANULAR_TYPES.includes(consentType) || seenConsentTypes.has(consentType)) continue;
+      opts[consentType] = record.granted;
+      seenConsentTypes.add(consentType);
     }
 
     const legacy = (legal?.opts as Partial<LegalConsentOptions> | null) ?? {};

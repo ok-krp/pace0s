@@ -1898,6 +1898,7 @@ export type Database = {
     }
     Functions: {
       canonicalize_nutrition_meal: { Args: { p_meal: string }; Returns: string }
+      get_current_health_consent_state: { Args: never; Returns: { health_data: boolean; health_cloud_sync: boolean }[] }
       has_current_health_e2ee_consent: { Args: never; Returns: boolean }
       insert_coach_ai_food_idempotent: {
         Args: {

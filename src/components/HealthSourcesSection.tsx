@@ -27,18 +27,15 @@ export function HealthSourcesSection() {
     (async () => {
       const user = (await supabase.auth.getUser()).data.user;
       if (!user || !active) return;
-      const { data } = await supabase
-        .from("consent_records")
-        .select("consent_type,granted,created_at")
-        .in("consent_type", ["health_data", "health_cloud_sync"])
-        .order("created_at", { ascending: false });
+      const { data, error } = await supabase.rpc("get_current_health_consent_state");
       if (!active) return;
-      const latest = new Map<string, boolean>();
-      for (const row of data ?? []) {
-        if (!latest.has(row.consent_type)) latest.set(row.consent_type, row.granted);
+      if (error || !data?.length) {
+        setHealthConsent(false);
+        setCloudHealthConsent(false);
+        return;
       }
-      setHealthConsent(latest.get("health_data") === true);
-      setCloudHealthConsent(latest.get("health_cloud_sync") === true);
+      setHealthConsent(data[0].health_data === true);
+      setCloudHealthConsent(data[0].health_cloud_sync === true);
     })();
     return () => { active = false; };
   }, []);

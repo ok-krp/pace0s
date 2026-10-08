@@ -25,4 +25,22 @@ assert.match(migration, /REVOKE ALL ON TABLE public\.ai_provider_secrets FROM an
 assert.match(migration, /GRANT ALL ON TABLE public\.ai_provider_secrets TO service_role/, "service role access missing");
 assert.match(migration, /encrypted_api_key/, "secret encryption storage missing");
 
+const coachFoodRpcMigration = fs.readFileSync(
+  "supabase/migrations/20261008120000_harden_coach_ai_food_rpc_authorization.sql",
+  "utf8",
+);
+for (const requiredGuard of [
+  "p_user_id is distinct from auth.uid()",
+  "conversation not owned by current user",
+  "and i.user_id = p_user_id",
+  "and fl.user_id = p_user_id",
+  "set search_path = ''",
+  "length(p_tool_call_id) > 200",
+  "revoke all on function public.insert_coach_ai_food_idempotent(",
+  "revoke execute on function public.insert_coach_ai_food_idempotent_v2",
+  "grant execute on function public.insert_coach_ai_food_idempotent_v2",
+]) {
+  assert.ok(coachFoodRpcMigration.includes(requiredGuard), `Coach AI RPC guard missing: ${requiredGuard}`);
+}
+
 console.log("BYOK policy checks passed");

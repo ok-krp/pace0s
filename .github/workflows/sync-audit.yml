@@ -1,12 +1,29 @@
-name: Pace sync audit
+name: Cloud Sync Audit
 
 on:
   pull_request:
     paths:
       - "src/**"
       - "supabase/**"
+      - "scripts/cloud-sync-contract-test.mjs"
       - "scripts/test-sync-policy.mjs"
+      - "scripts/health-e2ee-realtime-contract-test.mjs"
+      - "scripts/real-auth-multi-device-test.ts"
       - "package.json"
+      - "bun.lock"
+      - ".github/workflows/sync-audit.yml"
+  push:
+    branches:
+      - "fix/health-egress-consent-reads"
+    paths:
+      - "src/**"
+      - "supabase/**"
+      - "scripts/cloud-sync-contract-test.mjs"
+      - "scripts/test-sync-policy.mjs"
+      - "scripts/health-e2ee-realtime-contract-test.mjs"
+      - "scripts/real-auth-multi-device-test.ts"
+      - "package.json"
+      - "bun.lock"
       - ".github/workflows/sync-audit.yml"
 
 jobs:
@@ -14,14 +31,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: 22
-      - run: npm install --no-audit --no-fund
-      - run: node scripts/test-sync-policy.mjs
-      - run: npm run test:health-e2ee-realtime
-      # TanStack Router generates src/routeTree.gen.ts during the Vite build.
-      # Run the build before typecheck so newly added file routes are included.
-      - run: npm run build
-      - run: npm run lint
-      - run: npm run typecheck
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run test:sync
+      - run: bun run test:health-e2ee-realtime
+      - run: bun run build
+      - run: bun run lint
+      - run: bun run typecheck
+
+  real-auth-multi-device-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Run real authenticated A -> Realtime -> B -> B -> Realtime -> A test
+        env:
+          SUPABASE_URL: https://cduyjejftorfuxuwhbqt.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_HWlyOrqPkDAdibQIKl-RCQ_i8ihwcyO
+        run: bun run scripts/real-auth-multi-device-test.ts

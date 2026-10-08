@@ -9,6 +9,9 @@ const EXPORT_TABLES = [
   "health_samples_e2ee",
   "health_e2ee_devices",
   "health_e2ee_key_envelopes",
+  "health_e2ee_key_versions",
+  "health_e2ee_recovery_envelopes",
+  "health_legacy_migration_map",
   "legal_consent",
   "consent_records",
   "notification_log",
@@ -20,10 +23,13 @@ const EXPORT_TABLES = [
   "ai_conversations",
   "ai_messages",
   "ai_preferences",
+  "ai_tool_idempotency",
+  "audit_log",
   "development_tasks",
   "billing_customers",
   "billing_subscriptions",
   "billing_trials",
+  "data_deletion_requests",
   "sport_exercises",
   "sport_programs",
   "sport_program_items",
@@ -31,6 +37,7 @@ const EXPORT_TABLES = [
   "sport_workout_sessions",
   "sport_workout_exercises",
   "sport_workout_sets",
+  "user_biometrics_e2ee",
 ] as const;
 
 const DELETE_TABLES = [
@@ -70,15 +77,36 @@ export const exportMyData = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const tables: Record<string, unknown[]> = {};
 
+    const pageSize = 500;
     for (const table of EXPORT_TABLES) {
-      const query = (supabaseAdmin as any).from(table).select("*");
-      const { data, error } = await query.eq("user_id", context.userId);
-      if (error) {
-        console.error("privacy export failed", { table, error: error.message });
-        throw new Error("Impossible d’exporter vos données.");
+      const rows: unknown[] = [];
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await (supabaseAdmin as any)
+          .from(table)
+          .select("*")
+          .eq("user_id", context.userId)
+          .range(from, from + pageSize - 1);
+        if (error) {
+          console.error("privacy export failed", { table, error: error.message });
+          throw new Error("Impossible d’exporter vos données.");
+        }
+        const page = (data ?? []) as unknown[];
+        rows.push(...page);
+        if (page.length < pageSize) break;
       }
-      tables[table] = (data ?? []) as unknown[];
+      tables[table] = rows;
     }
+
+    // Export user-owned BYOK metadata, but never return encrypted API-key material.
+    const { data: providerSecrets, error: providerSecretsError } = await (supabaseAdmin as any)
+      .from("ai_provider_secrets")
+      .select("provider,key_last4,created_at,updated_at")
+      .eq("user_id", context.userId);
+    if (providerSecretsError) {
+      console.error("privacy export failed", { table: "ai_provider_secrets", error: providerSecretsError.message });
+      throw new Error("Impossible d’exporter vos données.");
+    }
+    tables.ai_provider_secrets = providerSecrets ?? [];
 
     return {
       generated_at: new Date().toISOString(),

@@ -1,0 +1,134 @@
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { createRemoteJWKSet, jwtVerify } from "npm:jose@6";
+
+const GITHUB_ISSUER = "https://token.actions.githubusercontent.com";
+const GITHUB_AUDIENCE = "paceos-supabase-e2e";
+const GITHUB_JWKS = createRemoteJWKSet(new URL("https://token.actions.githubusercontent.com/.well-known/jwks"));
+
+const secretKeys = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}");
+const secretKey = secretKeys.default;
+const publishableKeys = JSON.parse(Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") ?? "{}");
+const publishableKey = publishableKeys.default;
+const supabaseUrl = Deno.env.get("SUPABASE_URL");
+
+if (!secretKey || !publishableKey || !supabaseUrl) throw new Error("Supabase function keys are not configured");
+
+const admin = createClient(supabaseUrl, secretKey, { auth: { persistSession: false, autoRefreshToken: false } });
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, content-type",
+  "Content-Type": "application/json",
+};
+
+async function authorize(request: Request) {
+  const header = request.headers.get("authorization");
+  if (!header?.startsWith("Bearer ")) throw new Error("Missing GitHub OIDC bearer token");
+  const token = header.slice("Bearer ".length);
+  const { payload } = await jwtVerify(token, GITHUB_JWKS, {
+    issuer: GITHUB_ISSUER,
+    audience: GITHUB_AUDIENCE,
+  });
+  if (payload.repository !== "ok-krp/pace0s") throw new Error("GitHub repository is not allowed");
+  if (payload.workflow !== "Cloud Sync Audit") throw new Error("GitHub workflow is not allowed");
+  const eventName = String(payload.event_name ?? "");
+  if (eventName === "pull_request") {
+    // PR-triggered runs are allowed for this workflow.
+  } else if (eventName === "push" && payload.ref === "refs/heads/fix/health-egress-consent-reads") {
+    // The dedicated E2E workflow also runs on pushes to the PR branch.
+  } else {
+    throw new Error("GitHub event is not allowed");
+  }
+  if (payload.actor !== "ok-krp") throw new Error("GitHub actor is not allowed");
+  return payload;
+}
+
+Deno.serve(async (request) => {
+  if (request.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (request.method !== "POST") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders });
+
+  try {
+    const claims = await authorize(request);
+    const body = await request.json().catch(() => ({}));
+
+    if (body.action === "cleanup") {
+      const userId = typeof body.user_id === "string" ? body.user_id : "";
+      if (!userId) return new Response(JSON.stringify({ error: "user_id is required" }), { status: 400, headers: corsHeaders });
+      const { data: found, error: lookupError } = await admin.auth.admin.getUserById(userId);
+      if (lookupError || !found.user) return new Response(JSON.stringify({ error: "E2E user not found" }), { status: 404, headers: corsHeaders });
+      if (found.user.user_metadata?.paceos_e2e !== true || !found.user.email?.startsWith("paceos-e2e+")) {
+        return new Response(JSON.stringify({ error: "Refusing to delete a non-E2E user" }), { status: 403, headers: corsHeaders });
+      }
+      await admin.from("user_state").delete().eq("user_id", userId);
+      const { error } = await admin.auth.admin.deleteUser(userId);
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: corsHeaders });
+      return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+    }
+
+    if (body.action === "cleanup_stale") {
+      // CI jobs have an 8-minute timeout; a 10-minute age avoids deleting active fixtures.
+      const cutoff = Date.now() - 10 * 60 * 1000;
+      let page = 1;
+      let cleaned = 0;
+      while (true) {
+        const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+        if (error) return new Response(JSON.stringify({ error: "Unable to list E2E users: " + error.message }), { status: 500, headers: corsHeaders });
+        const users = data.users;
+        for (const user of users) {
+          if (
+            user.user_metadata?.paceos_e2e !== true ||
+            !user.email?.startsWith("paceos-e2e+") ||
+            !user.created_at ||
+            Date.parse(user.created_at) >= cutoff
+          ) continue;
+          await admin.from("user_state").delete().eq("user_id", user.id);
+          const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
+          // Another authorized CI run may have removed this same stale user after listUsers().
+          if (deleteError && !/user not found/i.test(deleteError.message)) {
+            return new Response(JSON.stringify({ error: "Unable to delete stale E2E user: " + deleteError.message }), { status: 500, headers: corsHeaders });
+          }
+          if (!deleteError) cleaned++;
+        }
+        if (users.length < 1000) break;
+        page++;
+      }
+      return new Response(JSON.stringify({ ok: true, cleaned }), { headers: corsHeaders });
+    }
+
+    const runId = String(claims.run_id ?? "unknown");
+    const runAttempt = String(claims.run_attempt ?? "1");
+    const email = "paceos-e2e+" + runId + "-" + runAttempt + "-" + crypto.randomUUID() + "@example.com";
+    const password = crypto.randomUUID() + "-" + crypto.randomUUID().slice(0, 16);
+
+    const { data: created, error: createError } = await admin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { paceos_e2e: true, github_run_id: runId },
+    });
+    if (createError || !created.user) {
+      return new Response(JSON.stringify({ error: createError?.message ?? "Failed to create E2E user" }), { status: 500, headers: corsHeaders });
+    }
+
+    const client = createClient(supabaseUrl, publishableKey, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
+    const [a, b] = await Promise.all([
+      client.auth.signInWithPassword({ email, password }),
+      client.auth.signInWithPassword({ email, password }),
+    ]);
+
+    if (a.error || b.error || !a.data.session || !b.data.session) {
+      await admin.auth.admin.deleteUser(created.user.id);
+      return new Response(JSON.stringify({
+        error: "Failed to create two authenticated E2E sessions",
+        detail: a.error?.message ?? b.error?.message ?? "missing session",
+      }), { status: 500, headers: corsHeaders });
+    }
+
+    return new Response(JSON.stringify({
+      user_id: created.user.id,
+      a: { access_token: a.data.session.access_token, refresh_token: a.data.session.refresh_token },
+      b: { access_token: b.data.session.access_token, refresh_token: b.data.session.refresh_token },
+    }), { headers: corsHeaders });
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Unauthorized" }), { status: 401, headers: corsHeaders });
+  }
+});
