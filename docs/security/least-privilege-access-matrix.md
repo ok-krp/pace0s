@@ -9,6 +9,7 @@
 - `anon`: no direct privileges on `public` tables.
 - `authenticated`: only operations actually used by the application, with existing RLS as row-level enforcement.
 - No client `TRUNCATE`, `TRIGGER`, or `REFERENCES`.
+- Revoke default table/sequence grants for `supabase_admin` so newly created objects do not silently regain client access.
 - Server/admin-only operations use `supabaseAdmin` or narrowly scoped RPCs; they do not justify client grants.
 - RLS policy presence is not equivalent to a grant. A request requires both table privilege and a matching policy.
 
@@ -73,6 +74,6 @@ The current source inventory shows these as trusted-server or RPC-managed tables
 1. **Do not apply yet.** The source scan and proposed grant matrix have not passed a full cross-user negative test.
 2. `health_e2ee_pairing_sessions` has RLS enabled and zero policies. It must remain inaccessible directly; verify every pairing RPC validates session ownership, consent, expiry, attempt count and caller identity.
 3. The 11 Advisor-reported `SECURITY DEFINER` RPCs still require per-function review of caller identity, ownership, consent, search path, and execute ACLs. Do not convert trigger/internal functions mechanically.
-4. The migration's `REVOKE ALL ON ALL TABLES` is schema-wide. Before application, reconcile the full table list with all web, Flutter, edge-function, and integration consumers—not just `.from()` hits in the web client.
+4. The migration's `REVOKE ALL ON ALL TABLES` is schema-wide. It now also revokes default table/sequence ACLs for `supabase_admin`. Before application, reconcile the full table list with all web, Flutter, edge-function, and integration consumers—not just `.from()` hits in the web client.
 5. Run CI, authenticated two-user negative tests (cross-user SELECT/INSERT/UPDATE/DELETE), and a non-production apply; then compare effective grants/policies and run Security Advisor + real multi-device E2E.
 6. This migration is prepared on the branch only; no SQL was applied to project `cduyjejftorfuxuwhbqt`.
