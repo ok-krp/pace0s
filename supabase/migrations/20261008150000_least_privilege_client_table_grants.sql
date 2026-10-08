@@ -14,12 +14,22 @@
 revoke all on all tables in schema public from anon;
 revoke all on all tables in schema public from authenticated;
 
--- Supabase's current default ACLs re-grant table and sequence privileges to
--- client roles for future objects. Close that path for the migration owner too.
+-- The live target currently has broad default ACLs for BOTH postgres and
+-- supabase_admin (tables, sequences, and function EXECUTE). Revoke for each
+-- object-creating role; otherwise future objects silently regain client access.
+alter default privileges for role postgres in schema public
+  revoke all on tables from anon, authenticated;
+alter default privileges for role postgres in schema public
+  revoke all on sequences from anon, authenticated;
+alter default privileges for role postgres in schema public
+  revoke execute on functions from anon, authenticated;
+
 alter default privileges for role supabase_admin in schema public
   revoke all on tables from anon, authenticated;
 alter default privileges for role supabase_admin in schema public
   revoke all on sequences from anon, authenticated;
+alter default privileges for role supabase_admin in schema public
+  revoke execute on functions from anon, authenticated;
 
 -- User-owned CRUD tables: RLS remains the authorization boundary.
 grant select, insert, update, delete on table public.ai_conversations to authenticated;
