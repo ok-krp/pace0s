@@ -302,7 +302,27 @@ export function useCloudSyncEngineInternal() {
       const queued = getQueued(row.key);
       if (queued) { recordConflict(row.key, queued.value, row.value, row.updated_at); return; }
       const domain = readDomainRecord(row.key);
-      if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) return;
+      if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) {
+        const domainTime = Date.parse(domain.updatedAt);
+        if (domainTime > remoteTime) {
+          // Realtime may reveal a cloud row created after the initial bootstrap.
+          // Preserve and immediately enqueue a newer local-only edit instead of
+          // waiting for a page-show event (healthy Realtime disables fallback polling).
+          const localItem: QueueItem = {
+            key: row.key,
+            value: domain.value,
+            updatedAt: domain.updatedAt,
+            mutationId: domain.mutationId,
+          };
+          queueItem(localItem);
+          void pushItem(localItem);
+        } else if (domainTime === remoteTime && serialize(domain.value) !== serialize(row.value)) {
+          // Equal timestamps with different payloads cannot be ordered safely.
+          // Keep the local value and make the conflict explicit rather than dropping either side.
+          recordConflict(row.key, domain.value, row.value, row.updated_at);
+        }
+        return;
+      }
       applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
       markVersion(row.key, row.updated_at);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
