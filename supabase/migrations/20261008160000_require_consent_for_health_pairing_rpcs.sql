@@ -24,54 +24,7 @@ begin
     raise exception 'Health E2EE cloud-sync consent is required';
   end if;
 
-  if p_secret_hash is null or p_secret_hash !~ '^[0-9a-f]{64}
-
-  if p_expires_in_seconds < 60 or p_expires_in_seconds > 600 then
-    raise exception 'Invalid pairing expiration';
-  end if;
-
-  if jsonb_typeof(p_ephemeral_pub) <> 'object'
-     or p_ephemeral_pub->>'kty' <> 'EC'
-     or p_ephemeral_pub->>'crv' <> 'P-256'
-     or coalesce(length(p_ephemeral_pub->>'x'), 0) = 0
-     or coalesce(length(p_ephemeral_pub->>'x'), 0) > 128
-     or coalesce(length(p_ephemeral_pub->>'y'), 0) = 0
-     or coalesce(length(p_ephemeral_pub->>'y'), 0) > 128 then
-    raise exception 'Invalid initiator ephemeral public key';
-  end if;
-
-  if not exists (
-    select 1
-    from public.health_e2ee_devices d
-    where d.id = p_initiator_device_id
-      and d.user_id = auth.uid()
-      and d.revoked_at is null
-      and d.algorithm = 'ECDH-P256'
-  ) then
-    raise exception 'Unauthorized device';
-  end if;
-
-  insert into public.health_e2ee_pairing_sessions (
-    user_id,
-    initiator_device_id,
-    secret_hash,
-    challenge,
-    initiator_ephemeral_public_key,
-    expires_at
-  )
-  values (
-    auth.uid(),
-    p_initiator_device_id,
-    p_secret_hash,
-    p_challenge,
-    p_ephemeral_pub,
-    now() + make_interval(secs => p_expires_in_seconds)
-  )
-  returning id into v_session_id;
-
-  return v_session_id;
-end;
-$$; then
+  if p_secret_hash is null or p_secret_hash !~ '^[0-9a-f]{64}$' then
     raise exception 'Invalid pairing secret hash';
   end if;
 
@@ -87,7 +40,9 @@ $$; then
      or p_ephemeral_pub->>'kty' <> 'EC'
      or p_ephemeral_pub->>'crv' <> 'P-256'
      or coalesce(length(p_ephemeral_pub->>'x'), 0) = 0
-     or coalesce(length(p_ephemeral_pub->>'y'), 0) = 0 then
+     or coalesce(length(p_ephemeral_pub->>'x'), 0) > 128
+     or coalesce(length(p_ephemeral_pub->>'y'), 0) = 0
+     or coalesce(length(p_ephemeral_pub->>'y'), 0) > 128 then
     raise exception 'Invalid initiator ephemeral public key';
   end if;
 
