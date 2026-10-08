@@ -44,6 +44,9 @@ assert.match(storage, /Persist and emit the sync event synchronously from the us
 assert.match(storage, /if \(!loaded \|\| typeof window === "undefined"\) return;/, "local state persistence must only run after hydration");
 assert.match(storage, /pace\.sport\.exercises.*LOCAL_WRITE_EVENT/s, "derived sport exercise changes must enter the cloud queue");
 assert.match(storage, /pace\.sport\.programs.*LOCAL_WRITE_EVENT/s, "derived sport program changes must enter the cloud queue");
+const profileRpc = read("supabase/migrations/20260830150000_fix_profile_id_and_legacy_profile_upsert.sql");
+assert.match(profileRpc, /effective_updated_at timestamptz := clock_timestamp\(\)/, "profile ordering must use database time, not a browser clock");
+assert.match(profileRpc, /updated_at = EXCLUDED\.updated_at/, "profile writes must persist the server-authoritative ordering timestamp");
 
 // A lost RPC response is resolved by the monotonic RPC itself; a rejected write
 // performs a single reconciliation read against the canonical row.
