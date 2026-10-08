@@ -65,7 +65,8 @@ Deno.serve(async (request) => {
     }
 
     if (body.action === "cleanup_stale") {
-      const cutoff = Date.now() - 60 * 60 * 1000;
+      // CI jobs have an 8-minute timeout; a 10-minute age avoids deleting active fixtures.
+      const cutoff = Date.now() - 10 * 60 * 1000;
       let page = 1;
       let cleaned = 0;
       while (true) {

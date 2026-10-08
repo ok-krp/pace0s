@@ -172,6 +172,10 @@ try {
   const { data: deniedConsent, error: deniedConsentError } = await aClient.rpc("has_current_health_e2ee_consent");
   if (deniedConsentError) throw new Error("Consent-denied RPC failed: " + deniedConsentError.message);
   if (deniedConsent !== false) throw new Error("Fresh E2E account unexpectedly has Health E2EE consent");
+  const { data: deniedState, error: deniedStateError } = await aClient.rpc("get_current_health_consent_state");
+  if (deniedStateError || deniedState?.[0]?.health_data !== false || deniedState?.[0]?.health_cloud_sync !== false) {
+    throw new Error("Fresh E2E account consent state was not false/false");
+  }
 
   const healthProbe = {
     user_id: userId,
@@ -196,6 +200,10 @@ try {
   const { data: grantedConsent, error: grantedConsentError } = await aClient.rpc("has_current_health_e2ee_consent");
   if (grantedConsentError) throw new Error("Consent-granted RPC failed: " + grantedConsentError.message);
   if (grantedConsent !== true) throw new Error("Health E2EE consent RPC did not recognize granted consent");
+  const { data: grantedState, error: grantedStateError } = await aClient.rpc("get_current_health_consent_state");
+  if (grantedStateError || grantedState?.[0]?.health_data !== true || grantedState?.[0]?.health_cloud_sync !== true) {
+    throw new Error("Granted E2E account consent state was not true/true");
+  }
 
   const { data: healthInserted, error: healthInsertError } = await aClient
     .from("health_samples_e2ee")
