@@ -64,6 +64,8 @@ grant select, insert, update on table public.health_e2ee_recovery_envelopes to a
 
 -- Sensitive/legal tables: only the operations represented by current policies.
 grant select, insert on table public.consent_records to authenticated;
+-- Flutter requests deletion directly and selects only the newly created request id.
+grant select, insert on table public.data_deletion_requests to authenticated;
 grant select, insert, update on table public.legal_consent to authenticated;
 grant select, delete on table public.health_samples to authenticated;
 
@@ -81,7 +83,7 @@ grant select on table public.billing_subscriptions to authenticated;
 
 -- Explicitly server-only / internal: no client table grants.
 -- ai_provider_secrets, ai_tool_idempotency, audit_log, billing_events,
--- billing_customers, billing_trials, data_deletion_requests,
+-- billing_customers, billing_trials,
 -- health_e2ee_pairing_sessions, health_legacy_migration_map, notification_log,
 -- user_biometrics_e2ee and direct user_state writes remain inaccessible by default.
 -- development_tasks only receives SELECT (the user task list) and INSERT (BUILD AI
