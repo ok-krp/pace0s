@@ -47,12 +47,6 @@
 | `health_samples` | Read legacy rows for migration and delete plaintext only after encrypted verification | SELECT, DELETE | CRUD, owner-scoped | Historical plaintext table; DELETE is needed for the explicit migration path. No INSERT/UPDATE grant. |
 | `sport_exercises` | Read catalog + user exercises; insert and rollback-delete exercises | SELECT, INSERT, DELETE | CRUD, owner-scoped | Kept separate from static nutrition catalogs. |
 | `billing_subscriptions` | Authenticated billing status reads own subscription | SELECT | SELECT, owner-scoped | Writes are handled by trusted webhook/admin path. |
-| `nutrition_canonical_dishes` | Catalog/reference table; no direct `.from()` call found in current source scan | SELECT | SELECT | Retained provisionally as read-only catalog access; validate all client/platform consumers. |
-| `nutrition_data_sources` | Catalog/reference table; no direct `.from()` call found in current source scan | SELECT | SELECT | Retained provisionally as read-only catalog access. |
-| `nutrition_dish_references` | Catalog/reference table; no direct `.from()` call found in current source scan | SELECT | SELECT | Retained provisionally as read-only catalog access. |
-| `nutrition_reference_dishes` | Catalog/reference table; no direct `.from()` call found in current source scan | SELECT | SELECT | Retained provisionally as read-only catalog access. |
-| `nutrition_reference_foods` | Catalog/reference table; no direct `.from()` call found in current source scan | SELECT | SELECT | Retained provisionally as read-only catalog access. |
-| `nutrition_reference_sources` | Catalog/reference table; no direct `.from()` call found in current source scan | SELECT | SELECT | Retained provisionally as read-only catalog access. |
 
 ## No direct grants to `anon` or `authenticated`
 
@@ -64,10 +58,11 @@ The current source inventory shows these as trusted-server or RPC-managed tables
 - `billing_events`
 - `billing_customers` (billing code uses the admin client)
 - `billing_trials` (trial code uses the admin client)
-- `health_e2ee_key_versions` is not server-only; Flutter reads the current version, so SELECT is granted
+- `health_e2ee_key_versions` is client-readable by Flutter, so SELECT is explicitly granted (not server-only)
 - `health_e2ee_pairing_sessions` (pairing is handled through RPCs; target currently has RLS enabled but zero policies)
 - `health_legacy_migration_map` (migration RPC/internal mapping)
 - `notification_log` (trusted reminder-hook/admin writes)
+- `nutrition_canonical_dishes`, `nutrition_data_sources`, `nutrition_dish_references`, `nutrition_reference_dishes`, `nutrition_reference_foods`, `nutrition_reference_sources` (nutrition engine uses the trusted server-side admin client; no direct client table access was found)
 - `user_biometrics_e2ee` (no direct source access found in the repository scan)
 
 ## Mandatory blockers before applying
