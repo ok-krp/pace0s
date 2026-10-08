@@ -132,14 +132,21 @@ assert.match(leastPrivilegeMigration, /revoke all on all tables in schema public
 assert.match(leastPrivilegeMigration, /revoke all on all sequences in schema public from anon/i);
 assert.match(leastPrivilegeMigration, /revoke all on all sequences in schema public from authenticated/i);
 for (const ownerRole of ["postgres", "supabase_admin"]) {
-  assert.match(leastPrivilegeMigration, new RegExp(`alter default privileges for role ${ownerRole} in schema public\\\\s+revoke all on tables`));
-  assert.match(leastPrivilegeMigration, new RegExp(`alter default privileges for role ${ownerRole} in schema public\\\\s+revoke all on sequences`));
-  assert.match(leastPrivilegeMigration, new RegExp(`alter default privileges for role ${ownerRole} in schema public\\\\s+revoke execute on functions`));
+  for (const objectPrivilege of [
+    "revoke all on tables",
+    "revoke all on sequences",
+    "revoke execute on functions",
+  ]) {
+    assert.ok(
+      leastPrivilegeMigration.includes(
+        "alter default privileges for role " + ownerRole + " in schema public\n  " + objectPrivilege,
+      ),
+      "default client ACL must be revoked for " + ownerRole + " / " + objectPrivilege,
+    );
+  }
 }
-assert.match(leastPrivilegeMigration, /grant select, insert, update on table public\\.ai_messages to authenticated/i);
-assert.doesNotMatch(
-  leastPrivilegeMigration.split("\\n").filter((line) => /^\\s*grant\\b/i.test(line)).join("\\n"),
-  /\\b(truncate|trigger|references|maintain)\\b/i,
-);
+assert.ok(leastPrivilegeMigration.includes("grant select, insert, update on table public.ai_messages to authenticated;"));
+const explicitGrantLines = leastPrivilegeMigration.split(/\r?\n/).filter((line) => /^\s*grant\b/i.test(line));
+assert.doesNotMatch(explicitGrantLines.join("\n"), /\b(truncate|trigger|references|maintain)\b/i);
 
 console.log("health E2EE realtime contract: PASS");
