@@ -96,4 +96,28 @@ assert.match(remainingDefinerMigration, /where user_id = auth\.uid\(\)/);
 assert.match(remainingDefinerMigration, /where id = p_revoked_device_id and user_id = auth\.uid\(\)/);
 assert.match(remainingDefinerMigration, /Device does not belong to current user/);
 
+const pairingRpcConsentMigration = fs.readFileSync(
+  path.join(root, "supabase/migrations/20261008160000_require_consent_for_health_pairing_rpcs.sql"),
+  "utf8",
+);
+
+for (const functionName of [
+  "create_pairing_session",
+  "join_pairing_session",
+  "confirm_pairing_session",
+  "complete_pairing_session",
+  "create_pairing_envelope",
+]) {
+  const start = pairingRpcConsentMigration.indexOf(`create or replace function public.${functionName}`);
+  assert.ok(start >= 0, `pairing consent migration must replace ${functionName}`);
+  const end = pairingRpcConsentMigration.indexOf("$;", start);
+  assert.ok(end > start, `pairing consent migration must terminate ${functionName}`);
+  const definition = pairingRpcConsentMigration.slice(start, end + 3);
+  assert.match(definition, /security definer/);
+  assert.match(definition, /set search_path = ''/);
+  assert.match(definition, /if not public\\.has_current_health_e2ee_consent\\(\\)/);
+  assert.match(definition, /Health E2EE cloud-sync consent is required/);
+  assert.match(pairingRpcConsentMigration, new RegExp(`grant execute on function public\\.${functionName}`));
+}
+
 console.log("health E2EE realtime contract: PASS");
