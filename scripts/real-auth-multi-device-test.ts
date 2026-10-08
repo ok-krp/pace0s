@@ -157,8 +157,8 @@ function subscribeForEvent(client: SupabaseClient, channelName: string, event: "
       }
     })
     .on("postgres_changes", { event, schema: "public", table: "user_state", filter: "user_id=eq." + userId }, (payload) => {
-      if (!predicate(payload) || settled) return;
       egress.realtimePayloadBytes += new TextEncoder().encode(JSON.stringify(payload)).byteLength;
+      if (!predicate(payload) || settled) return;
       settled = true;
       clearTimeout(timer);
       eventResolve(payload);
