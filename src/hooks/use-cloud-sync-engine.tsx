@@ -437,7 +437,11 @@ export function useCloudSyncEngineInternal() {
       if (!allowed()) { setStatus("consent_required"); return; }
       pruneEquivalentConflicts();
       if (!navigator.onLine) { setStatus("offline"); return; }
-      await flushQueue(); await pull();
+      await flushQueue();
+      await pull();
+      // pull() may enqueue legacy/local domain records that are absent in the cloud.
+      // Flush again so initial reconciliation uploads those records immediately.
+      await flushQueue();
       pruneEquivalentConflicts();
     };
 
