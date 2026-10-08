@@ -29,7 +29,7 @@ grant select on table public.reminder_debug_log to authenticated;
 grant select, insert on table public.development_tasks to authenticated;
 grant select, insert, delete on table public.sport_programs to authenticated;
 grant select, insert, delete on table public.sport_program_items to authenticated;
-grant select, insert, update, delete on table public.sport_progression_targets to authenticated;
+grant select, insert, update on table public.sport_progression_targets to authenticated;
 grant select, insert, delete on table public.sport_workout_sessions to authenticated;
 grant select, insert on table public.sport_workout_exercises to authenticated;
 grant select, insert, update on table public.sport_workout_sets to authenticated;
@@ -53,7 +53,7 @@ grant select on table public.nutrition_dish_references to authenticated;
 grant select on table public.nutrition_reference_dishes to authenticated;
 grant select on table public.nutrition_reference_foods to authenticated;
 grant select on table public.nutrition_reference_sources to authenticated;
-grant select on table public.sport_exercises to authenticated;
+grant select, insert, delete on table public.sport_exercises to authenticated;
 
 -- Billing state is read-only from the client.
 grant select on table public.billing_subscriptions to authenticated;
