@@ -404,29 +404,6 @@ export function useCloudSyncEngineInternal() {
             newest = newest && Date.parse(newest) > Date.parse(localDomain.updatedAt) ? newest : localDomain.updatedAt;
           }
         } catch {}
-        // Bootstrap pre-existing local domain state that has no cloud row yet.
-        // This recovers data created before the sync engine began observing writes.
-        try {
-          for (const storageKey of Object.keys(localStorage)) {
-            if (!storageKey.startsWith(DOMAIN_PREFIX)) continue;
-            const domain = storageKey.slice(DOMAIN_PREFIX.length);
-            if (!domain || domain.startsWith("__")) continue;
-            const key = PACE_PREFIX + domain;
-            if (!isSyncableKey(key) || grouped.has(key)) continue;
-            const localDomain = readDomainRecord(key);
-            if (!localDomain || isEmptyRecoveredValue(localDomain.value)) continue;
-            queueItem({
-              key,
-              value: localDomain.value,
-              updatedAt: localDomain.updatedAt,
-              mutationId: localDomain.mutationId,
-            });
-            meta[key] = localDomain.updatedAt;
-            newest = newest && Date.parse(newest) > Date.parse(localDomain.updatedAt) ? newest : localDomain.updatedAt;
-          }
-        } catch (error) {
-          console.warn("[CloudSync] local domain bootstrap failed", error);
-        }
         writeMeta(meta);
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (newest) setStatus("ok");
