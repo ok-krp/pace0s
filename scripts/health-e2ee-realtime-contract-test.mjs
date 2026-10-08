@@ -140,20 +140,22 @@ assert.match(leastPrivilegeMigration, /revoke all on all tables in schema public
 assert.match(leastPrivilegeMigration, /revoke all on all tables in schema public from authenticated/i);
 assert.match(leastPrivilegeMigration, /revoke all on all sequences in schema public from anon/i);
 assert.match(leastPrivilegeMigration, /revoke all on all sequences in schema public from authenticated/i);
-for (const ownerRole of ["postgres", "supabase_admin"]) {
-  for (const objectPrivilege of [
-    "revoke all on tables",
-    "revoke all on sequences",
-    "revoke execute on functions",
-  ]) {
-    assert.ok(
-      leastPrivilegeMigration.includes(
-        "alter default privileges for role " + ownerRole + " in schema public\n  " + objectPrivilege,
-      ),
-      "default client ACL must be revoked for " + ownerRole + " / " + objectPrivilege,
-    );
-  }
+// This migration connection cannot change supabase_admin's default ACLs
+// without membership in that role. It must revoke postgres-owned defaults and
+// explicitly retain the supabase_admin ACL as a pre-apply blocker.
+for (const objectPrivilege of [
+  "revoke all on tables",
+  "revoke all on sequences",
+  "revoke execute on functions",
+]) {
+  assert.ok(
+    leastPrivilegeMigration.includes(
+      "alter default privileges for role postgres in schema public\n  " + objectPrivilege,
+    ),
+    "default client ACL must be revoked for postgres / " + objectPrivilege,
+  );
 }
+assert.match(leastPrivilegeMigration, /supabase_admin defaults are an explicit\s+pre-apply blocker/i);
 assert.ok(leastPrivilegeMigration.includes("grant select, insert, update on table public.ai_messages to authenticated;"));
 const explicitGrantLines = leastPrivilegeMigration.split(/\r?\n/).filter((line) => /^\s*grant\b/i.test(line));
 assert.doesNotMatch(explicitGrantLines.join("\n"), /\b(truncate|trigger|references|maintain)\b/i);
