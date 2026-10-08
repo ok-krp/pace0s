@@ -168,6 +168,52 @@ try {
   if (bUserError) throw new Error("B getUser failed: " + bUserError.message);
   if (!aUser || !bUser || aUser.user.id !== bUser.user.id || aUser.user.id !== userId) throw new Error("A and B are not the same Auth user");
 
+  const { data: deniedConsent, error: deniedConsentError } = await aClient.rpc("has_current_health_e2ee_consent");
+  if (deniedConsentError) throw new Error("Consent-denied RPC failed: " + deniedConsentError.message);
+  if (deniedConsent !== false) throw new Error("Fresh E2E account unexpectedly has Health E2EE consent");
+
+  const healthProbe = {
+    user_id: userId,
+    ciphertext: "e2e-ciphertext-probe",
+    nonce: "MDEyMzQ1Njc4OWFiY2RlZg==",
+    algorithm: "AES-256-GCM",
+    key_version: 1,
+    dedupe_hash: "e".repeat(64),
+  };
+  const { error: deniedWriteError } = await aClient.from("health_samples_e2ee").insert(healthProbe);
+  if (!deniedWriteError) {
+    await aClient.from("health_samples_e2ee").delete().eq("user_id", userId).eq("dedupe_hash", healthProbe.dedupe_hash);
+    throw new Error("Health E2EE insert unexpectedly succeeded without consent");
+  }
+  console.log("Health E2EE consent denied: PASS");
+
+  const { error: grantError } = await aClient.from("consent_records").insert([
+    { user_id: userId, consent_type: "health_data", granted: true, legal_version: "e2e-v1", policy_version: "e2e-v1" },
+    { user_id: userId, consent_type: "health_cloud_sync", granted: true, legal_version: "e2e-v1", policy_version: "e2e-v1" },
+  ]);
+  if (grantError) throw new Error("Failed to grant test consent: " + grantError.message);
+  const { data: grantedConsent, error: grantedConsentError } = await aClient.rpc("has_current_health_e2ee_consent");
+  if (grantedConsentError) throw new Error("Consent-granted RPC failed: " + grantedConsentError.message);
+  if (grantedConsent !== true) throw new Error("Health E2EE consent RPC did not recognize granted consent");
+
+  const { data: healthInserted, error: healthInsertError } = await aClient
+    .from("health_samples_e2ee")
+    .insert(healthProbe)
+    .select("id")
+    .single();
+  if (healthInsertError || !healthInserted) throw new Error("Health E2EE insert failed with consent: " + (healthInsertError?.message ?? "missing row"));
+  const { data: healthRead, error: healthReadError } = await bClient
+    .from("health_samples_e2ee")
+    .select("id,ciphertext,nonce,algorithm,key_version")
+    .eq("id", healthInserted.id)
+    .single();
+  if (healthReadError || healthRead?.ciphertext !== healthProbe.ciphertext) {
+    throw new Error("Second authenticated session could not read consented Health E2EE row: " + (healthReadError?.message ?? "row mismatch"));
+  }
+  const { error: healthDeleteError } = await aClient.from("health_samples_e2ee").delete().eq("id", healthInserted.id);
+  if (healthDeleteError) throw new Error("Health E2EE probe cleanup failed: " + healthDeleteError.message);
+  console.log("Health E2EE consent granted + cross-session RLS read: PASS");
+
   const bListener = subscribeForEvent(bClient, "paceos-e2e-B", "INSERT", userId, (p) => p.new?.key === keyName && p.new?.value?.phase === "A");
   const aListener = subscribeForEvent(aClient, "paceos-e2e-A", "UPDATE", userId, (p) => p.new?.key === keyName && p.new?.value?.phase === "B");
 
