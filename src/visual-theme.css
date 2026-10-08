@@ -550,8 +550,10 @@
 
 
 /* Signal supports both light and dark palettes. Dark follows Pace's existing dark preference. */
-.dark[data-visual-theme="signal"] {
+html[data-visual-theme="signal"] {
   color-scheme: dark;
+  --color-background: #090b0e !important;
+  --color-foreground: #f5f7fa !important;
   --background:#090b0e; --foreground:#f5f7fa; --card:rgb(20 24 29/.92); --card-foreground:#f5f7fa;
   --popover:#111418; --popover-foreground:#f5f7fa; --primary:#f5f7fa; --primary-foreground:#111418;
   --secondary:#1c2127; --secondary-foreground:#f5f7fa; --muted:#1c2127; --muted-foreground:#b8bec7;
@@ -560,71 +562,71 @@
   --sidebar-accent:#1c2127; --sidebar-accent-foreground:#fff; --sidebar-border:rgb(255 255 255/.10); --sidebar-ring:#f5f7fa;
   --glass-tint:255 255 255; --glass-tint-base:.08; --glass-tint-strength:.08; --glass-edge:.12; --wallpaper:#090b0e;
 }
-.dark[data-visual-theme="signal"] body { background:#090b0e !important; color:#f5f7fa !important; }
-.dark[data-visual-theme="signal"] .pace-bg,
-.dark[data-visual-theme="signal"] .pace-bg::before { background:#090b0e !important; background-image:none !important; filter:none !important; }
-.dark[data-visual-theme="signal"] .text-foreground,
-.dark[data-visual-theme="signal"] .text-card-foreground { color:#f5f7fa !important; }
-.dark[data-visual-theme="signal"] .text-muted-foreground,
-.dark[data-visual-theme="signal"] [class*="text-muted"] { color:#b8bec7 !important; }
-.dark[data-visual-theme="signal"] .text-white { color:#f5f7fa !important; }
-.dark[data-visual-theme="signal"] .bg-white\/5 { background:rgb(255 255 255/.055) !important; }
-.dark[data-visual-theme="signal"] .bg-white\/10 { background:rgb(255 255 255/.08) !important; }
-.dark[data-visual-theme="signal"] .bg-white\/20 { background:rgb(255 255 255/.12) !important; }
-.dark[data-visual-theme="signal"] [class*="bg-white"] { background:rgb(255 255 255/.06) !important; }
-.dark[data-visual-theme="signal"] .border-white\/20 { border-color:rgb(255 255 255/.12) !important; }
-.dark[data-visual-theme="signal"] .border-white\/10 { border-color:rgb(255 255 255/.10) !important; }
-.dark[data-visual-theme="signal"] .glass-card,
-.dark[data-visual-theme="signal"] .glass-thin,
-.dark[data-visual-theme="signal"] [data-slot="card"],
-.dark[data-visual-theme="signal"] [class*="glass-card"] {
+html[data-visual-theme="signal"] body { background:#090b0e !important; color:#f5f7fa !important; }
+html[data-visual-theme="signal"] .pace-bg,
+html[data-visual-theme="signal"] .pace-bg::before { background:#090b0e !important; background-image:none !important; filter:none !important; }
+html[data-visual-theme="signal"] .text-foreground,
+html[data-visual-theme="signal"] .text-card-foreground { color:#f5f7fa !important; }
+html[data-visual-theme="signal"] .text-muted-foreground,
+html[data-visual-theme="signal"] [class*="text-muted"] { color:#b8bec7 !important; }
+html[data-visual-theme="signal"] .text-white { color:#f5f7fa !important; }
+html[data-visual-theme="signal"] .bg-white\/5 { background:rgb(255 255 255/.055) !important; }
+html[data-visual-theme="signal"] .bg-white\/10 { background:rgb(255 255 255/.08) !important; }
+html[data-visual-theme="signal"] .bg-white\/20 { background:rgb(255 255 255/.12) !important; }
+html[data-visual-theme="signal"] [class*="bg-white"] { background:rgb(255 255 255/.06) !important; }
+html[data-visual-theme="signal"] .border-white\/20 { border-color:rgb(255 255 255/.12) !important; }
+html[data-visual-theme="signal"] .border-white\/10 { border-color:rgb(255 255 255/.10) !important; }
+html[data-visual-theme="signal"] .glass-card,
+html[data-visual-theme="signal"] .glass-thin,
+html[data-visual-theme="signal"] [data-slot="card"],
+html[data-visual-theme="signal"] [class*="glass-card"] {
   background:rgb(255 255 255/.055) !important;
   border-color:rgb(255 255 255/.12) !important;
   box-shadow:0 12px 32px -20px rgb(0 0 0/.65) !important;
   backdrop-filter:blur(18px) saturate(130%) !important;
   -webkit-backdrop-filter:blur(18px) saturate(130%) !important;
 }
-.dark[data-visual-theme="signal"] input,
-.dark[data-visual-theme="signal"] textarea,
-.dark[data-visual-theme="signal"] select { background:#111418 !important; color:#f5f7fa !important; border-color:rgb(255 255 255/.12) !important; }
-.dark[data-visual-theme="signal"] input::placeholder,
-.dark[data-visual-theme="signal"] textarea::placeholder { color:#7f8792 !important; }
-.dark[data-visual-theme="signal"] aside,
-.dark[data-visual-theme="signal"] header { background:rgb(17 20 24/.92) !important; border-color:rgb(255 255 255/.12) !important; box-shadow:0 12px 32px -20px rgb(0 0 0/.70) !important; }
-.dark[data-visual-theme="signal"] nav a { color:#b8bec7 !important; }
-.dark[data-visual-theme="signal"] nav a:hover,
-.dark[data-visual-theme="signal"] nav a[aria-current="page"],
-.dark[data-visual-theme="signal"] nav a[data-active="true"] { background:#1c2127 !important; color:#f5f7fa !important; }
-.dark[data-visual-theme="signal"] button,
-.dark[data-visual-theme="signal"] [role="button"] { color:#f5f7fa; }
-.dark[data-visual-theme="signal"] button[data-variant="secondary"],
-.dark[data-visual-theme="signal"] button[data-variant="outline"] { background:#1c2127 !important; color:#f5f7fa !important; border-color:rgb(255 255 255/.12) !important; }
-.dark[data-visual-theme="signal"] .settings-panel { background:rgb(17 20 24/.92) !important; border-color:rgb(255 255 255/.12) !important; box-shadow:0 12px 40px rgb(0 0 0/.28) !important; }
-.dark[data-visual-theme="signal"] .settings-panel .settings-row:hover { background:rgb(255 255 255/.05) !important; }
+html[data-visual-theme="signal"] input,
+html[data-visual-theme="signal"] textarea,
+html[data-visual-theme="signal"] select { background:#111418 !important; color:#f5f7fa !important; border-color:rgb(255 255 255/.12) !important; }
+html[data-visual-theme="signal"] input::placeholder,
+html[data-visual-theme="signal"] textarea::placeholder { color:#7f8792 !important; }
+html[data-visual-theme="signal"] aside,
+html[data-visual-theme="signal"] header { background:rgb(17 20 24/.92) !important; border-color:rgb(255 255 255/.12) !important; box-shadow:0 12px 32px -20px rgb(0 0 0/.70) !important; }
+html[data-visual-theme="signal"] nav a { color:#b8bec7 !important; }
+html[data-visual-theme="signal"] nav a:hover,
+html[data-visual-theme="signal"] nav a[aria-current="page"],
+html[data-visual-theme="signal"] nav a[data-active="true"] { background:#1c2127 !important; color:#f5f7fa !important; }
+html[data-visual-theme="signal"] button,
+html[data-visual-theme="signal"] [role="button"] { color:#f5f7fa; }
+html[data-visual-theme="signal"] button[data-variant="secondary"],
+html[data-visual-theme="signal"] button[data-variant="outline"] { background:#1c2127 !important; color:#f5f7fa !important; border-color:rgb(255 255 255/.12) !important; }
+html[data-visual-theme="signal"] .settings-panel { background:rgb(17 20 24/.92) !important; border-color:rgb(255 255 255/.12) !important; box-shadow:0 12px 40px rgb(0 0 0/.28) !important; }
+html[data-visual-theme="signal"] .settings-panel .settings-row:hover { background:rgb(255 255 255/.05) !important; }
 
 
 /* Signal dark-mode hard stop: the entire document/canvas must be black. */
-html.dark[data-visual-theme="signal"],
-html.dark[data-visual-theme="signal"] body,
-html.dark[data-visual-theme="signal"] body > div,
-html.dark[data-visual-theme="signal"] .pace-bg {
+html[data-visual-theme="signal"],
+html[data-visual-theme="signal"] body,
+html[data-visual-theme="signal"] body > div,
+html[data-visual-theme="signal"] .pace-bg {
   background-color: #090b0e !important;
   color: #f5f7fa !important;
 }
-html.dark[data-visual-theme="signal"] {
+html[data-visual-theme="signal"] {
   --background: #090b0e !important;
   --wallpaper: #090b0e !important;
 }
-html.dark[data-visual-theme="signal"] .pace-bg::before {
+html[data-visual-theme="signal"] .pace-bg::before {
   background: #090b0e !important;
   background-image: none !important;
   background-color: #090b0e !important;
   opacity: 1 !important;
   filter: none !important;
 }
-html.dark[data-visual-theme="signal"] main,
-html.dark[data-visual-theme="signal"] header,
-html.dark[data-visual-theme="signal"] aside {
+html[data-visual-theme="signal"] main,
+html[data-visual-theme="signal"] header,
+html[data-visual-theme="signal"] aside {
   background-color: transparent !important;
 }
 
@@ -637,7 +639,7 @@ html.dark[data-visual-theme="signal"] aside {
    overlays/portals -> scrollbars -> selection -> native chrome.
    ========================================================================== */
 
-html.dark[data-visual-theme="signal"] {
+html[data-visual-theme="signal"] {
   color-scheme: dark;
   --background: #090b0e !important;
   --foreground: #f5f7fa !important;
@@ -673,17 +675,17 @@ html.dark[data-visual-theme="signal"] {
   --glass-edge: 0.12 !important;
 }
 
-html.dark[data-visual-theme="signal"],
-html.dark[data-visual-theme="signal"] body,
-html.dark[data-visual-theme="signal"] body > div,
-html.dark[data-visual-theme="signal"] .pace-bg,
-html.dark[data-visual-theme="signal"] main {
+html[data-visual-theme="signal"],
+html[data-visual-theme="signal"] body,
+html[data-visual-theme="signal"] body > div,
+html[data-visual-theme="signal"] .pace-bg,
+html[data-visual-theme="signal"] main {
   background: #090b0e !important;
   background-color: #090b0e !important;
   color: #f5f7fa !important;
 }
 
-html.dark[data-visual-theme="signal"] .pace-bg::before {
+html[data-visual-theme="signal"] .pace-bg::before {
   content: none !important;
   background: #090b0e !important;
   background-image: none !important;
@@ -692,16 +694,16 @@ html.dark[data-visual-theme="signal"] .pace-bg::before {
 }
 
 /* Surfaces: replace generic white/light Tailwind utilities and glass materials. */
-html.dark[data-visual-theme="signal"] [class*="bg-white"],
-html.dark[data-visual-theme="signal"] [class~="bg-background"],
-html.dark[data-visual-theme="signal"] [class~="bg-card"],
-html.dark[data-visual-theme="signal"] [class~="bg-popover"],
-html.dark[data-visual-theme="signal"] [class~="bg-muted"],
-html.dark[data-visual-theme="signal"] [data-slot="card"],
-html.dark[data-visual-theme="signal"] .glass-card,
-html.dark[data-visual-theme="signal"] [class*="glass-card"],
-html.dark[data-visual-theme="signal"] .glass-thin,
-html.dark[data-visual-theme="signal"] .glass-icon {
+html[data-visual-theme="signal"] [class*="bg-white"],
+html[data-visual-theme="signal"] [class~="bg-background"],
+html[data-visual-theme="signal"] [class~="bg-card"],
+html[data-visual-theme="signal"] [class~="bg-popover"],
+html[data-visual-theme="signal"] [class~="bg-muted"],
+html[data-visual-theme="signal"] [data-slot="card"],
+html[data-visual-theme="signal"] .glass-card,
+html[data-visual-theme="signal"] [class*="glass-card"],
+html[data-visual-theme="signal"] .glass-thin,
+html[data-visual-theme="signal"] .glass-icon {
   background: #14181d !important;
   background-image: none !important;
   border-color: rgb(255 255 255 / 0.12) !important;
@@ -711,50 +713,50 @@ html.dark[data-visual-theme="signal"] .glass-icon {
   -webkit-backdrop-filter: none !important;
 }
 
-html.dark[data-visual-theme="signal"] [class~="bg-white/5"],
-html.dark[data-visual-theme="signal"] [class~="bg-white/10"],
-html.dark[data-visual-theme="signal"] [class~="bg-white/20"] {
+html[data-visual-theme="signal"] [class~="bg-white/5"],
+html[data-visual-theme="signal"] [class~="bg-white/10"],
+html[data-visual-theme="signal"] [class~="bg-white/20"] {
   background: #1c2127 !important;
 }
 
 /* Keep intentionally black application surfaces black. */
-html.dark[data-visual-theme="signal"] [class*="bg-black"],
-html.dark[data-visual-theme="signal"] [style*="background:#050507"],
-html.dark[data-visual-theme="signal"] [style*="background: #050507"] {
+html[data-visual-theme="signal"] [class*="bg-black"],
+html[data-visual-theme="signal"] [style*="background:#050507"],
+html[data-visual-theme="signal"] [style*="background: #050507"] {
   background-color: #090b0e !important;
 }
 
 /* Text hierarchy. */
-html.dark[data-visual-theme="signal"] .text-foreground,
-html.dark[data-visual-theme="signal"] .text-card-foreground,
-html.dark[data-visual-theme="signal"] .text-white,
-html.dark[data-visual-theme="signal"] [class*="text-gray-900"],
-html.dark[data-visual-theme="signal"] [class*="text-black"] {
+html[data-visual-theme="signal"] .text-foreground,
+html[data-visual-theme="signal"] .text-card-foreground,
+html[data-visual-theme="signal"] .text-white,
+html[data-visual-theme="signal"] [class*="text-gray-900"],
+html[data-visual-theme="signal"] [class*="text-black"] {
   color: #f5f7fa !important;
 }
 
-html.dark[data-visual-theme="signal"] .text-muted-foreground,
-html.dark[data-visual-theme="signal"] [class*="text-muted"],
-html.dark[data-visual-theme="signal"] [class*="text-gray-500"],
-html.dark[data-visual-theme="signal"] [class*="text-gray-400"] {
+html[data-visual-theme="signal"] .text-muted-foreground,
+html[data-visual-theme="signal"] [class*="text-muted"],
+html[data-visual-theme="signal"] [class*="text-gray-500"],
+html[data-visual-theme="signal"] [class*="text-gray-400"] {
   color: #b8bec7 !important;
 }
 
-html.dark[data-visual-theme="signal"] h1,
-html.dark[data-visual-theme="signal"] h2,
-html.dark[data-visual-theme="signal"] h3,
-html.dark[data-visual-theme="signal"] h4,
-html.dark[data-visual-theme="signal"] h5,
-html.dark[data-visual-theme="signal"] label {
+html[data-visual-theme="signal"] h1,
+html[data-visual-theme="signal"] h2,
+html[data-visual-theme="signal"] h3,
+html[data-visual-theme="signal"] h4,
+html[data-visual-theme="signal"] h5,
+html[data-visual-theme="signal"] label {
   color: #f5f7fa;
 }
 
 /* Inputs, selects, textareas and common combobox controls. */
-html.dark[data-visual-theme="signal"] input,
-html.dark[data-visual-theme="signal"] textarea,
-html.dark[data-visual-theme="signal"] select,
-html.dark[data-visual-theme="signal"] [role="combobox"],
-html.dark[data-visual-theme="signal"] [data-slot="input"] {
+html[data-visual-theme="signal"] input,
+html[data-visual-theme="signal"] textarea,
+html[data-visual-theme="signal"] select,
+html[data-visual-theme="signal"] [role="combobox"],
+html[data-visual-theme="signal"] [data-slot="input"] {
   background: #111418 !important;
   background-image: none !important;
   color: #f5f7fa !important;
@@ -762,37 +764,37 @@ html.dark[data-visual-theme="signal"] [data-slot="input"] {
   box-shadow: none !important;
 }
 
-html.dark[data-visual-theme="signal"] input::placeholder,
-html.dark[data-visual-theme="signal"] textarea::placeholder {
+html[data-visual-theme="signal"] input::placeholder,
+html[data-visual-theme="signal"] textarea::placeholder {
   color: #7f8792 !important;
 }
 
 /* Buttons and interactive controls. */
-html.dark[data-visual-theme="signal"] button,
-html.dark[data-visual-theme="signal"] [role="button"] {
+html[data-visual-theme="signal"] button,
+html[data-visual-theme="signal"] [role="button"] {
   color: #f5f7fa;
   border-color: rgb(255 255 255 / 0.12);
 }
 
-html.dark[data-visual-theme="signal"] button[data-variant="secondary"],
-html.dark[data-visual-theme="signal"] button[data-variant="outline"],
-html.dark[data-visual-theme="signal"] [data-slot="button"][data-variant="secondary"],
-html.dark[data-visual-theme="signal"] [data-slot="button"][data-variant="outline"] {
+html[data-visual-theme="signal"] button[data-variant="secondary"],
+html[data-visual-theme="signal"] button[data-variant="outline"],
+html[data-visual-theme="signal"] [data-slot="button"][data-variant="secondary"],
+html[data-visual-theme="signal"] [data-slot="button"][data-variant="outline"] {
   background: #1c2127 !important;
   color: #f5f7fa !important;
   border-color: rgb(255 255 255 / 0.12) !important;
 }
 
-html.dark[data-visual-theme="signal"] button[data-variant="ghost"]:hover,
-html.dark[data-visual-theme="signal"] [data-slot="button"][data-variant="ghost"]:hover,
-html.dark[data-visual-theme="signal"] [role="button"]:hover {
+html[data-visual-theme="signal"] button[data-variant="ghost"]:hover,
+html[data-visual-theme="signal"] [data-slot="button"][data-variant="ghost"]:hover,
+html[data-visual-theme="signal"] [role="button"]:hover {
   background: #242a31 !important;
   color: #ffffff !important;
 }
 
 /* Sidebar/header/navigation are opaque Signal surfaces, not wallpaper glass. */
-html.dark[data-visual-theme="signal"] aside,
-html.dark[data-visual-theme="signal"] header {
+html[data-visual-theme="signal"] aside,
+html[data-visual-theme="signal"] header {
   background: #111418 !important;
   background-image: none !important;
   border-color: rgb(255 255 255 / 0.10) !important;
@@ -802,46 +804,46 @@ html.dark[data-visual-theme="signal"] header {
   -webkit-backdrop-filter: none !important;
 }
 
-html.dark[data-visual-theme="signal"] nav a {
+html[data-visual-theme="signal"] nav a {
   color: #b8bec7 !important;
 }
 
-html.dark[data-visual-theme="signal"] nav a:hover,
-html.dark[data-visual-theme="signal"] nav a[aria-current="page"],
-html.dark[data-visual-theme="signal"] nav a[data-active="true"] {
+html[data-visual-theme="signal"] nav a:hover,
+html[data-visual-theme="signal"] nav a[aria-current="page"],
+html[data-visual-theme="signal"] nav a[data-active="true"] {
   background: #1c2127 !important;
   color: #f5f7fa !important;
 }
 
 /* Radix portals and floating layers live under body, so they must inherit
    the same Signal contract explicitly rather than relying on component theme defaults. */
-html.dark[data-visual-theme="signal"] [data-radix-portal],
-html.dark[data-visual-theme="signal"] [data-radix-popper-content-wrapper],
-html.dark[data-visual-theme="signal"] [data-radix-toast-viewport],
-html.dark[data-visual-theme="signal"] [data-radix-select-viewport],
-html.dark[data-visual-theme="signal"] [role="dialog"],
-html.dark[data-visual-theme="signal"] [role="menu"],
-html.dark[data-visual-theme="signal"] [role="listbox"],
-html.dark[data-visual-theme="signal"] [role="tooltip"],
-html.dark[data-visual-theme="signal"] [data-slot="dialog-content"],
-html.dark[data-visual-theme="signal"] [data-slot="popover-content"],
-html.dark[data-visual-theme="signal"] [data-slot="dropdown-menu-content"],
-html.dark[data-visual-theme="signal"] [data-slot="context-menu-content"],
-html.dark[data-visual-theme="signal"] [data-slot="select-content"],
-html.dark[data-visual-theme="signal"] [data-slot="command"] {
+html[data-visual-theme="signal"] [data-radix-portal],
+html[data-visual-theme="signal"] [data-radix-popper-content-wrapper],
+html[data-visual-theme="signal"] [data-radix-toast-viewport],
+html[data-visual-theme="signal"] [data-radix-select-viewport],
+html[data-visual-theme="signal"] [role="dialog"],
+html[data-visual-theme="signal"] [role="menu"],
+html[data-visual-theme="signal"] [role="listbox"],
+html[data-visual-theme="signal"] [role="tooltip"],
+html[data-visual-theme="signal"] [data-slot="dialog-content"],
+html[data-visual-theme="signal"] [data-slot="popover-content"],
+html[data-visual-theme="signal"] [data-slot="dropdown-menu-content"],
+html[data-visual-theme="signal"] [data-slot="context-menu-content"],
+html[data-visual-theme="signal"] [data-slot="select-content"],
+html[data-visual-theme="signal"] [data-slot="command"] {
   color: #f5f7fa !important;
 }
 
-html.dark[data-visual-theme="signal"] [data-radix-portal] [data-slot="dialog-content"],
-html.dark[data-visual-theme="signal"] [data-radix-portal] [data-slot="popover-content"],
-html.dark[data-visual-theme="signal"] [data-radix-portal] [data-slot="dropdown-menu-content"],
-html.dark[data-visual-theme="signal"] [data-radix-portal] [data-slot="context-menu-content"],
-html.dark[data-visual-theme="signal"] [data-radix-portal] [data-slot="select-content"],
-html.dark[data-visual-theme="signal"] [data-radix-popper-content-wrapper] > *,
-html.dark[data-visual-theme="signal"] [role="dialog"],
-html.dark[data-visual-theme="signal"] [role="menu"],
-html.dark[data-visual-theme="signal"] [role="listbox"],
-html.dark[data-visual-theme="signal"] [data-slot="command"] {
+html[data-visual-theme="signal"] [data-radix-portal] [data-slot="dialog-content"],
+html[data-visual-theme="signal"] [data-radix-portal] [data-slot="popover-content"],
+html[data-visual-theme="signal"] [data-radix-portal] [data-slot="dropdown-menu-content"],
+html[data-visual-theme="signal"] [data-radix-portal] [data-slot="context-menu-content"],
+html[data-visual-theme="signal"] [data-radix-portal] [data-slot="select-content"],
+html[data-visual-theme="signal"] [data-radix-popper-content-wrapper] > *,
+html[data-visual-theme="signal"] [role="dialog"],
+html[data-visual-theme="signal"] [role="menu"],
+html[data-visual-theme="signal"] [role="listbox"],
+html[data-visual-theme="signal"] [data-slot="command"] {
   background: #111418 !important;
   background-image: none !important;
   border-color: rgb(255 255 255 / 0.12) !important;
@@ -850,74 +852,74 @@ html.dark[data-visual-theme="signal"] [data-slot="command"] {
   -webkit-backdrop-filter: none !important;
 }
 
-html.dark[data-visual-theme="signal"] [data-radix-dialog-overlay],
-html.dark[data-visual-theme="signal"] [data-slot="dialog-overlay"] {
+html[data-visual-theme="signal"] [data-radix-dialog-overlay],
+html[data-visual-theme="signal"] [data-slot="dialog-overlay"] {
   background: rgb(0 0 0 / 0.68) !important;
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
 
 /* Prevent portal descendants with generic light utility classes from escaping. */
-html.dark[data-visual-theme="signal"] [data-radix-portal] [class*="bg-white"],
-html.dark[data-visual-theme="signal"] [data-radix-popper-content-wrapper] [class*="bg-white"],
-html.dark[data-visual-theme="signal"] [data-radix-portal] [class~="bg-background"],
-html.dark[data-visual-theme="signal"] [data-radix-portal] [class~="bg-popover"],
-html.dark[data-visual-theme="signal"] [data-radix-portal] [class~="bg-card"] {
+html[data-visual-theme="signal"] [data-radix-portal] [class*="bg-white"],
+html[data-visual-theme="signal"] [data-radix-popper-content-wrapper] [class*="bg-white"],
+html[data-visual-theme="signal"] [data-radix-portal] [class~="bg-background"],
+html[data-visual-theme="signal"] [data-radix-portal] [class~="bg-popover"],
+html[data-visual-theme="signal"] [data-radix-portal] [class~="bg-card"] {
   background: #111418 !important;
   color: #f5f7fa !important;
 }
 
 /* Toasts/command/search surfaces. */
-html.dark[data-visual-theme="signal"] [data-sonner-toaster],
-html.dark[data-visual-theme="signal"] [data-sonner-toast] {
+html[data-visual-theme="signal"] [data-sonner-toaster],
+html[data-visual-theme="signal"] [data-sonner-toast] {
   --normal-bg: #111418 !important;
   --normal-text: #f5f7fa !important;
   --normal-border: rgb(255 255 255 / 0.12) !important;
 }
 
-html.dark[data-visual-theme="signal"] [data-sonner-toast] {
+html[data-visual-theme="signal"] [data-sonner-toast] {
   background: #111418 !important;
   color: #f5f7fa !important;
   border-color: rgb(255 255 255 / 0.12) !important;
 }
 
 /* Native chrome and selection. */
-html.dark[data-visual-theme="signal"] {
+html[data-visual-theme="signal"] {
   scrollbar-color: #4b525c #090b0e;
 }
 
-html.dark[data-visual-theme="signal"] *,
-html.dark[data-visual-theme="signal"] *::before,
-html.dark[data-visual-theme="signal"] *::after {
+html[data-visual-theme="signal"] *,
+html[data-visual-theme="signal"] *::before,
+html[data-visual-theme="signal"] *::after {
   scrollbar-color: #4b525c #090b0e;
 }
 
-html.dark[data-visual-theme="signal"] *::-webkit-scrollbar {
+html[data-visual-theme="signal"] *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 
-html.dark[data-visual-theme="signal"] *::-webkit-scrollbar-track {
+html[data-visual-theme="signal"] *::-webkit-scrollbar-track {
   background: #090b0e !important;
 }
 
-html.dark[data-visual-theme="signal"] *::-webkit-scrollbar-thumb {
+html[data-visual-theme="signal"] *::-webkit-scrollbar-thumb {
   background: #4b525c !important;
   border: 2px solid #090b0e !important;
   background-clip: padding-box;
   border-radius: 999px;
 }
 
-html.dark[data-visual-theme="signal"] *::-webkit-scrollbar-thumb:hover {
+html[data-visual-theme="signal"] *::-webkit-scrollbar-thumb:hover {
   background: #69727e !important;
   background-clip: padding-box;
 }
 
-html.dark[data-visual-theme="signal"] ::selection {
+html[data-visual-theme="signal"] ::selection {
   background: #f5f7fa !important;
   color: #090b0e !important;
 }
 
-html.dark[data-visual-theme="signal"] {
+html[data-visual-theme="signal"] {
   accent-color: #f5f7fa;
 }
