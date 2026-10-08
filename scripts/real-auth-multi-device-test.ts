@@ -93,7 +93,8 @@ function installEgressMeasurement() {
     } catch {
       return response;
     }
-    if (url.host !== new URL(url, globalThis.location?.href ?? "https://invalid").host) return response;
+    const supabaseHost = new URL(process.env.SUPABASE_URL!).host;
+    if (url.host !== supabaseHost) return response;
     const path = url.pathname;
     if (!path.startsWith("/rest/v1/") && !path.startsWith("/storage/v1/") && !path.startsWith("/auth/v1/") && !path.startsWith("/functions/v1/github-e2e-auth")) return response;
     const entry = egress.byPath.get(path) ?? { requests: 0, responseBytes: 0 };
