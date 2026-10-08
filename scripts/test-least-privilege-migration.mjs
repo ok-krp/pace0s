@@ -36,12 +36,14 @@ check(sql.includes("revoke all on all tables in schema public from authenticated
 check(sql.includes("revoke all on all sequences in schema public from anon;"), "revoke existing anon sequence privileges");
 check(sql.includes("revoke all on all sequences in schema public from authenticated;"), "revoke existing authenticated sequence privileges");
 
-for (const owner of ["postgres", "supabase_admin"]) {
+for (const owner of ["postgres"]) {
   check(sql.includes(`alter default privileges for role ${owner} in schema public`),
     `default ACLs are hardened for ${owner}`);
 }
 check(/revoke execute on functions from anon, authenticated;/i.test(sql),
-  "future function EXECUTE defaults are revoked from client roles");
+  "future function EXECUTE defaults are revoked from client roles for postgres");
+check(/supabase_admin defaults are an explicit pre-apply/i.test(sql),
+  "migration documents the elevated-role default ACL blocker");
 
 const unsafeTableGrants = sql.split(/\r?\n/).filter((line) =>
   /^\s*grant\b/i.test(line) &&
