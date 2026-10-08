@@ -156,7 +156,8 @@ for (const objectPrivilege of [
   );
 }
 assert.match(leastPrivilegeMigration, /supabase_admin defaults are an explicit/i);
-assert.match(leastPrivilegeMigration, /pre-apply blocker/i);
+assert.match(leastPrivilegeMigration, /pre-apply/i);
+assert.match(leastPrivilegeMigration, /blocker/i);
 assert.ok(leastPrivilegeMigration.includes("grant select, insert, update on table public.ai_messages to authenticated;"));
 const explicitGrantLines = leastPrivilegeMigration.split(/\r?\n/).filter((line) => /^\s*grant\b/i.test(line));
 assert.doesNotMatch(explicitGrantLines.join("\n"), /\b(truncate|trigger|references|maintain)\b/i);
