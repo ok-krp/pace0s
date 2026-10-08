@@ -11,6 +11,7 @@ on:
       - "supabase/config.toml"
       - "scripts/cloud-sync-contract-test.mjs"
       - "scripts/real-auth-multi-device-test.ts"
+      - "scripts/test-least-privilege-migration.mjs"
       - "package.json"
       - "bun.lock"
       - ".github/workflows/cloud-sync-audit.yml"
@@ -39,6 +40,7 @@ jobs:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
       - run: bun run test:sync
+      - run: bun run test:least-privilege
       - run: bun run build
       - run: bun run typecheck
       - run: bun run lint
