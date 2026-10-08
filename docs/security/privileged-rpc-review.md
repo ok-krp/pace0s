@@ -24,13 +24,14 @@
 
 - The direct table `health_e2ee_pairing_sessions` has RLS enabled and no direct client policies; pairing goes through narrowly scoped RPCs.
 - All 11 Advisor-reported functions were observed as `SECURITY DEFINER` in the live target during the read-only inventory. That inventory is not proof that the branch migrations are deployed.
-- The live target's default ACL inventory grants client roles broad privileges for objects created by both `postgres` and `supabase_admin`. The proposed grants migration revokes existing client table/sequence privileges and default table/sequence/function-execute privileges for those two owners, then restores the explicitly enumerated table operations.
+- The live target's default ACL inventory grants client roles broad privileges for objects created by both `postgres` and `supabase_admin`. The proposed grants migration revokes existing client table/sequence privileges and `postgres` default table/sequence/function-execute privileges, then restores the explicitly enumerated table operations. It cannot revoke `supabase_admin` default ACLs through the normal migration connection because that connection is neither superuser nor a member of `supabase_admin`; an authorized elevated session must handle that before any apply.
 - The new legacy-ownership migration and pairing-consent migration have static delimiter/invariant checks in `scripts/test-least-privilege-migration.mjs`; CI must pass on the current HEAD.
 - A source review cannot prove runtime RLS denial. Cross-user negative tests and non-production migration application remain mandatory before applying this to the target.
 
 ## Explicit remaining blockers
 
-1. Obtain passing CI results on the current PR HEAD, including Native Flutter's Apple, Android, Linux and Windows jobs.
-2. Run authenticated two-user negative tests for SELECT/INSERT/UPDATE/DELETE and RPC ownership/consent rejection in an isolated non-production environment.
-3. Apply migrations only in non-production, then compare effective grants, RLS policies, function ACLs and Security Advisor findings.
-4. Do not apply these migrations to `cduyjejftorfuxuwhbqt` or merge PR #292 until the above evidence is reviewed.
+1. Use an authorized `supabase_admin` session to revoke its default table, sequence, and function-execute ACLs for `anon` and `authenticated`; the normal migration connection cannot perform this step.
+2. Obtain passing CI results on the current PR HEAD, including Native Flutter's Apple, Android, Linux and Windows jobs.
+3. Run authenticated two-user negative tests for SELECT/INSERT/UPDATE/DELETE and RPC ownership/consent rejection in an isolated non-production environment.
+4. Apply migrations only in non-production, then compare effective grants, RLS policies, function ACLs and Security Advisor findings.
+5. Do not apply these migrations to `cduyjejftorfuxuwhbqt` or merge PR #292 until the above evidence is reviewed.
