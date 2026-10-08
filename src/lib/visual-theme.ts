@@ -42,7 +42,9 @@ export function applyVisualTheme(theme: VisualTheme, requestedDark?: boolean) {
 
   const root = document.documentElement;
   const storedDark = localStorage.getItem(DARK_MODE_KEY) === "1";
-  const dark = theme === "glass" ? true : requestedDark ?? storedDark;
+  // Signal is a dark-only visual system. Its activation must never fall back to
+  // the light palette, even when the previous Pace theme was light.
+  const dark = theme === "signal" || theme === "glass" ? true : requestedDark ?? storedDark;
 
   if (theme === "default") delete root.dataset.visualTheme;
   else root.dataset.visualTheme = theme;
