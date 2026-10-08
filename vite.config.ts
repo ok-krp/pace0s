@@ -5,6 +5,9 @@ import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
+  build: {
+    chunkSizeWarningLimit: 2000,
+  },
   resolve: {
     tsconfigPaths: true,
   },
