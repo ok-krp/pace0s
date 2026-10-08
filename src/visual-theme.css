@@ -627,3 +627,297 @@ html.dark[data-visual-theme="signal"] header,
 html.dark[data-visual-theme="signal"] aside {
   background-color: transparent !important;
 }
+
+
+/* ==========================================================================
+   Signal Dark — single-chain visual contract
+   Activation: html[data-visual-theme="signal"].dark
+   The selectors below intentionally form one deterministic cascade:
+   canvas -> wallpaper -> surfaces -> text -> controls -> navigation ->
+   overlays/portals -> scrollbars -> selection -> native chrome.
+   ========================================================================== */
+
+html.dark[data-visual-theme="signal"] {
+  color-scheme: dark;
+  --background: #090b0e !important;
+  --foreground: #f5f7fa !important;
+  --surface: #111418 !important;
+  --surface-elevated: #171b20 !important;
+  --card: #14181d !important;
+  --card-foreground: #f5f7fa !important;
+  --popover: #111418 !important;
+  --popover-foreground: #f5f7fa !important;
+  --primary: #f5f7fa !important;
+  --primary-foreground: #111418 !important;
+  --secondary: #1c2127 !important;
+  --secondary-foreground: #f5f7fa !important;
+  --muted: #1c2127 !important;
+  --muted-foreground: #b8bec7 !important;
+  --accent: #242a31 !important;
+  --accent-foreground: #ffffff !important;
+  --border: rgb(255 255 255 / 0.12) !important;
+  --input: rgb(255 255 255 / 0.10) !important;
+  --ring: #f5f7fa !important;
+  --sidebar: #111418 !important;
+  --sidebar-foreground: #f5f7fa !important;
+  --sidebar-primary: #f5f7fa !important;
+  --sidebar-primary-foreground: #111418 !important;
+  --sidebar-accent: #1c2127 !important;
+  --sidebar-accent-foreground: #ffffff !important;
+  --sidebar-border: rgb(255 255 255 / 0.10) !important;
+  --sidebar-ring: #f5f7fa !important;
+  --wallpaper: #090b0e !important;
+  --glass-tint: 20 24 29 !important;
+  --glass-tint-base: 0.08 !important;
+  --glass-tint-strength: 0.08 !important;
+  --glass-edge: 0.12 !important;
+}
+
+html.dark[data-visual-theme="signal"],
+html.dark[data-visual-theme="signal"] body,
+html.dark[data-visual-theme="signal"] body > div,
+html.dark[data-visual-theme="signal"] .pace-bg,
+html.dark[data-visual-theme="signal"] main {
+  background: #090b0e !important;
+  background-color: #090b0e !important;
+  color: #f5f7fa !important;
+}
+
+html.dark[data-visual-theme="signal"] .pace-bg::before {
+  content: none !important;
+  background: #090b0e !important;
+  background-image: none !important;
+  filter: none !important;
+  opacity: 1 !important;
+}
+
+/* Surfaces: replace generic white/light Tailwind utilities and glass materials. */
+html.dark[data-visual-theme="signal"] [class*="bg-white"],
+html.dark[data-visual-theme="signal"] [class~="bg-background"],
+html.dark[data-visual-theme="signal"] [class~="bg-card"],
+html.dark[data-visual-theme="signal"] [class~="bg-popover"],
+html.dark[data-visual-theme="signal"] [class~="bg-muted"],
+html.dark[data-visual-theme="signal"] [data-slot="card"],
+html.dark[data-visual-theme="signal"] .glass-card,
+html.dark[data-visual-theme="signal"] [class*="glass-card"],
+html.dark[data-visual-theme="signal"] .glass-thin,
+html.dark[data-visual-theme="signal"] .glass-icon {
+  background: #14181d !important;
+  background-image: none !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  color: #f5f7fa !important;
+  box-shadow: 0 12px 32px -20px rgb(0 0 0 / 0.65) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dark[data-visual-theme="signal"] [class~="bg-white/5"],
+html.dark[data-visual-theme="signal"] [class~="bg-white/10"],
+html.dark[data-visual-theme="signal"] [class~="bg-white/20"] {
+  background: #1c2127 !important;
+}
+
+/* Keep intentionally black application surfaces black. */
+html.dark[data-visual-theme="signal"] [class*="bg-black"],
+html.dark[data-visual-theme="signal"] [style*="background:#050507"],
+html.dark[data-visual-theme="signal"] [style*="background: #050507"] {
+  background-color: #090b0e !important;
+}
+
+/* Text hierarchy. */
+html.dark[data-visual-theme="signal"] .text-foreground,
+html.dark[data-visual-theme="signal"] .text-card-foreground,
+html.dark[data-visual-theme="signal"] .text-white,
+html.dark[data-visual-theme="signal"] [class*="text-gray-900"],
+html.dark[data-visual-theme="signal"] [class*="text-black"] {
+  color: #f5f7fa !important;
+}
+
+html.dark[data-visual-theme="signal"] .text-muted-foreground,
+html.dark[data-visual-theme="signal"] [class*="text-muted"],
+html.dark[data-visual-theme="signal"] [class*="text-gray-500"],
+html.dark[data-visual-theme="signal"] [class*="text-gray-400"] {
+  color: #b8bec7 !important;
+}
+
+html.dark[data-visual-theme="signal"] h1,
+html.dark[data-visual-theme="signal"] h2,
+html.dark[data-visual-theme="signal"] h3,
+html.dark[data-visual-theme="signal"] h4,
+html.dark[data-visual-theme="signal"] h5,
+html.dark[data-visual-theme="signal"] label {
+  color: #f5f7fa;
+}
+
+/* Inputs, selects, textareas and common combobox controls. */
+html.dark[data-visual-theme="signal"] input,
+html.dark[data-visual-theme="signal"] textarea,
+html.dark[data-visual-theme="signal"] select,
+html.dark[data-visual-theme="signal"] [role="combobox"],
+html.dark[data-visual-theme="signal"] [data-slot="input"] {
+  background: #111418 !important;
+  background-image: none !important;
+  color: #f5f7fa !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: none !important;
+}
+
+html.dark[data-visual-theme="signal"] input::placeholder,
+html.dark[data-visual-theme="signal"] textarea::placeholder {
+  color: #7f8792 !important;
+}
+
+/* Buttons and interactive controls. */
+html.dark[data-visual-theme="signal"] button,
+html.dark[data-visual-theme="signal"] [role="button"] {
+  color: #f5f7fa;
+  border-color: rgb(255 255 255 / 0.12);
+}
+
+html.dark[data-visual-theme="signal"] button[data-variant="secondary"],
+html.dark[data-visual-theme="signal"] button[data-variant="outline"],
+html.dark[data-visual-theme="signal"] [data-slot="button"][data-variant="secondary"],
+html.dark[data-visual-theme="signal"] [data-slot="button"][data-variant="outline"] {
+  background: #1c2127 !important;
+  color: #f5f7fa !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+
+html.dark[data-visual-theme="signal"] button[data-variant="ghost"]:hover,
+html.dark[data-visual-theme="signal"] [data-slot="button"][data-variant="ghost"]:hover,
+html.dark[data-visual-theme="signal"] [role="button"]:hover {
+  background: #242a31 !important;
+  color: #ffffff !important;
+}
+
+/* Sidebar/header/navigation are opaque Signal surfaces, not wallpaper glass. */
+html.dark[data-visual-theme="signal"] aside,
+html.dark[data-visual-theme="signal"] header {
+  background: #111418 !important;
+  background-image: none !important;
+  border-color: rgb(255 255 255 / 0.10) !important;
+  color: #f5f7fa !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dark[data-visual-theme="signal"] nav a {
+  color: #b8bec7 !important;
+}
+
+html.dark[data-visual-theme="signal"] nav a:hover,
+html.dark[data-visual-theme="signal"] nav a[aria-current="page"],
+html.dark[data-visual-theme="signal"] nav a[data-active="true"] {
+  background: #1c2127 !important;
+  color: #f5f7fa !important;
+}
+
+/* Radix portals and floating layers live under body, so they must inherit
+   the same Signal contract explicitly rather than relying on component theme defaults. */
+html.dark[data-visual-theme="signal"] [data-radix-portal],
+html.dark[data-visual-theme="signal"] [data-radix-popper-content-wrapper],
+html.dark[data-visual-theme="signal"] [data-radix-toast-viewport],
+html.dark[data-visual-theme="signal"] [data-radix-select-viewport],
+html.dark[data-visual-theme="signal"] [role="dialog"],
+html.dark[data-visual-theme="signal"] [role="menu"],
+html.dark[data-visual-theme="signal"] [role="listbox"],
+html.dark[data-visual-theme="signal"] [role="tooltip"],
+html.dark[data-visual-theme="signal"] [data-slot="dialog-content"],
+html.dark[data-visual-theme="signal"] [data-slot="popover-content"],
+html.dark[data-visual-theme="signal"] [data-slot="dropdown-menu-content"],
+html.dark[data-visual-theme="signal"] [data-slot="context-menu-content"],
+html.dark[data-visual-theme="signal"] [data-slot="select-content"],
+html.dark[data-visual-theme="signal"] [data-slot="command"] {
+  color: #f5f7fa !important;
+}
+
+html.dark[data-visual-theme="signal"] [data-radix-portal] [data-slot="dialog-content"],
+html.dark[data-visual-theme="signal"] [data-radix-portal] [data-slot="popover-content"],
+html.dark[data-visual-theme="signal"] [data-radix-portal] [data-slot="dropdown-menu-content"],
+html.dark[data-visual-theme="signal"] [data-radix-portal] [data-slot="context-menu-content"],
+html.dark[data-visual-theme="signal"] [data-radix-portal] [data-slot="select-content"],
+html.dark[data-visual-theme="signal"] [data-radix-popper-content-wrapper] > *,
+html.dark[data-visual-theme="signal"] [role="dialog"],
+html.dark[data-visual-theme="signal"] [role="menu"],
+html.dark[data-visual-theme="signal"] [role="listbox"],
+html.dark[data-visual-theme="signal"] [data-slot="command"] {
+  background: #111418 !important;
+  background-image: none !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.45) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+html.dark[data-visual-theme="signal"] [data-radix-dialog-overlay],
+html.dark[data-visual-theme="signal"] [data-slot="dialog-overlay"] {
+  background: rgb(0 0 0 / 0.68) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* Prevent portal descendants with generic light utility classes from escaping. */
+html.dark[data-visual-theme="signal"] [data-radix-portal] [class*="bg-white"],
+html.dark[data-visual-theme="signal"] [data-radix-popper-content-wrapper] [class*="bg-white"],
+html.dark[data-visual-theme="signal"] [data-radix-portal] [class~="bg-background"],
+html.dark[data-visual-theme="signal"] [data-radix-portal] [class~="bg-popover"],
+html.dark[data-visual-theme="signal"] [data-radix-portal] [class~="bg-card"] {
+  background: #111418 !important;
+  color: #f5f7fa !important;
+}
+
+/* Toasts/command/search surfaces. */
+html.dark[data-visual-theme="signal"] [data-sonner-toaster],
+html.dark[data-visual-theme="signal"] [data-sonner-toast] {
+  --normal-bg: #111418 !important;
+  --normal-text: #f5f7fa !important;
+  --normal-border: rgb(255 255 255 / 0.12) !important;
+}
+
+html.dark[data-visual-theme="signal"] [data-sonner-toast] {
+  background: #111418 !important;
+  color: #f5f7fa !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+}
+
+/* Native chrome and selection. */
+html.dark[data-visual-theme="signal"] {
+  scrollbar-color: #4b525c #090b0e;
+}
+
+html.dark[data-visual-theme="signal"] *,
+html.dark[data-visual-theme="signal"] *::before,
+html.dark[data-visual-theme="signal"] *::after {
+  scrollbar-color: #4b525c #090b0e;
+}
+
+html.dark[data-visual-theme="signal"] *::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+html.dark[data-visual-theme="signal"] *::-webkit-scrollbar-track {
+  background: #090b0e !important;
+}
+
+html.dark[data-visual-theme="signal"] *::-webkit-scrollbar-thumb {
+  background: #4b525c !important;
+  border: 2px solid #090b0e !important;
+  background-clip: padding-box;
+  border-radius: 999px;
+}
+
+html.dark[data-visual-theme="signal"] *::-webkit-scrollbar-thumb:hover {
+  background: #69727e !important;
+  background-clip: padding-box;
+}
+
+html.dark[data-visual-theme="signal"] ::selection {
+  background: #f5f7fa !important;
+  color: #090b0e !important;
+}
+
+html.dark[data-visual-theme="signal"] {
+  accent-color: #f5f7fa;
+}
