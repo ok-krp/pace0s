@@ -76,6 +76,44 @@ async function cleanupRealAuthUser(oidcToken: string, userId: string) {
   throw new Error("E2E auth cleanup failed after 3 attempts: " + lastFailure);
 }
 
+const egress = {
+  responseBytes: 0,
+  byPath: new Map<string, { requests: number; responseBytes: number }>(),
+  pending: [] as Promise<void>[],
+};
+
+function installEgressMeasurement() {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const response = await originalFetch(input, init);
+    let url: URL;
+    try {
+      url = new URL(typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url);
+    } catch {
+      return response;
+    }
+    if (!url.pathname.startsWith("/rest/v1/") && !url.pathname.startsWith("/storage/v1/")) return response;
+    const path = url.pathname;
+    const entry = egress.byPath.get(path) ?? { requests: 0, responseBytes: 0 };
+    entry.requests++;
+    egress.byPath.set(path, entry);
+    const pending = response.clone().arrayBuffer().then((bytes) => {
+      egress.responseBytes += bytes.byteLength;
+      entry.responseBytes += bytes.byteLength;
+    });
+    egress.pending.push(pending);
+    return response;
+  };
+}
+
+async function flushEgressMeasurement() {
+  await Promise.all(egress.pending);
+  console.log("REST response-body egress bytes: " + egress.responseBytes);
+  for (const [path, value] of [...egress.byPath.entries()].sort()) {
+    console.log("REST egress " + path + ": requests=" + value.requests + " response_body_bytes=" + value.responseBytes);
+  }
+}
+
 async function clientFromSession(session: { access_token: string; refresh_token: string }) {
   const client = createClient(url!, key!, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } });
   const { error } = await client.auth.setSession(session);
@@ -156,6 +194,7 @@ try {
   const sessions = await createRealAuthSessions(oidcToken);
   userId = sessions.user_id;
 
+  installEgressMeasurement();
   aClient = await clientFromSession(sessions.a);
   console.log("A authenticated via ephemeral Supabase E2E account");
   bClient = await clientFromSession(sessions.b);
@@ -306,6 +345,7 @@ try {
     }
   }
   await Promise.allSettled([aClient?.auth.signOut(), bClient?.auth.signOut()]);
+  await flushEgressMeasurement();
   if (oidcToken && userId) {
     try {
       await cleanupRealAuthUser(oidcToken, userId);
