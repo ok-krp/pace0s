@@ -16,8 +16,8 @@ revoke all on all tables in schema public from authenticated;
 
 -- User-owned CRUD tables: RLS remains the authorization boundary.
 grant select, insert, update, delete on table public.ai_conversations to authenticated;
-grant select, insert, update, delete on table public.ai_messages to authenticated;
-grant select, insert, update, delete on table public.ai_preferences to authenticated;
+grant select, insert on table public.ai_messages to authenticated;
+grant select, insert, update on table public.ai_preferences to authenticated;
 grant select, insert on table public.ai_action_log to authenticated;
 
 grant select, insert, update, delete on table public.food_log to authenticated;
@@ -33,19 +33,16 @@ grant select, insert, update, delete on table public.sport_progression_targets t
 grant select, insert, delete on table public.sport_workout_sessions to authenticated;
 grant select, insert on table public.sport_workout_exercises to authenticated;
 grant select, insert, update on table public.sport_workout_sets to authenticated;
-grant select, insert, update, delete on table public.user_biometrics_e2ee to authenticated;
-grant select, insert, update, delete on table public.user_state to authenticated;
+grant select on table public.user_state to authenticated;
 
 -- Health E2EE direct access is deliberately narrower.
 grant select, insert, update on table public.health_e2ee_devices to authenticated;
 grant select, insert, delete on table public.health_e2ee_key_envelopes to authenticated;
-grant select on table public.health_e2ee_key_versions to authenticated;
-grant select, insert, delete on table public.health_samples_e2ee to authenticated;
-grant select, insert, update, delete on table public.health_e2ee_recovery_envelopes to authenticated;
+grant select, insert on table public.health_samples_e2ee to authenticated;
+grant select, insert, update on table public.health_e2ee_recovery_envelopes to authenticated;
 
 -- Sensitive/legal tables: only the operations represented by current policies.
 grant select, insert on table public.consent_records to authenticated;
-grant select, insert on table public.data_deletion_requests to authenticated;
 grant select, insert, update on table public.legal_consent to authenticated;
 grant select, delete on table public.health_samples to authenticated;
 
@@ -63,7 +60,8 @@ grant select on table public.billing_subscriptions to authenticated;
 
 -- Explicitly server-only / internal: no client table grants.
 -- ai_provider_secrets, ai_tool_idempotency, audit_log, billing_events,
--- billing_customers, billing_trials, health_e2ee_pairing_sessions,
--- health_legacy_migration_map and notification_log remain inaccessible by default.
+-- billing_customers, billing_trials, data_deletion_requests, health_e2ee_key_versions,
+-- health_e2ee_pairing_sessions, health_legacy_migration_map, notification_log,
+-- user_biometrics_e2ee and direct user_state writes remain inaccessible by default.
 -- development_tasks only receives SELECT (the user task list) and INSERT (BUILD AI
 -- creates a task); UPDATE and DELETE remain withheld from client-facing role.
