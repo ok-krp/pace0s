@@ -601,3 +601,29 @@
 .dark[data-visual-theme="signal"] button[data-variant="outline"] { background:#1c2127 !important; color:#f5f7fa !important; border-color:rgb(255 255 255/.12) !important; }
 .dark[data-visual-theme="signal"] .settings-panel { background:rgb(17 20 24/.92) !important; border-color:rgb(255 255 255/.12) !important; box-shadow:0 12px 40px rgb(0 0 0/.28) !important; }
 .dark[data-visual-theme="signal"] .settings-panel .settings-row:hover { background:rgb(255 255 255/.05) !important; }
+
+
+/* Signal dark-mode hard stop: the entire document/canvas must be black. */
+html.dark[data-visual-theme="signal"],
+html.dark[data-visual-theme="signal"] body,
+html.dark[data-visual-theme="signal"] body > div,
+html.dark[data-visual-theme="signal"] .pace-bg {
+  background-color: #090b0e !important;
+  color: #f5f7fa !important;
+}
+html.dark[data-visual-theme="signal"] {
+  --background: #090b0e !important;
+  --wallpaper: #090b0e !important;
+}
+html.dark[data-visual-theme="signal"] .pace-bg::before {
+  background: #090b0e !important;
+  background-image: none !important;
+  background-color: #090b0e !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+html.dark[data-visual-theme="signal"] main,
+html.dark[data-visual-theme="signal"] header,
+html.dark[data-visual-theme="signal"] aside {
+  background-color: transparent !important;
+}
