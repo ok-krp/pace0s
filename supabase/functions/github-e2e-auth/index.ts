@@ -53,9 +53,41 @@ Deno.serve(async (request) => {
     if (body.action === "cleanup") {
       const userId = typeof body.user_id === "string" ? body.user_id : "";
       if (!userId) return new Response(JSON.stringify({ error: "user_id is required" }), { status: 400, headers: corsHeaders });
+      const { data: found, error: lookupError } = await admin.auth.admin.getUserById(userId);
+      if (lookupError || !found.user) return new Response(JSON.stringify({ error: "E2E user not found" }), { status: 404, headers: corsHeaders });
+      if (found.user.user_metadata?.paceos_e2e !== true || !found.user.email?.startsWith("paceos-e2e+")) {
+        return new Response(JSON.stringify({ error: "Refusing to delete a non-E2E user" }), { status: 403, headers: corsHeaders });
+      }
+      await admin.from("user_state").delete().eq("user_id", userId);
       const { error } = await admin.auth.admin.deleteUser(userId);
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: corsHeaders });
       return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
+    }
+
+    if (body.action === "cleanup_stale") {
+      const cutoff = Date.now() - 60 * 60 * 1000;
+      let page = 1;
+      let cleaned = 0;
+      while (true) {
+        const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
+        if (error) return new Response(JSON.stringify({ error: "Unable to list E2E users: " + error.message }), { status: 500, headers: corsHeaders });
+        const users = data.users;
+        for (const user of users) {
+          if (
+            user.user_metadata?.paceos_e2e !== true ||
+            !user.email?.startsWith("paceos-e2e+") ||
+            !user.created_at ||
+            Date.parse(user.created_at) >= cutoff
+          ) continue;
+          await admin.from("user_state").delete().eq("user_id", user.id);
+          const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
+          if (deleteError) return new Response(JSON.stringify({ error: "Unable to delete stale E2E user: " + deleteError.message }), { status: 500, headers: corsHeaders });
+          cleaned++;
+        }
+        if (users.length < 1000) break;
+        page++;
+      }
+      return new Response(JSON.stringify({ ok: true, cleaned }), { headers: corsHeaders });
     }
 
     const runId = String(claims.run_id ?? "unknown");
