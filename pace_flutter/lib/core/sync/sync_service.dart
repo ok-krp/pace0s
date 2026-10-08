@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -7,20 +8,31 @@ import '../storage/local_store.dart';
 /// Replays local mutations through Pace's existing user_state RPC and pulls
 /// newer remote state. Local writes remain durable while offline.
 class SyncService {
-  SyncService({required this.localStore, required this.client});
+  SyncService({required this.localStore, required this.client}) {
+    localStore.onLocalMutation = () => unawaited(syncNow());
+  }
 
   final LocalStore localStore;
   final SupabaseClient? client;
   bool _running = false;
+  bool _syncRequestedWhileRunning = false;
+  bool _realtimeHealthy = false;
+  bool _realtimeNeedsPull = false;
+  String? _deviceId;
   RealtimeChannel? _realtimeChannel;
   String? _realtimeUserId;
 
   Future<void> syncNow() async {
     final user = client?.auth.currentUser;
-    if (_running || client == null || user == null) return;
+    if (client == null || user == null) return;
+    if (_running) {
+      _syncRequestedWhileRunning = true;
+      return;
+    }
     _running = true;
     try {
-      await _ensureRealtimeSubscription(user.id);
+      final deviceId = await _ensureDeviceId();
+      await _ensureRealtimeSubscription(user.id, deviceId);
       final hadLocalAiPreferenceMutation = localStore.pendingOperations().any(
         (operation) =>
             operation['key'] == 'pace.settings.ai.confirm_actions' ||
@@ -28,14 +40,37 @@ class SyncService {
       );
       await _pushPending();
       await _syncAiPreferences(pushLocal: hadLocalAiPreferenceMutation);
-      await _pullRemote();
+      if (!_realtimeHealthy || _realtimeNeedsPull) {
+        _realtimeNeedsPull = false;
+        await _pullRemote();
+      }
     } finally {
       _running = false;
+      if (_syncRequestedWhileRunning) {
+        _syncRequestedWhileRunning = false;
+        if (localStore.pendingOperations().isNotEmpty) unawaited(syncNow());
+      }
     }
   }
 
-  Future<void> _ensureRealtimeSubscription(String userId) async {
-    if (_realtimeUserId == userId && _realtimeChannel != null) return;
+  Future<String> _ensureDeviceId() async {
+    final existing = localStore.read('pace.__sync_device_id');
+    if (existing is String && existing.isNotEmpty) {
+      _deviceId = existing;
+      return existing;
+    }
+    final random = Random.secure();
+    final id = List<int>.generate(16, (_) => random.nextInt(256))
+        .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+        .join();
+    final deviceId = 'flutter-$id';
+    await localStore.write('pace.__sync_device_id', deviceId, enqueueSync: false);
+    _deviceId = deviceId;
+    return deviceId;
+  }
+
+  Future<void> _ensureRealtimeSubscription(String userId, String deviceId) async {
+    if (_realtimeUserId == userId && _realtimeChannel != null && _realtimeHealthy) return;
 
     if (_realtimeChannel != null) {
       await client!.removeChannel(_realtimeChannel!);
@@ -43,6 +78,8 @@ class SyncService {
       _realtimeUserId = null;
     }
 
+    _realtimeHealthy = false;
+    _realtimeNeedsPull = false;
     final channel = client!.channel('pace-flutter-user-state-$userId');
 
     void handlePayload(PostgresChangePayload payload) {
@@ -50,6 +87,7 @@ class SyncService {
       // semantics are implemented in P1.3 so a DELETE can never be mistaken
       // for an empty user_state value here.
       final record = Map<String, dynamic>.from(payload.newRecord);
+      if (record['updated_by'] == deviceId) return;
       final key = record['key'];
       final value = record['value'];
       final updatedAt = record['updated_at'];
@@ -88,14 +126,12 @@ class SyncService {
       channel.subscribe((status, error) {
         switch (status) {
           case RealtimeSubscribeStatus.subscribed:
-            // Reconcile immediately after the websocket is confirmed. This
-            // closes the race where an event was emitted before subscription
-            // became active.
-            unawaited(syncNow());
+            _realtimeHealthy = true;
             break;
           case RealtimeSubscribeStatus.channelError:
           case RealtimeSubscribeStatus.timedOut:
           case RealtimeSubscribeStatus.closed:
+            _realtimeHealthy = false;
             // The next syncNow() must create a fresh channel rather than
             // reusing a channel that is no longer subscribed.
             if (identical(_realtimeChannel, channel)) {
@@ -108,6 +144,7 @@ class SyncService {
     } catch (_) {
       _realtimeChannel = null;
       _realtimeUserId = null;
+      _realtimeHealthy = false;
       // Polling remains the fallback when Realtime is unavailable.
     }
   }
@@ -118,8 +155,7 @@ class SyncService {
     String updatedAt,
   ) async {
     if (_running) {
-      // The regular sync cycle will reconcile this row after its current
-      // mutation batch completes, preventing a transient overwrite.
+      _realtimeNeedsPull = true;
       return;
     }
 
@@ -188,7 +224,7 @@ class SyncService {
       'p_key': key,
       'p_value': value,
       'p_updated_at': updatedAt,
-      'p_updated_by': 'flutter-native',
+      'p_updated_by': _deviceId ?? 'flutter-native',
     });
 
     final write = CloudSyncWriteResponse.fromRpc(response);
