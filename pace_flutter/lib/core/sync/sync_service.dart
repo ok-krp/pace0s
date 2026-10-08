@@ -27,6 +27,11 @@ class SyncService {
     await syncNow();
   }
 
+  Future<void> recoverIfNeeded() async {
+    if (_realtimeHealthy) return;
+    await syncNow();
+  }
+
   Future<void> syncNow() async {
     final user = client?.auth.currentUser;
     if (client == null || user == null) return;
