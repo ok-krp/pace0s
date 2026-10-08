@@ -21,18 +21,18 @@ grant select, insert, update, delete on table public.ai_preferences to authentic
 grant select, insert on table public.ai_action_log to authenticated;
 
 grant select, insert, update, delete on table public.food_log to authenticated;
-grant select, insert, update, delete on table public.food_scans to authenticated;
-grant select, insert, update, delete on table public.profiles to authenticated;
+grant select, insert on table public.food_scans to authenticated;
+grant select, insert, update on table public.profiles to authenticated;
 grant select, insert, update, delete on table public.push_subscriptions to authenticated;
 grant select, insert, update on table public.reminder_settings to authenticated;
 grant select on table public.reminder_debug_log to authenticated;
 grant select, insert on table public.development_tasks to authenticated;
-grant select, insert, update, delete on table public.sport_programs to authenticated;
-grant select, insert, update, delete on table public.sport_program_items to authenticated;
+grant select, insert, delete on table public.sport_programs to authenticated;
+grant select, insert, delete on table public.sport_program_items to authenticated;
 grant select, insert, update, delete on table public.sport_progression_targets to authenticated;
-grant select, insert, update, delete on table public.sport_workout_sessions to authenticated;
-grant select, insert, update, delete on table public.sport_workout_exercises to authenticated;
-grant select, insert, update, delete on table public.sport_workout_sets to authenticated;
+grant select, insert, delete on table public.sport_workout_sessions to authenticated;
+grant select, insert on table public.sport_workout_exercises to authenticated;
+grant select, insert, update on table public.sport_workout_sets to authenticated;
 grant select, insert, update, delete on table public.user_biometrics_e2ee to authenticated;
 grant select, insert, update, delete on table public.user_state to authenticated;
 
