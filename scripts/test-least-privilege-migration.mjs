@@ -62,7 +62,7 @@ const serverOnlyNutrition = [
   "nutrition_reference_dishes", "nutrition_reference_foods", "nutrition_reference_sources"
 ];
 for (const table of serverOnlyNutrition) {
-  check(!new RegExp(`\\\\bgrant\\\\b[^;]*\\\\bon\\\\s+table\\\\s+public\\\\.${table}\\\\b`, "i").test(sql),
+  check(!new RegExp(`\\bgrant\\b[^;]*\\bon\\s+table\\s+public\\.${table}\\b`, "i").test(sql),
     `server-only nutrition table ${table} has no direct client grant`);
 }
 
