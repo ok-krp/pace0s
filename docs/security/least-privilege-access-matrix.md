@@ -37,6 +37,7 @@
 | `sport_exercises` | Read/create exercises; delete a just-created exercise during rollback | SELECT, INSERT, DELETE | CRUD, owner-scoped | Updates and normal deletion use RPCs. |
 | `user_state` | Client reads + Realtime; mutations use `upsert_user_state_if_newer` RPC | SELECT | ALL, owner-scoped | Direct table writes are withheld; verify RPC ACL/body separately. |
 | `health_e2ee_devices` | Read/register devices; revocation is through the rotation RPC | SELECT, INSERT | SELECT/INSERT/UPDATE, owner + consent | No direct UPDATE/DELETE observed; RPC owns revocation. |
+| `health_e2ee_key_versions` | Flutter reads the current key version | SELECT | SELECT, owner-scoped | SELECT is required for native E2EE key-version lookup. |
 | `health_e2ee_key_envelopes` | Read/insert envelopes | SELECT, INSERT | SELECT/INSERT/DELETE, owner + consent | DELETE policy exists but no direct client delete path was found. |
 | `health_samples_e2ee` | Read encrypted samples; insert encrypted samples from web and Flutter | SELECT, INSERT | SELECT/INSERT/DELETE, owner + consent on read/insert | Both TS and Flutter upserts changed to ignore duplicates so conflicts are insert-only; DELETE withheld from direct clients. |
 | `health_e2ee_recovery_envelopes` | Read and upsert recovery envelope | SELECT, INSERT, UPDATE | CRUD, owner-scoped | DELETE not observed in client code. |
