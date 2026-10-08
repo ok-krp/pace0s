@@ -9,7 +9,7 @@
 - `anon`: no direct privileges on `public` tables.
 - `authenticated`: only operations actually used by the application, with existing RLS as row-level enforcement.
 - No client `TRUNCATE`, `TRIGGER`, or `REFERENCES`.
-- Revoke default table/sequence grants for `supabase_admin` so newly created objects do not silently regain client access.
+- Revoke existing table/sequence grants for client roles, then revoke default table, sequence, and function-execute grants for both actual object-creating roles (`postgres` and `supabase_admin`).
 - Server/admin-only operations use `supabaseAdmin` or narrowly scoped RPCs; they do not justify client grants.
 - RLS policy presence is not equivalent to a grant. A request requires both table privilege and a matching policy.
 
@@ -18,7 +18,7 @@
 | Table | Observed operation / caller | Proposed authenticated grant | Existing RLS status | Notes |
 |---|---|---|---|---|
 | `ai_conversations` | Read/create/update/delete via AI history server functions; some client reads/updates | SELECT, INSERT, UPDATE, DELETE | ALL, owner-scoped | Keep CRUD; child message deletion is by cascade. |
-| `ai_messages` | Read and insert assistant messages; server reads transcript | SELECT, INSERT | ALL, conversation + owner scoped | UPDATE/DELETE not observed as direct client operations. |
+| `ai_messages` | Flutter uses `upsert()` for messages; web/server reads transcript | SELECT, INSERT, UPDATE | ALL, conversation + owner scoped | UPDATE is required by PostgREST upsert semantics; DELETE is not granted. |
 | `ai_preferences` | Read and upsert preferences | SELECT, INSERT, UPDATE | ALL, owner-scoped | DELETE not observed. |
 | `ai_action_log` | UI reads own log; AI and sport server handlers insert entries | SELECT, INSERT | ALL, owner-scoped | INSERT is required; SELECT is used by history UI. |
 | `food_log` | Read, insert, update, delete food entries | SELECT, INSERT, UPDATE, DELETE | CRUD, owner-scoped | All four operations are used. |
@@ -73,8 +73,8 @@ The current source inventory shows these as trusted-server or RPC-managed tables
 ## Mandatory blockers before applying
 
 1. **Do not apply yet.** The source scan and proposed grant matrix have not passed a full cross-user negative test.
-2. `health_e2ee_pairing_sessions` has RLS enabled and zero policies. It must remain inaccessible directly; verify every pairing RPC validates session ownership, consent, expiry, attempt count and caller identity.
+2. `health_e2ee_pairing_sessions` has RLS enabled and zero policies. It must remain inaccessible directly. A branch-only migration now adds current-consent checks to the five pairing mutation RPCs; verify session ownership, expiry, attempt count and caller identity with negative tests before applying.
 3. The 11 Advisor-reported `SECURITY DEFINER` RPCs still require per-function review of caller identity, ownership, consent, search path, and execute ACLs. Do not convert trigger/internal functions mechanically.
-4. The migration's `REVOKE ALL ON ALL TABLES` is schema-wide. It now also revokes default table/sequence ACLs for `supabase_admin`. Before application, reconcile the full table list with all web, Flutter, edge-function, and integration consumers—not just `.from()` hits in the web client.
+4. The migration's `REVOKE ALL ON ALL TABLES` is schema-wide. It now revokes existing table/sequence grants and default table/sequence/function-execute ACLs for both `postgres` and `supabase_admin`. Before application, reconcile the full table list with all web, Flutter, edge-function, and integration consumers—not just `.from()` hits in the web client.
 5. Run CI, authenticated two-user negative tests (cross-user SELECT/INSERT/UPDATE/DELETE), and a non-production apply; then compare effective grants/policies and run Security Advisor + real multi-device E2E.
 6. This migration is prepared on the branch only; no SQL was applied to project `cduyjejftorfuxuwhbqt`.
