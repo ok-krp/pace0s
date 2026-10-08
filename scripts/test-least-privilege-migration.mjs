@@ -57,6 +57,15 @@ const anonTableGrants = sql.split(/\r?\n/).filter((line) =>
 );
 check(anonTableGrants.length === 0, "no direct table grants are given to anon");
 
+const serverOnlyNutrition = [
+  "nutrition_canonical_dishes", "nutrition_data_sources", "nutrition_dish_references",
+  "nutrition_reference_dishes", "nutrition_reference_foods", "nutrition_reference_sources"
+];
+for (const table of serverOnlyNutrition) {
+  check(!new RegExp(`\\\\bgrant\\\\b[^;]*\\\\bon\\\\s+table\\\\s+public\\\\.${table}\\\\b`, "i").test(sql),
+    `server-only nutrition table ${table} has no direct client grant`);
+}
+
 const expected = [
   "ai_messages", "ai_action_log", "health_e2ee_devices",
   "health_e2ee_key_envelopes", "health_samples_e2ee",
