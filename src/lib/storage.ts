@@ -172,9 +172,6 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const [value, setValue] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
   const valueRef = useRef<T>(initial);
-  const hydratedRef = useRef(false);
-  const suppressPersistRef = useRef(false);
-  useEffect(() => { hydratedRef.current = false; suppressPersistRef.current = false; }, [key]);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -190,22 +187,9 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   }, [key]);
   useEffect(() => { valueRef.current = value; }, [value]);
   useEffect(() => {
-    if (!loaded) return;
-    if (suppressPersistRef.current) { suppressPersistRef.current = false; return; }
-    if (!hydratedRef.current) { hydratedRef.current = true; return; }
-    try {
-      const serialized = JSON.stringify(value); const previous = localStorage.getItem(key); if (previous === serialized) return;
-      localStorage.setItem(key, serialized);
-      if (key === "pace.sport.overload") syncLatestOverloadRowsToTraining(value);
-      const updatedAt = new Date().toISOString(); const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
-      window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, { detail: { key, value, updatedAt, mutationId } }));
-    } catch {}
-  }, [key, value, loaded]);
-  useEffect(() => {
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
       if (!detail || detail.key !== key) return;
-      suppressPersistRef.current = true;
       const next = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(detail.value, valueRef.current) : detail.value;
       if (!hasCompatibleTopLevelShape(next, initial)) return;
       valueRef.current = next as T;
@@ -217,16 +201,26 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const set = useCallback((next: T | ((p: T) => T)) => {
     const resolved = typeof next === "function" ? (next as (p: T) => T)(valueRef.current) : next;
     valueRef.current = resolved;
-    if (key === "pace.recipes.custom" && typeof window !== "undefined") {
-      try {
-        localStorage.setItem(key, JSON.stringify(resolved));
-        const updatedAt = new Date().toISOString();
-        const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
-        window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, { detail: { key, value: resolved, updatedAt, mutationId } }));
-      } catch {}
-    }
     setValue(resolved);
-  }, [key]);
+    if (!loaded || typeof window === "undefined") return;
+
+    // Persist and emit the sync event synchronously from the user mutation.
+    // Waiting for a React effect created a race with an incoming Realtime
+    // write: the remote handler could mark that render as "remote" and the
+    // user's local mutation would never enter the cloud queue.
+    try {
+      const serialized = JSON.stringify(resolved);
+      const previous = localStorage.getItem(key);
+      if (previous === serialized) return;
+      localStorage.setItem(key, serialized);
+      if (key === "pace.sport.overload") syncLatestOverloadRowsToTraining(resolved);
+      const updatedAt = new Date().toISOString();
+      const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
+      window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, {
+        detail: { key, value: resolved, updatedAt, mutationId },
+      }));
+    } catch {}
+  }, [key, loaded]);
   return [value, set];
 }
 
