@@ -61,7 +61,7 @@ export const insertEncryptedHealthSamples = createServerFn({ method: "POST" })
     }));
     const { error } = await context.supabase
       .from("health_samples_e2ee")
-      .upsert(rows, { onConflict: "user_id,dedupe_hash" });
+      .upsert(rows, { onConflict: "user_id,dedupe_hash", ignoreDuplicates: true });
     if (error) {
       throw new Error("Impossible d'enregistrer les données de santé chiffrées.");
     }
