@@ -7,17 +7,32 @@ import '../storage/local_store.dart';
 /// Replays local mutations through Pace's existing user_state RPC and pulls
 /// newer remote state. Local writes remain durable while offline.
 class SyncService {
-  SyncService({required this.localStore, required this.client});
+  SyncService({required this.localStore, required this.client}) {
+    localStore.onLocalMutation = () => unawaited(_requestSync());
+  }
 
   final LocalStore localStore;
   final SupabaseClient? client;
   bool _running = false;
+  bool _syncRequestedWhileRunning = false;
   RealtimeChannel? _realtimeChannel;
   String? _realtimeUserId;
 
+  Future<void> _requestSync() async {
+    if (_running) {
+      _syncRequestedWhileRunning = true;
+      return;
+    }
+    await syncNow();
+  }
+
   Future<void> syncNow() async {
     final user = client?.auth.currentUser;
-    if (_running || client == null || user == null) return;
+    if (client == null || user == null) return;
+    if (_running) {
+      _syncRequestedWhileRunning = true;
+      return;
+    }
     _running = true;
     try {
       await _ensureRealtimeSubscription(user.id);
@@ -31,6 +46,12 @@ class SyncService {
       await _pullRemote();
     } finally {
       _running = false;
+      if (_syncRequestedWhileRunning) {
+        _syncRequestedWhileRunning = false;
+        if (localStore.pendingOperations().isNotEmpty) {
+          unawaited(syncNow());
+        }
+      }
     }
   }
 
