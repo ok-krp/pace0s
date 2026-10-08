@@ -103,11 +103,23 @@ function syncLatestOverloadRowsToTraining(value: unknown) {
       }
     }
     if (exercisesChanged) {
-      const next = JSON.stringify(exercises); localStorage.setItem("pace.sport.exercises", next);
+      const next = JSON.stringify(exercises);
+      localStorage.setItem("pace.sport.exercises", next);
+      const updatedAt = new Date().toISOString();
+      const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
+      window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, {
+        detail: { key: "pace.sport.exercises", value: exercises, updatedAt, mutationId },
+      }));
       window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: "pace.sport.exercises", value: exercises } }));
     }
     if (programsChanged) {
-      const next = JSON.stringify(programs); localStorage.setItem("pace.sport.programs", next);
+      const next = JSON.stringify(programs);
+      localStorage.setItem("pace.sport.programs", next);
+      const updatedAt = new Date().toISOString();
+      const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
+      window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, {
+        detail: { key: "pace.sport.programs", value: programs, updatedAt, mutationId },
+      }));
       window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key: "pace.sport.programs", value: programs } }));
     }
   } catch {}
