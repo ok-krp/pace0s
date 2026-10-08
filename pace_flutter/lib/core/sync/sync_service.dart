@@ -9,7 +9,9 @@ import '../storage/local_store.dart';
 /// newer remote state. Local writes remain durable while offline.
 class SyncService {
   SyncService({required this.localStore, required this.client}) {
-    localStore.onLocalMutation = () => unawaited(syncNow());
+    localStore.onLocalMutation = () async {
+      await syncNow();
+    };
   }
 
   final LocalStore localStore;
