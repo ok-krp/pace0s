@@ -17,7 +17,7 @@ const DEVICE_ID = getDeviceId();
 const CONFLICTS_KEY = "pace.__sync_conflicts";
 
 type SyncMeta = Record<string, string>;
-export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
+export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline" | "consent_required";
 export type SyncConflict = { id: string; key: string; localValue: unknown; remoteValue: unknown; remoteUpdatedAt: string; detectedAt: string; };
 type SyncRow = { key: string; value: unknown; updated_at: string; updated_by: string | null };
 type ServerWriteResult = { accepted: boolean; updated_at: string | null };
@@ -434,7 +434,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const syncNow = async () => {
-      if (!allowed()) return;
+      if (!allowed()) { setStatus("consent_required"); return; }
       pruneEquivalentConflicts();
       if (!navigator.onLine) { setStatus("offline"); return; }
       await flushQueue(); await pull();
@@ -483,7 +483,7 @@ export function useCloudSyncEngineInternal() {
     const onPageShow = () => {
       void syncNow();
     };
-    const onLegalChanged = () => { if (allowed()) void syncNow(); else setStatus("idle"); };
+    const onLegalChanged = () => { if (allowed()) void syncNow(); else setStatus("consent_required"); };
     const onConflictResolved = () => { void syncNow(); };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
