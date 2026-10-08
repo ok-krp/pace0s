@@ -204,3 +204,23 @@ assert.match(legalConsent, /const seenConsentTypes = new Set/);
 assert.match(legalConsent, /seenConsentTypes\.has\(consentType\)/);
 assert.match(legalConsent, /opts\[consentType\] = record\.granted/);
 assert.match(legalConsent, /seenConsentTypes\.add\(consentType\)/);
+
+
+// Data-subject exports must paginate beyond Supabase's default row cap and
+// include user-owned records while never returning encrypted BYOK key material.
+const privacyFunctions = read("src/lib/privacy.functions.ts");
+assert.match(privacyFunctions, /const pageSize = 500/);
+assert.match(privacyFunctions, /\.range\(from, from \+ pageSize - 1\)/);
+for (const table of [
+  "ai_tool_idempotency",
+  "audit_log",
+  "data_deletion_requests",
+  "health_e2ee_key_versions",
+  "health_e2ee_recovery_envelopes",
+  "health_legacy_migration_map",
+  "user_biometrics_e2ee",
+]) {
+  assert.match(privacyFunctions, new RegExp('"' + table + '"'), `privacy export must include ${table}`);
+}
+assert.match(privacyFunctions, /select\("provider,key_last4,created_at,updated_at"\)/);
+assert.match(privacyFunctions, /never return encrypted API-key material/);
