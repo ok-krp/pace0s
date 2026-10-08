@@ -32,6 +32,17 @@ async function getGithubOidcToken() {
   throw new Error("GitHub OIDC token request failed: HTTP " + lastStatus);
 }
 
+async function cleanupStaleRealAuthUsers(oidcToken: string) {
+  const response = await fetch(brokerUrl, {
+    method: "POST",
+    headers: { Authorization: "Bearer " + oidcToken, "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "cleanup_stale" }),
+  });
+  const body = await response.json().catch(() => ({})) as { error?: string; cleaned?: number };
+  if (!response.ok) throw new Error("E2E stale cleanup failed: " + (body.error ?? "HTTP " + response.status));
+  console.log("Stale E2E cleanup: " + (body.cleaned ?? 0) + " removed");
+}
+
 async function createRealAuthSessions(oidcToken: string) {
   const response = await fetch(brokerUrl, {
     method: "POST",
@@ -140,6 +151,7 @@ let bClient: SupabaseClient | null = null;
 
 try {
   oidcToken = await getGithubOidcToken();
+  await cleanupStaleRealAuthUsers(oidcToken);
   const sessions = await createRealAuthSessions(oidcToken);
   userId = sessions.user_id;
 
