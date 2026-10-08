@@ -12,6 +12,7 @@ class LocalStore {
   final File _file;
   Map<String, dynamic> _data = <String, dynamic>{};
   Future<void> _flushQueue = Future<void>.value();
+  Future<void> Function()? onLocalMutation;
 
   static Future<LocalStore> open() async {
     final directory = await getApplicationSupportDirectory();
@@ -46,6 +47,7 @@ class LocalStore {
       _data['__outbox'] = outbox;
     }
     await _flush();
+    if (enqueueSync) onLocalMutation?.call();
   }
 
   Future<void> remove(String key, {bool enqueueSync = true}) async {
@@ -61,6 +63,7 @@ class LocalStore {
       _data['__outbox'] = outbox;
     }
     await _flush();
+    if (enqueueSync) onLocalMutation?.call();
   }
 
   Future<void> applyRemote(String key, dynamic value, String updatedAt) async {
