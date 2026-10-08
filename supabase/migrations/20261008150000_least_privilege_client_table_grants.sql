@@ -23,7 +23,8 @@ alter default privileges for role supabase_admin in schema public
 
 -- User-owned CRUD tables: RLS remains the authorization boundary.
 grant select, insert, update, delete on table public.ai_conversations to authenticated;
-grant select, insert on table public.ai_messages to authenticated;
+-- Flutter uses upsert() for messages; PostgREST upsert requires UPDATE privilege too.
+grant select, insert, update on table public.ai_messages to authenticated;
 grant select, insert, update on table public.ai_preferences to authenticated;
 grant select, insert on table public.ai_action_log to authenticated;
 
