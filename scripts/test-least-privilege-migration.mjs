@@ -5,6 +5,8 @@ const path = "supabase/migrations/20261008150000_least_privilege_client_table_gr
 const sql = await readFile(path, "utf8");
 const pairingPath = "supabase/migrations/20261008160000_require_consent_for_health_pairing_rpcs.sql";
 const pairing = await readFile(pairingPath, "utf8");
+const legacyPath = "supabase/migrations/20261008170000_prevent_cross_user_legacy_sample_claim.sql";
+const legacy = await readFile(legacyPath, "utf8");
 
 function check(condition, message) {
   assert.ok(condition, message);
@@ -18,8 +20,15 @@ check((pairing.match(/^as \$\$$/gm) ?? []).length === (pairing.match(/^\$\$;$/gm
   "pairing RPC migration has balanced $$ function bodies");
 check((pairing.match(/^create or replace function public\./gm) ?? []).length === 5,
   "pairing consent migration defines the five expected mutation RPCs");
-check(pairing.includes("has_current_health_e2ee_consent()"),
-  "pairing mutation RPCs require current health/cloud-sync consent");
+check((pairing.match(/has_current_health_e2ee_consent\(\)/g) ?? []).length === 5,
+  "all five pairing mutation RPCs require current health/cloud-sync consent");
+check(!/^\$;$/m.test(legacy), "legacy ownership migration has no malformed $; terminators");
+check((legacy.match(/^as \$\$/gm) ?? []).length === (legacy.match(/^\$\$;$/gm) ?? []).length,
+  "legacy ownership migration has balanced $ function bodies");
+check(/from public\.health_samples legacy[\s\S]*?legacy\.id = legacy_id[\s\S]*?legacy\.user_id = auth\.uid\(\)/i.test(legacy),
+  "legacy migration verifies sample ownership before reserving its ID");
+check(legacy.includes("Legacy sample does not belong to current user"),
+  "cross-user legacy sample claims are rejected explicitly");
 
 // Least privilege: remove existing and future client ACLs before explicit grants.
 check(sql.includes("revoke all on all tables in schema public from anon;"), "revoke existing anon table privileges");
