@@ -16,6 +16,7 @@ class SyncService {
   bool _running = false;
   bool _syncRequestedWhileRunning = false;
   bool _realtimeHealthy = false;
+  bool _realtimeNeedsPull = false;
   RealtimeChannel? _realtimeChannel;
   String? _realtimeUserId;
 
@@ -49,7 +50,10 @@ class SyncService {
       );
       await _pushPending();
       await _syncAiPreferences(pushLocal: hadLocalAiPreferenceMutation);
-      if (!_realtimeHealthy) await _pullRemote();
+      if (!_realtimeHealthy || _realtimeNeedsPull) {
+        _realtimeNeedsPull = false;
+        await _pullRemote();
+      }
     } finally {
       _running = false;
       if (_syncRequestedWhileRunning) {
@@ -62,7 +66,7 @@ class SyncService {
   }
 
   Future<void> _ensureRealtimeSubscription(String userId) async {
-    if (_realtimeUserId == userId && _realtimeChannel != null) return;
+    if (_realtimeUserId == userId && _realtimeChannel != null && _realtimeHealthy) return;
 
     if (_realtimeChannel != null) {
       client!.removeChannel(_realtimeChannel!);
@@ -70,6 +74,7 @@ class SyncService {
     }
 
     _realtimeHealthy = false;
+    _realtimeNeedsPull = false;
     final channel = client!.channel('pace-flutter-user-state-$userId');
     channel.onPostgresChanges(
       event: PostgresChangeEvent.all,
@@ -118,8 +123,8 @@ class SyncService {
     String updatedAt,
   ) async {
     if (_running) {
-      // The regular sync cycle will reconcile this row after its current
-      // mutation batch completes, preventing a transient overwrite.
+      // A remote event arriving during a local push must not be lost.
+      _realtimeNeedsPull = true;
       return;
     }
 
