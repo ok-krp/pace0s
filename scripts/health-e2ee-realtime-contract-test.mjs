@@ -122,6 +122,15 @@ for (const functionName of [
   assert.match(pairingRpcConsentMigration, new RegExp(`grant execute on function public\\.${functionName}`));
 }
 
+assert.ok(
+  pairingRpcConsentMigration.includes("p_secret_plaintext is null"),
+  "pairing RPC must reject a null secret rather than treating SQL NULL as a successful comparison",
+);
+assert.ok(
+  pairingRpcConsentMigration.includes("is distinct from v_session.secret_hash"),
+  "pairing RPC secret verification must be null-safe",
+);
+
 const leastPrivilegeMigration = fs.readFileSync(
   path.join(root, "supabase/migrations/20261008150000_least_privilege_client_table_grants.sql"),
   "utf8",
