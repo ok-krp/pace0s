@@ -72,7 +72,7 @@ begin
 
   return v_session_id;
 end;
-$;
+$$;
 
 create or replace function public.join_pairing_session(
   p_session_id uuid,
@@ -170,7 +170,7 @@ begin
       updated_at = now()
   where id = p_session_id;
 end;
-$;
+$$;
 
 create or replace function public.confirm_pairing_session(
   p_session_id uuid,
@@ -227,7 +227,7 @@ begin
       updated_at = now()
   where id = p_session_id;
 end;
-$;
+$$;
 
 create or replace function public.complete_pairing_session(
   p_session_id uuid,
@@ -274,7 +274,7 @@ begin
       secret_hash = encode(digest(gen_random_bytes(32), 'sha256'), 'hex')
   where id = p_session_id;
 end;
-$;
+$$;
 
 create or replace function public.create_pairing_envelope(
   p_session_id uuid,
@@ -372,7 +372,7 @@ begin
 
   return v_envelope_id;
 end;
-$;
+$$;
 
 revoke all on function public.create_pairing_session(uuid,text,text,jsonb,integer) from public, anon;
 grant execute on function public.create_pairing_session(uuid,text,text,jsonb,integer) to authenticated;
