@@ -139,6 +139,18 @@ export function applyWallpaper(choice: WallpaperChoice) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
   const isDark = root.classList.contains("dark");
+  const isSignalDark = root.dataset.visualTheme === "signal" && isDark;
+
+  // Signal dark is intentionally independent from the selected wallpaper:
+  // never let a light wallpaper overwrite the Signal dark canvas.
+  if (isSignalDark) {
+    root.style.setProperty("--wallpaper", "#090b0e");
+    root.style.setProperty("--background", "#090b0e");
+    root.style.setProperty("--glass-tint", "20 24 29");
+    root.style.setProperty("--glass-tint-base", "0.08");
+    root.setAttribute("data-wallpaper", "signal-dark");
+    return;
+  }
 
   if ("kind" in choice && choice.kind === "custom") {
     root.style.setProperty(
