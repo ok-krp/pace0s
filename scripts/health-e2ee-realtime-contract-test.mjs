@@ -110,9 +110,11 @@ for (const functionName of [
 ]) {
   const start = pairingRpcConsentMigration.indexOf(`create or replace function public.${functionName}`);
   assert.ok(start >= 0, `pairing consent migration must replace ${functionName}`);
-  const end = pairingRpcConsentMigration.indexOf("$;", start);
+  const nextFunction = pairingRpcConsentMigration.indexOf("\ncreate or replace function public.", start + 1);
+  const aclStart = pairingRpcConsentMigration.indexOf("\nrevoke all on function public.", start);
+  const end = nextFunction >= 0 ? nextFunction : aclStart;
   assert.ok(end > start, `pairing consent migration must terminate ${functionName}`);
-  const definition = pairingRpcConsentMigration.slice(start, end + 3);
+  const definition = pairingRpcConsentMigration.slice(start, end);
   assert.match(definition, /security definer/);
   assert.match(definition, /set search_path = ''/);
   assert.match(definition, /if not public\.has_current_health_e2ee_consent\(\)/);
