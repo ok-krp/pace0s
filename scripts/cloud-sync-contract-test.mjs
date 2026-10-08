@@ -56,6 +56,33 @@ assert.ok(
   "a newer local domain edit must be queued when legacy sync metadata is missing",
 );
 
+assert.match(
+  engine,
+  /if \(domain && Date\.parse\(domain\.updatedAt\) >= remoteTime && !isEmptyRecoveredValue\(domain\.value\)\) \{[\s\S]*?if \(domainTime > remoteTime\) \{[\s\S]*?queueItem\(localItem\);[\s\S]*?void pushItem\(localItem\);[\s\S]*?recordConflict\(row\.key, domain\.value, row\.value, row\.updated_at\);/,
+  "a realtime row arriving after bootstrap must enqueue newer local data or expose an equal-timestamp conflict",
+);
+const realtimeReconcile = (local, remote) => {
+  if (local.updatedAt > remote.updatedAt) return "push-local";
+  if (local.updatedAt === remote.updatedAt && JSON.stringify(local.value) !== JSON.stringify(remote.value)) return "conflict";
+  return "apply-remote";
+};
+assert.equal(
+  realtimeReconcile(
+    { updatedAt: "2026-10-08T12:00:00.000Z", value: { count: 2 } },
+    { updatedAt: "2026-10-08T11:00:00.000Z", value: { count: 1 } },
+  ),
+  "push-local",
+  "a local-only edit newer than a Realtime insert must be pushed immediately",
+);
+assert.equal(
+  realtimeReconcile(
+    { updatedAt: "2026-10-08T12:00:00.000Z", value: { count: 2 } },
+    { updatedAt: "2026-10-08T12:00:00.000Z", value: { count: 1 } },
+  ),
+  "conflict",
+  "equal-timestamp divergent edits must not silently overwrite either value",
+);
+
 // The server RPC is monotonic: an older canonical timestamp must never be
 // replaced by a newer request carrying an older-than-canonical server timestamp.
 assert.match(
