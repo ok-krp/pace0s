@@ -148,6 +148,7 @@ export function applyWallpaper(choice: WallpaperChoice) {
     root.style.setProperty("--background", "#090b0e");
     root.style.setProperty("--glass-tint", "20 24 29");
     root.style.setProperty("--glass-tint-base", "0.08");
+    root.style.setProperty("--glass-tint-base", "0.08");
     root.setAttribute("data-wallpaper", "signal-dark");
     return;
   }
