@@ -22,6 +22,12 @@ check((pairing.match(/^create or replace function public\./gm) ?? []).length ===
   "pairing consent migration defines the five expected mutation RPCs");
 check((pairing.match(/has_current_health_e2ee_consent\(\)/g) ?? []).length === 5,
   "all five pairing mutation RPCs require current health/cloud-sync consent");
+check(pairing.includes("length(p_challenge) > 256"), "pairing challenge length is bounded in SQL");
+check(pairing.includes("length(p_secret_plaintext) > 512"), "pairing secret length is bounded in SQL");
+check((pairing.match(/length\(p_ephemeral_pub->>'x'\), 0\) > 128/g) ?? []).length === 2,
+  "both pairing public-key coordinates are bounded in SQL");
+check(pairing.includes("length(p_envelope) > 100000"), "pairing envelope size is bounded in SQL");
+check(pairing.includes("p_key_version > 100"), "pairing key version is bounded in SQL");
 check(!/^\$;$/m.test(legacy), "legacy ownership migration has no malformed $; terminators");
 check((legacy.match(/^as \$\$/gm) ?? []).length === (legacy.match(/^\$\$;$/gm) ?? []).length,
   "legacy ownership migration has balanced $ function bodies");
