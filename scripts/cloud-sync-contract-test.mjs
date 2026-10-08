@@ -195,3 +195,12 @@ assert.match(coachFoodSecurity, /i\.user_id = p_user_id/);
 assert.match(coachFoodSecurity, /i\.conversation_id = p_conversation_id/);
 assert.match(coachFoodSecurity, /fl\.user_id = p_user_id/);
 assert.match(coachFoodSecurity, /pg_catalog\.length\(p_tool_call_id\) > 200/);
+
+
+// Consent history is newest-first. The first record per category must win even
+// when it is a denial, otherwise an older grant can silently reactivate consent.
+const legalConsent = read("src/lib/legal.functions.ts");
+assert.match(legalConsent, /const seenConsentTypes = new Set/);
+assert.match(legalConsent, /seenConsentTypes\.has\(consentType\)/);
+assert.match(legalConsent, /opts\[consentType\] = record\.granted/);
+assert.match(legalConsent, /seenConsentTypes\.add\(consentType\)/);
