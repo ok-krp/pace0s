@@ -78,6 +78,7 @@ async function cleanupRealAuthUser(oidcToken: string, userId: string) {
 
 const egress = {
   responseBytes: 0,
+  realtimePayloadBytes: 0,
   byPath: new Map<string, { requests: number; responseBytes: number }>(),
   pending: [] as Promise<void>[],
 };
@@ -92,8 +93,9 @@ function installEgressMeasurement() {
     } catch {
       return response;
     }
-    if (!url.pathname.startsWith("/rest/v1/") && !url.pathname.startsWith("/storage/v1/")) return response;
+    if (url.host !== new URL(url, globalThis.location?.href ?? "https://invalid").host) return response;
     const path = url.pathname;
+    if (!path.startsWith("/rest/v1/") && !path.startsWith("/storage/v1/") && !path.startsWith("/auth/v1/") && !path.startsWith("/functions/v1/github-e2e-auth")) return response;
     const entry = egress.byPath.get(path) ?? { requests: 0, responseBytes: 0 };
     entry.requests++;
     egress.byPath.set(path, entry);
@@ -108,7 +110,8 @@ function installEgressMeasurement() {
 
 async function flushEgressMeasurement() {
   await Promise.all(egress.pending);
-  console.log("REST response-body egress bytes: " + egress.responseBytes);
+  console.log("Supabase HTTP response-body egress bytes: " + egress.responseBytes);
+  console.log("Supabase Realtime payload bytes: " + egress.realtimePayloadBytes);
   for (const [path, value] of [...egress.byPath.entries()].sort()) {
     console.log("REST egress " + path + ": requests=" + value.requests + " response_body_bytes=" + value.responseBytes);
   }
@@ -154,6 +157,7 @@ function subscribeForEvent(client: SupabaseClient, channelName: string, event: "
     })
     .on("postgres_changes", { event, schema: "public", table: "user_state", filter: "user_id=eq." + userId }, (payload) => {
       if (!predicate(payload) || settled) return;
+      egress.realtimePayloadBytes += new TextEncoder().encode(JSON.stringify(payload)).byteLength;
       settled = true;
       clearTimeout(timer);
       eventResolve(payload);
