@@ -146,6 +146,7 @@ const suffix = Date.now().toString(36) + "-" + Math.random().toString(36).slice(
 const keyName = "__paceos_real_auth_e2e__" + suffix;
 let oidcToken: string | null = null;
 let userId: string | null = null;
+let storagePath: string | null = null;
 let aClient: SupabaseClient | null = null;
 let bClient: SupabaseClient | null = null;
 
@@ -214,6 +215,27 @@ try {
   if (healthDeleteError) throw new Error("Health E2EE probe cleanup failed: " + healthDeleteError.message);
   console.log("Health E2EE consent granted + cross-session RLS read: PASS");
 
+  const pngBytes = Uint8Array.from(
+    atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/9ioAAAAASUVORK5CYII="),
+    (char) => char.charCodeAt(0),
+  );
+  storagePath = userId + "/e2e-" + suffix + ".png";
+  const { error: storageUploadError } = await aClient.storage
+    .from("nutrition-ai")
+    .upload(storagePath, pngBytes, { contentType: "image/png", upsert: false });
+  if (storageUploadError) throw new Error("Storage owner upload failed: " + storageUploadError.message);
+  const { data: storageDownload, error: storageDownloadError } = await bClient.storage
+    .from("nutrition-ai")
+    .download(storagePath);
+  if (storageDownloadError || !storageDownload) {
+    throw new Error("Second session could not download its Storage object: " + (storageDownloadError?.message ?? "missing object"));
+  }
+  const downloadedBytes = new Uint8Array(await storageDownload.arrayBuffer());
+  if (downloadedBytes.length !== pngBytes.length || downloadedBytes.some((byte, index) => byte !== pngBytes[index])) {
+    throw new Error("Storage cross-session download did not match the uploaded bytes");
+  }
+  console.log("Storage private bucket owner-scoped upload/download: PASS");
+
   const bListener = subscribeForEvent(bClient, "paceos-e2e-B", "INSERT", userId, (p) => p.new?.key === keyName && p.new?.value?.phase === "A");
   const aListener = subscribeForEvent(aClient, "paceos-e2e-A", "UPDATE", userId, (p) => p.new?.key === keyName && p.new?.value?.phase === "B");
 
@@ -264,6 +286,15 @@ try {
       await aClient.from("user_state").delete().eq("user_id", userId).eq("key", keyName);
     } catch {
       // Cleanup continues through the privileged broker even if the row delete fails.
+    }
+  }
+  if (aClient && storagePath) {
+    const { error: storageCleanupError } = await aClient.storage.from("nutrition-ai").remove([storagePath]);
+    if (storageCleanupError) {
+      console.error("Storage E2E cleanup failed: " + storageCleanupError.message);
+      process.exitCode = 1;
+    } else {
+      console.log("Storage E2E cleanup: PASS");
     }
   }
   await Promise.allSettled([aClient?.auth.signOut(), bClient?.auth.signOut()]);
