@@ -123,7 +123,8 @@ begin
     raise exception 'Invalid state transition';
   end if;
 
-  if encode(digest(convert_to(p_secret_plaintext, 'UTF8'), 'sha256'), 'hex') <> v_session.secret_hash then
+  if p_secret_plaintext is null
+     or encode(digest(convert_to(p_secret_plaintext, 'UTF8'), 'sha256'), 'hex') is distinct from v_session.secret_hash then
     v_attempt := v_session.attempt_count + 1;
 
     update public.health_e2ee_pairing_sessions
