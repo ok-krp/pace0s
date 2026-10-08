@@ -60,7 +60,7 @@ export function CloudSyncSettings() {
           </button>
         </div>
       )}
-      {user && <div className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">Les modifications sont enregistrées localement immédiatement et synchronisées automatiquement. En cas de coupure, elles restent en file d'attente puis sont envoyées dès le retour de la connexion.</div>}
+      {user && <div className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{consentRequired ? "Les modifications restent enregistrées localement. Elles ne seront envoyées qu’après ton autorisation explicite de la synchronisation cloud." : "Les modifications sont enregistrées localement immédiatement et synchronisées automatiquement. En cas de coupure, elles restent en file d'attente puis sont envoyées dès le retour de la connexion."}</div>}
     </div>
   );
 }
