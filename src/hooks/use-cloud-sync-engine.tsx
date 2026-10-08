@@ -336,7 +336,11 @@ export function useCloudSyncEngineInternal() {
           const updatedAt = new Date(sourceTime).toISOString();
           const localDomain = readDomainRecord(key);
           const localIsEmpty = localDomain ? isEmptyRecoveredValue(localDomain.value) : true;
-          const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
+          const metaTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
+          const domainTime = localDomain ? Date.parse(localDomain.updatedAt) : Number.NaN;
+          // The domain envelope is the source of truth for local edits, even when
+          // older clients never wrote a corresponding sync-meta timestamp.
+          const localTime = Math.max(metaTime, Number.isFinite(domainTime) ? domainTime : 0);
           const queued = getQueued(key);
           if (queued) {
             if (serialize(queued.value) === serialize(mergedValue)) {
