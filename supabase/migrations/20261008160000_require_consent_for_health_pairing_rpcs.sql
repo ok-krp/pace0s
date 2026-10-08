@@ -147,7 +147,9 @@ begin
      or p_ephemeral_pub->>'kty' <> 'EC'
      or p_ephemeral_pub->>'crv' <> 'P-256'
      or coalesce(length(p_ephemeral_pub->>'x'), 0) = 0
-     or coalesce(length(p_ephemeral_pub->>'y'), 0) = 0 then
+     or coalesce(length(p_ephemeral_pub->>'x'), 0) > 128
+     or coalesce(length(p_ephemeral_pub->>'y'), 0) = 0
+     or coalesce(length(p_ephemeral_pub->>'y'), 0) > 128 then
     raise exception 'Invalid recipient ephemeral public key';
   end if;
 
