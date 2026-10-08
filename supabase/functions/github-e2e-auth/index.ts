@@ -82,8 +82,11 @@ Deno.serve(async (request) => {
           ) continue;
           await admin.from("user_state").delete().eq("user_id", user.id);
           const { error: deleteError } = await admin.auth.admin.deleteUser(user.id);
-          if (deleteError) return new Response(JSON.stringify({ error: "Unable to delete stale E2E user: " + deleteError.message }), { status: 500, headers: corsHeaders });
-          cleaned++;
+          // Another authorized CI run may have removed this same stale user after listUsers().
+          if (deleteError && !/user not found/i.test(deleteError.message)) {
+            return new Response(JSON.stringify({ error: "Unable to delete stale E2E user: " + deleteError.message }), { status: 500, headers: corsHeaders });
+          }
+          if (!deleteError) cleaned++;
         }
         if (users.length < 1000) break;
         page++;
