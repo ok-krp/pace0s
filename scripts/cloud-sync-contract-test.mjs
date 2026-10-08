@@ -183,3 +183,15 @@ assert.match(nutritionLog, /let nutritionBridgePending = false;/, "nutrition bri
 assert.match(nutritionLog, /nutritionBridgePendingValue = value;/, "nutrition bridge must retain the latest pending nutrition value");
 assert.match(nutritionLog, /if \(nutritionBridgePending\)[\s\S]*?void bridgeLocalNutritionToFoodLog\(nextValue\);/, "nutrition bridge must drain a queued write after the in-flight write completes");
 assert.match(domainStore, /sodium: Number\(x\.sodium \?\? 0\), qty: Number\(x\.qty \?\? 1\), source: x\.source \?\? "manual"/, "local nutrition dedupe must retain provenance");
+
+
+// Coach AI food writes are privileged; they must be bound to the caller and
+// to a conversation owned by that caller, not just to a caller-supplied user_id.
+const coachFoodSecurity = read("supabase/migrations/20261008120000_harden_coach_ai_food_rpc_authorization.sql");
+assert.match(coachFoodSecurity, /auth\.uid\(\) is null or p_user_id is distinct from auth\.uid\(\)/);
+assert.match(coachFoodSecurity, /c\.id = p_conversation_id[\s\S]*?c\.user_id = auth\.uid\(\)/);
+assert.match(coachFoodSecurity, /set search_path = ''/);
+assert.match(coachFoodSecurity, /i\.user_id = p_user_id/);
+assert.match(coachFoodSecurity, /i\.conversation_id = p_conversation_id/);
+assert.match(coachFoodSecurity, /fl\.user_id = p_user_id/);
+assert.match(coachFoodSecurity, /pg_catalog\.length\(p_tool_call_id\) > 200/);
