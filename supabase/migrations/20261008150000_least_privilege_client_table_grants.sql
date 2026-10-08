@@ -26,6 +26,7 @@ grant select, insert, update, delete on table public.profiles to authenticated;
 grant select, insert, update, delete on table public.push_subscriptions to authenticated;
 grant select, insert, update on table public.reminder_settings to authenticated;
 grant select on table public.reminder_debug_log to authenticated;
+grant select, insert on table public.development_tasks to authenticated;
 grant select, insert, update, delete on table public.sport_programs to authenticated;
 grant select, insert, update, delete on table public.sport_program_items to authenticated;
 grant select, insert, update, delete on table public.sport_progression_targets to authenticated;
@@ -62,7 +63,7 @@ grant select on table public.billing_subscriptions to authenticated;
 
 -- Explicitly server-only / internal: no client table grants.
 -- ai_provider_secrets, ai_tool_idempotency, audit_log, billing_events,
--- billing_customers, billing_trials, development_tasks, health_e2ee_pairing_sessions,
+-- billing_customers, billing_trials, health_e2ee_pairing_sessions,
 -- health_legacy_migration_map and notification_log remain inaccessible by default.
--- development_tasks is intentionally not granted here pending moving its direct
--- client reads/writes behind an authenticated server endpoint.
+-- development_tasks only receives SELECT (the user task list) and INSERT (BUILD AI
+-- creates a task); UPDATE and DELETE remain withheld from client-facing role.
