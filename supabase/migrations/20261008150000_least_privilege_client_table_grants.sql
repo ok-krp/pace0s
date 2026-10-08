@@ -69,13 +69,8 @@ grant select, insert on table public.data_deletion_requests to authenticated;
 grant select, insert, update on table public.legal_consent to authenticated;
 grant select, delete on table public.health_samples to authenticated;
 
--- Read-only reference/catalog data.
-grant select on table public.nutrition_canonical_dishes to authenticated;
-grant select on table public.nutrition_data_sources to authenticated;
-grant select on table public.nutrition_dish_references to authenticated;
-grant select on table public.nutrition_reference_dishes to authenticated;
-grant select on table public.nutrition_reference_foods to authenticated;
-grant select on table public.nutrition_reference_sources to authenticated;
+-- Client-facing exercise catalog only. Nutrition reference tables are queried
+-- through the trusted server-side nutrition engine and receive no client grants.
 grant select, insert, delete on table public.sport_exercises to authenticated;
 
 -- Billing state is read-only from the client.
