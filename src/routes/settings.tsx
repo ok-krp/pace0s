@@ -59,15 +59,15 @@ function SettingsPage() {
     const stored = localStorage.getItem("pace.dark") === "1";
     setSignal(activeSignal);
     setGlass(activeGlass);
-    setDark(activeSignal || activeGlass || stored);
+    setDark(activeGlass || stored);
     if (activeSignal || activeGlass) {
       document.documentElement.dataset.visualTheme = activeSignal ? "signal" : "glass";
-      document.documentElement.classList.add("dark");
+      document.documentElement.classList.toggle("dark", activeGlass || stored);
     } else {
       delete document.documentElement.dataset.visualTheme;
       document.documentElement.classList.toggle("dark", stored);
     }
-    setThemeColor(activeSignal || activeGlass || stored, activeSignal, activeGlass);
+    setThemeColor(activeGlass || stored, activeSignal, activeGlass);
 
     const handleVisualThemeChange = (event: Event) => {
       const theme = (event as CustomEvent<{ theme?: string; signal?: boolean }>).detail?.theme;
@@ -75,7 +75,7 @@ function SettingsPage() {
       const nextGlass = theme === "glass";
       setSignal(nextSignal);
       setGlass(nextGlass);
-      setDark(nextSignal || nextGlass || localStorage.getItem("pace.dark") === "1");
+      setDark(nextGlass || localStorage.getItem("pace.dark") === "1");
     };
     window.addEventListener("pace.visual-theme.change", handleVisualThemeChange);
     return () => window.removeEventListener("pace.visual-theme.change", handleVisualThemeChange);
