@@ -21,6 +21,7 @@ export function CloudSyncSettings() {
   }, []);
 
   const consentRequired = status === "consent_required";
+  const waiting = status === "idle";
   const label = !user
     ? "Connecte-toi pour activer la synchronisation."
     : !online || status === "offline"
@@ -31,9 +32,11 @@ export function CloudSyncSettings() {
           ? "Synchronisation impossible — nouvelle tentative automatique"
           : consentRequired
             ? "Synchronisation désactivée — autorisation requise"
-            : "Synchronisation automatique active";
+            : waiting
+              ? "Synchronisation en attente de son premier résultat"
+              : "Synchronisation automatique active";
 
-  const indicatorClass = !online || status === "offline" || status === "error" || consentRequired
+  const indicatorClass = !online || status === "offline" || status === "error" || consentRequired || waiting
     ? "bg-amber-500"
     : "bg-emerald-500";
 
@@ -47,7 +50,7 @@ export function CloudSyncSettings() {
           <div className="font-medium flex items-center gap-2"><Cloud className="size-4" /> Synchronisation cloud</div>
           <div className="text-xs text-muted-foreground">{label}</div>
         </div>
-        {user && <span className={`size-2 rounded-full ${indicatorClass}`} aria-label={consentRequired ? "Autorisation requise" : online ? "En ligne" : "Hors ligne"} />}
+        {user && <span className={`size-2 rounded-full ${indicatorClass}`} aria-label={consentRequired ? "Autorisation requise" : waiting ? "Synchronisation en attente" : online ? "En ligne" : "Hors ligne"} />}
       </div>
       {consentRequired && user && (
         <div className="space-y-2">
