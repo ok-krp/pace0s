@@ -74,7 +74,7 @@ The current source inventory shows these as trusted-server or RPC-managed tables
 
 1. **Do not apply yet.** The source scan and proposed grant matrix have not passed a full cross-user negative test.
 2. `health_e2ee_pairing_sessions` has RLS enabled and zero policies. It must remain inaccessible directly. A branch-only migration now adds current-consent checks to the five pairing mutation RPCs; verify session ownership, expiry, attempt count and caller identity with negative tests before applying.
-3. The 11 Advisor-reported `SECURITY DEFINER` RPCs still require per-function review of caller identity, ownership, consent, search path, and execute ACLs. Do not convert trigger/internal functions mechanically.
+3. The static review of the 11 Advisor-reported `SECURITY DEFINER` RPCs is documented in [privileged-rpc-review.md](./privileged-rpc-review.md). A cross-user runtime test remains mandatory; the review also records remaining RPC-boundary payload-size validation work.
 4. The migration's `REVOKE ALL ON ALL TABLES` is schema-wide. It now revokes existing table/sequence grants and default table/sequence/function-execute ACLs for both `postgres` and `supabase_admin`. Before application, reconcile the full table list with all web, Flutter, edge-function, and integration consumers—not just `.from()` hits in the web client.
 5. Run CI, authenticated two-user negative tests (cross-user SELECT/INSERT/UPDATE/DELETE), and a non-production apply; then compare effective grants/policies and run Security Advisor + real multi-device E2E.
 6. This migration is prepared on the branch only; no SQL was applied to project `cduyjejftorfuxuwhbqt`.
