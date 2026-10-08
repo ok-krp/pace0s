@@ -46,6 +46,15 @@ assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 assert.match(engine, /if \(!payload\.accepted\)/);
 assert.match(engine, /supabase\.from\("user_state"\)\.select\("key,value,updated_at,updated_by"\)/);
 assert.match(engine, /serialize\(queued\.value\) === serialize\(mergedValue\)/);
+assert.match(engine, /const domainTime = localDomain \? Date\.parse\(localDomain\.updatedAt\)/,
+  "pull reconciliation must compare cloud timestamps against the local domain envelope, not only sync metadata");
+const localDomainUpdatedAt = Date.parse("2026-10-08T12:00:00.000Z");
+const missingMetaTimestamp = Date.parse("1970-01-01T00:00:00.000Z");
+const cloudUpdatedAt = Date.parse("2026-10-08T11:00:00.000Z");
+assert.ok(
+  Math.max(missingMetaTimestamp, localDomainUpdatedAt) > cloudUpdatedAt,
+  "a newer local domain edit must be queued when legacy sync metadata is missing",
+);
 
 // The server RPC is monotonic: an older canonical timestamp must never be
 // replaced by a newer request carrying an older-than-canonical server timestamp.
