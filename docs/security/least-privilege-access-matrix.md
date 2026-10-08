@@ -36,8 +36,8 @@
 | `sport_workout_sets` | Nested reads, inserts and updates to set values | SELECT, INSERT, UPDATE | CRUD, owner-scoped | DELETE in account cleanup uses server admin. |
 | `sport_exercises` | Read/create exercises; delete a just-created exercise during rollback | SELECT, INSERT, DELETE | CRUD, owner-scoped | Updates and normal deletion use RPCs. |
 | `user_state` | Client reads + Realtime; mutations use `upsert_user_state_if_newer` RPC | SELECT | ALL, owner-scoped | Direct table writes are withheld; verify RPC ACL/body separately. |
-| `health_e2ee_devices` | Read/register devices; update/revoke device state | SELECT, INSERT, UPDATE | SELECT/INSERT/UPDATE, owner + consent | No direct DELETE grant. |
-| `health_e2ee_key_envelopes` | Read/insert envelopes; deletion is permitted by existing policy | SELECT, INSERT, DELETE | SELECT/INSERT/DELETE, owner + consent | No UPDATE policy. |
+| `health_e2ee_devices` | Read/register devices; revocation is through the rotation RPC | SELECT, INSERT | SELECT/INSERT/UPDATE, owner + consent | No direct UPDATE/DELETE observed; RPC owns revocation. |
+| `health_e2ee_key_envelopes` | Read/insert envelopes | SELECT, INSERT | SELECT/INSERT/DELETE, owner + consent | DELETE policy exists but no direct client delete path was found. |
 | `health_samples_e2ee` | Read encrypted samples; insert encrypted samples from web and Flutter | SELECT, INSERT | SELECT/INSERT/DELETE, owner + consent on read/insert | Both TS and Flutter upserts changed to ignore duplicates so conflicts are insert-only; DELETE withheld from direct clients. |
 | `health_e2ee_recovery_envelopes` | Read and upsert recovery envelope | SELECT, INSERT, UPDATE | CRUD, owner-scoped | DELETE not observed in client code. |
 | `consent_records` | Read consent state and insert consent history | SELECT, INSERT | SELECT/INSERT, owner-scoped | UPDATE/DELETE not permitted by current policies. |
@@ -63,7 +63,7 @@ The current source inventory shows these as trusted-server or RPC-managed tables
 - `billing_customers` (billing code uses the admin client)
 - `billing_trials` (trial code uses the admin client)
 - `data_deletion_requests` (account-deletion flow uses the admin client)
-- `health_e2ee_key_versions` (no direct client table access found)
+- `health_e2ee_key_versions` is not server-only; Flutter reads the current version, so SELECT is granted
 - `health_e2ee_pairing_sessions` (pairing is handled through RPCs; target currently has RLS enabled but zero policies)
 - `health_legacy_migration_map` (migration RPC/internal mapping)
 - `notification_log` (trusted reminder-hook/admin writes)
