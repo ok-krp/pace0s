@@ -44,12 +44,25 @@ async function createRealAuthSessions(oidcToken: string) {
 }
 
 async function cleanupRealAuthUser(oidcToken: string, userId: string) {
-  const response = await fetch(brokerUrl, {
-    method: "POST",
-    headers: { Authorization: "Bearer " + oidcToken, "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "cleanup", user_id: userId }),
-  });
-  if (!response.ok) console.error("E2E auth cleanup failed: HTTP " + response.status + " " + await response.text());
+  let lastFailure = "unknown error";
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(brokerUrl, {
+        method: "POST",
+        headers: { Authorization: "Bearer " + oidcToken, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cleanup", user_id: userId }),
+      });
+      if (response.ok) {
+        console.log("E2E auth cleanup: PASS");
+        return;
+      }
+      lastFailure = "HTTP " + response.status + " " + await response.text();
+    } catch (error) {
+      lastFailure = error instanceof Error ? error.message : String(error);
+    }
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 1000));
+  }
+  throw new Error("E2E auth cleanup failed after 3 attempts: " + lastFailure);
 }
 
 async function clientFromSession(session: { access_token: string; refresh_token: string }) {
@@ -196,5 +209,12 @@ try {
     }
   }
   await Promise.allSettled([aClient?.auth.signOut(), bClient?.auth.signOut()]);
-  if (oidcToken && userId) await cleanupRealAuthUser(oidcToken, userId);
+  if (oidcToken && userId) {
+    try {
+      await cleanupRealAuthUser(oidcToken, userId);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : error);
+      process.exitCode = 1;
+    }
+  }
 }
