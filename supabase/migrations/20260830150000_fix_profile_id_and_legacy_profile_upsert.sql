@@ -1,5 +1,7 @@
 -- Fix profile inserts so the legacy NOT NULL profiles.id is always populated.
 -- Keep id == user_id for compatibility with the existing production schema.
+-- Use database time for ordering: browser clocks must never make a valid
+-- interactive edit lose to a future/stale client timestamp.
 CREATE OR REPLACE FUNCTION public.upsert_profile_if_newer(
   p_user_id uuid,
   p_profile jsonb,
@@ -12,10 +14,14 @@ SET search_path = public
 AS $$
 DECLARE
   accepted boolean := false;
-  effective_updated_at timestamptz := COALESCE(p_updated_at, now());
+  effective_updated_at timestamptz := clock_timestamp();
 BEGIN
   IF auth.uid() IS NULL OR auth.uid() <> p_user_id THEN
     RAISE EXCEPTION 'not authorized';
+  END IF;
+
+  IF p_updated_by IS NULL OR btrim(p_updated_by) = '' THEN
+    RAISE EXCEPTION 'updated_by is required';
   END IF;
 
   INSERT INTO public.profiles (
@@ -27,7 +33,8 @@ BEGIN
     p_user_id, p_user_id, p_profile->>'display_name', p_profile->>'email',
     NULLIF(p_profile->>'age', '')::integer, p_profile->>'sex',
     NULLIF(p_profile->>'height_cm', '')::numeric, NULLIF(p_profile->>'weight_kg', '')::numeric,
-    NULLIF(p_profile->>'weight_goal_kg', '')::numeric, NULLIF(p_profile->>'body_fat_goal_pct', '')::numeric,
+    NULLIF(p_profile->>'weight_goal_kg', '')::numeric,
+    NULLIF(p_profile->>'body_fat_goal_pct', '')::numeric,
     NULLIF(p_profile->>'muscle_mass_goal_pct', '')::numeric,
     NULLIF(p_profile->>'daily_calorie_goal', '')::integer,
     NULLIF(p_profile->>'daily_protein_goal', '')::integer,
