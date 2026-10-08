@@ -15,6 +15,7 @@ class SyncService {
   final SupabaseClient? client;
   bool _running = false;
   bool _syncRequestedWhileRunning = false;
+  bool _realtimeHealthy = false;
   RealtimeChannel? _realtimeChannel;
   String? _realtimeUserId;
 
@@ -43,7 +44,7 @@ class SyncService {
       );
       await _pushPending();
       await _syncAiPreferences(pushLocal: hadLocalAiPreferenceMutation);
-      await _pullRemote();
+      if (!_realtimeHealthy) await _pullRemote();
     } finally {
       _running = false;
       if (_syncRequestedWhileRunning) {
@@ -63,6 +64,7 @@ class SyncService {
       _realtimeChannel = null;
     }
 
+    _realtimeHealthy = false;
     final channel = client!.channel('pace-flutter-user-state-$userId');
     channel.onPostgresChanges(
       event: PostgresChangeEvent.all,
@@ -86,9 +88,22 @@ class SyncService {
     _realtimeUserId = userId;
 
     try {
-      channel.subscribe();
+      channel.subscribe((status, [error]) {
+        switch (status) {
+          case RealtimeSubscribeStatus.subscribed:
+            final wasHealthy = _realtimeHealthy;
+            _realtimeHealthy = true;
+            if (!wasHealthy && !_running) unawaited(_pullRemote());
+            break;
+          case RealtimeSubscribeStatus.channelError:
+          case RealtimeSubscribeStatus.timedOut:
+          case RealtimeSubscribeStatus.closed:
+            _realtimeHealthy = false;
+            break;
+        }
+      });
     } catch (_) {
-      // Polling remains the fallback when Realtime is unavailable.
+      _realtimeHealthy = false;
     }
   }
 
