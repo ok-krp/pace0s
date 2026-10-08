@@ -115,7 +115,7 @@ for (const functionName of [
   const definition = pairingRpcConsentMigration.slice(start, end + 3);
   assert.match(definition, /security definer/);
   assert.match(definition, /set search_path = ''/);
-  assert.match(definition, /if not public\\.has_current_health_e2ee_consent\\(\\)/);
+  assert.match(definition, /if not public\.has_current_health_e2ee_consent\(\)/);
   assert.match(definition, /Health E2EE cloud-sync consent is required/);
   assert.match(pairingRpcConsentMigration, new RegExp(`grant execute on function public\\.${functionName}`));
 }
