@@ -432,10 +432,13 @@ export function useCloudSyncEngineInternal() {
       if (document.visibilityState === "visible" && !realtimeHealthy) void syncNow();
     }, 60_000);
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") void syncNow();
+      // Realtime is authoritative while healthy. A visibility change must not
+      // re-download the entire user_state table; only recover when Realtime is unhealthy.
+      if (document.visibilityState === "visible" && !realtimeHealthy) void syncNow();
     };
     const onPageShow = () => {
-      void syncNow();
+      // Same rule for browser BFCache/page-show events: no full-table pull while Realtime is healthy.
+      if (!realtimeHealthy) void syncNow();
     };
     const onLegalChanged = () => { if (allowed()) void syncNow(); else setStatus("idle"); };
     const onConflictResolved = () => { void syncNow(); };
