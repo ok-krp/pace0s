@@ -27,7 +27,9 @@ export function CloudSyncSettings() {
         ? "Synchronisation…"
         : status === "error"
           ? "Synchronisation impossible — nouvelle tentative automatique"
-          : "Synchronisation automatique active";
+          : status === "consent_required"
+            ? "Synchronisation désactivée — consentement requis"
+            : "Synchronisation automatique active";
 
   return (
     <div className="rounded-2xl glass-card p-4 space-y-3">
