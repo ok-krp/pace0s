@@ -13,6 +13,8 @@
 
 revoke all on all tables in schema public from anon;
 revoke all on all tables in schema public from authenticated;
+revoke all on all sequences in schema public from anon;
+revoke all on all sequences in schema public from authenticated;
 
 -- The live target currently has broad default ACLs for BOTH postgres and
 -- supabase_admin (tables, sequences, and function EXECUTE). Revoke for each
