@@ -42,6 +42,7 @@
 | `health_samples_e2ee` | Read encrypted samples; insert encrypted samples from web and Flutter | SELECT, INSERT | SELECT/INSERT/DELETE, owner + consent on read/insert | Both TS and Flutter upserts changed to ignore duplicates so conflicts are insert-only; DELETE withheld from direct clients. |
 | `health_e2ee_recovery_envelopes` | Read and upsert recovery envelope | SELECT, INSERT, UPDATE | CRUD, owner-scoped | DELETE not observed in client code. |
 | `consent_records` | Read consent state and insert consent history | SELECT, INSERT | SELECT/INSERT, owner-scoped | UPDATE/DELETE not permitted by current policies. |
+| `data_deletion_requests` | Flutter creates a deletion request and returns its new id | SELECT, INSERT | SELECT/INSERT, owner-scoped | UPDATE/DELETE remain server-only; `.insert().select('id')` requires SELECT plus INSERT. |
 | `legal_consent` | Read current legal choices and upsert them | SELECT, INSERT, UPDATE | CRUD, owner-scoped | DELETE not observed. |
 | `health_samples` | Read legacy rows for migration and delete plaintext only after encrypted verification | SELECT, DELETE | CRUD, owner-scoped | Historical plaintext table; DELETE is needed for the explicit migration path. No INSERT/UPDATE grant. |
 | `sport_exercises` | Read catalog + user exercises; insert and rollback-delete exercises | SELECT, INSERT, DELETE | CRUD, owner-scoped | Kept separate from static nutrition catalogs. |
@@ -63,7 +64,6 @@ The current source inventory shows these as trusted-server or RPC-managed tables
 - `billing_events`
 - `billing_customers` (billing code uses the admin client)
 - `billing_trials` (trial code uses the admin client)
-- `data_deletion_requests` (account-deletion flow uses the admin client)
 - `health_e2ee_key_versions` is not server-only; Flutter reads the current version, so SELECT is granted
 - `health_e2ee_pairing_sessions` (pairing is handled through RPCs; target currently has RLS enabled but zero policies)
 - `health_legacy_migration_map` (migration RPC/internal mapping)
