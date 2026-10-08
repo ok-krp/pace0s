@@ -122,4 +122,24 @@ for (const functionName of [
   assert.match(pairingRpcConsentMigration, new RegExp(`grant execute on function public\\.${functionName}`));
 }
 
+const leastPrivilegeMigration = fs.readFileSync(
+  path.join(root, "supabase/migrations/20261008150000_least_privilege_client_table_grants.sql"),
+  "utf8",
+);
+
+assert.match(leastPrivilegeMigration, /revoke all on all tables in schema public from anon/i);
+assert.match(leastPrivilegeMigration, /revoke all on all tables in schema public from authenticated/i);
+assert.match(leastPrivilegeMigration, /revoke all on all sequences in schema public from anon/i);
+assert.match(leastPrivilegeMigration, /revoke all on all sequences in schema public from authenticated/i);
+for (const ownerRole of ["postgres", "supabase_admin"]) {
+  assert.match(leastPrivilegeMigration, new RegExp(`alter default privileges for role ${ownerRole} in schema public\\\\s+revoke all on tables`));
+  assert.match(leastPrivilegeMigration, new RegExp(`alter default privileges for role ${ownerRole} in schema public\\\\s+revoke all on sequences`));
+  assert.match(leastPrivilegeMigration, new RegExp(`alter default privileges for role ${ownerRole} in schema public\\\\s+revoke execute on functions`));
+}
+assert.match(leastPrivilegeMigration, /grant select, insert, update on table public\\.ai_messages to authenticated/i);
+assert.doesNotMatch(
+  leastPrivilegeMigration.split("\\n").filter((line) => /^\\s*grant\\b/i.test(line)).join("\\n"),
+  /\\b(truncate|trigger|references|maintain)\\b/i,
+);
+
 console.log("health E2EE realtime contract: PASS");
