@@ -40,6 +40,10 @@ assert.match(engine, /server-authoritative/);
 assert.match(engine, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 assert.match(engine, /resolveConflict/);
 assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
+assert.match(storage, /Persist and emit the sync event synchronously from the user mutation/, "local user mutations must emit sync events synchronously instead of waiting for a React effect");
+assert.match(storage, /if \(!loaded \|\| typeof window === "undefined"\) return;/, "local state persistence must only run after hydration");
+assert.match(storage, /pace\.sport\.exercises.*LOCAL_WRITE_EVENT/s, "derived sport exercise changes must enter the cloud queue");
+assert.match(storage, /pace\.sport\.programs.*LOCAL_WRITE_EVENT/s, "derived sport program changes must enter the cloud queue");
 
 // A lost RPC response is resolved by the monotonic RPC itself; a rejected write
 // performs a single reconciliation read against the canonical row.
