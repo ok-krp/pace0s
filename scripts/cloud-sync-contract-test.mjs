@@ -179,6 +179,24 @@ assert.deepEqual(deviceA, deviceB, "resolved water must converge across devices"
 assert.deepEqual(conflictsA, []);
 assert.deepEqual(conflictsB, []);
 
+// Sleep must only persist after an actual input mutation, and it must not debounce
+// the last edit into a timer that can be cancelled by route navigation.
+const sleepRoute = read("src/routes/sleep.tsx");
+assert.match(sleepRoute, /const persistSleep = \(nextStart: string, nextEnd: string, nextQuality: number\)/,
+  "sleep edits must go through a single persistence path");
+assert.match(sleepRoute, /onChange=\{\(e\) => \{ const value = e\.target\.value; setStart\(value\); persistSleep\(value, end, quality\); \}\}/,
+  "editing the sleep start must persist immediately");
+assert.match(sleepRoute, /onChange=\{\(e\) => \{ const value = e\.target\.value; setEnd\(value\); persistSleep\(start, value, quality\); \}\}/,
+  "editing the sleep end must persist immediately");
+assert.match(sleepRoute, /onChange=\{\(v\) => \{ if \(v != null\) \{ setQuality\(v\); persistSleep\(start, end, v\); \} \}\}/,
+  "editing sleep quality must persist immediately");
+assert.equal(/window\.setTimeout\(/.test(sleepRoute), false,
+  "sleep persistence must not depend on a cancellable debounce timer");
+assert.match(sleepRoute, /select\("key,value,updated_at"\)/,
+  "sleep cloud recovery must use authoritative row timestamps");
+assert.match(sleepRoute, /Date\.parse\(a\.updated_at\) - Date\.parse\(b\.updated_at\)/,
+  "sleep cloud history must merge rows in timestamp order");
+
 console.log("cloud-sync-contract-test: PASS");
 
 assert.match(engine, /pruneEquivalentConflicts\(\);\n      if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
