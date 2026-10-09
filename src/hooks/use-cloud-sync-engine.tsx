@@ -13,7 +13,12 @@ const EXCLUDED = new Set<string>(["pace.sport.active"]);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
-const DEVICE_ID = getDeviceId();
+const TAB_DEVICE_KEY = "pace.__sync_tab_id";
+// A localStorage-backed ID is shared by every tab in the same browser. If used
+// as updated_by, every tab mistakes another tab's Realtime update for its own
+// echo and silently ignores it. Keep the persistent installation ID for
+// diagnostics, but use a per-tab ID for Realtime echo suppression.
+const DEVICE_ID = getTabDeviceId();
 const CONFLICTS_KEY = "pace.__sync_conflicts";
 
 type SyncMeta = Record<string, string>;
@@ -34,6 +39,16 @@ function getDeviceId() {
     localStorage.setItem(DEVICE_KEY, id);
     return id;
   } catch { return `${Date.now()}-${Math.random()}`; }
+}
+function getTabDeviceId() {
+  if (typeof window === "undefined") return "server";
+  try {
+    const existing = sessionStorage.getItem(TAB_DEVICE_KEY);
+    if (existing) return existing;
+    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `tab-${Date.now()}-${Math.random()}`;
+    sessionStorage.setItem(TAB_DEVICE_KEY, id);
+    return id;
+  } catch { return `tab-${Date.now()}-${Math.random()}`; }
 }
 function isSyncableKey(key: string) { return key.startsWith(PACE_PREFIX) && !key.startsWith(INTERNAL_PREFIX) && key !== DOMAIN_OUTBOX_KEY && !EXCLUDED.has(key); }
 function readQueue(): QueueItem[] {
@@ -466,8 +481,13 @@ export function useCloudSyncEngineInternal() {
       const encoded = serialize(value);
       if (encoded !== undefined && lastRemoteValues.current[key] === encoded) { delete lastRemoteValues.current[key]; return; }
       delete lastRemoteValues.current[key];
-      queueItem({ key, value, updatedAt, mutationId });
-      void pushItem({ key, value, updatedAt, mutationId });
+      const item = { key, value, updatedAt, mutationId };
+      queueItem(item);
+      // The UI status reflects the full write lifecycle: a local edit starts
+      // synchronization immediately and remains "syncing" until the RPC has
+      // completed or a concrete error/offline state is reached.
+      setStatus(navigator.onLine ? "syncing" : "offline");
+      void pushItem(item);
     });
 
     const onOnline = () => {
