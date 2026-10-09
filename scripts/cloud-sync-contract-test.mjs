@@ -12,6 +12,15 @@ assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling 
 assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
 assert.equal(/setInterval\s*\(/.test(storage), false, "storage must not poll for local changes");
 assert.match(storage, /pace\.local\.write/);
+assert.match(engine, /const DEVICE_ID = getTabDeviceId\(\)/,
+  "Realtime echo suppression must use a per-tab ID so sibling tabs receive updates");
+assert.match(engine, /sessionStorage\.getItem\(TAB_DEVICE_KEY\)/,
+  "each browser tab must have a distinct sync origin");
+assert.match(engine, /setStatus\(navigator\.onLine \? "syncing" : "offline"\);[\s\S]*?void pushItem\(item\)/,
+  "a user mutation must start synchronization immediately and expose its in-flight state");
+const syncSettings = read("src/components/CloudSyncSettings.tsx");
+assert.match(syncSettings, /Synchronisation en temps réel active/);
+assert.match(syncSettings, /Chaque modification déclenche immédiatement la synchronisation/);
 assert.match(engine, /onLocalWrite\(/);
 assert.match(engine, /postgres_changes/);
 assert.equal((engine.match(/realtimeChannel\.subscribe\(/g) ?? []).length, 1, "Realtime channel must only be subscribed during initial channel setup");
