@@ -282,7 +282,9 @@ export function useCloudSyncEngineInternal() {
           localStorage.setItem("pace.__last_sync_at", readMeta()[latest.key] ?? latest.updatedAt);
         }
         unqueueIfMutation(latest.key, latest.updatedAt);
-        setStatus("ok");
+        // Keep the settings indicator in "syncing" until every queued key has
+        // completed, rather than declaring success after the first parallel RPC.
+        setStatus(readQueue().length > 0 ? "syncing" : "ok");
       });
       keyWrites.current[item.key] = current.catch(() => undefined);
       try { await current; } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
