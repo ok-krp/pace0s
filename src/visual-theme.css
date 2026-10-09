@@ -923,3 +923,92 @@ html[data-visual-theme="signal"] ::selection {
 html[data-visual-theme="signal"] {
   accent-color: #f5f7fa;
 }
+
+
+/* Final Signal dark palette: deliberately last in the cascade to override legacy light rules. */
+html[data-visual-theme="signal"] {
+  color-scheme: dark !important;
+  --background: #090b0e !important;
+  --foreground: #f5f7fa !important;
+  --color-background: #090b0e !important;
+  --color-foreground: #f5f7fa !important;
+  --card: #14181d !important;
+  --card-foreground: #f5f7fa !important;
+  --popover: #111418 !important;
+  --popover-foreground: #f5f7fa !important;
+  --secondary: #1c2127 !important;
+  --secondary-foreground: #f5f7fa !important;
+  --muted: #1c2127 !important;
+  --muted-foreground: #aeb6c2 !important;
+  --accent: #242a31 !important;
+  --accent-foreground: #ffffff !important;
+  --border: rgb(255 255 255 / .12) !important;
+  --input: rgb(255 255 255 / .12) !important;
+  --sidebar: #101317 !important;
+  --sidebar-foreground: #f5f7fa !important;
+  --sidebar-accent: #1c2127 !important;
+  --sidebar-border: rgb(255 255 255 / .10) !important;
+  --wallpaper: #090b0e !important;
+}
+html[data-visual-theme="signal"],
+html[data-visual-theme="signal"] body,
+html[data-visual-theme="signal"] #root,
+html[data-visual-theme="signal"] body > div,
+html[data-visual-theme="signal"] main,
+html[data-visual-theme="signal"] .pace-bg {
+  background: #090b0e !important;
+  background-color: #090b0e !important;
+  color: #f5f7fa !important;
+}
+html[data-visual-theme="signal"] .pace-bg::before { content: none !important; opacity: 0 !important; }
+html[data-visual-theme="signal"] .text-foreground,
+html[data-visual-theme="signal"] .text-card-foreground,
+html[data-visual-theme="signal"] .text-white,
+html[data-visual-theme="signal"] h1,
+html[data-visual-theme="signal"] h2,
+html[data-visual-theme="signal"] h3,
+html[data-visual-theme="signal"] h4,
+html[data-visual-theme="signal"] label { color: #f5f7fa !important; }
+html[data-visual-theme="signal"] .text-muted-foreground,
+html[data-visual-theme="signal"] [class*="text-muted"] { color: #aeb6c2 !important; }
+html[data-visual-theme="signal"] [class*="bg-white"],
+html[data-visual-theme="signal"] [class*="bg-gray-50"],
+html[data-visual-theme="signal"] [class*="bg-gray-100"],
+html[data-visual-theme="signal"] [class*="bg-slate-50"],
+html[data-visual-theme="signal"] [class*="bg-slate-100"],
+html[data-visual-theme="signal"] [data-slot="card"],
+html[data-visual-theme="signal"] .glass-card,
+html[data-visual-theme="signal"] [class*="glass-card"],
+html[data-visual-theme="signal"] .glass-thin,
+html[data-visual-theme="signal"] .glass-icon,
+html[data-visual-theme="signal"] aside,
+html[data-visual-theme="signal"] header {
+  background-color: #14181d !important;
+  background-image: none !important;
+  color: #f5f7fa !important;
+  border-color: rgb(255 255 255 / .12) !important;
+  box-shadow: 0 8px 28px rgb(0 0 0 / .25) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html[data-visual-theme="signal"] input,
+html[data-visual-theme="signal"] textarea,
+html[data-visual-theme="signal"] select {
+  background: #101317 !important;
+  color: #f5f7fa !important;
+  border-color: rgb(255 255 255 / .16) !important;
+}
+html[data-visual-theme="signal"] button[data-variant="secondary"],
+html[data-visual-theme="signal"] button[data-variant="outline"],
+html[data-visual-theme="signal"] nav a:hover,
+html[data-visual-theme="signal"] nav a[aria-current="page"],
+html[data-visual-theme="signal"] nav a[data-active="true"] {
+  background: #242a31 !important;
+  color: #ffffff !important;
+  border-color: rgb(255 255 255 / .14) !important;
+}
+html[data-visual-theme="signal"] .settings-panel .glass-card,
+html[data-visual-theme="signal"] .settings-panel .glass-thin {
+  background: transparent !important;
+  box-shadow: none !important;
+}
