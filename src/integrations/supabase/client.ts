@@ -5,12 +5,11 @@ import type { PaceDatabase } from "./pace-database";
 function createSupabaseClient() {
   // Browser-safe Supabase configuration: publishable keys are intended for public clients.
   // Prefer Vite env vars when configured, with the migrated PaceOS project as fallback.
-  const SUPABASE_URL =
-    import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "https://cduyjejftorfuxuwhbqt.supabase.co";
-  const SUPABASE_PUBLISHABLE_KEY =
-    import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.SUPABASE_PUBLISHABLE_KEY ||
-    "sb_publishable_HWlyOrqPkDAdibQIKl-RCQ_i8ihwcyO";
+  // Pin both values to the migrated project together. Mixing a stale Vercel
+  // environment URL with the target project's publishable key (or vice versa)
+  // makes auth and cloud sync fail even though the client initializes.
+  const SUPABASE_URL = "https://cduyjejftorfuxuwhbqt.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_HWlyOrqPkDAdibQIKl-RCQ_i8ihwcyO";
 
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
     const missing = [
