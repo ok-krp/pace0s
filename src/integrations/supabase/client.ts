@@ -6,7 +6,7 @@ function createSupabaseClient() {
   // Browser-safe Supabase configuration: publishable keys are intended for public clients.
   // Prefer Vite env vars when configured, with the PaceOS project values as a production-safe fallback.
   const SUPABASE_URL =
-    import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "https://jayzswkabxfhzmftagku.supabase.co";
+    import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || "https://cduyjejftorfuxuwhbqt.supabase.co";
   const SUPABASE_PUBLISHABLE_KEY =
     import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     process.env.SUPABASE_PUBLISHABLE_KEY ||
@@ -27,6 +27,8 @@ function createSupabaseClient() {
       storage: typeof window !== "undefined" ? localStorage : undefined,
       persistSession: true,
       autoRefreshToken: true,
+      flowType: "pkce",
+      detectSessionInUrl: false,
     },
   });
 }
