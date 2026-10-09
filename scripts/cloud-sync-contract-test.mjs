@@ -31,6 +31,10 @@ assert.match(engine, /!key\.startsWith\(INTERNAL_PREFIX\)/);
 assert.match(engine, /DOMAIN_OUTBOX_KEY/);
 
 // Remote application is separated from user mutation events.
+assert.match(storage, /window\.addEventListener\("storage"/,
+  "sibling tabs must react to localStorage mutations without a page refresh");
+assert.match(storage, /CustomEvent\(REMOTE_WRITE_EVENT, \{ detail: \{ key, value, updatedAt \} \}\)/,
+  "cross-tab storage events must update subscribed UI state without re-enqueueing a cloud write");
 assert.match(storage, /REMOTE_WRITE_EVENT/);
 assert.match(storage, /CustomEvent<LocalWriteDetail>\(LOCAL_WRITE_EVENT/);
 assert.match(engine, /lastRemoteValues/);
