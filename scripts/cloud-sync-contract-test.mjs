@@ -16,6 +16,8 @@ assert.match(engine, /const DEVICE_ID = getTabDeviceId\(\)/,
   "Realtime echo suppression must use a per-tab ID so sibling tabs receive updates");
 assert.match(engine, /sessionStorage\.getItem\(TAB_DEVICE_KEY\)/,
   "each browser tab must have a distinct sync origin");
+assert.match(engine, /setStatus\(readQueue\(\)\.length > 0 \? "syncing" : "ok"\)/,
+  "sync settings must not report success until all queued mutations have completed");
 assert.match(engine, /setStatus\(navigator\.onLine \? "syncing" : "offline"\);[\s\S]*?void pushItem\(item\)/,
   "a user mutation must start synchronization immediately and expose its in-flight state");
 const syncSettings = read("src/components/CloudSyncSettings.tsx");
