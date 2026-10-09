@@ -12,7 +12,6 @@ const DOMAIN_OUTBOX_KEY = "pace.domain.outbox";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
-const DEVICE_KEY = "pace.__sync_device_id";
 const TAB_DEVICE_KEY = "pace.__sync_tab_id";
 // A localStorage-backed ID is shared by every tab in the same browser. If used
 // as updated_by, every tab mistakes another tab's Realtime update for its own
@@ -30,16 +29,6 @@ type QueueItem = { key: string; value: unknown; updatedAt: string; mutationId?: 
 type LegacyQueue = string[] | QueueItem[];
 type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 
-function getDeviceId() {
-  if (typeof window === "undefined") return "server";
-  try {
-    const existing = localStorage.getItem(DEVICE_KEY);
-    if (existing) return existing;
-    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-    localStorage.setItem(DEVICE_KEY, id);
-    return id;
-  } catch { return `${Date.now()}-${Math.random()}`; }
-}
 function getTabDeviceId() {
   if (typeof window === "undefined") return "server";
   try {
