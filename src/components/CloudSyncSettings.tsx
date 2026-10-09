@@ -6,7 +6,7 @@ import { openConsentSheet } from "@/components/LegalConsentGate";
 
 export function CloudSyncSettings() {
   const { user } = useAuth();
-  const { status } = useCloudSyncStatus();
+  const { status, queuedCount } = useCloudSyncStatus();
   const [online, setOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
 
   useEffect(() => {
@@ -34,7 +34,7 @@ export function CloudSyncSettings() {
             ? "Synchronisation désactivée — autorisation requise"
             : waiting
               ? "Synchronisation en attente de son premier résultat"
-              : "Synchronisation automatique active";
+              : "Synchronisation en temps réel active";
 
   const indicatorClass = !online || status === "offline" || status === "error" || consentRequired || waiting
     ? "bg-amber-500"
@@ -60,7 +60,7 @@ export function CloudSyncSettings() {
           </button>
         </div>
       )}
-      {user && <div className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{consentRequired ? "Les modifications restent enregistrées localement. Elles ne seront envoyées qu’après ton autorisation explicite de la synchronisation cloud." : "Les modifications sont enregistrées localement immédiatement et synchronisées automatiquement. En cas de coupure, elles restent en file d'attente puis sont envoyées dès le retour de la connexion."}</div>}
+      {user && <div className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{consentRequired ? "Les modifications restent enregistrées localement. Elles ne seront envoyées qu’après ton autorisation explicite de la synchronisation cloud." : `Chaque modification déclenche immédiatement la synchronisation. Les autres appareils et onglets sont actualisés en temps réel. En cas de coupure, les changements restent en attente${queuedCount ? ` (${queuedCount})` : ""} puis sont envoyés au retour de la connexion.`}</div>}
     </div>
   );
 }
