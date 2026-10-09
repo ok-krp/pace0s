@@ -67,6 +67,29 @@ type StoredProgram = { id: string; items: StoredProgramItem[]; [key: string]: un
 type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 type LocalWriteDetail = { key: string; value: unknown; updatedAt: string; mutationId: string };
 
+// localStorage changes made by a different browser tab do not trigger React
+// state updates automatically. Re-emit them as remote UI events so every open
+// Pace tab updates without a refresh. This is presentation-only: it does not
+// enqueue another cloud write or create a sync echo.
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event: StorageEvent) => {
+    const key = event.key;
+    if (!key || !key.startsWith(NEW_PREFIX) || key.startsWith("pace.__") || key === "pace.domain.outbox" || event.newValue == null) return;
+    try {
+      let value: unknown = JSON.parse(event.newValue);
+      let updatedAt: string | undefined;
+      if (key.startsWith("pace.domain.") && value && typeof value === "object" && !Array.isArray(value)) {
+        const record = value as Partial<DomainRecord>;
+        if (record.version === 1 && typeof record.updatedAt === "string" && "value" in record) {
+          value = record.value;
+          updatedAt = record.updatedAt;
+        }
+      }
+      window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value, updatedAt } }));
+    } catch {}
+  });
+}
+
 function syncLatestOverloadRowsToTraining(value: unknown) {
   if (typeof window === "undefined" || !value || typeof value !== "object" || Array.isArray(value)) return;
   try {
