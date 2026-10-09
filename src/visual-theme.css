@@ -576,3 +576,75 @@
 .dark[data-visual-theme="signal"] select { background:#111418 !important; color:#f5f7fa !important; border-color:rgb(255 255 255/.12) !important; }
 .dark[data-visual-theme="signal"] aside,
 .dark[data-visual-theme="signal"] header { background:rgb(17 20 24/.92) !important; border-color:rgb(255 255 255/.12) !important; }
+
+
+/* Regression guard: Signal's dark palette must cover legacy light surfaces too.
+   Scope this strictly to Signal + the active .dark class so the light toggle remains functional. */
+html.dark[data-visual-theme="signal"] {
+  color-scheme: dark !important;
+  --background: #090b0e !important;
+  --foreground: #f5f7fa !important;
+  --card: #14181d !important;
+  --card-foreground: #f5f7fa !important;
+  --popover: #111418 !important;
+  --popover-foreground: #f5f7fa !important;
+  --secondary: #1c2127 !important;
+  --secondary-foreground: #f5f7fa !important;
+  --muted: #1c2127 !important;
+  --muted-foreground: #b8bec7 !important;
+  --accent: #242a31 !important;
+  --accent-foreground: #ffffff !important;
+  --border: rgb(255 255 255 / 0.12) !important;
+  --input: rgb(255 255 255 / 0.12) !important;
+  --sidebar: #101317 !important;
+  --sidebar-foreground: #f5f7fa !important;
+  --sidebar-accent: #1c2127 !important;
+  --sidebar-border: rgb(255 255 255 / 0.10) !important;
+  --wallpaper: #090b0e !important;
+}
+html.dark[data-visual-theme="signal"] body,
+html.dark[data-visual-theme="signal"] #root,
+html.dark[data-visual-theme="signal"] main {
+  background-color: #090b0e !important;
+  color: #f5f7fa !important;
+}
+html.dark[data-visual-theme="signal"] [class*="bg-white"],
+html.dark[data-visual-theme="signal"] [class*="bg-gray-50"],
+html.dark[data-visual-theme="signal"] [class*="bg-gray-100"],
+html.dark[data-visual-theme="signal"] [class*="bg-slate-50"],
+html.dark[data-visual-theme="signal"] [class*="bg-slate-100"] {
+  background-color: #14181d !important;
+  background-image: none !important;
+  color: #f5f7fa !important;
+}
+html.dark[data-visual-theme="signal"] [data-slot="card"],
+html.dark[data-visual-theme="signal"] .glass-card,
+html.dark[data-visual-theme="signal"] .glass-thin,
+html.dark[data-visual-theme="signal"] aside,
+html.dark[data-visual-theme="signal"] header {
+  background-color: #14181d !important;
+  background-image: none !important;
+  color: #f5f7fa !important;
+  border-color: rgb(255 255 255 / 0.12) !important;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.25) !important;
+}
+html.dark[data-visual-theme="signal"] input,
+html.dark[data-visual-theme="signal"] textarea,
+html.dark[data-visual-theme="signal"] select {
+  background-color: #101317 !important;
+  color: #f5f7fa !important;
+  border-color: rgb(255 255 255 / 0.16) !important;
+}
+html.dark[data-visual-theme="signal"] .text-foreground,
+html.dark[data-visual-theme="signal"] .text-card-foreground,
+html.dark[data-visual-theme="signal"] h1,
+html.dark[data-visual-theme="signal"] h2,
+html.dark[data-visual-theme="signal"] h3,
+html.dark[data-visual-theme="signal"] h4,
+html.dark[data-visual-theme="signal"] label {
+  color: #f5f7fa !important;
+}
+html.dark[data-visual-theme="signal"] .text-muted-foreground,
+html.dark[data-visual-theme="signal"] [class*="text-muted"] {
+  color: #b8bec7 !important;
+}
