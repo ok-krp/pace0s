@@ -153,7 +153,7 @@ class _PaceShellState extends State<PaceShell> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) => unawaited(widget.sync.syncNow()));
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) => unawaited(widget.sync.recoverIfNeeded()));
   }
 
   @override
