@@ -40,7 +40,12 @@ async function ensureCustomer(
   email: string | undefined,
   supabase: typeof supabaseAdmin,
 ) {
-  const { data: existing } = await supabase.from("billing_customers").select("stripe_customer_id").eq("user_id", userId).maybeSingle();
+  const { data: existing, error: existingError } = await supabase
+    .from("billing_customers")
+    .select("stripe_customer_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw new Error("Impossible de vérifier le client de facturation.");
   if (existing?.stripe_customer_id) return existing.stripe_customer_id;
   const customer = await stripeRequest("/customers", {
     email: email ?? "",
