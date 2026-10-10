@@ -7,4 +7,6 @@ assert.match(sanitizer, /DROP_WITH_CONTENT/);
 assert.match(sanitizer, /isSafeLinkHref/);
 assert.match(route, /innerHTML = sanitizeNoteHtml\(note\.html\)/);
 assert.match(route, /html: sanitizeNoteHtml\(editorRef\.current\.innerHTML\)/);
+assert.match(route, /htmlToPlainText\(sanitizeNoteHtml\(html\)\)/);
+assert.doesNotMatch(route, /div\.innerHTML\s*=\s*html/);
 console.log("Rich note HTML sanitization contract: PASS");
