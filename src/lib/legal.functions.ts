@@ -92,6 +92,23 @@ export const saveLegalConsent = createServerFn({ method: "POST" })
     const region = legalRegionForCountry(country);
     const now = new Date().toISOString();
 
+    // Persist granular choices first: if their write fails, do not update the legacy
+    // legal_consent row, which could otherwise make stale preferences appear current.
+    const records = GRANULAR_TYPES.map((consentType) => ({
+      user_id: context.userId,
+      consent_type: consentType,
+      granted: data.opts[consentType],
+      legal_version: LEGAL_VERSIONS.eula,
+      policy_version: LEGAL_VERSIONS.privacy,
+      created_at: now,
+    }));
+
+    const { error: recordsError } = await context.supabase.from("consent_records").insert(records);
+    if (recordsError) {
+      console.error("granular consent save failed", recordsError);
+      throw new Error("Impossible d'enregistrer les consentements détaillés.");
+    }
+
     const { error: legalError } = await context.supabase.from("legal_consent").upsert(
       {
         user_id: context.userId,
@@ -108,21 +125,6 @@ export const saveLegalConsent = createServerFn({ method: "POST" })
     if (legalError) {
       console.error("legal consent save failed", legalError);
       throw new Error("Impossible d'enregistrer les préférences de confidentialité.");
-    }
-
-    const records = GRANULAR_TYPES.map((consentType) => ({
-      user_id: context.userId,
-      consent_type: consentType,
-      granted: data.opts[consentType],
-      legal_version: LEGAL_VERSIONS.eula,
-      policy_version: LEGAL_VERSIONS.privacy,
-      created_at: now,
-    }));
-
-    const { error: recordsError } = await context.supabase.from("consent_records").insert(records);
-    if (recordsError) {
-      console.error("granular consent save failed", recordsError);
-      throw new Error("Impossible d'enregistrer les consentements détaillés.");
     }
 
     return { ok: true, region, ipCountry: country, opts: data.opts };
