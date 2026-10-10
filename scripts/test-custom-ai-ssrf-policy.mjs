@@ -24,5 +24,5 @@ for (const ip of ["8.8.8.8", "1.1.1.1", "::ffff:8.8.8.8", "::ffff:0808:0808", "2
   assert.equal(isBlockedIp(ip), false, `expected public IP to remain allowed: ${ip}`);
 }
 assert.throws(() => assertSafeApiUrl(new URL("http://example.com")), /HTTPS/);
-assert.throws(() => assertSafeApiUrl(new URL("https://127.0.0.1")), /private/);
+assert.throws(() => assertSafeApiUrl(new URL("https://127.0.0.1")), /privée/);
 console.log("Custom AI provider SSRF behavioral and contract tests: PASS");
