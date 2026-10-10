@@ -138,7 +138,7 @@ export async function applyStripeSubscription(
   },
 ) {
   const priceId = subscription.items?.data?.[0]?.price?.id;
-  const plan = (subscription.metadata?.pace_plan as PlanId | undefined) ?? planFromPriceId(priceId);
+  const plan = planFromPriceId(priceId);
   const safePlan: PlanId = plan && plan in PLAN_CATALOG ? plan : "plus";
   let userId = subscription.metadata?.pace_user_id;
   if (!userId) {
