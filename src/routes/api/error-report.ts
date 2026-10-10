@@ -9,7 +9,7 @@ const json = (body: unknown, status: number, extra: Record<string, string> = {})
 // eslint-disable-next-line no-control-regex
 const clean = (value: unknown, max: number) =>
   // eslint-disable-next-line no-control-regex
-  typeof value === "string" ? value.replace(/[\\u0000-\\u001f\\u007f\\u2028\\u2029]+/g, " ").slice(0, max) : undefined;
+  typeof value === "string" ? value.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, " ").slice(0, max) : undefined;
 
 function sameOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
