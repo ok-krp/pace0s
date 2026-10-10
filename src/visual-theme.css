@@ -648,3 +648,8 @@ html.dark[data-visual-theme="signal"] .text-muted-foreground,
 html.dark[data-visual-theme="signal"] [class*="text-muted"] {
   color: #b8bec7 !important;
 }
+
+/* Restore intentional white text after the light-theme contrast override. */
+html.dark[data-visual-theme="signal"] .text-white {
+  color: #f5f7fa !important;
+}
