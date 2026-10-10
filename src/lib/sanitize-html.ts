@@ -11,7 +11,7 @@ const ALLOWED_STYLE_PROPS = new Set([
   "color", "background-color", "font-family", "font-size", "font-weight", "font-style", "text-decoration",
   "text-align", "display", "align-items", "gap", "margin", "margin-top", "margin-bottom",
 ]);
-const SAFE_STYLE_VALUE = /^[a-zA-Z0-9\\s#%.,'"()\\-_\\x2f]*$/;
+const SAFE_STYLE_VALUE = /^[a-zA-Z0-9\s#%.,'"()\-_\/]*$/;
 
 function sanitizeStyle(style: string): string {
   return style.split(";").map((decl) => decl.trim()).filter(Boolean).map((decl) => {
