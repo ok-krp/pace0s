@@ -33,6 +33,9 @@ function createSupabaseClient() {
   if (parsedUrl.protocol !== "https:" && parsedUrl.hostname !== "localhost") {
     throw new Error("[Supabase] SUPABASE_URL must use HTTPS outside localhost.");
   }
+  if (parsedUrl.username || parsedUrl.password || parsedUrl.search || parsedUrl.hash) {
+    throw new Error("[Supabase] SUPABASE_URL must not contain credentials, query parameters, or a fragment.");
+  }
 
   return createClient<PaceDatabase>(parsedUrl.toString().replace(/\/$/, ""), config.key, {
     auth: {
