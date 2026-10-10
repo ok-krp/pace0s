@@ -22,6 +22,7 @@ jobs:
       - run: npm run test:billing-plan-policy
       - run: npm run test:stripe-webhook-body-limit
       - run: npm run test:custom-ai-ssrf-policy
+      - run: npm run test:error-report-security
       - run: npm run test:supabase-config
       - run: npm run test:health-e2ee-realtime
       # TanStack Router generates src/routeTree.gen.ts during the Vite build.
