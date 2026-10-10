@@ -147,7 +147,7 @@ export async function applyStripeSubscription(
     userId = data?.user_id;
   }
   if (!userId) throw new Error("Stripe subscription sans utilisateur Pace.");
-  await supabase.from("billing_subscriptions").upsert({
+  const { error: subscriptionError } = await supabase.from("billing_subscriptions").upsert({
     user_id: userId,
     stripe_subscription_id: subscription.id,
     stripe_customer_id: subscription.customer,
@@ -156,6 +156,7 @@ export async function applyStripeSubscription(
     current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
     cancel_at_period_end: subscription.cancel_at_period_end,
   });
+  if (subscriptionError) throw new Error("Impossible d'enregistrer l'abonnement Stripe.");
 }
 
 export function verifyStripeSignature(payload: string, signature: string, secret: string): boolean {
