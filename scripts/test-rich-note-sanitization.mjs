@@ -5,6 +5,9 @@ const route = readFileSync(new URL("../src/routes/work.tsx", import.meta.url), "
 assert.match(sanitizer, /const ALLOWED_TAGS = new Set/);
 assert.match(sanitizer, /DROP_WITH_CONTENT/);
 assert.match(sanitizer, /isSafeLinkHref/);
+assert.match(sanitizer, /if \(typeof DOMParser === "undefined"\) return escapeText\(html\);/);
+assert.match(sanitizer, /if \(typeof DOMParser === "undefined"\) return html\.trim\(\);/);
+assert.doesNotMatch(sanitizer, /html\.replace\(\/<\[\^>\]\*\/>/);
 assert.match(route, /innerHTML = sanitizeNoteHtml\(note\.html\)/);
 assert.match(route, /html: sanitizeNoteHtml\(editorRef\.current\.innerHTML\)/);
 assert.match(route, /htmlToPlainText\(sanitizeNoteHtml\(html\)\)/);
