@@ -6,4 +6,8 @@ assert.match(source, /if \(seenConsentTypes\.has\(record\.consent_type\)\) conti
 assert.match(source, /seenConsentTypes\.add\(record\.consent_type\)/);
 assert.match(source, /opts\[key\] = record\.granted/);
 assert.match(source, /typeof legacy\[key\] === "boolean" && !seenConsentTypes\.has\(key\)/);
-console.log("Latest granular consent decision contract: PASS");
+assert.ok(
+  source.indexOf('.from("consent_records").insert(records)') < source.indexOf('.from("legal_consent").upsert('),
+  "granular consent must be persisted before the legacy consent row",
+);
+console.log("Latest granular consent and write-order contract: PASS");
