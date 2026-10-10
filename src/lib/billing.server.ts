@@ -139,7 +139,8 @@ export async function applyStripeSubscription(
 ) {
   const priceId = subscription.items?.data?.[0]?.price?.id;
   const plan = planFromPriceId(priceId);
-  const safePlan: PlanId = plan && plan in PLAN_CATALOG ? plan : "plus";
+  if (!plan || !(plan in PLAN_CATALOG)) throw new Error("Stripe subscription avec un prix inconnu (aucun plan Pace correspondant).");
+  const safePlan: PlanId = plan;
   let userId = subscription.metadata?.pace_user_id;
   if (!userId) {
     const { data } = await supabase.from("billing_customers").select("user_id").eq("stripe_customer_id", subscription.customer).maybeSingle();
