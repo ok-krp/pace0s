@@ -7,4 +7,6 @@ const source = readFileSync(new URL("../src/lib/billing.server.ts", import.meta.
 assert.match(source, /const plan = planFromPriceId\(priceId\);/);
 assert.doesNotMatch(source, /subscription\.metadata\?\.pace_plan\s*\?\?/);
 assert.match(source, /if \(!plan \|\| !\(plan in PLAN_CATALOG\)\) throw new Error/);
-console.log("Billing plan fail-closed contract: PASS");
+assert.match(source, /const \{ error: subscriptionError \} = await supabase\.from\("billing_subscriptions"\)\.upsert/);
+assert.match(source, /if \(subscriptionError\) throw new Error/);
+console.log("Billing plan and persistence fail-closed contract: PASS");
