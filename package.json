@@ -15,6 +15,7 @@
     "test:billing-plan-policy": "node scripts/test-billing-plan-policy.mjs",
     "test:stripe-webhook-body-limit": "node scripts/test-stripe-webhook-body-limit.mjs",
     "test:custom-ai-ssrf-policy": "node scripts/test-custom-ai-ssrf-policy.mjs",
+    "test:error-report-security": "node scripts/test-error-report-security.mjs",
     "test:supabase-config": "node scripts/test-supabase-config-contract.mjs",
     "test:byok": "node scripts/test-ai-byok-policy.mjs",
     "format": "prettier --write .",
