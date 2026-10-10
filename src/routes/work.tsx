@@ -1,4 +1,4 @@
-import { sanitizeNoteHtml } from "@/lib/sanitize-html";
+import { htmlToPlainText, sanitizeNoteHtml } from "@/lib/sanitize-html";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Pause, RotateCcw, Briefcase, Plus, Check, StickyNote, Trash2, Search, Bold, Italic, Underline, Strikethrough, List, ListOrdered, ListTodo, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Pin, PinOff, Palette, Undo2, Redo2 } from "lucide-react";
@@ -16,7 +16,7 @@ const CATS = ["École", "Business", "Sport", "Projets"];
 const COLORS = [{ key: "default", cls: "bg-card" }, { key: "amber", cls: "bg-amber-500/10" }, { key: "rose", cls: "bg-rose-500/10" }, { key: "emerald", cls: "bg-emerald-500/10" }, { key: "sky", cls: "bg-sky-500/10" }, { key: "violet", cls: "bg-violet-500/10" }];
 const FONTS = [{ label: "Par défaut", value: "" }, { label: "Serif", value: "Georgia, serif" }, { label: "Manuscrite", value: "'Brush Script MT', cursive" }, { label: "Monospace", value: "'Courier New', monospace" }, { label: "Arial", value: "Arial, sans-serif" }];
 const SIZES = [{ label: "Petit", value: "2" }, { label: "Normal", value: "3" }, { label: "Grand", value: "5" }, { label: "Très grand", value: "7" }];
-const textPreview = (html: string) => { if (typeof document === "undefined") return ""; const div = document.createElement("div"); div.innerHTML = html; return (div.textContent || "").trim().slice(0, 120); };
+const textPreview = (html: string) => htmlToPlainText(sanitizeNoteHtml(html)).slice(0, 120);
 
 function WorkPage() {
   const navigate = useNavigate();
