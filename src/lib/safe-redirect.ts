@@ -7,7 +7,7 @@ export function safeInternalPath(next: unknown, fallback = "/"): string {
   if (/[\\\u0000-\u001f\u007f]/.test(value)) return fallback;
   try {
     const parsed = new URL(value, "https://pace.invalid");
-    const normalizedPath = decodeURIComponent(parsed.pathname).replace(/\/+$/, "").toLowerCase();
+    const normalizedPath = decodeURIComponent(parsed.pathname).replace(/\\/g, "/").replace(/\/+/, "/").replace(/\/+$/, "").toLowerCase();
     if (parsed.origin !== "https://pace.invalid" || normalizedPath === "/login") return fallback;
     return `${parsed.pathname}${parsed.search}${parsed.hash}`;
   } catch {
