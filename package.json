@@ -14,7 +14,7 @@
     "test:sync": "node scripts/cloud-sync-contract-test.mjs",
     "test:billing-plan-policy": "node scripts/test-billing-plan-policy.mjs",
     "test:stripe-webhook-body-limit": "node scripts/test-stripe-webhook-body-limit.mjs",
-    "test:custom-ai-ssrf-policy": "node scripts/test-custom-ai-ssrf-policy.mjs",
+    "test:custom-ai-ssrf-policy": "node --experimental-strip-types scripts/test-custom-ai-ssrf-policy.mjs",
     "test:error-report-security": "node scripts/test-error-report-security.mjs",
     "test:rich-note-sanitization": "node scripts/test-rich-note-sanitization.mjs",
     "test:safe-redirect-policy": "node scripts/test-safe-redirect-policy.mjs",
