@@ -56,11 +56,26 @@ export const Route = createFileRoute("/api/stripe/webhook")({
           .select("stripe_event_id,status")
           .eq("stripe_event_id", event.id)
           .maybeSingle();
-        if (seen?.status === "processed" || seen?.status === "processing") return Response.json({ received: true, duplicate: true });
+        if (seen?.status === "processed") return Response.json({ received: true, duplicate: true });
+
+        // Recover an event left in processing by a crashed serverless invocation.
+        let alreadyClaimed = false;
+        if (seen?.status === "processing") {
+          const now = new Date().toISOString();
+          const staleBefore = new Date(Date.now() - 5 * 60_000).toISOString();
+          const { data: takeover, error: takeoverError } = await supabaseAdmin.from("billing_events")
+            .update({ processed_at: now })
+            .eq("stripe_event_id", event.id)
+            .eq("status", "processing")
+            .lt("processed_at", staleBefore)
+            .select("stripe_event_id");
+          if (takeoverError) return new Response("Impossible de reprendre l'événement", { status: 500 });
+          if (takeover?.length) alreadyClaimed = true;
+          else return Response.json({ received: true, duplicate: true });
+        }
 
         // Claim a failed event by conditional update. Do not then attempt a second INSERT:
         // the unique-key conflict would otherwise return 200 without retrying the event.
-        let alreadyClaimed = false;
         if (seen?.status === "failed") {
           const { data: retried, error: retryError } = await supabaseAdmin
             .from("billing_events")
