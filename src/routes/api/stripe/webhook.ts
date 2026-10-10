@@ -47,6 +47,10 @@ export const Route = createFileRoute("/api/stripe/webhook")({
           return new Response("JSON Stripe invalide", { status: 400 });
         }
 
+        if (!event || typeof event.id !== "string" || typeof event.type !== "string" || !event.data?.object) {
+          return new Response("Événement Stripe invalide", { status: 400 });
+        }
+
         const { data: seen } = await supabaseAdmin
           .from("billing_events")
           .select("stripe_event_id,status")
