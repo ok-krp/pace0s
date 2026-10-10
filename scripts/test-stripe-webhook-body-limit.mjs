@@ -7,4 +7,6 @@ assert.doesNotMatch(source, /await request\.text\(\)/);
 assert.match(source, /if \(seen\?\.status === "failed"\)/);
 assert.match(source, /\.eq\("status", "failed"\)/);
 assert.match(source, /if \(!alreadyClaimed\)/);
+assert.match(source, /typeof event\.id !== "string"/);
+assert.match(source, /!event\.data\?\.object/);
 console.log("Stripe webhook bounded-body contract: PASS");
