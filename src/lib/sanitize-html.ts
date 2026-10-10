@@ -74,7 +74,7 @@ const escapeText = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&"
 /** Retourne du HTML sûr, destiné à être injecté dans l'éditeur de notes. */
 export function sanitizeNoteHtml(html: string): string {
   if (typeof html !== "string" || !html) return "";
-  if (typeof DOMParser === "undefined") return escapeText(html.replace(/<[^>]*>/g, ""));
+  if (typeof DOMParser === "undefined") return escapeText(html);
   const doc = new DOMParser().parseFromString(`<!doctype html><body>${html}`, "text/html");
   cleanNode(doc.body);
   return doc.body.innerHTML;
@@ -82,7 +82,7 @@ export function sanitizeNoteHtml(html: string): string {
 
 export function htmlToPlainText(html: string): string {
   if (typeof html !== "string" || !html) return "";
-  if (typeof DOMParser === "undefined") return html.replace(/<[^>]*>/g, " ").trim();
+  if (typeof DOMParser === "undefined") return html.trim();
   const doc = new DOMParser().parseFromString(html, "text/html");
   return (doc.body.textContent || "").trim();
 }
