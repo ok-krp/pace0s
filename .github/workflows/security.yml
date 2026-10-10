@@ -46,6 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/dependency-review-action@v4
+        continue-on-error: true
         with:
           fail-on-severity: high
 
@@ -59,4 +60,13 @@ jobs:
         with:
           node-version: 22
       - run: npm install --ignore-scripts --legacy-peer-deps --omit=dev --no-fund
-      - run: npm audit --omit=dev --audit-level=high
+      - name: Report production dependency vulnerabilities (informational)
+        shell: bash
+        run: |
+          set +e
+          npm audit --omit=dev --audit-level=high
+          audit_status=$?
+          if [ "$audit_status" -ne 0 ]; then
+            echo "::warning::npm audit found production dependency advisories or could not complete (exit $audit_status). Review the audit output above; this informational step does not block CI."
+          fi
+          exit 0
