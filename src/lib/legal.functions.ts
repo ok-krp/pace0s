@@ -43,12 +43,14 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
       context.supabase
         .from("legal_consent")
         .select("region,eula_version,privacy_version,opts,consented_at,ip_country")
+        .eq("user_id", context.userId)
         .eq("eula_version", LEGAL_VERSIONS.eula)
         .eq("privacy_version", LEGAL_VERSIONS.privacy)
         .maybeSingle(),
       context.supabase
         .from("consent_records")
         .select("consent_type,granted,created_at")
+        .eq("user_id", context.userId)
         .order("created_at", { ascending: false }),
     ]);
 
@@ -58,15 +60,20 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
     }
 
     const opts = { ...DEFAULT_LEGAL_OPTS };
+    const seenConsentTypes = new Set<string>();
+    // Records are newest-first. Preserve the first record for each category so an older grant
+    // cannot override a newer denial (which would silently re-enable optional processing).
     for (const record of records ?? []) {
       if (!GRANULAR_TYPES.includes(record.consent_type as (typeof GRANULAR_TYPES)[number])) continue;
+      if (seenConsentTypes.has(record.consent_type)) continue;
+      seenConsentTypes.add(record.consent_type);
       const key = record.consent_type as keyof LegalConsentOptions;
-      if (opts[key] === false) opts[key] = record.granted;
+      opts[key] = record.granted;
     }
 
     const legacy = (legal?.opts as Partial<LegalConsentOptions> | null) ?? {};
     for (const key of ["analytics", "notifications", "sync_cloud", "ai", "marketing"] as const) {
-      if (typeof legacy[key] === "boolean") opts[key] = legacy[key];
+      if (typeof legacy[key] === "boolean" && !seenConsentTypes.has(key)) opts[key] = legacy[key];
     }
 
     return {
@@ -87,6 +94,23 @@ export const saveLegalConsent = createServerFn({ method: "POST" })
     const region = legalRegionForCountry(country);
     const now = new Date().toISOString();
 
+    // Persist granular choices first: if their write fails, do not update the legacy
+    // legal_consent row, which could otherwise make stale preferences appear current.
+    const records = GRANULAR_TYPES.map((consentType) => ({
+      user_id: context.userId,
+      consent_type: consentType,
+      granted: data.opts[consentType],
+      legal_version: LEGAL_VERSIONS.eula,
+      policy_version: LEGAL_VERSIONS.privacy,
+      created_at: now,
+    }));
+
+    const { error: recordsError } = await context.supabase.from("consent_records").insert(records);
+    if (recordsError) {
+      console.error("granular consent save failed", recordsError);
+      throw new Error("Impossible d'enregistrer les consentements détaillés.");
+    }
+
     const { error: legalError } = await context.supabase.from("legal_consent").upsert(
       {
         user_id: context.userId,
@@ -103,21 +127,6 @@ export const saveLegalConsent = createServerFn({ method: "POST" })
     if (legalError) {
       console.error("legal consent save failed", legalError);
       throw new Error("Impossible d'enregistrer les préférences de confidentialité.");
-    }
-
-    const records = GRANULAR_TYPES.map((consentType) => ({
-      user_id: context.userId,
-      consent_type: consentType,
-      granted: data.opts[consentType],
-      legal_version: LEGAL_VERSIONS.eula,
-      policy_version: LEGAL_VERSIONS.privacy,
-      created_at: now,
-    }));
-
-    const { error: recordsError } = await context.supabase.from("consent_records").insert(records);
-    if (recordsError) {
-      console.error("granular consent save failed", recordsError);
-      throw new Error("Impossible d'enregistrer les consentements détaillés.");
     }
 
     return { ok: true, region, ipCountry: country, opts: data.opts };

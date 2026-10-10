@@ -1,3 +1,4 @@
+import { htmlToPlainText, sanitizeNoteHtml } from "@/lib/sanitize-html";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Pause, RotateCcw, Briefcase, Plus, Check, StickyNote, Trash2, Search, Bold, Italic, Underline, Strikethrough, List, ListOrdered, ListTodo, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Pin, PinOff, Palette, Undo2, Redo2 } from "lucide-react";
@@ -15,7 +16,7 @@ const CATS = ["École", "Business", "Sport", "Projets"];
 const COLORS = [{ key: "default", cls: "bg-card" }, { key: "amber", cls: "bg-amber-500/10" }, { key: "rose", cls: "bg-rose-500/10" }, { key: "emerald", cls: "bg-emerald-500/10" }, { key: "sky", cls: "bg-sky-500/10" }, { key: "violet", cls: "bg-violet-500/10" }];
 const FONTS = [{ label: "Par défaut", value: "" }, { label: "Serif", value: "Georgia, serif" }, { label: "Manuscrite", value: "'Brush Script MT', cursive" }, { label: "Monospace", value: "'Courier New', monospace" }, { label: "Arial", value: "Arial, sans-serif" }];
 const SIZES = [{ label: "Petit", value: "2" }, { label: "Normal", value: "3" }, { label: "Grand", value: "5" }, { label: "Très grand", value: "7" }];
-const textPreview = (html: string) => { if (typeof document === "undefined") return ""; const div = document.createElement("div"); div.innerHTML = html; return (div.textContent || "").trim().slice(0, 120); };
+const textPreview = (html: string) => htmlToPlainText(sanitizeNoteHtml(html)).slice(0, 120);
 
 function WorkPage() {
   const navigate = useNavigate();
@@ -52,8 +53,8 @@ function WorkPage() {
 
 function NoteEditor({ note, onChange, onDelete }: { note: Note; onChange: (patch: Partial<Note>) => void; onDelete: () => void }) {
   const editorRef = useRef<HTMLDivElement>(null); const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => { if (editorRef.current && editorRef.current.innerHTML !== note.html) editorRef.current.innerHTML = note.html; }, [note.id]);
-  const scheduleSave = () => { if (saveTimer.current) clearTimeout(saveTimer.current); saveTimer.current = setTimeout(() => { if (editorRef.current) onChange({ html: editorRef.current.innerHTML }); }, 400); };
+  useEffect(() => { if (editorRef.current && editorRef.current.innerHTML !== note.html) editorRef.current.innerHTML = sanitizeNoteHtml(note.html); }, [note.id]);
+  const scheduleSave = () => { if (saveTimer.current) clearTimeout(saveTimer.current); saveTimer.current = setTimeout(() => { if (editorRef.current) onChange({ html: sanitizeNoteHtml(editorRef.current.innerHTML) }); }, 400); };
   const exec = (command: string, value?: string) => { editorRef.current?.focus(); document.execCommand(command, false, value); scheduleSave(); };
   const insertChecklist = () => { editorRef.current?.focus(); document.execCommand("insertHTML", false, `<div class="pace-check" style="display:flex;align-items:center;gap:6px;margin:2px 0"><input type="checkbox" /><span contenteditable="true">Élément</span></div><br/>`); scheduleSave(); };
   const insertLink = () => { const url = window.prompt("Lien (https://…)"); if (url) exec("createLink", url); };

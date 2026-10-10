@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Sparkles, Mail, Lock, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { safeInternalPath } from "@/lib/safe-redirect";
 import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +16,7 @@ export const Route = createFileRoute("/login")({
 });
 
 function safeNext(next: string): string {
-  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
-  return next;
+  return safeInternalPath(next, "/");
 }
 
 function getAppOrigin(): string {

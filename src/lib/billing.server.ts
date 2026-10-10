@@ -40,7 +40,12 @@ async function ensureCustomer(
   email: string | undefined,
   supabase: typeof supabaseAdmin,
 ) {
-  const { data: existing } = await supabase.from("billing_customers").select("stripe_customer_id").eq("user_id", userId).maybeSingle();
+  const { data: existing, error: existingError } = await supabase
+    .from("billing_customers")
+    .select("stripe_customer_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw new Error("Impossible de vérifier le client de facturation.");
   if (existing?.stripe_customer_id) return existing.stripe_customer_id;
   const customer = await stripeRequest("/customers", {
     email: email ?? "",
@@ -138,15 +143,16 @@ export async function applyStripeSubscription(
   },
 ) {
   const priceId = subscription.items?.data?.[0]?.price?.id;
-  const plan = (subscription.metadata?.pace_plan as PlanId | undefined) ?? planFromPriceId(priceId);
-  const safePlan: PlanId = plan && plan in PLAN_CATALOG ? plan : "plus";
+  const plan = planFromPriceId(priceId);
+  if (!plan || !(plan in PLAN_CATALOG)) throw new Error("Stripe subscription avec un prix inconnu (aucun plan Pace correspondant).");
+  const safePlan: PlanId = plan;
   let userId = subscription.metadata?.pace_user_id;
   if (!userId) {
     const { data } = await supabase.from("billing_customers").select("user_id").eq("stripe_customer_id", subscription.customer).maybeSingle();
     userId = data?.user_id;
   }
   if (!userId) throw new Error("Stripe subscription sans utilisateur Pace.");
-  await supabase.from("billing_subscriptions").upsert({
+  const { error: subscriptionError } = await supabase.from("billing_subscriptions").upsert({
     user_id: userId,
     stripe_subscription_id: subscription.id,
     stripe_customer_id: subscription.customer,
@@ -155,6 +161,7 @@ export async function applyStripeSubscription(
     current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
     cancel_at_period_end: subscription.cancel_at_period_end,
   });
+  if (subscriptionError) throw new Error("Impossible d'enregistrer l'abonnement Stripe.");
 }
 
 export function verifyStripeSignature(payload: string, signature: string, secret: string): boolean {
