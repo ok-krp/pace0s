@@ -101,8 +101,16 @@ export const Route = createFileRoute("/api/stripe/webhook")({
             status: "processing",
           });
           if (eventError) {
-            const { data: raced } = await supabaseAdmin.from("billing_events").select("stripe_event_id,status").eq("stripe_event_id", event.id).maybeSingle();
-            if (raced?.status === "processed" || raced?.status === "processing") return Response.json({ received: true, duplicate: true });
+            const { data: raced, error: racedError } = await supabaseAdmin
+              .from("billing_events")
+              .select("stripe_event_id,status")
+              .eq("stripe_event_id", event.id)
+              .maybeSingle();
+            if (racedError) return new Response("Impossible de vérifier l'événement concurrent", { status: 500 });
+            if (raced?.status === "processed") return Response.json({ received: true, duplicate: true });
+            // Do not acknowledge a concurrent in-flight event: if its worker fails,
+            // Stripe must retry instead of permanently dropping this delivery.
+            if (raced?.status === "processing") return new Response("Événement Stripe déjà en cours de traitement", { status: 500 });
             return new Response("Impossible d'enregistrer l'événement", { status: 500 });
           }
         }
