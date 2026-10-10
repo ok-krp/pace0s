@@ -16,6 +16,7 @@
     "test:stripe-webhook-body-limit": "node scripts/test-stripe-webhook-body-limit.mjs",
     "test:custom-ai-ssrf-policy": "node scripts/test-custom-ai-ssrf-policy.mjs",
     "test:error-report-security": "node scripts/test-error-report-security.mjs",
+    "test:rich-note-sanitization": "node scripts/test-rich-note-sanitization.mjs",
     "test:supabase-config": "node scripts/test-supabase-config-contract.mjs",
     "test:byok": "node scripts/test-ai-byok-policy.mjs",
     "format": "prettier --write .",
