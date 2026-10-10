@@ -4,4 +4,7 @@ const source = readFileSync(new URL("../src/routes/api/stripe/webhook.ts", impor
 assert.match(source, /const MAX_BODY_BYTES = 512_000/);
 assert.match(source, /readBoundedBody\(request, MAX_BODY_BYTES\)/);
 assert.doesNotMatch(source, /await request\.text\(\)/);
+assert.match(source, /if \(seen\?\.status === "failed"\)/);
+assert.match(source, /\.eq\("status", "failed"\)/);
+assert.match(source, /if \(!alreadyClaimed\)/);
 console.log("Stripe webhook bounded-body contract: PASS");
