@@ -1,0 +1,7 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const source = readFileSync(new URL("../src/routes/api/stripe/webhook.ts", import.meta.url), "utf8");
+assert.match(source, /const MAX_BODY_BYTES = 512_000/);
+assert.match(source, /readBoundedBody\(request, MAX_BODY_BYTES\)/);
+assert.doesNotMatch(source, /await request\.text\(\)/);
+console.log("Stripe webhook bounded-body contract: PASS");
