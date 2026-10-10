@@ -51,11 +51,12 @@ export const Route = createFileRoute("/api/stripe/webhook")({
           return new Response("Événement Stripe invalide", { status: 400 });
         }
 
-        const { data: seen } = await supabaseAdmin
+        const { data: seen, error: seenError } = await supabaseAdmin
           .from("billing_events")
           .select("stripe_event_id,status")
           .eq("stripe_event_id", event.id)
           .maybeSingle();
+        if (seenError) return new Response("Impossible de vérifier l'événement Stripe", { status: 500 });
         if (seen?.status === "processed") return Response.json({ received: true, duplicate: true });
 
         // Recover an event left in processing by a crashed serverless invocation.
@@ -71,7 +72,7 @@ export const Route = createFileRoute("/api/stripe/webhook")({
             .select("stripe_event_id");
           if (takeoverError) return new Response("Impossible de reprendre l'événement", { status: 500 });
           if (takeover?.length) alreadyClaimed = true;
-          else return Response.json({ received: true, duplicate: true });
+          else return new Response("Événement Stripe déjà en cours de traitement", { status: 500 });
         }
 
         // Claim a failed event by conditional update. Do not then attempt a second INSERT:
@@ -110,10 +111,11 @@ export const Route = createFileRoute("/api/stripe/webhook")({
           if (event.type === "checkout.session.completed") {
             const session = event.data.object as { customer?: string; client_reference_id?: string };
             if (session.customer && session.client_reference_id) {
-              await supabaseAdmin.from("billing_customers").upsert({
+              const { error: customerError } = await supabaseAdmin.from("billing_customers").upsert({
                 user_id: session.client_reference_id,
                 stripe_customer_id: session.customer,
               });
+              if (customerError) throw new Error("Impossible d'enregistrer le client Stripe.");
             }
           }
 
@@ -127,7 +129,20 @@ export const Route = createFileRoute("/api/stripe/webhook")({
           return new Response("Webhook processing failed", { status: 500 });
         }
 
-        await supabaseAdmin.from("billing_events").update({ status: "processed", last_error: null }).eq("stripe_event_id", event.id);
+        const { error: processedError } = await supabaseAdmin
+          .from("billing_events")
+          .update({ status: "processed", last_error: null })
+          .eq("stripe_event_id", event.id);
+        if (processedError) {
+          console.error("Stripe webhook status persistence failed", { eventId: event.id, type: event.type, error: processedError });
+          const { error: failedStatusError } = await supabaseAdmin
+            .from("billing_events")
+            .update({ status: "failed", last_error: "Impossible d'enregistrer le statut traité." })
+            .eq("stripe_event_id", event.id)
+            .eq("status", "processing");
+          if (failedStatusError) console.error("Stripe webhook failed-status persistence failed", { eventId: event.id, error: failedStatusError });
+          return new Response("Impossible d'enregistrer le statut de l'événement Stripe", { status: 500 });
+        }
         return Response.json({ received: true });
       },
     },
