@@ -53,21 +53,38 @@ export const Route = createFileRoute("/api/stripe/webhook")({
           .eq("stripe_event_id", event.id)
           .maybeSingle();
         if (seen?.status === "processed" || seen?.status === "processing") return Response.json({ received: true, duplicate: true });
+
+        // Claim a failed event by conditional update. Do not then attempt a second INSERT:
+        // the unique-key conflict would otherwise return 200 without retrying the event.
+        let alreadyClaimed = false;
         if (seen?.status === "failed") {
-          await supabaseAdmin.from("billing_events").update({ status: "processing", last_error: null }).eq("stripe_event_id", event.id);
+          const { data: retried, error: retryError } = await supabaseAdmin
+            .from("billing_events")
+            .update({ status: "processing", last_error: null, processed_at: new Date().toISOString() })
+            .eq("stripe_event_id", event.id)
+            .eq("status", "failed")
+            .select("stripe_event_id");
+          if (retryError) return new Response("Impossible de relancer l'événement", { status: 500 });
+          if (retried?.length) alreadyClaimed = true;
+          else {
+            const { data: current } = await supabaseAdmin.from("billing_events").select("status").eq("stripe_event_id", event.id).maybeSingle();
+            if (current?.status === "processing" || current?.status === "processed") return Response.json({ received: true, duplicate: true });
+            return new Response("Impossible de relancer l'événement", { status: 500 });
+          }
         }
 
-        const { error: eventError } = await supabaseAdmin.from("billing_events").insert({
-          stripe_event_id: event.id,
-          event_type: event.type,
-          payload: event as never,
-          status: "processing",
-        });
-        if (eventError) {
-          const { data: raced } = await supabaseAdmin.from("billing_events").select("stripe_event_id,status").eq("stripe_event_id", event.id).maybeSingle();
-          if (raced?.status === "processed" || raced?.status === "processing") return Response.json({ received: true, duplicate: true });
-          if (raced?.status === "failed") await supabaseAdmin.from("billing_events").update({ status: "processing", last_error: null }).eq("stripe_event_id", event.id);
-          return new Response("Impossible d'enregistrer l'événement", { status: 500 });
+        if (!alreadyClaimed) {
+          const { error: eventError } = await supabaseAdmin.from("billing_events").insert({
+            stripe_event_id: event.id,
+            event_type: event.type,
+            payload: event as never,
+            status: "processing",
+          });
+          if (eventError) {
+            const { data: raced } = await supabaseAdmin.from("billing_events").select("stripe_event_id,status").eq("stripe_event_id", event.id).maybeSingle();
+            if (raced?.status === "processed" || raced?.status === "processing") return Response.json({ received: true, duplicate: true });
+            return new Response("Impossible d'enregistrer l'événement", { status: 500 });
+          }
         }
 
         try {
