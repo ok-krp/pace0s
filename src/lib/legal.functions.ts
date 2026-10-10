@@ -43,12 +43,14 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
       context.supabase
         .from("legal_consent")
         .select("region,eula_version,privacy_version,opts,consented_at,ip_country")
+        .eq("user_id", context.userId)
         .eq("eula_version", LEGAL_VERSIONS.eula)
         .eq("privacy_version", LEGAL_VERSIONS.privacy)
         .maybeSingle(),
       context.supabase
         .from("consent_records")
         .select("consent_type,granted,created_at")
+        .eq("user_id", context.userId)
         .order("created_at", { ascending: false }),
     ]);
 
