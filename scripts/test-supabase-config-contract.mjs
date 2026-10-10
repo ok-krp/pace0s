@@ -15,6 +15,7 @@ assert.match(source, /url: viteUrl, key: viteKey/);
 assert.match(source, /url: serverUrl, key: serverKey/);
 assert.match(source, /Values from different pairs are never mixed/);
 assert.match(source, /parsedUrl\.protocol !== "https:"/);
+assert.match(source, /parsedUrl\.username \|\| parsedUrl\.password \|\| parsedUrl\.search \|\| parsedUrl\.hash/);
 
 // The elevated server key must never be sent to an invalid or cleartext remote URL.
 assert.match(serverSource, /parsedUrl = new URL\(SUPABASE_URL\)/);
