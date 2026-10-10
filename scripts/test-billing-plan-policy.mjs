@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const source = readFileSync(new URL("../src/lib/billing.server.ts", import.meta.url), "utf8");
+
+// Entitlements must be backed by a configured Stripe Price ID, never metadata alone.
+assert.match(source, /const plan = planFromPriceId\(priceId\);/);
+assert.doesNotMatch(source, /subscription\.metadata\?\.pace_plan\s*\?\?/);
+assert.match(source, /if \(!plan \|\| !\(plan in PLAN_CATALOG\)\) throw new Error/);
+console.log("Billing plan fail-closed contract: PASS");
