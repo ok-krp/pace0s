@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const guard = readFileSync(new URL("../src/lib/ssrf.server.ts", import.meta.url), "utf8");
+const provider = readFileSync(new URL("../src/lib/ai-provider.server.ts", import.meta.url), "utf8");
+assert.match(guard, /url\.protocol !== "https:"/);
+assert.match(guard, /await lookup\(host, \{ all: true \}\)/);
+assert.match(guard, /redirect: "manual"/);
+assert.match(provider, /provider === "custom" \? publicOnlyFetch : fetch/);
+assert.match(provider, /if \(provider === "custom"\) assertSafeApiUrl\(url\)/);
+console.log("Custom AI provider SSRF contract: PASS");
