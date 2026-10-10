@@ -5,5 +5,6 @@ const limiter = readFileSync(new URL("../src/lib/rate-limit.ts", import.meta.url
 assert.match(route, /readBoundedJson\(request, MAX_BODY_BYTES\)/);
 assert.match(route, /rateLimit\(`error-report:/);
 assert.match(route, /sameOrigin\(request\)/);
+assert.ok(route.includes(String.raw`value.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g`));
 assert.match(limiter, /hits\.length >= limit/);
 console.log("Error report bounded-body/rate-limit contract: PASS");
