@@ -18,7 +18,22 @@ function createSupabaseAdminClient() {
     throw new Error(message);
   }
 
-  return createClient<Database>(SUPABASE_URL, SUPABASE_SECRET_KEY, {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(SUPABASE_URL);
+  } catch {
+    throw new Error("[Supabase] SUPABASE_URL must be a valid absolute URL.");
+  }
+  const hostname = parsedUrl.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  const isLocalHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  if (parsedUrl.protocol !== "https:" && !isLocalHost) {
+    throw new Error("[Supabase] SUPABASE_URL must use HTTPS outside localhost.");
+  }
+  if (parsedUrl.username || parsedUrl.password || parsedUrl.search || parsedUrl.hash) {
+    throw new Error("[Supabase] SUPABASE_URL must not contain credentials, query parameters, or a fragment.");
+  }
+
+  return createClient<Database>(parsedUrl.toString().replace(/\/$/, ""), SUPABASE_SECRET_KEY, {
     auth: {
       storage: undefined,
       persistSession: false,
