@@ -16,4 +16,7 @@ assert.match(source, /Événement Stripe déjà en cours de traitement.*status: 
 assert.match(source, /if \(customerError\) throw new Error/);
 assert.match(source, /if \(processedError\)/);
 assert.match(source, /if \(failedStatusError\)/);
-console.log("Stripe webhook bounded-body and persistence contract: PASS");
+assert.match(source, /if \(racedError\) return new Response/);
+assert.match(source, /if \(raced\?\.status === "processed"\) return Response\.json/);
+assert.match(source, /if \(raced\?\.status === "processing"\) return new Response\("Événement Stripe déjà en cours de traitement", \{ status: 500 \}\)/);
+console.log("Stripe webhook bounded-body, race, and persistence contract: PASS");
