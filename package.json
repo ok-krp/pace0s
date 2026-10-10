@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test:sync": "node scripts/cloud-sync-contract-test.mjs",
     "test:billing-plan-policy": "node scripts/test-billing-plan-policy.mjs",
+    "test:stripe-webhook-body-limit": "node scripts/test-stripe-webhook-body-limit.mjs",
     "test:supabase-config": "node scripts/test-supabase-config-contract.mjs",
     "test:byok": "node scripts/test-ai-byok-policy.mjs",
     "format": "prettier --write .",
