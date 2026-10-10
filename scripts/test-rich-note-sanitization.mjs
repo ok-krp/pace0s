@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+const sanitizer = readFileSync(new URL("../src/lib/sanitize-html.ts", import.meta.url), "utf8");
+const route = readFileSync(new URL("../src/routes/work.tsx", import.meta.url), "utf8");
+assert.match(sanitizer, /const ALLOWED_TAGS = new Set/);
+assert.match(sanitizer, /DROP_WITH_CONTENT/);
+assert.match(sanitizer, /isSafeLinkHref/);
+assert.match(route, /innerHTML = sanitizeNoteHtml\(note\.html\)/);
+assert.match(route, /html: sanitizeNoteHtml\(editorRef\.current\.innerHTML\)/);
+console.log("Rich note HTML sanitization contract: PASS");
