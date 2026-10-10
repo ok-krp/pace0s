@@ -27,6 +27,7 @@ jobs:
       - run: npm run test:safe-redirect-policy
       - run: npm run test:latest-consent-policy
       - run: npm run test:supabase-config
+      - run: npm run test:signal-dark-mode
       - run: npm run test:health-e2ee-realtime
       # TanStack Router generates src/routeTree.gen.ts during the Vite build.
       # Run the build before typecheck so newly added file routes are included.
