@@ -2,13 +2,41 @@ import { createFileRoute } from "@tanstack/react-router";
 import { applyStripeSubscription, verifyStripeSignature } from "@/lib/billing.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
+const MAX_BODY_BYTES = 512_000;
+
+/** Lit le corps en flux et arrête la lecture dès que la limite en octets est dépassée. */
+async function readBoundedBody(request: Request, maxBytes: number): Promise<string | null> {
+  const reader = request.body?.getReader();
+  if (!reader) return "";
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      return null;
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 export const Route = createFileRoute("/api/stripe/webhook")({
   server: {
     handlers: {
       POST: async ({ request }) => {
         const secret = process.env.STRIPE_WEBHOOK_SECRET;
         if (!secret) return new Response("Stripe webhook non configuré", { status: 503 });
-        const raw = await request.text();
+        const raw = await readBoundedBody(request, MAX_BODY_BYTES);
+        if (raw === null) return new Response("Payload trop volumineux", { status: 413 });
         const signature = request.headers.get("stripe-signature") ?? "";
         if (!verifyStripeSignature(raw, signature, secret)) return new Response("Signature Stripe invalide", { status: 400 });
 
