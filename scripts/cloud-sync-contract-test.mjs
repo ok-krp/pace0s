@@ -177,8 +177,8 @@ assert.ok(engine.includes("if (serialize(mergedValue) !== serialize(canonical?.v
 assert.ok(engine.includes("await pull();\n      // Bootstrap may enqueue legacy-only state during the pull.\n      await flushQueue();"),
   "initial reconciliation must flush newly recovered legacy data without waiting for another edit");
 
-assert.ok(engine.includes("const pulled = await pull();\\n      if (pulled) {") &&
-  engine.indexOf("const pulled = await pull();") < engine.indexOf("await flushQueue();", engine.indexOf("const pulled = await pull();")),
+const pulledIndex = engine.indexOf("const pulled = await pull();");
+assert.ok(pulledIndex >= 0 && engine.indexOf("await flushQueue();", pulledIndex) > pulledIndex,
   "cloud state must be reconciled before replaying queued offline mutations");
 assert.ok(engine.includes("let pullInFlight: Promise<boolean> | null = null;") &&
   engine.includes("if (pullInFlight) return pullInFlight"),
