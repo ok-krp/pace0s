@@ -178,7 +178,7 @@ assert.ok(engine.includes("const localLegacyValue = readLegacyLocalValue(row.key
   "Realtime rows must preserve and re-upload known legacy raw values instead of overwriting them");
 assert.ok(engine.includes("if (serialize(mergedValue) !== serialize(canonical?.value))"),
   "legacy rows and local-only values must be queued through the canonical cloud write path");
-assert.ok(engine.includes("await pull();\n      // Bootstrap may enqueue legacy-only state during the pull.\n      await flushQueue();"),
+assert.ok(engine.includes("const pulled = await pull();\n      if (pulled) {\n        // Bootstrap may enqueue legacy-only state during the pull.\n        await flushQueue();"),
   "initial reconciliation must flush newly recovered legacy data without waiting for another edit");
 
 const pulledIndex = engine.indexOf("const pulled = await pull();");
