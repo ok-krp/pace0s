@@ -8,6 +8,7 @@ on:
       - "src/lib/storage.ts"
       - "supabase/migrations/**"
       - "scripts/cloud-sync-contract-test.mjs"
+      - "scripts/test-nutrition-photo-contract.mjs"
       - "package.json"
       - ".github/workflows/cloud-sync-audit.yml"
   push:
