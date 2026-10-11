@@ -3,7 +3,6 @@ import { z } from "zod";
 import { generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { LEGAL_VERSIONS } from "./legal";
 import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema } from "./nutrition-ai.shared";
 import { calculateReferenceBasedNutrition, findDishReference, scaleDishReference } from "./nutrition-engine";
@@ -69,8 +68,17 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
     if (data.vision) {
       parsed = visionSchema.parse(data.vision);
     } else {
-      const { data: file, error: downloadError } = await supabaseAdmin.storage.from(PHOTO_BUCKET).download(path!);
-      if (downloadError || !file) throw new Error("Image introuvable ou inaccessible.");
+      const { data: file, error: downloadError } = await context.supabase.storage.from(PHOTO_BUCKET).download(path!);
+      if (downloadError || !file) {
+        // Use the authenticated user's RLS-scoped Storage client. This avoids
+        // cross-environment service-key mismatches and keeps access restricted
+        // to the user's own nutrition-ai folder.
+        console.error("[nutrition-ai] authenticated Storage download failed", {
+          message: downloadError?.message ?? "Storage returned no file",
+          statusCode: (downloadError as { statusCode?: number } | null)?.statusCode ?? null,
+        });
+        throw new Error("Image introuvable ou inaccessible.");
+      }
       const bytes = Buffer.from(await file.arrayBuffer());
       if (bytes.length === 0 || bytes.length > MAX_PHOTO_BYTES) throw new Error("Image trop lourde ou vide.");
       const contentType = file.type || "image/jpeg";
@@ -105,7 +113,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
     const result = foodAnalysisSchema.parse({ dish_name: parsed.dish_name, items: completeItems, health_score: parsed.health_score, quality: parsed.quality, confidence: Math.min(parsed.confidence, nutrition.confidence || parsed.confidence), confidence_note: `${parsed.confidence_note} ${referenceCount}/${parsed.items.length} aliments calibrés par les références Pace.`.trim(), notes: `${parsed.notes}${referenceCount < parsed.items.length ? " Les aliments sans référence Pace sont conservés avec une estimation visuelle au lieu d’être supprimés." : ""}` });
     return { error: null, result };
   } catch (e) { console.error("analyzeFoodPhoto error", e); return { error: e instanceof Error ? e.message : "Erreur IA", result: null }; }
-  finally { if (path) await supabaseAdmin.storage.from(PHOTO_BUCKET).remove([path]).catch(() => undefined); }
+  finally { if (path) await context.supabase.storage.from(PHOTO_BUCKET).remove([path]).catch(() => undefined); }
 });
 
 export const nutritionAdvice = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((d: { summary: string }) => z.object({ summary: z.string().min(1).max(4000) }).parse(d)).handler(async ({ data, context }) => {
