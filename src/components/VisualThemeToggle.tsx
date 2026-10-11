@@ -15,12 +15,12 @@ function applyVisualTheme(theme: VisualTheme) {
   const root = document.documentElement;
   if (theme === "default") delete root.dataset.visualTheme;
   else root.dataset.visualTheme = theme;
-  // Signal supports both light and dark. Only Glass forces dark.
-  const dark = theme === "glass" || localStorage.getItem(DARK_MODE_KEY) === "1";
+  // Signal et Liquid suivent le mode sombre choisi par l'utilisateur.
+  const dark = localStorage.getItem(DARK_MODE_KEY) === "1";
   root.classList.toggle("dark", dark);
   localStorage.setItem(VISUAL_THEME_KEY, theme);
   const themeColor = document.querySelector('meta[name="theme-color"]');
-  themeColor?.setAttribute("content", theme === "glass" ? "#070b12" : theme === "signal" ? dark ? "#090b0e" : "#f6f7f9" : dark ? "#1f242c" : "#f8fafc");
+  themeColor?.setAttribute("content", theme === "glass" ? (dark ? "#070a14" : "#e9e7ee") : theme === "signal" ? dark ? "#000000" : "#f6f7f9" : dark ? "#1f242c" : "#f8fafc");
   window.dispatchEvent(new CustomEvent("pace.visual-theme.change", { detail: { theme, signal: theme === "signal" } }));
 }
 
@@ -42,9 +42,9 @@ export function VisualThemeToggle({ compact = false }: { compact?: boolean }) {
     <button
       type="button"
       onClick={toggle}
-      aria-label={`Thème actuel : ${theme === "default" ? "Pace" : theme === "signal" ? "Signal" : "Glass"}. Cliquer pour changer`}
+      aria-label={`Thème actuel : ${theme === "default" ? "Pace" : theme === "signal" ? "Signal" : "Liquid"}. Cliquer pour changer`}
       aria-pressed={theme !== "default"}
-      title={`Thème : ${theme === "default" ? "Pace" : theme === "signal" ? "Signal" : "Glass"}`}
+      title={`Thème : ${theme === "default" ? "Pace" : theme === "signal" ? "Signal" : "Liquid"}`}
       className={[
         "signal-theme-control inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium transition-[background,border-color,color,box-shadow] duration-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
@@ -60,7 +60,7 @@ export function VisualThemeToggle({ compact = false }: { compact?: boolean }) {
       >
         {theme === "signal" ? <Activity className="size-3.5" /> : theme === "glass" ? <Layers3 className="size-3.5" /> : <Sparkles className="size-3.5" />}
       </span>
-      {!compact && <span>{theme === "signal" ? "Signal" : theme === "glass" ? "Glass" : "Style"}</span>}
+      {!compact && <span>{theme === "signal" ? "Signal" : theme === "glass" ? "Liquid" : "Style"}</span>}
     </button>
   );
 }
