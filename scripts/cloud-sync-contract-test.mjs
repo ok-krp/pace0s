@@ -169,6 +169,9 @@ assert.ok(engine.includes("const LEGACY_LOCAL_SYNC_KEYS = new Set<string>([") &&
   "bootstrap must explicitly allowlist known legacy raw keys rather than uploading arbitrary localStorage");
 assert.ok(engine.includes("readLegacyLocalValue(key)"),
   "legacy raw local data must participate in cloud reconciliation");
+assert.ok(engine.includes("const localLegacyValue = readLegacyLocalValue(row.key)") &&
+  engine.includes("void pushItem({ key: row.key, value: mergedValue, updatedAt: recoveryTime, mutationId })"),
+  "Realtime rows must preserve and re-upload known legacy raw values instead of overwriting them");
 assert.ok(engine.includes("if (serialize(mergedValue) !== serialize(canonical?.value))"),
   "legacy rows and local-only values must be queued through the canonical cloud write path");
 assert.ok(engine.includes("await pull();\n      // Bootstrap may enqueue legacy-only state during the pull.\n      await flushQueue();"),
