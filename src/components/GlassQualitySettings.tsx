@@ -13,7 +13,7 @@ function GlassQualitySettingsImpl() {
           <Gauge className="size-4" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-medium">Qualité Glass</div>
+          <div className="font-medium">Qualité Liquid Glass</div>
           <div className="text-xs text-muted-foreground">
             Ajuste le flou, les reflets spéculaires et la lumière de Fresnel.
           </div>
