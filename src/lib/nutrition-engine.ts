@@ -22,7 +22,7 @@ export async function findDishReference(client: NutritionReferenceClient, name: 
   const canonical = await dishTable(client).select(columns).ilike("canonical_name", pattern).order("confidence", { ascending: false }).limit(1).maybeSingle();
   if (canonical.error) throw new Error(`Dish reference lookup failed: ${canonical.error.message}`);
   if (canonical.data) return canonical.data as DishReference;
-  const alias = await dishTable().select(columns).contains("aliases", [normalized]).order("confidence", { ascending: false }).limit(1).maybeSingle();
+  const alias = await dishTable(client).select(columns).contains("aliases", [normalized]).order("confidence", { ascending: false }).limit(1).maybeSingle();
   if (alias.error) throw new Error(`Dish reference alias lookup failed: ${alias.error.message}`);
   return (alias.data as DishReference | null) ?? null;
 }
