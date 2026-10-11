@@ -344,7 +344,7 @@ export function useCloudSyncEngineInternal() {
       setStatus("ok");
     };
 
-    const pull = async (): Promise<boolean> => {
+    const pullOnce = async (): Promise<boolean> => {
       if (cancelled || !allowed() || !navigator.onLine) return false;
       if (running.current) {
         recoveryNeeded = true;
@@ -466,6 +466,20 @@ export function useCloudSyncEngineInternal() {
         recoveryNeeded = true;
         if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
         return false;
+      }
+    };
+
+    // Realtime subscription and initial bootstrap can request a pull at nearly
+    // the same time. Coalesce them into one REST read to protect Supabase egress.
+    let pullInFlight: Promise<boolean> | null = null;
+    const pull = async (): Promise<boolean> => {
+      if (pullInFlight) return pullInFlight;
+      const operation = pullOnce();
+      pullInFlight = operation;
+      try {
+        return await operation;
+      } finally {
+        if (pullInFlight === operation) pullInFlight = null;
       }
     };
 
