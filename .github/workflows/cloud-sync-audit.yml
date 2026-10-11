@@ -8,7 +8,9 @@ on:
       - "src/lib/storage.ts"
       - "supabase/migrations/**"
       - "scripts/cloud-sync-contract-test.mjs"
+      - "scripts/real-auth-multi-device-test.ts"
       - "package.json"
+      - "bun.lock"
       - ".github/workflows/cloud-sync-audit.yml"
   push:
     branches: [main]
@@ -36,3 +38,22 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: npm run lint
+
+  real-auth-multi-device:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Real-auth multi-device Realtime test
+        env:
+          SUPABASE_URL: https://cduyjejftorfuxuwhbqt.supabase.co
+          SUPABASE_PUBLISHABLE_KEY: sb_publishable_HWlyOrqPkDAdibQIKl-RCQ_i8ihwcyO
+        run: bun --experimental-strip-types scripts/real-auth-multi-device-test.ts
+      - name: Confirm real-auth test completed
+        run: echo "real-auth-multi-device completed on ${GITHUB_SHA}"

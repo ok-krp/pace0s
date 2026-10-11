@@ -12,12 +12,16 @@ const DOMAIN_OUTBOX_KEY = "pace.domain.outbox";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
-const DEVICE_KEY = "pace.__sync_device_id";
-const DEVICE_ID = getDeviceId();
+const TAB_DEVICE_KEY = "pace.__sync_tab_id";
+// A localStorage-backed ID is shared by every tab in the same browser. If used
+// as updated_by, every tab mistakes another tab's Realtime update for its own
+// echo and silently ignores it. Keep the persistent installation ID for
+// diagnostics, but use a per-tab ID for Realtime echo suppression.
+const DEVICE_ID = getTabDeviceId();
 const CONFLICTS_KEY = "pace.__sync_conflicts";
 
 type SyncMeta = Record<string, string>;
-export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
+export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline" | "consent_required";
 export type SyncConflict = { id: string; key: string; localValue: unknown; remoteValue: unknown; remoteUpdatedAt: string; detectedAt: string; };
 type SyncRow = { key: string; value: unknown; updated_at: string; updated_by: string | null };
 type ServerWriteResult = { accepted: boolean; updated_at: string | null };
@@ -25,15 +29,15 @@ type QueueItem = { key: string; value: unknown; updatedAt: string; mutationId?: 
 type LegacyQueue = string[] | QueueItem[];
 type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 
-function getDeviceId() {
+function getTabDeviceId() {
   if (typeof window === "undefined") return "server";
   try {
-    const existing = localStorage.getItem(DEVICE_KEY);
+    const existing = sessionStorage.getItem(TAB_DEVICE_KEY);
     if (existing) return existing;
-    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-    localStorage.setItem(DEVICE_KEY, id);
+    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `tab-${Date.now()}-${Math.random()}`;
+    sessionStorage.setItem(TAB_DEVICE_KEY, id);
     return id;
-  } catch { return `${Date.now()}-${Math.random()}`; }
+  } catch { return `tab-${Date.now()}-${Math.random()}`; }
 }
 function isSyncableKey(key: string) { return key.startsWith(PACE_PREFIX) && !key.startsWith(INTERNAL_PREFIX) && key !== DOMAIN_OUTBOX_KEY && !EXCLUDED.has(key); }
 function readQueue(): QueueItem[] {
@@ -278,7 +282,9 @@ export function useCloudSyncEngineInternal() {
           localStorage.setItem("pace.__last_sync_at", readMeta()[latest.key] ?? latest.updatedAt);
         }
         unqueueIfMutation(latest.key, latest.updatedAt);
-        setStatus("ok");
+        // Keep the settings indicator in "syncing" until every queued key has
+        // completed, rather than declaring success after the first parallel RPC.
+        setStatus(readQueue().length > 0 ? "syncing" : "ok");
       });
       keyWrites.current[item.key] = current.catch(() => undefined);
       try { await current; } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
@@ -302,7 +308,27 @@ export function useCloudSyncEngineInternal() {
       const queued = getQueued(row.key);
       if (queued) { recordConflict(row.key, queued.value, row.value, row.updated_at); return; }
       const domain = readDomainRecord(row.key);
-      if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) return;
+      if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) {
+        const domainTime = Date.parse(domain.updatedAt);
+        if (domainTime > remoteTime) {
+          // Realtime may reveal a cloud row created after the initial bootstrap.
+          // Preserve and immediately enqueue a newer local-only edit instead of
+          // waiting for a page-show event (healthy Realtime disables fallback polling).
+          const localItem: QueueItem = {
+            key: row.key,
+            value: domain.value,
+            updatedAt: domain.updatedAt,
+            mutationId: domain.mutationId,
+          };
+          queueItem(localItem);
+          void pushItem(localItem);
+        } else if (domainTime === remoteTime && serialize(domain.value) !== serialize(row.value)) {
+          // Equal timestamps with different payloads cannot be ordered safely.
+          // Keep the local value and make the conflict explicit rather than dropping either side.
+          recordConflict(row.key, domain.value, row.value, row.updated_at);
+        }
+        return;
+      }
       applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
       markVersion(row.key, row.updated_at);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
@@ -336,7 +362,11 @@ export function useCloudSyncEngineInternal() {
           const updatedAt = new Date(sourceTime).toISOString();
           const localDomain = readDomainRecord(key);
           const localIsEmpty = localDomain ? isEmptyRecoveredValue(localDomain.value) : true;
-          const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
+          const metaTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
+          const domainTime = localDomain ? Date.parse(localDomain.updatedAt) : Number.NaN;
+          // The domain envelope is the source of truth for local edits, even when
+          // older clients never wrote a corresponding sync-meta timestamp.
+          const localTime = Math.max(metaTime, Number.isFinite(domainTime) ? domainTime : 0);
           const queued = getQueued(key);
           if (queued) {
             if (serialize(queued.value) === serialize(mergedValue)) {
@@ -411,10 +441,14 @@ export function useCloudSyncEngineInternal() {
     };
 
     const syncNow = async () => {
-      if (!allowed()) return;
+      if (!allowed()) { setStatus("consent_required"); return; }
       pruneEquivalentConflicts();
       if (!navigator.onLine) { setStatus("offline"); return; }
-      await flushQueue(); await pull();
+      await flushQueue();
+      await pull();
+      // pull() may enqueue legacy/local domain records that are absent in the cloud.
+      // Flush again so initial reconciliation uploads those records immediately.
+      await flushQueue();
       pruneEquivalentConflicts();
     };
 
@@ -438,8 +472,13 @@ export function useCloudSyncEngineInternal() {
       const encoded = serialize(value);
       if (encoded !== undefined && lastRemoteValues.current[key] === encoded) { delete lastRemoteValues.current[key]; return; }
       delete lastRemoteValues.current[key];
-      queueItem({ key, value, updatedAt, mutationId });
-      void pushItem({ key, value, updatedAt, mutationId });
+      const item = { key, value, updatedAt, mutationId };
+      queueItem(item);
+      // The UI status reflects the full write lifecycle: a local edit starts
+      // synchronization immediately and remains "syncing" until the RPC has
+      // completed or a concrete error/offline state is reached.
+      setStatus(navigator.onLine ? "syncing" : "offline");
+      void pushItem(item);
     });
 
     const onOnline = () => {
@@ -460,7 +499,7 @@ export function useCloudSyncEngineInternal() {
     const onPageShow = () => {
       void syncNow();
     };
-    const onLegalChanged = () => { if (allowed()) void syncNow(); else setStatus("idle"); };
+    const onLegalChanged = () => { if (allowed()) void syncNow(); else setStatus("consent_required"); };
     const onConflictResolved = () => { void syncNow(); };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
