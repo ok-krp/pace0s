@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test:sync": "node scripts/cloud-sync-contract-test.mjs",
+    "test:nutrition-photo": "node scripts/test-nutrition-photo-contract.mjs",
     "test:billing-plan-policy": "node scripts/test-billing-plan-policy.mjs",
     "test:stripe-webhook-body-limit": "node scripts/test-stripe-webhook-body-limit.mjs",
     "test:custom-ai-ssrf-policy": "node --experimental-strip-types scripts/test-custom-ai-ssrf-policy.mjs",
