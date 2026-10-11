@@ -136,7 +136,27 @@ assert.deepEqual(deviceA, deviceB, "resolved water must converge across devices"
 assert.deepEqual(conflictsA, []);
 assert.deepEqual(conflictsB, []);
 
-console.log("cloud-sync-contract-test: PASS");
-
 assert.match(engine, /pruneEquivalentConflicts\(\);\n      if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
 assert.match(engine, /remainingConflicts = currentConflicts\.filter\(\(item\) => item\.key !== key\)/, "queued equivalent values must clear stale conflicts");
+
+const nativeSync = read("pace_flutter/lib/core/sync/sync_service.dart");
+const nativeApp = read("pace_flutter/lib/app/pace_app.dart");
+const nativeStore = read("pace_flutter/lib/core/storage/local_store.dart");
+
+// Native sync must be mutation-driven, with bounded recovery only when Realtime
+// or a remote pull is unhealthy. Realtime events received during an active sync
+// must schedule another pass instead of being discarded.
+assert.match(nativeStore, /if \(enqueueSync\) onLocalMutation\?\.call\(\)/,
+  "native local writes/removals must trigger synchronization after persistence");
+assert.match(nativeSync, /case RealtimeSubscribeStatus\.subscribed:[\s\S]*?_realtimeNeedsPull = true;[\s\S]*?_syncRequestedWhileRunning = true;/,
+  "Realtime subscription must schedule an initial remote pull even during an active sync");
+assert.match(nativeSync, /localStore\.pendingOperations\(\)\.isNotEmpty \|\| _realtimeNeedsPull/,
+  "a pending remote pull must be retried even when the local outbox is empty");
+assert.match(nativeSync, /Keep the pull pending for the bounded recovery fallback/,
+  "failed remote pulls must remain pending without causing an immediate retry loop");
+assert.match(nativeApp, /Duration\(seconds: 60\), \(_\) => unawaited\(widget\.sync\.recoverIfNeeded\(\)\)/,
+  "native recovery must be limited to a 60-second degraded-Realtime fallback");
+assert.doesNotMatch(nativeApp, /Duration\(seconds: 15\), \(_\) => unawaited\(widget\.sync\.syncNow\(\)\)/,
+  "native sync must not use unconditional 15-second polling");
+
+console.log("cloud-sync-contract-test: PASS");
