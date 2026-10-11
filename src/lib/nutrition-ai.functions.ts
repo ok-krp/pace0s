@@ -92,7 +92,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
     }
     if (parsed.items.length === 0) return { error: "Aucun aliment identifiable sur cette photo.", result: null };
 
-    const dish = await findDishReference(parsed.dish_name);
+    const dish = await findDishReference(context.supabase, parsed.dish_name);
     if (dish && parsed.confidence >= 0.65) {
       const grams = parsed.items.reduce((sum, item) => sum + item.grams, 0) || Number(dish.portion_g);
       const values = scaleDishReference(dish, grams);
@@ -102,7 +102,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
       return { error: null, result };
     }
 
-    const nutrition = await calculateReferenceBasedNutrition(parsed.items.map(x => ({ name: x.name, grams: x.grams })));
+    const nutrition = await calculateReferenceBasedNutrition(context.supabase, parsed.items.map(x => ({ name: x.name, grams: x.grams })));
     const referenceByName = new Map(nutrition.items.map((item) => [item.name.trim().toLocaleLowerCase("fr-FR"), item]));
     const completeItems = parsed.items.map((visionItem) => {
       const reference = referenceByName.get(visionItem.name.trim().toLocaleLowerCase("fr-FR"));
