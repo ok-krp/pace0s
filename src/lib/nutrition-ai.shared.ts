@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const AI_MODEL = "google/gemini-3.7-flash";
+export const AI_MODEL = "google/gemini-3.8-flash";
 
 export const foodItemSchema = z.object({
   name: z.string(),
