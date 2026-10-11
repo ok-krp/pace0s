@@ -165,8 +165,12 @@ assert.ok(engine.includes('const TAB_DEVICE_KEY = "pace.__sync_tab_id";'),
 assert.ok(engine.includes("sessionStorage.getItem(TAB_DEVICE_KEY)"),
   "browser tabs must not share the same Realtime echo-suppression ID");
 assert.ok(engine.includes("const LEGACY_LOCAL_SYNC_KEYS = new Set<string>([") &&
-  engine.includes('"pace.sport.exercises"') && engine.includes('"pace.tx"') && engine.includes('"pace.assets"'),
-  "bootstrap must explicitly allowlist known legacy raw keys rather than uploading arbitrary localStorage");
+  engine.includes('"pace.sport.exercises"') && engine.includes('"pace.tx"') && engine.includes('"pace.assets"') &&
+  engine.includes('"pace.work.sessions"') && engine.includes('"pace.notes.list"') &&
+  engine.includes('"pace.recipes.custom"') && engine.includes('"pace.water.log"'),
+  "bootstrap must explicitly allowlist known legacy user data rather than uploading arbitrary localStorage");
+assert.ok(engine.includes("if (readDomainRecord(key)) return undefined;"),
+  "legacy recovery must not reintroduce stale raw aliases when a versioned domain record exists");
 assert.ok(engine.includes("readLegacyLocalValue(key)"),
   "legacy raw local data must participate in cloud reconciliation");
 assert.ok(engine.includes("const localLegacyValue = readLegacyLocalValue(row.key)") &&
