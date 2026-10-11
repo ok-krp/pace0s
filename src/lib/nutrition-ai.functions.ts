@@ -12,6 +12,7 @@ const PHOTO_BUCKET = "nutrition-ai";
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
 const visionItemSchema = z.object({ name: z.string().min(1).max(200), brand: z.string().nullable().default(null), grams: z.number().min(0).max(50000), kcal: z.number().min(0).max(20000), protein_g: z.number().min(0).max(1000), carbs_g: z.number().min(0).max(1000), fat_g: z.number().min(0).max(1000), fiber_g: z.number().min(0).max(500), sugar_g: z.number().min(0).max(500), sodium_mg: z.number().min(0).max(10000) });
 const visionSchema = z.object({ dish_name: z.string().min(1).max(300), items: z.array(visionItemSchema).max(50), health_score: z.enum(["green", "orange", "red"]), quality: z.enum(["bulking", "cutting", "balanced", "treat"]), confidence: z.number().min(0).max(1), confidence_note: z.string().default(""), notes: z.string().default("") });
+const PHOTO_AI_MODEL = "google/gemini-3.8-flash";
 const FALLBACK_AI_MODEL = "google/gemini-3.6-flash";
 
 function getGeminiModel(model = AI_MODEL) {
@@ -22,8 +23,20 @@ function getGeminiModel(model = AI_MODEL) {
 
 function isTransientVisionCapacityError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error ?? "");
-  const candidate = error as { status?: unknown } | null;
-  const status = typeof candidate?.status === "number" ? candidate.status : 0;
+  const candidate = error as {
+    status?: unknown;
+    statusCode?: unknown;
+    response?: { status?: unknown };
+    cause?: { status?: unknown; statusCode?: unknown };
+  } | null;
+  const statusCandidates = [
+    candidate?.statusCode,
+    candidate?.status,
+    candidate?.response?.status,
+    candidate?.cause?.statusCode,
+    candidate?.cause?.status,
+  ];
+  const status = statusCandidates.find((value): value is number => typeof value === "number") ?? 0;
   return status === 400 || status === 404 || status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504 || /model.*not found|unsupported.*model|high demand|overloaded|resource.?exhausted|rate.?limit|too many requests|temporarily unavailable|timeout/i.test(message);
 }
 
@@ -37,7 +50,7 @@ async function generateFoodVision(prompt: string, imageDataUrl: string, contentT
   }];
 
   try {
-    return await generateText({ maxRetries: 0, model: getGeminiModel(), messages });
+    return await generateText({ maxRetries: 0, model: getGeminiModel(PHOTO_AI_MODEL), messages });
   } catch (error) {
     if (!isTransientVisionCapacityError(error)) throw error;
     console.warn("[nutrition-ai] Gemini primary model unavailable; trying fallback model.");
