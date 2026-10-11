@@ -344,11 +344,18 @@ export function useCloudSyncEngineInternal() {
       setStatus("ok");
     };
 
-    const pull = async () => {
-      if (cancelled || !allowed() || !navigator.onLine || running.current) return;
+    const pull = async (): Promise<boolean> => {
+      if (cancelled || !allowed() || !navigator.onLine) return false;
+      if (running.current) {
+        recoveryNeeded = true;
+        return false;
+      }
       try {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
-        if (error || !data || cancelled) return;
+        if (error || !data || cancelled) {
+          recoveryNeeded = true;
+          return false;
+        }
         const queue = new Set(readQueue().map((item) => item.key));
         const meta = readMeta();
         const grouped = new Map<string, { canonical?: SyncRow; legacy?: SyncRow }>();
@@ -453,21 +460,31 @@ export function useCloudSyncEngineInternal() {
         writeMeta(meta);
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (newest) setStatus("ok");
-      } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
+        recoveryNeeded = false;
+        return true;
+      } catch {
+        recoveryNeeded = true;
+        if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
+        return false;
+      }
     };
 
     const syncNow = async () => {
       if (!allowed()) return;
       pruneEquivalentConflicts();
       if (!navigator.onLine) { setStatus("offline"); return; }
-      await flushQueue();
-      await pull();
-      // Bootstrap may enqueue legacy-only state during the pull.
-      await flushQueue();
+      // Reconcile cloud state before replaying queued offline mutations.
+      // A stale outbox item must not overwrite a newer remote edit on reconnect.
+      const pulled = await pull();
+      if (pulled) {
+        // Bootstrap may enqueue legacy-only state during the pull.
+        await flushQueue();
+      }
       pruneEquivalentConflicts();
     };
 
     let realtimeHealthy = false;
+    let recoveryNeeded = true;
 
     const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow))
@@ -475,9 +492,11 @@ export function useCloudSyncEngineInternal() {
     void realtimeChannel.subscribe((subscriptionStatus) => {
       if (subscriptionStatus === "SUBSCRIBED") {
         realtimeHealthy = true;
+        recoveryNeeded = true;
         void pull();
       } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
         realtimeHealthy = false;
+        recoveryNeeded = true;
         setStatus(navigator.onLine ? "error" : "offline");
       }
     });
@@ -501,7 +520,7 @@ export function useCloudSyncEngineInternal() {
     // trigger an immediate reconciliation. This avoids full-table egress every
     // few seconds while preserving recovery when Realtime is unavailable.
     const reconcileTimer = window.setInterval(() => {
-      if (document.visibilityState === "visible" && !realtimeHealthy) void syncNow();
+      if (document.visibilityState === "visible" && (!realtimeHealthy || recoveryNeeded)) void syncNow();
     }, 60_000);
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") void syncNow();
