@@ -177,4 +177,14 @@ assert.ok(engine.includes("if (serialize(mergedValue) !== serialize(canonical?.v
 assert.ok(engine.includes("await pull();\n      // Bootstrap may enqueue legacy-only state during the pull.\n      await flushQueue();"),
   "initial reconciliation must flush newly recovered legacy data without waiting for another edit");
 
+assert.ok(engine.includes("const pulled = await pull();\\n      if (pulled) {") &&
+  engine.indexOf("const pulled = await pull();") < engine.indexOf("await flushQueue();", engine.indexOf("const pulled = await pull();")),
+  "cloud state must be reconciled before replaying queued offline mutations");
+assert.ok(engine.includes("let pullInFlight: Promise<boolean> | null = null;") &&
+  engine.includes("if (pullInFlight) return pullInFlight"),
+  "initial Realtime pull and bootstrap must coalesce instead of issuing duplicate REST reads");
+assert.ok(engine.includes("recoveryNeeded = true;") &&
+  engine.includes("(!realtimeHealthy || recoveryNeeded)"),
+  "failed or skipped pulls must be retried by the bounded foreground recovery fallback");
+
 console.log("cloud-sync-contract-test: PASS");
