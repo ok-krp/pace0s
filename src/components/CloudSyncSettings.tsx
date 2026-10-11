@@ -21,10 +21,10 @@ export function CloudSyncSettings() {
 
   const label = !user
     ? "Connecte-toi pour activer la synchronisation."
-    : !online || status === "offline"
-      ? "Hors ligne — modifications conservées localement"
-      : status === "consent_required"
-        ? "Autorisation requise — active la synchronisation cloud dans Confidentialité"
+    : status === "consent_required"
+      ? "Autorisation requise — active la synchronisation cloud dans Confidentialité"
+      : !online || status === "offline"
+        ? "Hors ligne — modifications conservées localement"
         : status === "syncing"
           ? "Synchronisation…"
           : status === "error"
