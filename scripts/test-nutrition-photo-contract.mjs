@@ -16,6 +16,8 @@ assert.match(ai, /const FALLBACK_AI_MODEL = "google\/gemini-3\.6-flash"/);
 assert.match(ai, /const MAX_PHOTO_BYTES = 8 \* 1024 \* 1024/);
 assert.match(ai, /candidate\?\.statusCode/);
 assert.match(ai, /candidate\?\.response\?\.status/);
+assert.match(ai, /status === 408 \|\| status === 429/);
+assert.doesNotMatch(ai, /status === 400 \|\| status === 404/, "do not retry every malformed-request error");
 assert.match(ai, /getGeminiModel\(PHOTO_AI_MODEL\)/);
 
 // The browser upload stays below the private bucket's 8 MiB hard limit and
