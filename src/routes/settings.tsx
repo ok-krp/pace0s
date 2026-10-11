@@ -23,7 +23,7 @@ import { AiLocalModeSettings } from "@/components/AiLocalModeSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
 import { DailyPrioritySettings } from "@/components/DailyPrioritySettings";
 import { VisualThemeToggle } from "@/components/VisualThemeToggle";
-import { applyVisualTheme, readVisualTheme, setDarkMode } from "@/lib/visual-theme";
+import { readVisualTheme, setDarkMode } from "@/lib/visual-theme";
 import { createBillingCheckout, createBillingPortal, getBillingStatus } from "@/lib/billing.functions";
 import { PLAN_CATALOG, type PlanId, type EntitlementPlan } from "@/lib/billing";
 
@@ -78,7 +78,7 @@ function SettingsPage() {
     setDark(v);
     setDarkMode(v);
   };
-  const exportData = () => { const data: Record<string, unknown> = {}; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => { try { data[k] = JSON.parse(localStorage.getItem(k) ?? "null"); } catch {} }); const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `lifetracker-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); toast.success("Export téléchargé"); };
+    const exportData = () => { const data: Record<string, unknown> = {}; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => { try { data[k] = JSON.parse(localStorage.getItem(k) ?? "null"); } catch {} }); const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `lifetracker-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); toast.success("Export téléchargé"); };
   const reset = () => { if (!confirm("Réinitialiser TOUTES vos données ?")) return; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k)); toast.success("Données effacées"); setTimeout(() => location.reload(), 600); };
 
   return (
