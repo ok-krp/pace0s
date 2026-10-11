@@ -35,8 +35,8 @@ function isTransientVisionCapacityError(error: unknown) {
     candidate?.cause?.statusCode,
     candidate?.cause?.status,
   ];
-  const status = statusCandidates.find((value): value is number => typeof value === "number") ?? 0;
-  return status === 400 || status === 404 || status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504 || /model.*not found|unsupported.*model|high demand|overloaded|resource.?exhausted|rate.?limit|too many requests|temporarily unavailable|timeout/i.test(message);
+  const status = statusCandidates.find((value): value is number => typeof value === "number" && value > 0) ?? 0;
+  return status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504 || /model.*not found|unsupported.*model|high demand|overloaded|resource.?exhausted|rate.?limit|too many requests|temporarily unavailable|timeout/i.test(message);
 }
 
 async function generateFoodVision(prompt: string, imageDataUrl: string, contentType: string) {
