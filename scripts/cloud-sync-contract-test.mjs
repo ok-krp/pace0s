@@ -160,17 +160,18 @@ assert.doesNotMatch(nativeApp, /Duration\(seconds: 15\), \(_\) => unawaited\(wid
   "native sync must not use unconditional 15-second polling");
 
 
-assert.match(engine, /const TAB_DEVICE_KEY = "pace\\.__sync_tab_id"/,
+assert.ok(engine.includes('const TAB_DEVICE_KEY = "pace.__sync_tab_id";'),
   "Realtime echo suppression must use a distinct origin per browser tab");
-assert.match(engine, /sessionStorage\\.getItem\\(TAB_DEVICE_KEY\\)/,
+assert.ok(engine.includes("sessionStorage.getItem(TAB_DEVICE_KEY)"),
   "browser tabs must not share the same Realtime echo-suppression ID");
-assert.match(engine, /const LEGACY_LOCAL_SYNC_KEYS = new Set<string>\\([\\s\\S]*?pace\\.sport\\.exercises[\\s\\S]*?pace\\.tx[\\s\\S]*?pace\\.assets/,
+assert.ok(engine.includes("const LEGACY_LOCAL_SYNC_KEYS = new Set<string>([") &&
+  engine.includes('"pace.sport.exercises"') && engine.includes('"pace.tx"') && engine.includes('"pace.assets"'),
   "bootstrap must explicitly allowlist known legacy raw keys rather than uploading arbitrary localStorage");
-assert.match(engine, /readLegacyLocalValue\\(key\\)/,
+assert.ok(engine.includes("readLegacyLocalValue(key)"),
   "legacy raw local data must participate in cloud reconciliation");
-assert.match(engine, /if \\(serialize\\(mergedValue\\) !== serialize\\(canonical\\?\\.value\\)\\)/,
+assert.ok(engine.includes("if (serialize(mergedValue) !== serialize(canonical?.value))"),
   "legacy rows and local-only values must be queued through the canonical cloud write path");
-assert.match(engine, /await pull\\(\\);[\\s\\S]*?Bootstrap may enqueue legacy-only state during the pull\\.[\\s\\S]*?await flushQueue\\(\\)/,
+assert.ok(engine.includes("await pull();\n      // Bootstrap may enqueue legacy-only state during the pull.\n      await flushQueue();"),
   "initial reconciliation must flush newly recovered legacy data without waiting for another edit");
 
 console.log("cloud-sync-contract-test: PASS");
