@@ -12,6 +12,7 @@ const bucketMigration = read("supabase/migrations/20260830170000_nutrition_ai_st
 // including SDK error objects that expose statusCode instead of status.
 assert.match(ai, /const PHOTO_AI_MODEL = "google\/gemini-3\.8-flash"/);
 assert.match(ai, /const FALLBACK_AI_MODEL = "google\/gemini-3\.6-flash"/);
+assert.match(ai, /const MAX_PHOTO_BYTES = 8 \* 1024 \* 1024/);
 assert.match(ai, /candidate\?\.statusCode/);
 assert.match(ai, /candidate\?\.response\?\.status/);
 assert.match(ai, /getGeminiModel\(PHOTO_AI_MODEL\)/);
