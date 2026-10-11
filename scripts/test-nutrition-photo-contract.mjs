@@ -28,8 +28,8 @@ assert.match(bucketMigration, /values \('nutrition-ai', 'nutrition-ai', false, 8
 // image download, and cleanup. The test deliberately does not call production AI.
 assert.match(ai, /context\.supabase\.from\("legal_consent"\)/);
 assert.match(ai, /storagePathForUser\(context\.userId, data\.storagePath\)/);
-assert.match(ai, /supabaseAdmin\.storage\.from\(PHOTO_BUCKET\)\.download\(path!\)/);
-assert.match(ai, /finally \{ if \(path\) await supabaseAdmin\.storage\.from\(PHOTO_BUCKET\)\.remove\(\[path\]\)/);
+assert.match(ai, /context\.supabase\.storage\.from\(PHOTO_BUCKET\)\.download\(path!\)/);
+assert.match(ai, /finally \{ if \(path\) await context\.supabase\.storage\.from\(PHOTO_BUCKET\)\.remove\(\[path\]\)/);
 assert.match(shared, /export const AI_MODEL = "google\/gemini-3\.8-flash"/);
 
 console.log("nutrition-photo-contract-test: PASS");
