@@ -23,11 +23,13 @@ export function CloudSyncSettings() {
     ? "Connecte-toi pour activer la synchronisation."
     : !online || status === "offline"
       ? "Hors ligne — modifications conservées localement"
-      : status === "syncing"
-        ? "Synchronisation…"
-        : status === "error"
-          ? "Synchronisation impossible — nouvelle tentative automatique"
-          : "Synchronisation automatique active";
+      : status === "consent_required"
+        ? "Autorisation requise — active la synchronisation cloud dans Confidentialité"
+        : status === "syncing"
+          ? "Synchronisation…"
+          : status === "error"
+            ? "Synchronisation impossible — nouvelle tentative automatique"
+            : "Synchronisation automatique active";
 
   return (
     <div className="rounded-2xl glass-card p-4 space-y-3">
