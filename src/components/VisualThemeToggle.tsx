@@ -1,27 +1,9 @@
 import { useEffect, useState } from "react";
 import { Activity, Sparkles, Layers3 } from "lucide-react";
+import { applyVisualTheme, readVisualTheme, type VisualTheme } from "@/lib/visual-theme";
 
-const VISUAL_THEME_KEY = "pace.visual-theme";
-const DARK_MODE_KEY = "pace.dark";
-
-type VisualTheme = "default" | "signal" | "glass";
 function getVisualTheme(): VisualTheme {
-  if (typeof document === "undefined") return "default";
-  const value = document.documentElement.dataset.visualTheme;
-  return value === "signal" || value === "glass" ? value : "default";
-}
-
-function applyVisualTheme(theme: VisualTheme) {
-  const root = document.documentElement;
-  if (theme === "default") delete root.dataset.visualTheme;
-  else root.dataset.visualTheme = theme;
-  // Signal et Liquid suivent le mode sombre choisi par l'utilisateur.
-  const dark = localStorage.getItem(DARK_MODE_KEY) === "1";
-  root.classList.toggle("dark", dark);
-  localStorage.setItem(VISUAL_THEME_KEY, theme);
-  const themeColor = document.querySelector('meta[name="theme-color"]');
-  themeColor?.setAttribute("content", theme === "glass" ? (dark ? "#070a14" : "#e9e7ee") : theme === "signal" ? dark ? "#000000" : "#f6f7f9" : dark ? "#1f242c" : "#f8fafc");
-  window.dispatchEvent(new CustomEvent("pace.visual-theme.change", { detail: { theme, signal: theme === "signal" } }));
+  return readVisualTheme();
 }
 
 export function VisualThemeToggle({ compact = false }: { compact?: boolean }) {
