@@ -18,6 +18,8 @@ jobs:
         with:
           node-version: 22
       - run: npm install --no-audit --no-fund
+      - run: npm run test:sync
+      - run: npm run test:nutrition-photo
       - run: npm run lint
       # TanStack Router generates src/routeTree.gen.ts during the Vite build.
       # Generate it before TypeScript validates createFileRoute(...).
