@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader } from "@/components/Stat";
 import { getSafeClientErrorMessage } from "@/lib/client-error";
-import { LegalFooterLinks } from "@/components/LegalPage";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -298,7 +297,6 @@ function SettingsPage() {
           </section>
         </TabsContent>
       </Tabs>
-      <LegalFooterLinks className="mt-8 pb-4" />
     </div>
   );
 }
