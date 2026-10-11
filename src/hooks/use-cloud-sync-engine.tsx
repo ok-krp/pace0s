@@ -392,7 +392,7 @@ export function useCloudSyncEngineInternal() {
           applyRemoteAndRemember(key, mergedValue, updatedAt, canonical?.updated_by ?? legacy?.updated_by);
           meta[key] = updatedAt;
           newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
-          if (canonical && serialize(mergedValue) !== serialize(canonical.value)) {
+          if (serialize(mergedValue) !== serialize(canonical?.value)) {
             // Preserve legacy local items alongside the canonical cloud value,
             // then replay them through the normal durable queue/RPC path.
             const recoveryTime = new Date().toISOString();
