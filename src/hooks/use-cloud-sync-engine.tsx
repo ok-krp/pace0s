@@ -14,13 +14,28 @@ const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
 const TAB_DEVICE_KEY = "pace.__sync_tab_id";
 const LEGACY_LOCAL_SYNC_KEYS = new Set<string>([
+  // Durable user data stored as raw pace.* keys by older screens.
+  "pace.sleep",
+  "pace.water",
+  "pace.water.log",
+  "pace.weight",
+  "pace.routine.list",
+  "pace.routine.done",
+  "pace.work.minutes",
+  "pace.work.sessions",
+  "pace.notes.list",
   "pace.sport.exercises",
   "pace.sport.programs",
   "pace.sport.sessions",
+  "pace.sport.active",
   "pace.sport.overload",
   "pace.tx",
   "pace.assets",
-  "pace.routine.list",
+  "pace.courses.items",
+  "pace.recipes.favs",
+  "pace.recipes.custom",
+  "pace.recipes.cats",
+  "pace.recipes.hidden",
 ]);
 const DEVICE_ID = getTabDeviceId();
 const CONFLICTS_KEY = "pace.__sync_conflicts";
@@ -85,6 +100,10 @@ function readDomainRecord(key: string): DomainRecord | null {
 
 function readLegacyLocalValue(key: string): unknown | undefined {
   if (!LEGACY_LOCAL_SYNC_KEYS.has(key)) return undefined;
+  // Domain-backed screens already have a versioned envelope. Only fall back to
+  // the raw key when that envelope is absent, otherwise stale aliases could
+  // resurrect entries that a newer remote mutation intentionally removed.
+  if (readDomainRecord(key)) return undefined;
   try {
     const raw = localStorage.getItem(key);
     return raw === null ? undefined : JSON.parse(raw);
