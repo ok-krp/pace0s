@@ -322,9 +322,25 @@ export function useCloudSyncEngineInternal() {
       if (queued) { recordConflict(row.key, queued.value, row.value, row.updated_at); return; }
       const domain = readDomainRecord(row.key);
       if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) return;
-      applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
+      const localLegacyValue = readLegacyLocalValue(row.key);
+      const mergedValue = localLegacyValue === undefined
+        ? row.value
+        : mergeRecoveredValues(localLegacyValue, row.value);
+      applyRemoteAndRemember(row.key, mergedValue, row.updated_at, row.updated_by);
       markVersion(row.key, row.updated_at);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
+      if (serialize(mergedValue) !== serialize(row.value)) {
+        // A Realtime INSERT can arrive before bootstrap. Merge the explicitly
+        // supported legacy key into the event value before updating local state,
+        // then queue the canonical write so the legacy data is not stranded.
+        const recoveryTime = new Date().toISOString();
+        const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : recoveryTime;
+        queueItem({ key: row.key, value: mergedValue, updatedAt: recoveryTime, mutationId });
+        markVersion(row.key, recoveryTime);
+        setStatus(navigator.onLine ? "syncing" : "offline");
+        void pushItem({ key: row.key, value: mergedValue, updatedAt: recoveryTime, mutationId });
+        return;
+      }
       setStatus("ok");
     };
 
