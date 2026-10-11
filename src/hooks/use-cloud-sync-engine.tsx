@@ -12,8 +12,17 @@ const DOMAIN_OUTBOX_KEY = "pace.domain.outbox";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
-const DEVICE_KEY = "pace.__sync_device_id";
-const DEVICE_ID = getDeviceId();
+const TAB_DEVICE_KEY = "pace.__sync_tab_id";
+const LEGACY_LOCAL_SYNC_KEYS = new Set<string>([
+  "pace.sport.exercises",
+  "pace.sport.programs",
+  "pace.sport.sessions",
+  "pace.sport.overload",
+  "pace.tx",
+  "pace.assets",
+  "pace.routine.list",
+]);
+const DEVICE_ID = getTabDeviceId();
 const CONFLICTS_KEY = "pace.__sync_conflicts";
 
 type SyncMeta = Record<string, string>;
@@ -25,15 +34,15 @@ type QueueItem = { key: string; value: unknown; updatedAt: string; mutationId?: 
 type LegacyQueue = string[] | QueueItem[];
 type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 
-function getDeviceId() {
+function getTabDeviceId() {
   if (typeof window === "undefined") return "server";
   try {
-    const existing = localStorage.getItem(DEVICE_KEY);
+    const existing = sessionStorage.getItem(TAB_DEVICE_KEY);
     if (existing) return existing;
-    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-    localStorage.setItem(DEVICE_KEY, id);
+    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `tab-${Date.now()}-${Math.random()}`;
+    sessionStorage.setItem(TAB_DEVICE_KEY, id);
     return id;
-  } catch { return `${Date.now()}-${Math.random()}`; }
+  } catch { return `tab-${Date.now()}-${Math.random()}`; }
 }
 function isSyncableKey(key: string) { return key.startsWith(PACE_PREFIX) && !key.startsWith(INTERNAL_PREFIX) && key !== DOMAIN_OUTBOX_KEY && !EXCLUDED.has(key); }
 function readQueue(): QueueItem[] {
@@ -72,6 +81,16 @@ function readDomainRecord(key: string): DomainRecord | null {
     const record = JSON.parse(raw) as DomainRecord;
     return record?.version === 1 && typeof record.updatedAt === "string" ? record : null;
   } catch { return null; }
+}
+
+function readLegacyLocalValue(key: string): unknown | undefined {
+  if (!LEGACY_LOCAL_SYNC_KEYS.has(key)) return undefined;
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? undefined : JSON.parse(raw);
+  } catch {
+    return undefined;
+  }
 }
 
 function mergeRecoveredValues(legacy: unknown, current: unknown): unknown {
@@ -330,7 +349,11 @@ export function useCloudSyncEngineInternal() {
         for (const [key, bucket] of grouped) {
           const canonical = bucket.canonical;
           const legacy = bucket.legacy;
-          const mergedValue = legacy ? mergeRecoveredValues(legacy.value, canonical?.value) : canonical?.value;
+          const remoteValue = legacy ? mergeRecoveredValues(legacy.value, canonical?.value) : canonical?.value;
+          const localLegacyValue = readLegacyLocalValue(key);
+          const mergedValue = localLegacyValue === undefined
+            ? remoteValue
+            : mergeRecoveredValues(localLegacyValue, remoteValue);
           const sourceTime = Math.max(Date.parse(canonical?.updated_at ?? "1970-01-01T00:00:00.000Z"), Date.parse(legacy?.updated_at ?? "1970-01-01T00:00:00.000Z"));
           if (!Number.isFinite(sourceTime)) continue;
           const updatedAt = new Date(sourceTime).toISOString();
@@ -369,19 +392,14 @@ export function useCloudSyncEngineInternal() {
           applyRemoteAndRemember(key, mergedValue, updatedAt, canonical?.updated_by ?? legacy?.updated_by);
           meta[key] = updatedAt;
           newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
-          if (legacy && canonical && serialize(mergedValue) !== serialize(canonical.value)) {
+          if (canonical && serialize(mergedValue) !== serialize(canonical.value)) {
+            // Preserve legacy local items alongside the canonical cloud value,
+            // then replay them through the normal durable queue/RPC path.
             const recoveryTime = new Date().toISOString();
-            try {
-              await supabase.rpc("upsert_user_state_if_newer", {
-                p_user_id: user.id,
-                p_key: key,
-                p_value: mergedValue as never,
-                p_updated_at: recoveryTime,
-                p_updated_by: "state_recovery_v4",
-              });
-              meta[key] = recoveryTime;
-              newest = recoveryTime;
-            } catch {}
+            const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : recoveryTime;
+            queueItem({ key, value: mergedValue, updatedAt: recoveryTime, mutationId });
+            meta[key] = recoveryTime;
+            newest = recoveryTime;
           }
         }
         // Bootstrap pre-existing local domain state that has no cloud row yet.
@@ -404,6 +422,18 @@ export function useCloudSyncEngineInternal() {
             newest = newest && Date.parse(newest) > Date.parse(localDomain.updatedAt) ? newest : localDomain.updatedAt;
           }
         } catch {}
+        // Explicitly recover known legacy raw keys; never upload arbitrary
+        // localStorage entries, which also contain device-only preferences.
+        for (const key of LEGACY_LOCAL_SYNC_KEYS) {
+          if (grouped.has(key) || getQueued(key)) continue;
+          const value = readLegacyLocalValue(key);
+          if (value === undefined || isEmptyRecoveredValue(value)) continue;
+          const updatedAt = meta[key] ?? new Date().toISOString();
+          const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : updatedAt;
+          queueItem({ key, value, updatedAt, mutationId });
+          meta[key] = updatedAt;
+          newest = newest && Date.parse(newest) > Date.parse(updatedAt) ? newest : updatedAt;
+        }
         writeMeta(meta);
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (newest) setStatus("ok");
@@ -414,7 +444,10 @@ export function useCloudSyncEngineInternal() {
       if (!allowed()) return;
       pruneEquivalentConflicts();
       if (!navigator.onLine) { setStatus("offline"); return; }
-      await flushQueue(); await pull();
+      await flushQueue();
+      await pull();
+      // Bootstrap may enqueue legacy-only state during the pull.
+      await flushQueue();
       pruneEquivalentConflicts();
     };
 
