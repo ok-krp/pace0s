@@ -187,4 +187,13 @@ assert.ok(engine.includes("recoveryNeeded = true;") &&
   engine.includes("(!realtimeHealthy || recoveryNeeded)"),
   "failed or skipped pulls must be retried by the bounded foreground recovery fallback");
 
+const syncSettings = read("src/components/CloudSyncSettings.tsx");
+const settingsRoute = read("src/routes/settings.tsx");
+assert.ok(engine.includes('"consent_required"') && engine.includes('setStatus("consent_required")'),
+  "cloud sync must explicitly report missing consent rather than appearing idle/active");
+assert.ok(syncSettings.includes('status === "consent_required"') &&
+  settingsRoute.includes('import { CloudSyncSettings } from "@/components/CloudSyncSettings";') &&
+  settingsRoute.includes('<AccordionItem value="cloud-sync">'),
+  "settings must expose cloud-sync state and the consent requirement to the user");
+
 console.log("cloud-sync-contract-test: PASS");
