@@ -6,6 +6,7 @@ const read = (file) => fs.readFileSync(path.join(process.cwd(), file), "utf8");
 const route = read("src/routes/nutrition.tsx");
 const ai = read("src/lib/nutrition-ai.functions.ts");
 const shared = read("src/lib/nutrition-ai.shared.ts");
+const nutritionEngine = read("src/lib/nutrition-engine.ts");
 const bucketMigration = read("supabase/migrations/20260830170000_nutrition_ai_storage.sql");
 
 // Model IDs and fallback classification must stay on supported Google models,
@@ -30,6 +31,11 @@ assert.match(bucketMigration, /values \('nutrition-ai', 'nutrition-ai', false, 8
 assert.match(ai, /context\.supabase\.from\("legal_consent"\)/);
 assert.match(ai, /storagePathForUser\(context\.userId, data\.storagePath\)/);
 assert.match(ai, /context\.supabase\.storage\.from\(PHOTO_BUCKET\)\.download\(path!\)/);
+assert.doesNotMatch(ai, /supabaseAdmin/);
+assert.doesNotMatch(nutritionEngine, /supabaseAdmin/);
+assert.match(nutritionEngine, /findDishReference\(client: NutritionReferenceClient/);
+assert.match(nutritionEngine, /dishTable\(client\)\.select/);
+assert.match(nutritionEngine, /nutritionTable\(client\)\.select/);
 assert.match(ai, /finally \{ if \(path\) await context\.supabase\.storage\.from\(PHOTO_BUCKET\)\.remove\(\[path\]\)/);
 assert.match(shared, /export const AI_MODEL = "google\/gemini-3\.8-flash"/);
 
