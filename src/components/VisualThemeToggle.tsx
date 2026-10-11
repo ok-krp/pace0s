@@ -24,9 +24,9 @@ export function VisualThemeToggle({ compact = false }: { compact?: boolean }) {
     <button
       type="button"
       onClick={toggle}
-      aria-label={`Thème actuel : ${theme === "default" ? "Pace" : theme === "signal" ? "Signal" : "Glass"}. Cliquer pour changer`}
+      aria-label={`Thème actuel : ${theme === "default" ? "Pace" : theme === "signal" ? "Signal" : "Liquid"}. Cliquer pour changer`}
       aria-pressed={theme !== "default"}
-      title={`Thème : ${theme === "default" ? "Pace" : theme === "signal" ? "Signal" : "Glass"}`}
+      title={`Thème : ${theme === "default" ? "Pace" : theme === "signal" ? "Signal" : "Liquid"}`}
       className={[
         "signal-theme-control inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium transition-[background,border-color,color,box-shadow] duration-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
@@ -42,7 +42,7 @@ export function VisualThemeToggle({ compact = false }: { compact?: boolean }) {
       >
         {theme === "signal" ? <Activity className="size-3.5" /> : theme === "glass" ? <Layers3 className="size-3.5" /> : <Sparkles className="size-3.5" />}
       </span>
-      {!compact && <span>{theme === "signal" ? "Signal" : theme === "glass" ? "Glass" : "Style"}</span>}
+      {!compact && <span>{theme === "signal" ? "Signal" : theme === "glass" ? "Liquid" : "Style"}</span>}
     </button>
   );
 }
