@@ -402,6 +402,7 @@ export function useCloudSyncEngineInternal() {
           const updatedAt = new Date(sourceTime).toISOString();
           const localDomain = readDomainRecord(key);
           const localIsEmpty = localDomain ? isEmptyRecoveredValue(localDomain.value) : true;
+          const localDomainTime = Date.parse(localDomain?.updatedAt ?? "1970-01-01T00:00:00.000Z");
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           const queued = getQueued(key);
           if (queued) {
@@ -420,7 +421,10 @@ export function useCloudSyncEngineInternal() {
             recordConflict(key, queued.value, mergedValue, updatedAt);
             continue;
           }
-          if (localDomain && !localIsEmpty && localTime > sourceTime) {
+          if (localDomain && !localIsEmpty && Number.isFinite(localDomainTime) && localDomainTime > sourceTime) {
+            // Sync metadata can be absent after an older app version or a
+            // partial local restore. Compare the domain envelope timestamp too,
+            // or a stale cloud row can overwrite a newer local edit.
             queueItem({
               key,
               value: localDomain.value,
