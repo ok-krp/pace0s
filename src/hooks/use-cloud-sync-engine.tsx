@@ -432,7 +432,7 @@ export function useCloudSyncEngineInternal() {
               mutationId: localDomain.mutationId,
             });
             meta[key] = localDomain.updatedAt;
-            newest = newest && Date.parse(newest) > localTime ? newest : localDomain.updatedAt;
+            newest = newest && Date.parse(newest) > localDomainTime ? newest : localDomain.updatedAt;
             continue;
           }
           if (sourceTime <= localTime && !localIsEmpty) continue;
