@@ -6,6 +6,7 @@ on:
       - "src/**"
       - "supabase/**"
       - "scripts/test-sync-policy.mjs"
+      - "scripts/test-reminder-consent.mjs"
       - "package.json"
       - ".github/workflows/sync-audit.yml"
 
@@ -19,6 +20,7 @@ jobs:
           node-version: 22
       - run: npm install --no-audit --no-fund
       - run: node scripts/test-sync-policy.mjs
+      - run: npm run test:reminder-consent
       - run: npm run test:health-e2ee-realtime
       # TanStack Router generates src/routeTree.gen.ts during the Vite build.
       # Run the build before typecheck so newly added file routes are included.
