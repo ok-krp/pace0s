@@ -25,6 +25,7 @@ import { FoodAnalysisEditor } from "@/components/FoodAnalysisEditor";
 import { NutritionDailyAiChat } from "@/components/NutritionDailyAiChat";
 import { toast } from "sonner";
 import { isLegalCategoryAllowed } from "@/lib/legal";
+import { openConsentSheet } from "@/components/LegalConsentGate";
 import { supabase } from "@/integrations/supabase/client";
 
 const searchSchema = z.object({ tab: z.enum(["nutrition", "recipes", "water"]).optional() });
@@ -96,6 +97,7 @@ function NutritionPage() {
       if (res.error || !res.result) {
         URL.revokeObjectURL(previewUrl);
         toast.error(res.error ?? "Analyse échouée");
+        if (res.error === "Consentement Analyse IA requis") openConsentSheet();
         return;
       }
       const r = res.result as FoodAnalysis;
