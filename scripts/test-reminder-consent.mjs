@@ -15,6 +15,9 @@ assert.match(helper, /\.eq\("eula_version", LEGAL_VERSIONS\.eula\)/, "consent lo
 assert.match(helper, /\.eq\("privacy_version", LEGAL_VERSIONS\.privacy\)/, "consent lookup must use the current privacy version");
 assert.match(helper, /\.notifications === true/, "notifications must be explicitly opted in");
 assert.match(helper, /if \(error\)[\s\S]*?throw new Error/, "consent lookup failures must fail closed");
+assert.match(helper, /cache\\.get\\(userId\\)/, "consent lookups must be reused within a webhook request");
+assert.match(helper, /cache\\.set\\(userId, result\\)/, "consent lookup results must be cached per recipient");
+assert.match(source, /const notificationConsentCache = new Map<string, Promise<boolean>>\\(\\)/, "the consent cache must be request-scoped");
 
 const loopStart = source.indexOf("for (const row of (rows ?? []) as ReminderRow[])");
 const consentCall = source.indexOf("await hasNotificationConsent(row.user_id, notificationConsentCache)", loopStart);
