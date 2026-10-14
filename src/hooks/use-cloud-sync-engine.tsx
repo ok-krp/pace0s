@@ -485,6 +485,7 @@ export function useCloudSyncEngineInternal() {
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (newest) setStatus("ok");
         recoveryNeeded = false;
+        lastSuccessfulPullAt = Date.now();
         return true;
       } catch {
         recoveryNeeded = true;
@@ -496,8 +497,20 @@ export function useCloudSyncEngineInternal() {
     // Realtime subscription and initial bootstrap can request a pull at nearly
     // the same time. Coalesce them into one REST read to protect Supabase egress.
     let pullInFlight: Promise<boolean> | null = null;
+    let lastSuccessfulPullAt = 0;
+    let hasSubscribedBefore = false;
+    const PULL_COOLDOWN_MS = 5 * 60_000;
     const pull = async (): Promise<boolean> => {
       if (pullInFlight) return pullInFlight;
+      // Realtime delivers changes while healthy. Avoid re-downloading every
+      // user_state JSON value on repeated visibility/pageshow events; reconnects
+      // and failed pulls set recoveryNeeded and bypass this bounded cooldown.
+      if (
+        realtimeHealthy &&
+        !recoveryNeeded &&
+        lastSuccessfulPullAt > 0 &&
+        Date.now() - lastSuccessfulPullAt < PULL_COOLDOWN_MS
+      ) return true;
       const operation = pullOnce();
       pullInFlight = operation;
       try {
@@ -533,7 +546,11 @@ export function useCloudSyncEngineInternal() {
     void realtimeChannel.subscribe((subscriptionStatus) => {
       if (subscriptionStatus === "SUBSCRIBED") {
         realtimeHealthy = true;
-        recoveryNeeded = true;
+        // The first subscription follows initial bootstrap, so don't force a
+        // duplicate full pull if that bootstrap just succeeded. Every reconnect
+        // still forces reconciliation to recover events missed while offline.
+        if (hasSubscribedBefore) recoveryNeeded = true;
+        hasSubscribedBefore = true;
         void pull();
       } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
         realtimeHealthy = false;
