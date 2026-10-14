@@ -147,5 +147,5 @@ export function usePush() {
     setSubscribed(false);
   }, [removeSubscription]);
 
-  return { ready, subscribed, permission, error, enable, disable };
+  return { ready, subscribed, permission, error, needsConsent: !consentAllowed, enable, disable };
 }

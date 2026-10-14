@@ -3,6 +3,8 @@ import { Moon, Sun, Download, Trash2, Bell, Send, Brain, Smartphone, CreditCard,
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader } from "@/components/Stat";
+import { getSafeClientErrorMessage } from "@/lib/client-error";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -16,6 +18,7 @@ import { NutritionColsSettings } from "@/components/NutritionColsSettings";
 import { FinanceLockSettings } from "@/components/FinanceLockSettings";
 import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
+import { CloudSyncSettings } from "@/components/CloudSyncSettings";
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
 import { AiSettings } from "@/components/AiSettings";
@@ -26,7 +29,7 @@ import { VisualThemeToggle } from "@/components/VisualThemeToggle";
 import { createBillingCheckout, createBillingPortal, getBillingStatus } from "@/lib/billing.functions";
 import { PLAN_CATALOG, type PlanId, type EntitlementPlan } from "@/lib/billing";
 
-const NATIVE_ANDROID_APK_URL = "https://github.com/ok-krp/pace0s/releases/download/android-application-latest/app-debug.apk";
+const NATIVE_ANDROID_APK_URL = "https://github.com/ok-krp/pace0s/releases/download/android-application-latest/Pace-Android.apk";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({ meta: [{ title: "Paramètres — Pace" }, { name: "description", content: "Personnalisez Pace, la confidentialité et les assistants IA." }, { property: "og:title", content: "Paramètres — Pace" }, { property: "og:description", content: "Personnalisez Pace, la confidentialité et les assistants IA." }, { property: "og:type", content: "website" }, { name: "twitter:card", content: "summary" }] }),
@@ -34,7 +37,7 @@ export const Route = createFileRoute("/settings")({
 });
 
 function setThemeColor(dark: boolean, signal = false, glass = false) {
-  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", glass ? "#070b12" : signal ? (dark ? "#090b0e" : "#f6f7f9") : dark ? "#1f242c" : "#f8fafc");
+  document.querySelector('meta[name="theme-color"]')?.setAttribute("content", glass ? (dark ? "#070a14" : "#e9e7ee") : signal ? (dark ? "#000000" : "#f6f7f9") : dark ? "#1f242c" : "#f8fafc");
 }
 
 function SettingsPage() {
@@ -46,6 +49,7 @@ function SettingsPage() {
   const [billing, setBilling] = useState<{ plan: EntitlementPlan; status: string; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; stripeConfigured: boolean; trialEndsAt: string | null; trialActive: boolean } | null>(null);
   const [billingLoading, setBillingLoading] = useState(true);
   const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const getBilling = useServerFn(getBillingStatus);
   const startCheckout = useServerFn(createBillingCheckout);
   const openPortal = useServerFn(createBillingPortal);
@@ -59,15 +63,15 @@ function SettingsPage() {
     const stored = localStorage.getItem("pace.dark") === "1";
     setSignal(activeSignal);
     setGlass(activeGlass);
-    setDark(activeGlass || stored);
+    setDark(stored);
     if (activeSignal || activeGlass) {
       document.documentElement.dataset.visualTheme = activeSignal ? "signal" : "glass";
-      document.documentElement.classList.toggle("dark", activeGlass || stored);
+      document.documentElement.classList.toggle("dark", stored);
     } else {
       delete document.documentElement.dataset.visualTheme;
       document.documentElement.classList.toggle("dark", stored);
     }
-    setThemeColor(activeGlass || stored, activeSignal, activeGlass);
+    setThemeColor(stored, activeSignal, activeGlass);
 
     const handleVisualThemeChange = (event: Event) => {
       const theme = (event as CustomEvent<{ theme?: string; signal?: boolean }>).detail?.theme;
@@ -75,7 +79,7 @@ function SettingsPage() {
       const nextGlass = theme === "glass";
       setSignal(nextSignal);
       setGlass(nextGlass);
-      setDark(nextGlass || localStorage.getItem("pace.dark") === "1");
+      setDark(localStorage.getItem("pace.dark") === "1");
     };
     window.addEventListener("pace.visual-theme.change", handleVisualThemeChange);
     return () => window.removeEventListener("pace.visual-theme.change", handleVisualThemeChange);
@@ -109,7 +113,7 @@ function SettingsPage() {
                   <Row icon={<Sparkles className="size-4" />} label="Style visuel" desc="Cycle entre les styles Pace, Signal et Premium Glass">
                     <VisualThemeToggle compact={false} />
                   </Row>
-                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} disabled={glass} /></Row>
+                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark}  /></Row>
                   <Row icon={<Smartphone className="size-4" />} label="Application Android" desc="Télécharger la version native de PaceOS"><Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger</Button></Row>
                   <WallpaperSettings />
                 </AccordionContent>
@@ -121,7 +125,7 @@ function SettingsPage() {
               <AccordionItem value="notifications">
                 <AccordionTrigger>Notifications</AccordionTrigger>
                 <AccordionContent>
-                  <Row icon={<Bell className="size-4" />} label="Notifications push" desc={push.error ? push.error : push.permission === "denied" ? "Bloquées dans le navigateur — autorisez-les depuis l'icône à gauche de l'URL, puis rechargez la page" : push.permission === "unsupported" ? "Non supporté sur ce navigateur" : !push.ready ? "Initialisation…" : "Rappels hydratation, routine, sommeil"}><Switch checked={push.subscribed} onCheckedChange={handleTogglePush} disabled={!!push.error || !push.ready || push.permission === "denied" || push.permission === "unsupported"} /></Row>
+                  <Row icon={<Bell className="size-4" />} label="Notifications push" desc={push.needsConsent && push.permission !== "denied" && push.permission !== "unsupported" ? "Activez pour autoriser les rappels (consentement « Notifications »)" : push.error ? push.error : push.permission === "denied" ? "Bloquées dans le navigateur — autorisez-les depuis l'icône à gauche de l'URL, puis rechargez la page" : push.permission === "unsupported" ? "Non supporté sur ce navigateur" : !push.ready ? "Initialisation…" : "Rappels hydratation, routine, sommeil"}><Switch checked={push.subscribed} onCheckedChange={handleTogglePush} disabled={push.permission === "denied" || push.permission === "unsupported" || (!push.needsConsent && (!!push.error || !push.ready))} /></Row>
                   <Row icon={<Send className="size-4" />} label="Notification de test" desc="Vérifiez que les notifications fonctionnent sur cet appareil"><Button variant="secondary" size="sm" onClick={handleSendTest} disabled={sending || !push.subscribed} className="rounded-xl">{sending ? "Envoi…" : "Tester"}</Button></Row>
                   <div className="settings-subsection"><div className="settings-subtitle">Rappels & automatisations</div><RemindersSection /><ReminderDebugSection /></div>
                 </AccordionContent>
@@ -142,6 +146,7 @@ function SettingsPage() {
               <AccordionItem value="privacy">
                 <AccordionTrigger>Données & confidentialité</AccordionTrigger>
                 <AccordionContent>
+                  <CloudSyncSettings />
                   <PrivacyDataSection />
                   <Row icon={<Download className="size-4" />} label="Exporter les préférences locales" desc="JSON des préférences stockées sur cet appareil"><Button variant="secondary" size="sm" onClick={exportData} className="rounded-xl">Exporter</Button></Row>
                   <Row icon={<Trash2 className="size-4" />} label="Réinitialiser cet appareil" desc="Efface uniquement les données locales"><Button variant="destructive" size="sm" onClick={reset} className="rounded-xl">Effacer</Button></Row>
@@ -207,14 +212,19 @@ function SettingsPage() {
           </div>
           */}
 
-          <section className="min-h-[calc(100vh-13rem)] bg-[#050507] text-white rounded-[28px] border border-white/10 p-4 sm:p-8 overflow-hidden">
+          <section className="pace-dark-surface min-h-[calc(100vh-13rem)] bg-[#050507] text-white rounded-[28px] border border-white/10 p-4 sm:p-8 overflow-hidden">
             <div className="mx-auto max-w-6xl">
               <div className="flex items-center justify-between gap-4 rounded-full border border-white/10 bg-[#121215]/80 px-4 py-2.5 backdrop-blur-xl">
                 <div className="flex items-center gap-3 min-w-0">
                   <CreditCard className="size-4 shrink-0 text-white/70" />
                   <span className="text-sm font-medium tracking-tight truncate">PaceOS</span>
                 </div>
-                {billing?.cancelAtPeriodEnd && <span className="rounded-full border border-amber-400/20 px-3 py-1 text-[10px] uppercase tracking-wider text-amber-200/70">Annulation en fin de période</span>}
+                <div className="flex items-center gap-2 shrink-0">
+                  {billing?.cancelAtPeriodEnd && <span className="rounded-full border border-amber-400/20 px-3 py-1 text-[10px] uppercase tracking-wider text-amber-200/70">Annulation en fin de période</span>}
+                  {billing?.plan && billing.plan in PLAN_CATALOG && (
+                    <Button type="button" size="sm" variant="outline" className="rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10" onClick={async () => { try { const res = await openPortal({}); window.location.href = res.url; } catch (error) { toast.error(getSafeClientErrorMessage(error, "Impossible d’ouvrir la gestion de l’abonnement.")); } }}>Gérer / résilier mon abonnement</Button>
+                  )}
+                </div>
               </div>
 
               <div className="relative py-14 sm:py-20 text-center">
@@ -228,11 +238,20 @@ function SettingsPage() {
                 </div>
               </div>
 
+              {!(billing?.plan && billing.plan in PLAN_CATALOG) && (
+                <div className="mb-6 flex items-start gap-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-left">
+                  <Checkbox id="accept-terms" checked={acceptedTerms} onCheckedChange={(v) => setAcceptedTerms(v === true)} className="mt-0.5 border-white/40" aria-describedby="accept-terms-desc" />
+                  <label htmlFor="accept-terms" id="accept-terms-desc" className="text-xs leading-relaxed text-white/70 cursor-pointer">
+                    J’ai lu et j’accepte les <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 text-white">Conditions générales d’utilisation et de vente</a> et la <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 text-white">Politique de confidentialité</a>. Je demande l’exécution immédiate du service et je reconnais que, une fois le service pleinement exécuté, je perds mon droit de rétractation ; en cas de rétractation dans les 14 jours, je paierai un montant proportionnel au service déjà fourni.
+                  </label>
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
                 {(Object.entries(PLAN_CATALOG) as Array<[PlanId, typeof PLAN_CATALOG[PlanId]]>).map(([plan, details]) => {
                   const isPro = plan === "pro";
                   const current = billing?.plan === plan;
-                  const disabled = !billing?.stripeConfigured || current;
+                  const subscribed = Boolean(billing?.plan && billing.plan in PLAN_CATALOG);
+                  const disabled = !billing?.stripeConfigured || current || (!subscribed && !acceptedTerms);
                   const price = billingInterval === "monthly" ? details.monthly.toFixed(2).replace(".", ",") : details.annual.toFixed(0);
                   const period = billingInterval === "monthly" ? "/ mois" : "/ an";
                   return (
@@ -254,12 +273,13 @@ function SettingsPage() {
                       </ul>
                       <Button className={`mt-7 w-full rounded-2xl border border-white/20 ${isPro ? "bg-white text-[#050507]" : "bg-white/5 text-white"}`} disabled={disabled} onClick={async () => {
                         try {
-                          const res = await startCheckout({ data: { plan: plan as "plus" | "pro" | "coach", interval: billingInterval } });
+                          // Déjà abonné : changement de plan via le portail (évite un double abonnement).
+                          const res = subscribed ? await openPortal({}) : await startCheckout({ data: { plan: plan as "plus" | "pro" | "coach", interval: billingInterval } });
                           window.location.href = res.url;
                         } catch (error) {
-                          toast.error((error as Error).message);
+                          toast.error(getSafeClientErrorMessage(error, "Le paiement n’a pas pu être lancé. Réessayez."));
                         }
-                      }}>{current ? "Plan actuel" : !billing?.stripeConfigured ? "Paiement à configurer" : "S’abonner"}</Button>
+                      }}>{current ? "Plan actuel" : !billing?.stripeConfigured ? "Paiement indisponible" : subscribed ? "Changer de plan" : !acceptedTerms ? "Accepter les CGV pour continuer" : "S’abonner"}</Button>
                     </section>
                   );
                 })}
@@ -271,7 +291,7 @@ function SettingsPage() {
                   <button type="button" aria-pressed={billingInterval === "annual"} onClick={() => setBillingInterval("annual")} className={`rounded-full px-4 py-2 text-xs font-medium ${billingInterval === "annual" ? "bg-white text-[#050507]" : "text-white/55"}`}>Annuel</button>
                 </div>
                 <div className="text-xs text-white/45">Facturation annuelle — Essential 99 €, Pro 199 €, Ultimate 299 € / an</div>
-                <div className="text-[11px] text-white/35">Prix affichés hors TVA éventuelle. Aucun plan gratuit ni essai gratuit n’est proposé.</div>
+                <div className="text-[11px] text-white/45">Prix en euros TTC. Abonnement à reconduction automatique, résiliable à tout moment depuis cette page (effet à la fin de la période payée). Aucun plan gratuit ni essai gratuit n’est proposé.</div>
               </div>
             </div>
           </section>
@@ -296,5 +316,5 @@ function PlanCard({ plan, name, price, annual, features, highlighted = false, cu
 */
 
 function Row({ icon, label, desc, children }: { icon: React.ReactNode; label: string; desc: string; children: React.ReactNode }) {
-  return <div className="settings-row flex items-center gap-3 px-2 py-3"><div className="size-8 shrink-0 grid place-items-center text-muted-foreground">{icon}</div><div className="flex-1 min-w-0"><div className="font-medium text-sm text-white drop-shadow-sm">{label}</div><div className="text-xs text-muted-foreground leading-relaxed">{desc}</div></div>{children}</div>;
+  return <div className="settings-row flex items-center gap-3 px-2 py-3"><div className="size-8 shrink-0 grid place-items-center text-muted-foreground">{icon}</div><div className="flex-1 min-w-0"><div className="font-medium text-sm text-foreground">{label}</div><div className="text-xs text-muted-foreground leading-relaxed">{desc}</div></div>{children}</div>;
 }
