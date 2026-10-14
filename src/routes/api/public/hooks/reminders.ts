@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { timingSafeEqual } from "node:crypto";
+import { LEGAL_VERSIONS } from "@/lib/legal";
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a);
@@ -60,6 +61,29 @@ function withinWindow(target: string | null, hh: number, mm: number): boolean {
   const tgtMin = th * 60 + tm;
   const diff = nowMin - tgtMin;
   return diff >= 0 && diff < 15; // 15-min slot starting at target
+}
+
+async function hasNotificationConsent(userId: string, cache: Map<string, Promise<boolean>>): Promise<boolean> {
+  let result = cache.get(userId);
+  if (!result) {
+    result = (async () => {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data, error } = await supabaseAdmin
+        .from("legal_consent")
+        .select("opts")
+        .eq("user_id", userId)
+        .eq("eula_version", LEGAL_VERSIONS.eula)
+        .eq("privacy_version", LEGAL_VERSIONS.privacy)
+        .maybeSingle();
+      if (error) {
+        console.error("notification consent lookup failed", error);
+        throw new Error("Impossible de vérifier le consentement aux notifications.");
+      }
+      return (data?.opts as { notifications?: boolean } | null)?.notifications === true;
+    })();
+    cache.set(userId, result);
+  }
+  return result;
 }
 
 async function alreadySent(userId: string, type: string, hours: number): Promise<boolean> {
@@ -238,6 +262,7 @@ export const Route = createFileRoute("/api/public/hooks/reminders")({
 
         let sent = 0;
         let skipped = 0;
+        const notificationConsentCache = new Map<string, Promise<boolean>>();
         for (const row of (rows ?? []) as ReminderRow[]) {
           try {
             const tz = row.timezone || "Europe/Paris";
@@ -247,6 +272,19 @@ export const Route = createFileRoute("/api/public/hooks/reminders")({
             if (!withinWindow(target, hh, mm)) {
               skipped++;
               await logDebug({ user_id: row.user_id, type: row.type, status: "skipped", trigger, target_segment: segment, reason: `Hors fenêtre (cible ${target ?? "—"}, local ${String(hh).padStart(2,"0")}:${String(mm).padStart(2,"0")})` });
+              continue;
+            }
+            const consentAllowed = await hasNotificationConsent(row.user_id, notificationConsentCache);
+            if (!consentAllowed) {
+              skipped++;
+              await logDebug({
+                user_id: row.user_id,
+                type: row.type,
+                status: "skipped",
+                trigger,
+                target_segment: segment,
+                reason: "Consentement Notifications absent ou révoqué",
+              });
               continue;
             }
             if (await alreadySent(row.user_id, row.type, ANTI_DUP_HOURS[row.type])) {
