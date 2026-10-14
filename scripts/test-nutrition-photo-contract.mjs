@@ -34,6 +34,7 @@ assert.match(ai, /context\.supabase\.from\("legal_consent"\)/);
 const photoHandler = ai.slice(ai.indexOf("export const analyzeFoodPhoto"), ai.indexOf("export const nutritionAdvice"));
 assert.match(photoHandler, /const path = data\.storagePath[\s\S]*?try \{\s*\/\/ Keep consent checks inside the cleanup scope[\s\S]*?const \{ data: consent,[\s\S]*?Consentement Analyse IA requis/);
 assert.match(route, /if \(res\.error \|\| !res\.result\) \{\s*URL\.revokeObjectURL\(previewUrl\);[\s\S]*?toast\.error/);
+assert.match(route, /res\.error === "Consentement Analyse IA requis"\) openConsentSheet\(\)/, "stale server-side consent must reopen the consent sheet instead of silently failing");
 assert.match(ai, /storagePathForUser\(context\.userId, data\.storagePath\)/);
 assert.match(ai, /context\.supabase\.storage\.from\(PHOTO_BUCKET\)\.download\(path!\)/);
 assert.doesNotMatch(ai, /supabaseAdmin/);
