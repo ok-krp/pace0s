@@ -93,7 +93,11 @@ function NutritionPage() {
       });
       if (uploadError) throw new Error(`Envoi de la photo impossible : ${uploadError.message}`);
       const res = await analyzePhoto({ data: { storagePath } });
-      if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
+      if (res.error || !res.result) {
+        URL.revokeObjectURL(previewUrl);
+        toast.error(res.error ?? "Analyse échouée");
+        return;
+      }
       const r = res.result as FoodAnalysis;
       setPending({ kind: "photo", photo: previewUrl, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner" });
       storagePath = null;
