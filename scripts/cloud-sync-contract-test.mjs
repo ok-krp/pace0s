@@ -32,6 +32,7 @@ assert.match(engine, /lastRemoteValues/);
 
 assert.match(engine, /Object\.keys\(object\)\.sort\(\)/, "sync comparisons must be key-order independent");
 assert.match(engine, /object\.version === 1.*object\.mutationId === "string"/s, "sync comparisons must unwrap domain envelopes");
+assert.match(engine, /const localDomainTime = Date\.parse\(localDomain\?\.updatedAt \?\? "1970-01-01T00:00:00\.000Z"\);[\s\S]*?localDomainTime > sourceTime/, "bootstrap must preserve newer domain data when sync metadata is missing");
 assert.match(engine, /pruneEquivalentConflicts/);
 
 // Rapid mutations are represented by a value + timestamp and coalesced per key.
