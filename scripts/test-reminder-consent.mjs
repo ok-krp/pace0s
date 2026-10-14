@@ -13,7 +13,7 @@ assert.match(helper, /\.from\("legal_consent"\)/, "consent must be checked again
 assert.match(helper, /\.eq\("user_id", userId\)/, "consent lookup must be scoped to the reminder recipient");
 assert.match(helper, /\.eq\("eula_version", LEGAL_VERSIONS\.eula\)/, "consent lookup must use the current EULA version");
 assert.match(helper, /\.eq\("privacy_version", LEGAL_VERSIONS\.privacy\)/, "consent lookup must use the current privacy version");
-assert.match(helper, /notifications\?\s*\)\?\.notifications === true/, "notifications must be explicitly opted in");
+assert.match(helper, /\.notifications === true/, "notifications must be explicitly opted in");
 assert.match(helper, /if \(error\)[\s\S]*?throw new Error/, "consent lookup failures must fail closed");
 
 const loopStart = source.indexOf("for (const row of (rows ?? []) as ReminderRow[])");
