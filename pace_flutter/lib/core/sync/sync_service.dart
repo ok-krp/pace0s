@@ -20,12 +20,15 @@ class SyncService {
   bool _syncRequestedWhileRunning = false;
   bool _realtimeHealthy = false;
   bool _realtimeNeedsPull = false;
+  // Keep failed writes queued and retry them on the bounded recovery cadence,
+  // even when Realtime itself remains healthy.
+  bool _pendingRetryNeeded = false;
   String? _deviceId;
   RealtimeChannel? _realtimeChannel;
   String? _realtimeUserId;
 
   Future<void> recoverIfNeeded() async {
-    if (_realtimeHealthy && !_realtimeNeedsPull) return;
+    if (_realtimeHealthy && !_realtimeNeedsPull && !_pendingRetryNeeded) return;
     await syncNow();
   }
 
@@ -204,6 +207,7 @@ class SyncService {
   }
 
   Future<void> _pushPending() async {
+    _pendingRetryNeeded = false;
     for (final operation in List<Map<String, dynamic>>.from(
       localStore.pendingOperations(),
     )) {
@@ -220,18 +224,23 @@ class SyncService {
           continue;
         }
 
-        // A newer server value won. Apply it locally before acknowledging the
-        // stale mutation so it can never be retried over the newer state.
-        if (result.remoteValue != null && result.remoteUpdatedAt != null) {
-          await localStore.applyRemote(
-            operation['key'] as String,
-            result.remoteValue,
-            result.remoteUpdatedAt!,
-          );
+        // A rejected write is only safe to acknowledge after a canonical
+        // server row is confirmed. If that row is temporarily missing (for
+        // example during a concurrent delete/recreate), retain the local
+        // operation and retry it on the bounded recovery cadence.
+        if (result.remoteUpdatedAt == null) {
+          _pendingRetryNeeded = true;
+          continue;
         }
+        await localStore.applyRemote(
+          operation['key'] as String,
+          result.remoteValue,
+          result.remoteUpdatedAt!,
+        );
         await localStore.acknowledgeOperation(operation);
       } catch (_) {
-        // Preserve the operation for the next reconnect/retry.
+        // Preserve the operation for the next bounded recovery retry.
+        _pendingRetryNeeded = true;
         break;
       }
     }
