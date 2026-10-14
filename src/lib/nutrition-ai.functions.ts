@@ -59,11 +59,13 @@ async function generateFoodVision(prompt: string, imageDataUrl: string, contentT
 function storagePathForUser(userId: string, path: string) { const normalized = path.replace(/^\/+/, ""); if (!normalized || normalized.includes("..") || !normalized.startsWith(`${userId}/`)) throw new Error("Référence image invalide."); return normalized; }
 
 export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((d: { storagePath?: string; vision?: unknown; goal?: string; hint?: string }) => z.object({ storagePath: z.string().min(3).max(500).optional(), vision: visionSchema.optional(), goal: z.string().max(300).optional(), hint: z.string().max(300).optional() }).refine((value) => Boolean(value.storagePath || value.vision), "Analyse photo manquante.").parse(d)).handler(async ({ data, context }) => {
-  const { data: consent, error: consentError } = await context.supabase.from("legal_consent").select("opts").eq("user_id", context.userId).eq("eula_version", LEGAL_VERSIONS.eula).eq("privacy_version", LEGAL_VERSIONS.privacy).maybeSingle();
-  if (consentError) throw new Error(consentError.message);
-  if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) return { error: "Consentement Analyse IA requis", result: null };
   const path = data.storagePath ? storagePathForUser(context.userId, data.storagePath) : null;
   try {
+    // Keep consent checks inside the cleanup scope: when server-side consent
+    // is stale or missing, the just-uploaded private image must still be removed.
+    const { data: consent, error: consentError } = await context.supabase.from("legal_consent").select("opts").eq("user_id", context.userId).eq("eula_version", LEGAL_VERSIONS.eula).eq("privacy_version", LEGAL_VERSIONS.privacy).maybeSingle();
+    if (consentError) throw new Error(consentError.message);
+    if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) return { error: "Consentement Analyse IA requis", result: null };
     let parsed: z.infer<typeof visionSchema>;
     if (data.vision) {
       parsed = visionSchema.parse(data.vision);
