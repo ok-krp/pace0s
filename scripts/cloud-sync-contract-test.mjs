@@ -6,6 +6,7 @@ const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
+const flutterSync = read("pace_flutter/lib/core/sync/sync_service.dart");
 
 assert.match(engine, /setInterval\s*\(.*60(?:000|_000)/s, "sync engine must reconcile periodically");
 assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
@@ -13,6 +14,9 @@ assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconc
 assert.equal(/setInterval\s*\(/.test(storage), false, "storage must not poll for local changes");
 assert.match(storage, /pace\.local\.write/);
 assert.match(engine, /onLocalWrite\(/);
+assert.match(flutterSync, /if \(result\.remoteUpdatedAt == null\) \{[\s\S]*?_pendingRetryNeeded = true;[\s\S]*?continue;/, "Flutter sync must retain a rejected mutation when no canonical server row can be read");
+assert.match(flutterSync, /if \(_realtimeHealthy && !_realtimeNeedsPull && !_pendingRetryNeeded\) return;/, "failed Flutter writes must retry on bounded recovery even if Realtime is healthy");
+assert.match(flutterSync, /catch \(_\) \{\s*\/\/ Preserve the operation for the next bounded recovery retry\.\s*_pendingRetryNeeded = true;/, "failed Flutter writes must remain queued for recovery");
 assert.match(engine, /postgres_changes/);
 assert.equal((engine.match(/realtimeChannel\.subscribe\(/g) ?? []).length, 1, "Realtime channel must only be subscribed during initial channel setup");
 assert.equal(/location\.reload\s*\(/.test(engine), false, "sync must never reload the page");
