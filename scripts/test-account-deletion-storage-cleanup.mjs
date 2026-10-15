@@ -46,5 +46,8 @@ assert.match(claimMigration, /pg_advisory_xact_lock/);
 assert.match(claimMigration, /status in \('pending', 'processing'\)/);
 assert.match(claimMigration, /grant execute on function public\.claim_account_deletion_request\(uuid\) to service_role/i);
 assert.match(deletionHandler, /claimDeletionRequest\(userId, supabaseAdmin\)/);
+assert.match(deletionHandler, /programsError\) throw new Error/);
+assert.match(deletionHandler, /sessionsError\) throw new Error/);
+assert.match(deletionHandler, /sport_workout_exercises:lookup/);
 
 console.log("account deletion Storage cleanup contract: PASS");
