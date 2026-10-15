@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { resolveGranularConsentOptions } from "../src/lib/legal.ts";
 
 const opts = resolveGranularConsentOptions([
@@ -14,4 +15,15 @@ assert.equal(opts.health_data, false, "a prior grant must not override a newer r
 assert.equal(opts.health_cloud_sync, true, "the newest grant should be honored");
 assert.equal(opts.financial_data, false, "missing categories must fail closed");
 assert.equal(opts.marketing, false, "unknown categories must not enable consent");
-console.log("granular consent resolution: PASS");
+
+const aiConsentSource = fs.readFileSync("src/lib/ai-consent.server.ts", "utf8");
+const aiChatSource = fs.readFileSync("src/lib/ai-chat.server.ts", "utf8");
+const nutritionSource = fs.readFileSync("src/lib/nutrition-ai.functions.ts", "utf8");
+assert.match(aiConsentSource, /if \(granular\) return granular\.granted === true/);
+assert.match(aiConsentSource, /if \(granularError\)/);
+assert.match(aiConsentSource, /\.order\("decision_sequence", \{ ascending: false \}\)/);
+assert.match(aiChatSource, /hasAiProcessingConsent\(client, userId\)/);
+assert.match(aiChatSource, /consent_lookup_failed/);
+assert.match(nutritionSource, /hasAiProcessingConsent\(context\.supabase, context\.userId\)/);
+
+console.log("granular consent and AI revocation policy: PASS");
