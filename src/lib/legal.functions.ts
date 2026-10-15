@@ -40,8 +40,9 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
         .maybeSingle(),
       context.supabase
         .from("consent_records")
-        .select("consent_type,granted,created_at")
-        .order("created_at", { ascending: false }),
+        .select("id,consent_type,granted,created_at")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false }),
     ]);
 
     if (legalError || recordsError) {
