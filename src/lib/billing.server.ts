@@ -59,7 +59,10 @@ async function ensureCustomer(
 const trialSchema = z.object({ deviceId: z.string().min(16).max(200) });
 
 function hashDeviceId(deviceId: string): string {
-  const secret = process.env.PACE_BYOK_ENCRYPTION_KEY ?? process.env.SUPABASE_SECRET_KEY ?? "pace-trial-salt";
+  const secret = process.env.PACE_TRIAL_HASH_SECRET
+    ?? process.env.SUPABASE_SECRET_KEY
+    ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) throw new Error("PACE_TRIAL_HASH_SECRET or a Supabase server secret is required.");
   return createHash("sha256").update(`${secret}:${deviceId}`).digest("hex");
 }
 
