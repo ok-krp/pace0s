@@ -32,5 +32,7 @@ assert.match(billingServer, /if \(!pricePlan\) throw new Error/);
 assert.match(billingServer, /metadataPlan !== pricePlan/);
 assert.match(billingServer, /const safePlan: PlanId = pricePlan/);
 assert.doesNotMatch(billingServer, /plan && plan in PLAN_CATALOG \? plan : "plus"/);
+assert.match(billingServer, /if \(subscriptionWriteError\)/);
+assert.match(billingServer, /if \(existingError\) throw new Error\("Impossible de vérifier le client de facturation\."/);
 
 console.log("billing entitlement and Stripe price policy: PASS");
