@@ -203,6 +203,12 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
         const { error } = await nutritionBucket.remove(nutritionPaths.slice(offset, offset + 100));
         if (error) throw new Error("cleanup:storage:nutrition-ai");
       }
+      // Verify the bucket prefix is empty before removing the SQL ownership
+      // records or Auth user; a partial Storage failure must stop deletion.
+      const remainingNutritionPaths = await listStorageObjectPaths(nutritionBucket, userId);
+      if (remainingNutritionPaths.length > 0) {
+        throw new Error("cleanup:storage:nutrition-ai:objects-remain");
+      }
 
       const [{ data: programs }, { data: sessions }] = await Promise.all([
         supabaseAdmin.from("sport_programs").select("id").eq("user_id", userId),
