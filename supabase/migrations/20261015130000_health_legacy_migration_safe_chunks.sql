@@ -48,6 +48,7 @@ declare
   legacy_id uuid;
   dedupe_hash_value text;
   existing_hash text;
+  inserted_rows integer := 0;
 begin
   if auth.uid() is null or auth.uid() <> p_expected_user_id then
     raise exception 'Authenticated account changed during migration';
@@ -107,6 +108,14 @@ begin
         dedupe_hash_value
       )
       on conflict (user_id, dedupe_hash) do nothing;
+      get diagnostics inserted_rows = row_count;
+
+      -- Without a prior migration-map row, a dedupe collision might represent
+      -- a different value for the same logical identity. Never map or delete
+      -- the plaintext source based on identity alone.
+      if inserted_rows = 0 then
+        raise exception 'Unmapped dedupe collision requires payload verification';
+      end if;
 
       insert into public.health_legacy_migration_map(
         legacy_sample_id, user_id, dedupe_hash
