@@ -200,7 +200,7 @@ class LocalStore {
 
     final entry = outbox[index];
     final attempts = (entry['attempts'] as num?)?.toInt() ?? 0;
-    final exponent = attempts.clamp(0, 8);
+    final exponent = attempts.clamp(0, 8).toInt();
     final delaySeconds = (5 * (1 << exponent)).clamp(5, 900).toInt();
     final current = (now ?? DateTime.now().toUtc()).toUtc();
     entry['attempts'] = attempts + 1;
