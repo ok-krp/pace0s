@@ -87,14 +87,16 @@ begin
         and migration.user_id = auth.uid();
 
     if found then
-      if existing_hash is not null and existing_hash <> dedupe_hash_value then
+      -- Older migration maps have no dedupe hash and their corresponding
+      -- encrypted row cannot be identified safely from the legacy ID alone.
+      -- Never backfill the map hash by assumption: retain plaintext and require
+      -- an explicit reconciliation path for those pre-existing mappings.
+      if existing_hash is null then
+        raise exception 'Legacy mapping predates verified dedupe; reconciliation required';
+      end if;
+      if existing_hash <> dedupe_hash_value then
         raise exception 'Legacy migration mapping hash mismatch';
       end if;
-      update public.health_legacy_migration_map
-        set dedupe_hash = dedupe_hash_value
-        where legacy_sample_id = legacy_id
-          and user_id = auth.uid()
-          and dedupe_hash is null;
     else
       insert into public.health_samples_e2ee(
         user_id, ciphertext, nonce, algorithm, key_version, dedupe_hash
