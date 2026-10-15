@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { LEGAL_VERSIONS, resolveGranularConsentOptions, type LegalConsentOptions } from "./legal";
+import { GRANULAR_CONSENT_TYPES, LEGAL_VERSIONS, resolveGranularConsentOptions, type LegalConsentOptions } from "./legal";
 
 const consentSchema = z.object({
   opts: z.object({
@@ -99,7 +99,7 @@ export const saveLegalConsent = createServerFn({ method: "POST" })
       throw new Error("Impossible d'enregistrer les préférences de confidentialité.");
     }
 
-    const records = GRANULAR_TYPES.map((consentType) => ({
+    const records = GRANULAR_CONSENT_TYPES.map((consentType) => ({
       user_id: context.userId,
       consent_type: consentType,
       granted: data.opts[consentType],
