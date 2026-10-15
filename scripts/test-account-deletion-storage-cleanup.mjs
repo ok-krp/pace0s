@@ -30,8 +30,11 @@ assert.match(source, /\.in\("program_id", programIds\)/);
 assert.match(source, /\.in\("session_id", sessionIds\)/);
 assert.match(source, /\.in\("workout_exercise_id", workoutExerciseIds\)/);
 assert.match(source, /async function claimDeletionRequest/);
-assert.match(source, /\.in\("status", \["pending", "processing"\]\)/);
-assert.match(source, /\.eq\("status", "pending"\)/);
+assert.match(source, /claim_account_deletion_request/);
+const claimMigration = fs.readFileSync("supabase/migrations/20261015160000_account_deletion_claim_lock.sql", "utf8");
+assert.match(claimMigration, /pg_advisory_xact_lock/);
+assert.match(claimMigration, /status in \('pending', 'processing'\)/);
+assert.match(claimMigration, /grant execute on function public\.claim_account_deletion_request\(uuid\) to service_role/i);
 assert.match(deletionHandler, /claimDeletionRequest\(userId, supabaseAdmin\)/);
 
 console.log("account deletion Storage cleanup contract: PASS");
