@@ -61,6 +61,7 @@ class SyncService {
           operation['key'] as String,
           result.remoteValue,
           result.remoteUpdatedAt!,
+          expectedUserId: expectedUserId,
         );
         if (!_isCurrentAccount(expectedUserId)) return;
         await localStore.acknowledgeOperation(operation, expectedUserId: expectedUserId);
