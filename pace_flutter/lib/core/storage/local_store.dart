@@ -15,6 +15,7 @@ class LocalStore {
   Map<String, dynamic> _data = <String, dynamic>{};
   Future<void> _flushQueue = Future<void>.value();
   Future<void> _accountSwitchQueue = Future<void>.value();
+  bool _switchingAccount = false;
 
   /// Null means local guest state. Signed-in users always get a separate file;
   /// legacy global data stays in the guest file and is never uploaded to a
@@ -34,14 +35,28 @@ class LocalStore {
     final operation = _accountSwitchQueue.catchError((Object _) {}).then((_) async {
       if (_activeUserId == nextUserId) return;
 
-      await _flush();
-      _activeUserId = nextUserId;
-      final filename = nextUserId == null
-          ? 'pace_local.json'
-          : 'pace_local_${nextUserId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.json';
-      _file = File(p.join(_directory.path, filename));
-      _data = <String, dynamic>{};
-      await _loadFile(_file);
+      final previousFile = _file;
+      final previousData = _data;
+      _switchingAccount = true;
+      try {
+        await _flush();
+        final filename = nextUserId == null
+            ? 'pace_local.json'
+            : 'pace_local_${nextUserId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.json';
+        final nextFile = File(p.join(_directory.path, filename));
+        _file = nextFile;
+        _data = <String, dynamic>{};
+        try {
+          await _loadFile(nextFile);
+        } catch (_) {
+          _file = previousFile;
+          _data = previousData;
+          rethrow;
+        }
+        _activeUserId = nextUserId;
+      } finally {
+        _switchingAccount = false;
+      }
     });
     _accountSwitchQueue = operation;
     return operation;
@@ -77,6 +92,7 @@ class LocalStore {
   String? lastSyncedAt(String key) => _syncMeta[key] as String?;
 
   Future<void> write(String key, dynamic value, {bool enqueueSync = true}) async {
+    if (_switchingAccount) throw StateError('Local account is switching');
     _data[key] = value;
     if (enqueueSync) {
       final outbox = _outbox;
@@ -93,6 +109,7 @@ class LocalStore {
   }
 
   Future<void> remove(String key, {bool enqueueSync = true}) async {
+    if (_switchingAccount) throw StateError('Local account is switching');
     _data.remove(key);
     if (enqueueSync) {
       final outbox = _outbox;
@@ -108,6 +125,7 @@ class LocalStore {
   }
 
   Future<void> applyRemote(String key, dynamic value, String updatedAt) async {
+    if (_switchingAccount) throw StateError('Local account is switching');
     _data[key] = value;
     _setSyncedAt(key, updatedAt);
     await _flush();
@@ -135,6 +153,7 @@ class LocalStore {
   List<Map<String, dynamic>> pendingOperations() => List.unmodifiable(_outbox);
 
   Future<void> acknowledgeOperation(Map<String, dynamic> operation) async {
+    if (_switchingAccount) throw StateError('Local account is switching');
     final outbox = _outbox;
     final queuedAt = operation['queuedAt'];
     outbox.removeWhere((entry) {
