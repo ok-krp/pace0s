@@ -42,7 +42,7 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
         .from("consent_records")
         .select("id,consent_type,granted,created_at")
         .order("created_at", { ascending: false })
-        .order("id", { ascending: false }),
+        .order("decision_sequence" as any, { ascending: false }),
     ]);
 
     if (legalError || recordsError) {
