@@ -94,19 +94,40 @@ class _AuthGateState extends State<_AuthGate> {
   bool _configured = false;
   bool _signedIn = false;
 
+  int _accountGeneration = 0;
+
   @override
   void initState() {
     super.initState();
     _configured = widget.auth.client != null;
-    _signedIn = widget.auth.currentUser != null;
+    // Do not render a signed-in shell until its account-specific local store
+    // has been loaded. This prevents a previous account's data flashing on
+    // screen during app startup or account switching.
+    _signedIn = false;
     if (_configured) {
+      final currentUser = widget.auth.currentUser;
+      if (currentUser != null) unawaited(_activateAccount(currentUser.id));
       _subscription = widget.auth.authStateChanges.listen((state) {
-        if (!mounted) return;
-        setState(() => _signedIn = state.session != null);
-        if (state.session != null) unawaited(widget.sync.syncNow());
+        unawaited(_activateAccount(state.session?.user.id));
       });
-      if (_signedIn) unawaited(widget.sync.syncNow());
     }
+  }
+
+  Future<void> _activateAccount(String? userId) async {
+    final generation = ++_accountGeneration;
+    if (mounted) setState(() => _signedIn = false);
+
+    try {
+      await widget.localStore.activateAccount(userId);
+    } catch (_) {
+      // Fail closed: keep the authenticated shell hidden if account-local
+      // storage cannot be switched safely.
+      return;
+    }
+
+    if (!mounted || generation != _accountGeneration) return;
+    setState(() => _signedIn = userId != null);
+    if (userId != null) await widget.sync.syncNow();
   }
 
   @override
