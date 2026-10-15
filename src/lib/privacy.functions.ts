@@ -62,6 +62,35 @@ const EXPORT_ORDER_BY: Record<string, string> = {
   sport_workout_sets: "id",
 };
 
+async function fetchRowsForParentIds(
+  table: string,
+  parentColumn: string,
+  parentIds: string[],
+): Promise<unknown[]> {
+  const rows: unknown[] = [];
+  const parentBatchSize = 100;
+  const pageSize = 500;
+
+  for (let parentOffset = 0; parentOffset < parentIds.length; parentOffset += parentBatchSize) {
+    const parentBatch = parentIds.slice(parentOffset, parentOffset + parentBatchSize);
+    let offset = 0;
+    while (true) {
+      const { data, error } = await (supabaseAdmin as any)
+        .from(table)
+        .select("*")
+        .in(parentColumn, parentBatch)
+        .order("id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw new Error(`privacy export failed for ${table}`);
+      const page = (data ?? []) as unknown[];
+      rows.push(...page);
+      if (page.length < pageSize) break;
+      offset += page.length;
+    }
+  }
+  return rows;
+}
+
 async function fetchAllExportRows(table: string, userId: string): Promise<unknown[]> {
   const rows: unknown[] = [];
   const pageSize = 500;
@@ -207,24 +236,18 @@ export const exportMyData = createServerFn({ method: "POST" })
     const programIds = programs.map((row) => row.id);
     const sessionIds = sessions.map((row) => row.id);
 
-    const { data: programItems, error: programItemsError } = programIds.length
-      ? await (supabaseAdmin as any).from("sport_program_items").select("*").in("program_id", programIds)
-      : { data: [], error: null };
-    if (programItemsError) throw new Error("Impossible d’exporter vos données.");
-    tables.sport_program_items = programItems ?? [];
+    const programItems = await fetchRowsForParentIds("sport_program_items", "program_id", programIds);
+    tables.sport_program_items = programItems;
 
-    const { data: workoutExercises, error: workoutExercisesError } = sessionIds.length
-      ? await (supabaseAdmin as any).from("sport_workout_exercises").select("*").in("session_id", sessionIds)
-      : { data: [], error: null };
-    if (workoutExercisesError) throw new Error("Impossible d’exporter vos données.");
-    tables.sport_workout_exercises = workoutExercises ?? [];
+    const workoutExercises = await fetchRowsForParentIds("sport_workout_exercises", "session_id", sessionIds);
+    tables.sport_workout_exercises = workoutExercises;
 
-    const workoutExerciseIds = (workoutExercises ?? []).map((row: { id: string }) => row.id);
-    const { data: workoutSets, error: workoutSetsError } = workoutExerciseIds.length
-      ? await (supabaseAdmin as any).from("sport_workout_sets").select("*").in("workout_exercise_id", workoutExerciseIds)
-      : { data: [], error: null };
-    if (workoutSetsError) throw new Error("Impossible d’exporter vos données.");
-    tables.sport_workout_sets = workoutSets ?? [];
+    const workoutExerciseIds = workoutExercises.map((row) => (row as { id: string }).id);
+    tables.sport_workout_sets = await fetchRowsForParentIds(
+      "sport_workout_sets",
+      "workout_exercise_id",
+      workoutExerciseIds,
+    );
 
     return {
       generated_at: new Date().toISOString(),
