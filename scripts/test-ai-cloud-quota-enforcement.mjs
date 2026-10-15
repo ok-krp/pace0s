@@ -15,6 +15,7 @@ assert.match(migration, /security definer[\s\S]*?set search_path = ''/i);
 assert.match(migration, /status in \('active', 'trialing'\)/i);
 assert.match(migration, /current_period_end > now\(\)/i);
 assert.match(migration, /when 'trial' then 20/i);
+assert.match(migration, /v_plan is null and not exists \([\s\S]*?from public\.billing_subscriptions existing/i);
 assert.match(migration, /when 'plus' then 60/i);
 assert.match(migration, /when 'pro' then 250/i);
 assert.match(migration, /when 'coach' then 750/i);
