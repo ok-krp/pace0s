@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { PLAN_CATALOG, PLAN_AI_LIMITS, isPaidPlan, type PlanId } from "./billing";
+import { PLAN_CATALOG, PLAN_AI_LIMITS, hasActivePaidEntitlement } from "./billing";
 
 const deviceSchema = z.object({ deviceId: z.string().min(16).max(200) });
 
@@ -24,16 +24,20 @@ export const getBillingStatus = createServerFn({ method: "GET" })
       .eq("user_id", context.userId)
       .maybeSingle();
 
-    const paidPlan = subscription?.plan && isPaidPlan(subscription.plan as PlanId) ? (subscription.plan as PlanId) : null;
+    const entitledPlan = hasActivePaidEntitlement(
+      subscription?.plan,
+      subscription?.status,
+      subscription?.current_period_end,
+    ) ? subscription.plan : null;
     const trialActive = false;
-    const effectivePlan = paidPlan ?? "expired";
+    const effectivePlan = entitledPlan ?? "expired";
 
     return {
       plan: effectivePlan,
       status: subscription?.status ?? "expired",
       currentPeriodEnd: subscription?.current_period_end ?? null,
       cancelAtPeriodEnd: subscription?.cancel_at_period_end ?? false,
-      aiMonthlyLimit: paidPlan ? PLAN_AI_LIMITS[paidPlan] : PLAN_AI_LIMITS.expired,
+      aiMonthlyLimit: entitledPlan ? PLAN_AI_LIMITS[entitledPlan] : PLAN_AI_LIMITS.expired,
       catalog: PLAN_CATALOG,
       stripeConfigured: Boolean(process.env.STRIPE_SECRET_KEY),
       trialEndsAt: null,
