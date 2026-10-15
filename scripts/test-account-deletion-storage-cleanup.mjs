@@ -20,4 +20,9 @@ assert.ok(
   deletionHandler.indexOf("nutritionBucket.remove") < deletionHandler.indexOf("auth.admin.deleteUser"),
   "storage cleanup must complete before deleting the Auth user",
 );
+assert.match(source, /async function claimDeletionRequest/);
+assert.match(source, /\.in\("status", \["pending", "processing"\]\)/);
+assert.match(source, /\.eq\("status", "pending"\)/);
+assert.match(deletionHandler, /claimDeletionRequest\(userId, supabaseAdmin\)/);
+
 console.log("account deletion Storage cleanup contract: PASS");
