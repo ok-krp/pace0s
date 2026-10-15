@@ -57,12 +57,12 @@ begin
     return;
   end if;
 
-  insert into public.ai_cloud_usage as usage (user_id, month_start, actions_used, updated_at)
+  insert into public.ai_cloud_usage as usage_row (user_id, month_start, actions_used, updated_at)
   values (v_user_id, v_month_start, 1, now())
   on conflict (user_id, month_start) do update
-    set actions_used = usage.actions_used + 1,
+    set actions_used = usage_row.actions_used + 1,
         updated_at = now()
-    where usage.actions_used < v_limit
+    where usage_row.actions_used < v_limit
   returning actions_used into v_used;
 
   if found then
@@ -70,11 +70,11 @@ begin
     return;
   end if;
 
-  select usage.actions_used
+  select usage_row.actions_used
     into v_used
-    from public.ai_cloud_usage usage
-    where usage.user_id = v_user_id
-      and usage.month_start = v_month_start;
+    from public.ai_cloud_usage usage_row
+    where usage_row.user_id = v_user_id
+      and usage_row.month_start = v_month_start;
 
   return query select false, coalesce(v_used, v_limit), v_limit, v_plan, v_month_start;
 end;
