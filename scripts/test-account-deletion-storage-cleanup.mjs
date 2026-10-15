@@ -23,6 +23,16 @@ assert.ok(
   deletionHandler.indexOf("nutritionBucket.remove") < deletionHandler.indexOf("auth.admin.deleteUser"),
   "storage cleanup must complete before deleting the Auth user",
 );
+const exportTablesBlock = source.slice(source.indexOf("const EXPORT_TABLES"), source.indexOf("type StorageListBucket"));
+for (const table of [
+  "health_legacy_migration_map",
+  "health_e2ee_key_versions",
+  "health_e2ee_recovery_envelopes",
+  "health_e2ee_pairing_sessions",
+]) {
+  assert.ok(exportTablesBlock.includes(`"${table}"`), `export must include ${table}`);
+  assert.ok(source.slice(source.indexOf("const DELETE_TABLES"), source.indexOf("async function claimDeletionRequest")).includes(`"${table}"`), `deletion must include ${table}`);
+}
 assert.match(source, /tables\.sport_program_items = programItems/);
 assert.match(source, /tables\.sport_workout_exercises = workoutExercises/);
 assert.match(source, /tables\.sport_workout_sets = workoutSets/);
