@@ -53,9 +53,9 @@ class SyncService {
         // stale mutation so it can never be retried over the newer state.
         if (!result.hasRemote || result.remoteUpdatedAt == null) {
           // A rejected RPC without a canonical row is ambiguous (for example,
-          // a transient read/RLS failure). Keep the mutation queued; never
-          // silently discard a local change without a confirmed winner. Continue
-          // with other keys so one blocked mutation cannot stall the whole outbox.
+          // a transient read/RLS failure). Keep the mutation queued and back off;
+          // never silently discard a local change without a confirmed winner.
+          await localStore.deferOperation(operation, expectedUserId: expectedUserId);
           continue;
         }
         await localStore.applyRemote(
@@ -67,7 +67,11 @@ class SyncService {
         if (!_isCurrentAccount(expectedUserId)) return;
         await localStore.acknowledgeOperation(operation, expectedUserId: expectedUserId);
       } catch (_) {
-        // Preserve the operation for the next reconnect/retry.
+        try {
+          await localStore.deferOperation(operation, expectedUserId: expectedUserId);
+        } catch (_) {
+          // An account switch is already in progress; leave the outbox untouched.
+        }
         break;
       }
     }
