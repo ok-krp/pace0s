@@ -170,7 +170,44 @@ class LocalStore {
       .map((entry) => Map<String, dynamic>.from(entry))
       .toList();
 
-  List<Map<String, dynamic>> pendingOperations() => List.unmodifiable(_outbox);
+  List<Map<String, dynamic>> pendingOperations({DateTime? now}) {
+    final current = (now ?? DateTime.now().toUtc()).toUtc();
+    final due = _outbox.where((entry) {
+      final rawNextAttempt = entry['nextAttemptAt'];
+      if (rawNextAttempt is! String) return true;
+      final nextAttempt = DateTime.tryParse(rawNextAttempt);
+      return nextAttempt == null || !nextAttempt.isAfter(current);
+    }).map((entry) => Map<String, dynamic>.unmodifiable(entry)).toList();
+    return List.unmodifiable(due);
+  }
+
+  Future<void> deferOperation(
+    Map<String, dynamic> operation, {
+    required String expectedUserId,
+    DateTime? now,
+  }) async {
+    if (_switchingAccount || _activeUserId != expectedUserId) {
+      throw StateError('Local account changed before retry scheduling');
+    }
+    final outbox = _outbox;
+    final queuedAt = operation['queuedAt'];
+    final index = outbox.indexWhere((entry) {
+      if (entry['key'] != operation['key']) return false;
+      if (queuedAt != null) return entry['queuedAt'] == queuedAt;
+      return entry['operation'] == operation['operation'] && entry['value'] == operation['value'];
+    });
+    if (index < 0) return;
+
+    final entry = outbox[index];
+    final attempts = (entry['attempts'] as num?)?.toInt() ?? 0;
+    final exponent = attempts.clamp(0, 8);
+    final delaySeconds = (5 * (1 << exponent)).clamp(5, 900).toInt();
+    final current = (now ?? DateTime.now().toUtc()).toUtc();
+    entry['attempts'] = attempts + 1;
+    entry['nextAttemptAt'] = current.add(Duration(seconds: delaySeconds)).toIso8601String();
+    _data['__outbox'] = outbox;
+    await _flush();
+  }
 
   Future<void> acknowledgeOperation(
     Map<String, dynamic> operation, {
