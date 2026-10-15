@@ -10,5 +10,5 @@ assert.match(migration, /grant update on table public\.health_samples_e2ee to au
 assert.match(migration, /create policy health_samples_e2ee_update_own[\s\S]*?for update[\s\S]*?to authenticated/i);
 assert.match(migration, /using \([\s\S]*?auth\.uid\(\)[\s\S]*?user_id[\s\S]*?has_current_health_e2ee_consent\(\)/i);
 assert.match(migration, /with check \([\s\S]*?auth\.uid\(\)[\s\S]*?user_id[\s\S]*?has_current_health_e2ee_consent\(\)/i);
-assert.match(migration, /order by c\.created_at desc, c\.id desc/i);
+assert.match(migration, /order by c\.created_at desc, c\.decision_sequence desc/i);
 console.log("health E2EE upsert migration contract: PASS");
