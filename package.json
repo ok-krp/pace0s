@@ -16,7 +16,8 @@
     "format": "prettier --write .",
     "test:health-e2ee": "node --experimental-strip-types scripts/health-e2ee-protocol-test.mjs",
     "test:health-e2ee-realtime": "node scripts/health-e2ee-realtime-contract-test.mjs",
-    "test:billing-entitlement": "node --experimental-strip-types scripts/test-billing-entitlement-expiry.mjs"
+    "test:billing-entitlement": "node --experimental-strip-types scripts/test-billing-entitlement-expiry.mjs",
+    "test:ai-cloud-quota": "node scripts/test-ai-cloud-quota-enforcement.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.10",
