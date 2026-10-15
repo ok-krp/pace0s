@@ -4,6 +4,35 @@
 alter table public.health_legacy_migration_map
   add column if not exists dedupe_hash text;
 
+create or replace function public.has_current_health_e2ee_consent()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $
+  select
+    coalesce((
+      select c.granted
+      from public.consent_records c
+      where c.user_id = (select auth.uid())
+        and c.consent_type = 'health_data'
+      order by c.created_at desc, c.id desc
+      limit 1
+    ), false)
+    and coalesce((
+      select c.granted
+      from public.consent_records c
+      where c.user_id = (select auth.uid())
+        and c.consent_type = 'health_cloud_sync'
+      order by c.created_at desc, c.id desc
+      limit 1
+    ), false);
+$;
+
+revoke all on function public.has_current_health_e2ee_consent() from public, anon;
+grant execute on function public.has_current_health_e2ee_consent() to authenticated;
+
 create or replace function public.migrate_health_legacy_chunk_for_user(
   p_expected_user_id uuid,
   p_records jsonb
