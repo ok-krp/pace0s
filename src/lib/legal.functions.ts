@@ -43,6 +43,8 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
         .from("consent_records")
         .select("consent_type,granted,created_at,decision_sequence")
         .eq("user_id", context.userId)
+        .eq("legal_version", LEGAL_VERSIONS.eula)
+        .eq("policy_version", LEGAL_VERSIONS.privacy)
         .order("created_at", { ascending: false })
         .order("decision_sequence" as any, { ascending: false }),
     ]);
