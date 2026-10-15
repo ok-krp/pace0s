@@ -122,6 +122,7 @@ export async function handleAiChat(request: Request) {
       .eq("user_id", userId)
       .eq("consent_type", "ai_processing")
       .order("created_at", { ascending: false })
+      .order("decision_sequence", { ascending: false })
       .limit(1)
       .maybeSingle();
     if (aiConsentError) console.warn("[ai-chat] granular AI consent lookup failed", aiConsentError.message);
