@@ -29,6 +29,12 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{ migrated: nu
   if (userError || !userResult.user) throw new Error("Authenticated user required");
   const userId = userResult.user.id;
 
+  const { count: sourceCount, error: countError } = await supabase
+    .from("health_samples")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  if (countError || sourceCount === null) throw new Error("Unable to count legacy health data");
+
   // Read every page before deleting anything. Deleting rows while using offset
   // pagination would shift later pages and could skip plaintext rows.
   const legacyRows: LegacyHealthSample[] = [];
@@ -51,6 +57,11 @@ export async function migrateLegacyHealthSamplesToE2ee(): Promise<{ migrated: nu
     offset += rows.length;
   }
 
+  // Abort before any writes/deletes if pagination did not reproduce the
+  // complete source set (including when PostgREST Max Rows is lower than expected).
+  if (legacyRows.length !== sourceCount) {
+    throw new Error("Legacy health pagination is incomplete; plaintext was retained");
+  }
   if (legacyRows.length === 0) return { migrated: 0, deleted: 0 };
 
   let migrated = 0;
