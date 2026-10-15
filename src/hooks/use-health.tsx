@@ -283,7 +283,7 @@ export function useHealthToday() {
       cancelled = true;
       refreshGeneration.current += 1;
       window.removeEventListener("pace.health.changed", handler);
-      window.removeEventListener("pace.legal.changed", handler);
+      window.removeEventListener("pace.legal.changed", onLegalChanged);
       window.removeEventListener("online", onOnline);
       if (refreshTimer) clearTimeout(refreshTimer);
       if (channel) void supabase.removeChannel(channel);
