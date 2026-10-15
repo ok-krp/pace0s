@@ -62,7 +62,7 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
     }>) as LegalConsentOptions;
 
     const legacy = (legal?.opts as Partial<LegalConsentOptions> | null) ?? {};
-    for (const key of ["analytics", "notifications", "sync_cloud", "ai", "marketing"] as const) {
+    for (const key of ["analytics", "notifications", "sync_cloud", "ai"] as const) {
       if (typeof legacy[key] === "boolean") opts[key] = legacy[key];
     }
 
