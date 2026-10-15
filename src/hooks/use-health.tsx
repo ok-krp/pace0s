@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listEncryptedHealthSamples } from "@/lib/health.functions";
 import { decryptHealthPayload } from "@/lib/health.crypto";
 import { migrateLegacyHealthSamplesToE2ee } from "@/lib/health.migration";
 import { backfillHealthE2eeDedupeHashes } from "@/lib/health.dedupe.backfill";
+import { getLegalConsentStatus } from "@/lib/legal.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -100,8 +101,14 @@ export function useHealthToday() {
   const [loading, setLoading] = useState(false);
 
   const refresh = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
+    const requestedUserId = user?.id ?? null;
+    const isCurrent = () =>
+      generation === refreshGeneration.current && currentUserId.current === requestedUserId;
+
     if (!user) {
       setData(EMPTY);
+      setLoading(false);
       return;
     }
 
@@ -126,7 +133,15 @@ export function useHealthToday() {
               // Session storage is best-effort; migration failure must never block E2EE reads.
             }
 
+            // Do not read legacy plaintext health data until the server confirms
+            // both granular consents. The migration RPC rechecks consent at write time.
+            const consent = await fetchLegalConsent();
+            if (!isCurrent()) return;
+            if (consent.opts.health_data !== true || consent.opts.health_cloud_sync !== true) {
+              throw new Error("Health migration requires active health and cloud-sync consent");
+            }
             const migration = await migrateLegacyHealthSamplesToE2ee();
+            if (!isCurrent()) return;
             localStorage.setItem(migrationKey, "1");
             if (migration.deleted > 0) {
               window.dispatchEvent(new Event("pace.health.changed"));
@@ -137,10 +152,13 @@ export function useHealthToday() {
         }
       }
 
+      if (!isCurrent()) return;
+
       const dedupeBackfillKey = `pace-health-e2ee-dedupe-backfilled:${user.id}`;
       if (localStorage.getItem(dedupeBackfillKey) !== "1") {
         try {
           const backfill = await backfillHealthE2eeDedupeHashes();
+          if (!isCurrent()) return;
           if (backfill.skipped === 0) localStorage.setItem(dedupeBackfillKey, "1");
         } catch (error) {
           console.warn("health E2EE dedupe backfill deferred", error);
@@ -148,10 +166,12 @@ export function useHealthToday() {
       }
 
       const response = await fetchEncrypted({ data: { limit: 10000 } });
+      if (!isCurrent()) return;
       const records = response.records as EncryptedHealthRecord[];
       const samples: HealthSample[] = [];
 
       for (const record of records) {
+        if (!isCurrent()) return;
         try {
           if (record.algorithm !== "AES-256-GCM" || !Number.isInteger(record.key_version) || record.key_version < 1) continue;
           const payload = await decryptHealthPayload(record.ciphertext, record.nonce, record.key_version);
@@ -172,14 +192,16 @@ export function useHealthToday() {
         }
       }
 
-      setData(aggregateHealthSamples(samples, timeZone));
+      if (isCurrent()) setData(aggregateHealthSamples(samples, timeZone));
     } catch (error) {
-      console.error("health refresh", error);
-      setData(EMPTY);
+      if (isCurrent()) {
+        console.error("health refresh", error);
+        setData(EMPTY);
+      }
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [user, fetchEncrypted]);
+  }, [user, fetchEncrypted, fetchLegalConsent]);
 
   useEffect(() => {
     void refresh();
@@ -188,11 +210,13 @@ export function useHealthToday() {
   useEffect(() => {
     const handler = () => void refresh();
     window.addEventListener("pace.health.changed", handler);
+    window.addEventListener("pace.legal.changed", handler);
     const onOnline = () => void refresh();
     window.addEventListener("online", onOnline);
     if (!user) {
       return () => {
         window.removeEventListener("pace.health.changed", handler);
+        window.removeEventListener("pace.legal.changed", handler);
         window.removeEventListener("online", onOnline);
       };
     }
@@ -236,6 +260,7 @@ export function useHealthToday() {
     return () => {
       cancelled = true;
       window.removeEventListener("pace.health.changed", handler);
+      window.removeEventListener("pace.legal.changed", handler);
       window.removeEventListener("online", onOnline);
       if (refreshTimer) clearTimeout(refreshTimer);
       if (channel) void supabase.removeChannel(channel);
