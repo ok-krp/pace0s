@@ -9,9 +9,11 @@ import { LEGAL_VERSIONS } from "./legal";
 export async function hasAiProcessingConsent(client: any, userId: string): Promise<boolean> {
   const { data: granular, error: granularError } = await client
     .from("consent_records")
-    .select("granted")
+    .select("granted,legal_version,policy_version")
     .eq("user_id", userId)
     .eq("consent_type", "ai_processing")
+    .eq("legal_version", LEGAL_VERSIONS.eula)
+    .eq("policy_version", LEGAL_VERSIONS.privacy)
     .order("created_at", { ascending: false })
     .order("decision_sequence", { ascending: false })
     .limit(1)
