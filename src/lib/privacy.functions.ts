@@ -105,60 +105,20 @@ const DELETE_TABLES = [
 
 async function claimDeletionRequest(userId: string, supabaseAdmin: unknown): Promise<{ id: string }> {
   const adminDb = supabaseAdmin as any;
-  const findActive = async () => {
-    const { data, error } = await adminDb
-      .from("data_deletion_requests")
-      .select("id,status")
-      .eq("user_id", userId)
-      .in("status", ["pending", "processing"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error) throw new Error("account deletion request lookup failed");
-    return data as { id: string; status: string } | null;
-  };
-
-  const claimPending = async (requestId: string) => {
-    const { data, error } = await adminDb
-      .from("data_deletion_requests")
-      .update({ status: "processing", error_code: null })
-      .eq("id", requestId)
-      .eq("user_id", userId)
-      .eq("status", "pending")
-      .select("id")
-      .maybeSingle();
-    if (error) throw new Error("account deletion request claim failed");
-    return data as { id: string } | null;
-  };
-
-  const existing = await findActive();
-  if (existing?.status === "processing") {
-    throw new Error("Une suppression est déjà en cours.");
+  const { data, error } = await adminDb.rpc("claim_account_deletion_request", {
+    p_user_id: userId,
+  });
+  if (error) {
+    if (/already processing/i.test(error.message ?? "")) {
+      throw new Error("Une suppression est déjà en cours.");
+    }
+    console.error("account deletion request claim failed", { error: error.message });
+    throw new Error("Impossible de démarrer la suppression du compte.");
   }
-  if (existing?.status === "pending") {
-    const claimed = await claimPending(existing.id);
-    if (claimed) return claimed;
-    const raced = await findActive();
-    if (raced?.status === "processing") throw new Error("Une suppression est déjà en cours.");
-    throw new Error("La demande de suppression a changé pendant sa prise en charge.");
+  if (typeof data !== "string" || !data) {
+    throw new Error("Impossible de démarrer la suppression du compte.");
   }
-
-  const { data: created, error: createError } = await adminDb
-    .from("data_deletion_requests")
-    .insert({ user_id: userId, status: "processing" })
-    .select("id")
-    .maybeSingle();
-  if (!createError && created) return created as { id: string };
-
-  // If a concurrent request won the unique active-request constraint, reuse a
-  // pending request if possible; never run two processing jobs concurrently.
-  const raced = await findActive();
-  if (raced?.status === "pending") {
-    const claimed = await claimPending(raced.id);
-    if (claimed) return claimed;
-  }
-  console.error("account deletion request failed", { error: createError?.message });
-  throw new Error("Une suppression est déjà en cours ou ne peut pas être démarrée.");
+  return { id: data };
 }
 
 export const exportMyData = createServerFn({ method: "POST" })
