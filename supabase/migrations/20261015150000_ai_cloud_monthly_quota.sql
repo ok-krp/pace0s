@@ -50,7 +50,10 @@ begin
       and subscription.plan in ('plus', 'pro', 'coach')
     limit 1;
 
-  if v_plan is null then
+  if v_plan is null and not exists (
+    select 1 from public.billing_subscriptions existing
+    where existing.user_id = v_user_id
+  ) then
     select case when trial.trial_ends_at > now() then 'trial' else null end
       into v_plan
       from public.billing_trials trial
