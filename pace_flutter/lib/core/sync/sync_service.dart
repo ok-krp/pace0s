@@ -11,25 +11,39 @@ class SyncService {
   final SupabaseClient? client;
   bool _running = false;
 
+  bool _isCurrentAccount(String expectedUserId) =>
+      client?.auth.currentUser?.id == expectedUserId &&
+      localStore.activeUserId == expectedUserId;
+
   Future<void> syncNow() async {
-    if (_running || client == null || client!.auth.currentUser == null) return;
+    final activeClient = client;
+    final userId = activeClient?.auth.currentUser?.id;
+    if (_running || activeClient == null || userId == null) return;
+    // Guest/offline mutations must never be replayed under whichever account
+    // happens to be signed in later.
+    if (localStore.activeUserId != userId) return;
+
     _running = true;
     try {
       final hadLocalAiPreferenceMutation = localStore.pendingOperations().any(
         (operation) => operation['key'] == 'pace.settings.ai.confirm_actions' || operation['key'] == 'pace.settings.ai.memory',
       );
-      await _pushPending();
-      await _syncAiPreferences(pushLocal: hadLocalAiPreferenceMutation);
-      await _pullRemote();
+      await _pushPending(userId);
+      if (!_isCurrentAccount(userId)) return;
+      await _syncAiPreferences(expectedUserId: userId, pushLocal: hadLocalAiPreferenceMutation);
+      if (!_isCurrentAccount(userId)) return;
+      await _pullRemote(userId);
     } finally {
       _running = false;
     }
   }
 
-  Future<void> _pushPending() async {
+  Future<void> _pushPending(String expectedUserId) async {
     for (final operation in List<Map<String, dynamic>>.from(localStore.pendingOperations())) {
+      if (!_isCurrentAccount(expectedUserId)) return;
       try {
-        final result = await _push(operation);
+        final result = await _push(operation, expectedUserId);
+        if (!_isCurrentAccount(expectedUserId)) return;
         if (result.accepted) {
           await localStore.acknowledgeOperation(operation);
           continue;
@@ -44,6 +58,7 @@ class SyncService {
             result.remoteUpdatedAt!,
           );
         }
+        if (!_isCurrentAccount(expectedUserId)) return;
         await localStore.acknowledgeOperation(operation);
       } catch (_) {
         // Preserve the operation for the next reconnect/retry.
@@ -52,8 +67,8 @@ class SyncService {
     }
   }
 
-  Future<_PushResult> _push(Map<String, dynamic> operation) async {
-    final userId = client!.auth.currentUser!.id;
+  Future<_PushResult> _push(Map<String, dynamic> operation, String userId) async {
+    if (!_isCurrentAccount(userId)) throw StateError('Account changed before sync push');
     final key = operation['key'] as String;
     final updatedAt = (operation['queuedAt'] as String?) ?? DateTime.now().toUtc().toIso8601String();
     final value = operation['operation'] == 'delete' ? null : operation['value'];
@@ -66,6 +81,7 @@ class SyncService {
       'p_updated_by': 'flutter-native',
     });
 
+    if (!_isCurrentAccount(userId)) throw StateError('Account changed during sync push');
     if (response == true) return const _PushResult.accepted();
 
     final rows = await client!
@@ -74,6 +90,7 @@ class SyncService {
         .eq('user_id', userId)
         .eq('key', key)
         .limit(1);
+    if (!_isCurrentAccount(userId)) throw StateError('Account changed during sync conflict lookup');
     if (rows.isEmpty) return const _PushResult.rejected();
     final row = Map<String, dynamic>.from(rows.first);
     return _PushResult.rejectedWithRemote(
@@ -82,9 +99,10 @@ class SyncService {
     );
   }
 
-  Future<void> _syncAiPreferences({required bool pushLocal}) async {
+  Future<void> _syncAiPreferences({required String expectedUserId, required bool pushLocal}) async {
+    if (!_isCurrentAccount(expectedUserId)) return;
     final user = client!.auth.currentUser;
-    if (user == null) return;
+    if (user == null || user.id != expectedUserId) return;
 
     try {
       if (pushLocal) {
@@ -104,13 +122,15 @@ class SyncService {
           .select('confirm_actions,memory_level')
           .eq('user_id', user.id)
           .limit(1);
-      if (rows.isEmpty) return;
+      if (!_isCurrentAccount(expectedUserId) || rows.isEmpty) return;
       final row = Map<String, dynamic>.from(rows.first);
       final remoteConfirm = row['confirm_actions'];
       final remoteMemory = row['memory_level'];
+      if (!_isCurrentAccount(expectedUserId)) return;
       if (remoteConfirm is bool) {
         await localStore.write('pace.settings.ai.confirm_actions', remoteConfirm, enqueueSync: false);
       }
+      if (!_isCurrentAccount(expectedUserId)) return;
       if (remoteMemory is String) {
         await localStore.write('pace.settings.ai.memory', remoteMemory != 'none', enqueueSync: false);
       }
@@ -119,14 +139,16 @@ class SyncService {
     }
   }
 
-  Future<void> _pullRemote() async {
-    final userId = client!.auth.currentUser!.id;
+  Future<void> _pullRemote(String userId) async {
+    if (!_isCurrentAccount(userId)) return;
     final rows = await client!
         .from('user_state')
         .select('key,value,updated_at')
         .eq('user_id', userId);
+    if (!_isCurrentAccount(userId)) return;
 
     for (final raw in rows) {
+      if (!_isCurrentAccount(userId)) return;
       final row = Map<String, dynamic>.from(raw);
       final key = row['key'] as String;
       final remoteUpdatedAt = row['updated_at'] as String?;
