@@ -24,7 +24,7 @@ jobs:
       - name: Verify fixed versions
         run: |
           node <<'NODE'
-          const lock = require('./bun.lock');
+          const lock = JSON.parse(require('fs').readFileSync('./bun.lock', 'utf8'));
           const packages = lock.packages || {};
           const start = packages['@tanstack/react-start']?.[0]?.split('@').pop();
           const core = packages['@tanstack/start-server-core']?.[0]?.split('@').pop();
