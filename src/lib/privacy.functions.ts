@@ -48,6 +48,7 @@ const EXPORT_ORDER_BY: Record<string, string> = {
   health_e2ee_recovery_envelopes: "id",
   health_e2ee_pairing_sessions: "id",
   consent_records: "decision_sequence",
+  user_state: "id",
   notification_log: "id",
   push_subscriptions: "id",
   reminder_debug_log: "id",
