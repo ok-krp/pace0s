@@ -37,5 +37,6 @@ export async function hasAiProcessingConsent(client: any, userId: string): Promi
   }
 
   const opts = legacy?.opts as { ai_processing?: unknown; ai?: unknown } | null;
-  return opts?.ai_processing === true || opts?.ai === true;
+  if (typeof opts?.ai_processing === "boolean") return opts.ai_processing;
+  return opts?.ai === true;
 }
