@@ -33,6 +33,9 @@ assert.doesNotMatch(legalFunctions, /\["analytics", "notifications", "sync_cloud
 const aiConsentSource = fs.readFileSync("src/lib/ai-consent.server.ts", "utf8");
 const aiChatSource = fs.readFileSync("src/lib/ai-chat.server.ts", "utf8");
 const nutritionSource = fs.readFileSync("src/lib/nutrition-ai.functions.ts", "utf8");
+const progressionSource = fs.readFileSync("src/lib/sport-progression.server.ts", "utf8");
+assert.match(progressionSource, /hasAiProcessingConsent\(context\.supabase, context\.userId\)/);
+
 assert.match(aiConsentSource, /if \(granular\) return granular\.granted === true/);
 assert.match(aiConsentSource, /if \(granularError\)/);
 assert.match(aiConsentSource, /\.order\("decision_sequence", \{ ascending: false \}\)/);
