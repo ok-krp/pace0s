@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { GRANULAR_CONSENT_TYPES, LEGAL_VERSIONS, resolveGranularConsentOptions, type LegalConsentOptions } from "./legal";
+import { LEGAL_VERSIONS, resolveGranularConsentOptions, type LegalConsentOptions } from "./legal";
 
 const consentSchema = z.object({
   opts: z.object({
