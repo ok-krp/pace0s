@@ -51,13 +51,17 @@ class SyncService {
 
         // A newer server value won. Apply it locally before acknowledging the
         // stale mutation so it can never be retried over the newer state.
-        if (result.remoteValue != null && result.remoteUpdatedAt != null) {
-          await localStore.applyRemote(
-            operation['key'] as String,
-            result.remoteValue,
-            result.remoteUpdatedAt!,
-          );
+        if (!result.hasRemote || result.remoteUpdatedAt == null) {
+          // A rejected RPC without a canonical row is ambiguous (for example,
+          // a transient read/RLS failure). Keep the mutation queued; never
+          // silently discard a local change without a confirmed winner.
+          break;
         }
+        await localStore.applyRemote(
+          operation['key'] as String,
+          result.remoteValue,
+          result.remoteUpdatedAt!,
+        );
         if (!_isCurrentAccount(expectedUserId)) return;
         await localStore.acknowledgeOperation(operation);
       } catch (_) {
@@ -168,20 +172,24 @@ class SyncService {
 class _PushResult {
   const _PushResult.accepted()
       : accepted = true,
+        hasRemote = false,
         remoteValue = null,
         remoteUpdatedAt = null;
 
   const _PushResult.rejected()
       : accepted = false,
+        hasRemote = false,
         remoteValue = null,
         remoteUpdatedAt = null;
 
   const _PushResult.rejectedWithRemote({
     required this.remoteValue,
     required this.remoteUpdatedAt,
-  }) : accepted = false;
+  }) : accepted = false,
+       hasRemote = true;
 
   final bool accepted;
+  final bool hasRemote;
   final dynamic remoteValue;
   final String? remoteUpdatedAt;
 }
