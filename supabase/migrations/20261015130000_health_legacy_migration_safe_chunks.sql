@@ -20,6 +20,8 @@ as $
       from public.consent_records c
       where c.user_id = (select auth.uid())
         and c.consent_type = 'health_data'
+        and c.legal_version = '2026-07-10'
+        and c.policy_version = '2026-07-10'
       order by c.created_at desc, c.decision_sequence desc
       limit 1
     ), false)
@@ -28,7 +30,9 @@ as $
       from public.consent_records c
       where c.user_id = (select auth.uid())
         and c.consent_type = 'health_cloud_sync'
-      order by c.created_at desc, c.id desc
+        and c.legal_version = '2026-07-10'
+        and c.policy_version = '2026-07-10'
+      order by c.created_at desc, c.decision_sequence desc
       limit 1
     ), false);
 $;
