@@ -205,15 +205,27 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
         throw new Error("cleanup:storage:nutrition-ai:objects-remain");
       }
 
-      const [{ data: programs }, { data: sessions }] = await Promise.all([
+      const [
+        { data: programs, error: programsError },
+        { data: sessions, error: sessionsError },
+      ] = await Promise.all([
         supabaseAdmin.from("sport_programs").select("id").eq("user_id", userId),
         supabaseAdmin.from("sport_workout_sessions").select("id").eq("user_id", userId),
       ]);
+      if (programsError) throw new Error("cleanup:sport_programs:lookup");
+      if (sessionsError) throw new Error("cleanup:sport_workout_sessions:lookup");
+
       const programIds = (programs ?? []).map((row) => row.id);
       const sessionIds = (sessions ?? []).map((row) => row.id);
-      const workoutExercises = sessionIds.length
-        ? (await supabaseAdmin.from("sport_workout_exercises").select("id").in("session_id", sessionIds)).data ?? []
-        : [];
+      let workoutExercises: Array<{ id: string }> = [];
+      if (sessionIds.length) {
+        const { data, error } = await supabaseAdmin
+          .from("sport_workout_exercises")
+          .select("id")
+          .in("session_id", sessionIds);
+        if (error) throw new Error("cleanup:sport_workout_exercises:lookup");
+        workoutExercises = data ?? [];
+      }
       const workoutExerciseIds = workoutExercises.map((row) => row.id);
 
       if (workoutExerciseIds.length) {
