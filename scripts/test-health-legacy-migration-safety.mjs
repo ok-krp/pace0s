@@ -13,6 +13,7 @@ assert.match(migration, /legacy\.id = legacy_id and legacy\.user_id = auth\.uid\
 assert.match(migration, /delete_migrated_health_legacy_chunk/);
 assert.match(migration, /migration\.dedupe_hash/);
 assert.match(migration, /encrypted\.dedupe_hash = migration\.dedupe_hash/);
+assert.match(migration, /Unmapped dedupe collision requires payload verification/);
 assert.match(migration, /revoke all on function public\.migrate_health_legacy_chunk\(jsonb\) from authenticated/i);
 
 assert.match(client, /\.range\(offset, offset \+ PAGE_SIZE - 1\)/);
