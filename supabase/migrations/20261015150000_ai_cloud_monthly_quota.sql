@@ -50,7 +50,15 @@ begin
       and subscription.plan in ('plus', 'pro', 'coach')
     limit 1;
 
+  if v_plan is null then
+    select case when trial.trial_ends_at > now() then 'trial' else null end
+      into v_plan
+      from public.billing_trials trial
+      where trial.user_id = v_user_id;
+  end if;
+
   v_limit := case v_plan
+    when 'trial' then 20
     when 'plus' then 60
     when 'pro' then 250
     when 'coach' then 750
