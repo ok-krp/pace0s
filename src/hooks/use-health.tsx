@@ -97,8 +97,12 @@ function aggregateHealthSamples(samples: HealthSample[], timeZone: string): Heal
 export function useHealthToday() {
   const { user } = useAuth();
   const fetchEncrypted = useServerFn(listEncryptedHealthSamples);
+  const fetchLegalConsent = useServerFn(getLegalConsentStatus);
   const [data, setData] = useState<HealthToday>(EMPTY);
   const [loading, setLoading] = useState(false);
+  const refreshGeneration = useRef(0);
+  const currentUserId = useRef<string | null>(user?.id ?? null);
+  currentUserId.current = user?.id ?? null;
 
   const refresh = useCallback(async () => {
     const generation = ++refreshGeneration.current;
