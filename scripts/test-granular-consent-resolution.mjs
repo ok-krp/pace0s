@@ -37,6 +37,7 @@ const progressionSource = fs.readFileSync("src/lib/sport-progression.server.ts",
 assert.match(progressionSource, /hasAiProcessingConsent\(context\.supabase, context\.userId\)/);
 
 assert.match(aiConsentSource, /if \(granular\) return granular\.granted === true/);
+assert.match(aiConsentSource, /if \(typeof opts\?\.ai_processing === "boolean"\) return opts\.ai_processing/);
 assert.match(aiConsentSource, /if \(granularError\)/);
 assert.match(aiConsentSource, /\.order\("decision_sequence", \{ ascending: false \}\)/);
 assert.match(aiChatSource, /hasAiProcessingConsent\(client, userId\)/);
