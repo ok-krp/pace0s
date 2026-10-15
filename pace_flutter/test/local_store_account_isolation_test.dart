@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/core/storage/local_store.dart';
+import 'package:pace/core/storage/local_store.dart';
 
 void main() {
   late Directory directory;
