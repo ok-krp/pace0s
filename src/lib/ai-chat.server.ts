@@ -6,6 +6,7 @@ import { getPreferencesServer } from "./ai-history.server";
 import type { AgentType, AiPermissions } from "./ai-history.types";
 import { getAiRuntimeConfig, type AiGateway, PROVIDER_LABELS } from "./ai-provider.server";
 import { canonicalSportTools } from "./sport-ai-tools";
+import { consumeCloudAiAction } from "./ai-quota.server";
 
 type Client = SupabaseClient<Database>;
 type ChatBody = { messages?: unknown; conversationId?: unknown; agentType?: unknown; ephemeral?: unknown };
@@ -155,7 +156,21 @@ export async function handleAiChat(request: Request) {
     }
     if (agentType === "build") { const { data: authUser } = await client.auth.getUser(); if (authUser.user?.email?.toLowerCase() !== "mathieu.lequint@gmail.com") fail(403, "build_forbidden", "Build IA est réservé au compte administrateur autorisé."); }
     if (!ephemeral) { const { data, error } = await client.from("ai_conversations").select("id").eq("id", conversationId).eq("user_id", userId).eq("agent_type", agentType).maybeSingle(); if (error) fail(503, "db_error", "Erreur base de données."); if (!data) fail(404, "conversation_not_found", "Cette conversation n’existe plus. Créez-en une nouvelle."); }
-    const runtime = await getAiRuntimeConfig(client, userId, agentType); const preferences = await getPreferencesServer(client, userId);
+    const runtime = await getAiRuntimeConfig(client, userId, agentType);
+    if (runtime.source === "pace") {
+      let quota;
+      try {
+        quota = await consumeCloudAiAction(client);
+      } catch {
+        fail(503, "ai_quota_unavailable", "Impossible de vérifier le quota IA. La requête a été bloquée par sécurité.");
+      }
+      if (!quota.allowed) {
+        fail(429, "ai_quota_exceeded", quota.monthly_limit > 0
+          ? `Quota IA cloud mensuel atteint (${quota.used}/${quota.monthly_limit}). Configurez une clé BYOK ou attendez le renouvellement mensuel.`
+          : "Un abonnement actif est nécessaire pour utiliser l’IA cloud Pace.");
+      }
+    }
+    const preferences = await getPreferencesServer(client, userId);
     if (!ephemeral && newest?.role === "user") { const text = textOf(newest); const { data: exists } = await client.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("user_id", userId).eq("model_message_id", newest.id).maybeSingle(); if (!exists) { const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "user", parts: newest.parts as unknown as Json, plain_text: text, model_message_id: newest.id }); if (error) fail(503, "db_write_error", "Votre message n’a pas pu être enregistré."); } }
     const [dataContext, summary] = await Promise.all([agentType === "coach" ? contextForCoach(client, userId, preferences.permissions) : Promise.resolve({}), !ephemeral && preferences.memory_level !== "none" ? rollingSummary(client, userId, conversationId, runtime.gateway, runtime.model) : Promise.resolve("")]);
     const tools = agentType === "coach"
