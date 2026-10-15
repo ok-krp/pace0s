@@ -137,8 +137,15 @@ class LocalStore {
     await _flush();
   }
 
-  Future<void> applyRemote(String key, dynamic value, String updatedAt) async {
-    if (_switchingAccount) throw StateError('Local account is switching');
+  Future<void> applyRemote(
+    String key,
+    dynamic value,
+    String updatedAt, {
+    required String expectedUserId,
+  }) async {
+    if (_switchingAccount || _activeUserId != expectedUserId) {
+      throw StateError('Local account changed before remote apply');
+    }
     _data[key] = value;
     _setSyncedAt(key, updatedAt);
     await _flush();
@@ -165,8 +172,13 @@ class LocalStore {
 
   List<Map<String, dynamic>> pendingOperations() => List.unmodifiable(_outbox);
 
-  Future<void> acknowledgeOperation(Map<String, dynamic> operation) async {
-    if (_switchingAccount) throw StateError('Local account is switching');
+  Future<void> acknowledgeOperation(
+    Map<String, dynamic> operation, {
+    required String expectedUserId,
+  }) async {
+    if (_switchingAccount || _activeUserId != expectedUserId) {
+      throw StateError('Local account changed before outbox acknowledgement');
+    }
     final outbox = _outbox;
     final queuedAt = operation['queuedAt'];
     outbox.removeWhere((entry) {
