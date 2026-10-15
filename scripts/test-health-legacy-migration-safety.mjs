@@ -9,6 +9,8 @@ const client = fs.readFileSync("src/lib/health.migration.ts", "utf8");
 
 assert.match(migration, /auth\.uid\(\) <> p_expected_user_id/);
 assert.match(migration, /has_current_health_e2ee_consent\(\)/);
+assert.match(migration, /c\.legal_version = '2026-07-10'/i);
+assert.match(migration, /c\.policy_version = '2026-07-10'/i);
 assert.match(migration, /legacy\.id = legacy_id and legacy\.user_id = auth\.uid\(\)/);
 assert.match(migration, /delete_migrated_health_legacy_chunk/);
 assert.match(migration, /migration\.dedupe_hash/);
