@@ -82,39 +82,21 @@ export const saveLegalConsent = createServerFn({ method: "POST" })
     const { getRequestCountry, legalRegionForCountry } = await import("./legal.server");
     const country = getRequestCountry();
     const region = legalRegionForCountry(country);
-    const now = new Date().toISOString();
-
-    const { error: legalError } = await context.supabase.from("legal_consent").upsert(
+    const { data: saved, error: saveError } = await (context.supabase as any).rpc(
+      "save_legal_consent_atomic",
       {
-        user_id: context.userId,
-        region,
-        eula_version: LEGAL_VERSIONS.eula,
-        privacy_version: LEGAL_VERSIONS.privacy,
-        ip_country: country,
-        consented_at: now,
-        opts: data.opts,
+        p_user_id: context.userId,
+        p_region: region,
+        p_eula_version: LEGAL_VERSIONS.eula,
+        p_privacy_version: LEGAL_VERSIONS.privacy,
+        p_ip_country: country,
+        p_opts: data.opts,
       },
-      { onConflict: "user_id,eula_version,privacy_version" },
     );
 
-    if (legalError) {
-      console.error("legal consent save failed", legalError);
+    if (saveError || saved !== true) {
+      console.error("atomic legal consent save failed", saveError?.message ?? "invalid RPC result");
       throw new Error("Impossible d'enregistrer les préférences de confidentialité.");
-    }
-
-    const records = GRANULAR_CONSENT_TYPES.map((consentType) => ({
-      user_id: context.userId,
-      consent_type: consentType,
-      granted: data.opts[consentType],
-      legal_version: LEGAL_VERSIONS.eula,
-      policy_version: LEGAL_VERSIONS.privacy,
-      created_at: now,
-    }));
-
-    const { error: recordsError } = await context.supabase.from("consent_records").insert(records);
-    if (recordsError) {
-      console.error("granular consent save failed", recordsError);
-      throw new Error("Impossible d'enregistrer les consentements détaillés.");
     }
 
     return { ok: true, region, ipCountry: country, opts: data.opts };
