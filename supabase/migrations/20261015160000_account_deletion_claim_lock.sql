@@ -1,6 +1,6 @@
--- Serialize account deletion claims per user. The previous application-level
--- check/insert sequence could race because the schema has no active-request
--- uniqueness constraint.
+-- Serialize account deletion claims per user and reuse pending requests.
+-- The partial unique index prevents duplicate active rows, but the previous
+-- application-level insert did not claim an existing pending request.
 create or replace function public.claim_account_deletion_request(p_user_id uuid)
 returns uuid
 language plpgsql
