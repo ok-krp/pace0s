@@ -40,7 +40,7 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
         .maybeSingle(),
       context.supabase
         .from("consent_records")
-        .select("id,consent_type,granted,created_at")
+        .select("id,consent_type,granted,created_at,decision_sequence")
         .order("created_at", { ascending: false })
         .order("decision_sequence" as any, { ascending: false }),
     ]);
