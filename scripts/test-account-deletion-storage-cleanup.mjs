@@ -23,6 +23,12 @@ assert.ok(
   deletionHandler.indexOf("nutritionBucket.remove") < deletionHandler.indexOf("auth.admin.deleteUser"),
   "storage cleanup must complete before deleting the Auth user",
 );
+assert.match(source, /tables\.sport_program_items = programItems/);
+assert.match(source, /tables\.sport_workout_exercises = workoutExercises/);
+assert.match(source, /tables\.sport_workout_sets = workoutSets/);
+assert.match(source, /\.in\("program_id", programIds\)/);
+assert.match(source, /\.in\("session_id", sessionIds\)/);
+assert.match(source, /\.in\("workout_exercise_id", workoutExerciseIds\)/);
 assert.match(source, /async function claimDeletionRequest/);
 assert.match(source, /\.in\("status", \["pending", "processing"\]\)/);
 assert.match(source, /\.eq\("status", "pending"\)/);
