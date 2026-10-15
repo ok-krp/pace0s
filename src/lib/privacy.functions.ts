@@ -33,6 +33,45 @@ const EXPORT_TABLES = [
   "sport_workout_sets",
 ] as const;
 
+type StorageListBucket = {
+  list: (prefix: string, options: { limit: number; offset: number; sortBy: { column: string; order: "asc" | "desc" } }) => Promise<{
+    data: Array<{ name: string; id: string | null }> | null;
+    error: { message: string } | null;
+  }>;
+  remove: (paths: string[]) => Promise<{ error: { message: string } | null }>;
+};
+
+/** Enumerate before deleting so offset pagination cannot skip objects as pages shrink. */
+async function listStorageObjectPaths(bucket: StorageListBucket, prefix: string): Promise<string[]> {
+  const paths: string[] = [];
+  let offset = 0;
+  const pageSize = 100;
+
+  while (true) {
+    const { data, error } = await bucket.list(prefix, {
+      limit: pageSize,
+      offset,
+      sortBy: { column: "name", order: "asc" },
+    });
+    if (error) throw new Error("cleanup:storage:list");
+
+    const entries = data ?? [];
+    for (const entry of entries) {
+      const objectPath = `${prefix}/${entry.name}`;
+      if (entry.id == null) {
+        paths.push(...await listStorageObjectPaths(bucket, objectPath));
+      } else {
+        paths.push(objectPath);
+      }
+    }
+
+    if (entries.length < pageSize) break;
+    offset += entries.length;
+  }
+
+  return paths;
+}
+
 const DELETE_TABLES = [
   "ai_messages",
   "development_tasks",
@@ -107,6 +146,15 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     }
 
     try {
+      // Storage objects are not removed by deleting the Auth user. Complete
+      // and verify this cleanup before deleting any SQL rows.
+      const nutritionBucket = supabaseAdmin.storage.from("nutrition-ai") as unknown as StorageListBucket;
+      const nutritionPaths = await listStorageObjectPaths(nutritionBucket, userId);
+      for (let offset = 0; offset < nutritionPaths.length; offset += 100) {
+        const { error } = await nutritionBucket.remove(nutritionPaths.slice(offset, offset + 100));
+        if (error) throw new Error("cleanup:storage:nutrition-ai");
+      }
+
       const [{ data: programs }, { data: sessions }] = await Promise.all([
         supabaseAdmin.from("sport_programs").select("id").eq("user_id", userId),
         supabaseAdmin.from("sport_workout_sessions").select("id").eq("user_id", userId),
