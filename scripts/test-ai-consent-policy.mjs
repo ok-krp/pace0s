@@ -16,5 +16,7 @@ assert.match(nutrition, /hasAiProcessingConsent\(context\.supabase, context\.use
 assert.match(legalFunctions, /rpc\(\s*"save_legal_consent_atomic"/);
 assert.match(atomicMigration, /auth\.uid\(\) <> p_user_id/);
 assert.match(atomicMigration, /insert into public\.consent_records/);
+assert.doesNotMatch(legalFunctions, /\["analytics", "notifications", "sync_cloud", "ai", "marketing"\]);
+
 
 console.log("AI consent revocation policy: PASS");
