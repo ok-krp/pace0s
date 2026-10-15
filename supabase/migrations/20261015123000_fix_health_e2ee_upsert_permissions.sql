@@ -1,0 +1,50 @@
+-- Keep the consent check deterministic when multiple decisions share a timestamp.
+-- UUID ordering is a stable tie-breaker; the client must still write each decision
+-- as a new record and must never infer consent from an older grant.
+create or replace function public.has_current_health_e2ee_consent()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select
+    coalesce((
+      select c.granted
+      from public.consent_records c
+      where c.user_id = (select auth.uid())
+        and c.consent_type = 'health_data'
+      order by c.created_at desc, c.id desc
+      limit 1
+    ), false)
+    and coalesce((
+      select c.granted
+      from public.consent_records c
+      where c.user_id = (select auth.uid())
+        and c.consent_type = 'health_cloud_sync'
+      order by c.created_at desc, c.id desc
+      limit 1
+    ), false);
+$$;
+
+revoke all on function public.has_current_health_e2ee_consent() from public, anon;
+grant execute on function public.has_current_health_e2ee_consent() to authenticated;
+
+-- The client uses ON CONFLICT (user_id, dedupe_hash) DO UPDATE. PostgreSQL
+-- requires UPDATE privilege and an UPDATE RLS policy for that conflict path.
+-- Keep the policy scoped to the authenticated owner and current health consent.
+grant update on table public.health_samples_e2ee to authenticated;
+
+drop policy if exists health_samples_e2ee_update_own on public.health_samples_e2ee;
+create policy health_samples_e2ee_update_own
+  on public.health_samples_e2ee
+  for update
+  to authenticated
+  using (
+    (select auth.uid()) = user_id
+    and public.has_current_health_e2ee_consent()
+  )
+  with check (
+    (select auth.uid()) = user_id
+    and public.has_current_health_e2ee_consent()
+  );
