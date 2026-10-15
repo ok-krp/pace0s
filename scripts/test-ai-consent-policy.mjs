@@ -11,6 +11,7 @@ const legalFunctions = fs.readFileSync("src/lib/legal.functions.ts", "utf8");
 const atomicMigration = fs.readFileSync("supabase/migrations/20261015111500_atomic_legal_consent.sql", "utf8");
 
 assert.match(consent, /if \(granular\) return granular\.granted === true/);
+assert.match(consent, /if \(typeof opts\?\.ai_processing === "boolean"\) return opts\.ai_processing/);
 assert.match(consent, /if \(granularError\)/);
 assert.match(consent, /\.order\("decision_sequence", \{ ascending: false \}\)/);
 assert.match(chat, /hasAiProcessingConsent\(client, userId\)/);
