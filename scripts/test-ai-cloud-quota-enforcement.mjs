@@ -18,7 +18,7 @@ assert.match(migration, /when 'trial' then 20/i);
 assert.match(migration, /when 'plus' then 60/i);
 assert.match(migration, /when 'pro' then 250/i);
 assert.match(migration, /when 'coach' then 750/i);
-assert.match(migration, /where usage\.actions_used < v_limit/i);
+assert.match(migration, /where usage_row\\.actions_used < v_limit/i);
 assert.match(migration, /grant execute on function public\.consume_ai_cloud_action\(\) to authenticated/i);
 assert.match(migration, /revoke all on public\.ai_cloud_usage from public, anon, authenticated/i);
 
