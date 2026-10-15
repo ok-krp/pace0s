@@ -34,6 +34,8 @@ for (const table of [
   assert.ok(source.slice(source.indexOf("const DELETE_TABLES"), source.indexOf("async function claimDeletionRequest")).includes(`"${table}"`), `deletion must include ${table}`);
 }
 assert.match(source, /async function fetchAllExportRows/);
+assert.match(source, /async function fetchRowsForParentIds/);
+assert.match(source, /\.in\(parentColumn, parentBatch\)/);
 assert.match(source, /\.range\(offset, offset \+ pageSize - 1\)/);
 assert.match(source, /const pageSize = 500/);
 assert.match(source, /user_state: "id"/);
