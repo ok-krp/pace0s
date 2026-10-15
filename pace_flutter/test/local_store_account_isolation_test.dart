@@ -42,6 +42,26 @@ void main() {
     expect(store.pendingOperations(), hasLength(1));
   });
 
+  test('failed outbox operations use bounded exponential retry backoff', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'account A');
+    final operation = store.pendingOperations().single;
+    final now = DateTime.utc(2026, 10, 16, 10);
+
+    await store.deferOperation(operation, expectedUserId: 'user-a', now: now);
+    expect(store.pendingOperations(now: now), isEmpty);
+    expect(store.pendingOperations(now: now.add(const Duration(seconds: 4))), isEmpty);
+    final due = store.pendingOperations(now: now.add(const Duration(seconds: 5)));
+    expect(due, hasLength(1));
+    expect(due.single['attempts'], 1);
+    expect(due.single['nextAttemptAt'], isA<String>());
+
+    await store.deferOperation(due.single, expectedUserId: 'user-a', now: now.add(const Duration(seconds: 5)));
+    expect(store.pendingOperations(now: now.add(const Duration(seconds: 14))), isEmpty);
+    expect(store.pendingOperations(now: now.add(const Duration(seconds: 15))), hasLength(1));
+  });
+
   test('stale sync completions cannot mutate another account', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
