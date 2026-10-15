@@ -69,11 +69,27 @@ export const insertEncryptedHealthSamples = createServerFn({ method: "POST" })
   .validator((d: unknown) => encryptedInsertSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: healthConsent } = await context.supabase
-      .from("consent_records").select("granted").eq("user_id", context.userId).eq("legal_version", LEGAL_VERSIONS.eula).eq("policy_version", LEGAL_VERSIONS.privacy).eq("consent_type", "health_data")
-      .order("created_at", { ascending: false }).order("decision_sequence" as any, { ascending: false }).limit(1).maybeSingle();
+      .from("consent_records")
+      .select("granted")
+      .eq("user_id", context.userId)
+      .eq("legal_version", LEGAL_VERSIONS.eula)
+      .eq("policy_version", LEGAL_VERSIONS.privacy)
+      .eq("consent_type", "health_data")
+      .order("created_at", { ascending: false })
+      .order("decision_sequence" as any, { ascending: false })
+      .limit(1)
+      .maybeSingle();
     const { data: cloudConsent } = await context.supabase
-      .from("consent_records").select("granted").eq("user_id", context.userId).eq("legal_version", LEGAL_VERSIONS.eula).eq("policy_version", LEGAL_VERSIONS.privacy).eq("consent_type", "health_cloud_sync")
-      .order("created_at", { ascending: false }).order("decision_sequence" as any, { ascending: false }).limit(1).maybeSingle();
+      .from("consent_records")
+      .select("granted")
+      .eq("user_id", context.userId)
+      .eq("legal_version", LEGAL_VERSIONS.eula)
+      .eq("policy_version", LEGAL_VERSIONS.privacy)
+      .eq("consent_type", "health_cloud_sync")
+      .order("created_at", { ascending: false })
+      .order("decision_sequence" as any, { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (healthConsent?.granted !== true || cloudConsent?.granted !== true) {
       throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
     }
@@ -94,12 +110,28 @@ export const listEncryptedHealthSamples = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => z.object({ limit: z.number().int().min(1).max(10000).default(10000) }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
-    const { data: healthConsent } = await context.supabase.from("consent_records")
-      .select("granted").eq("user_id", context.userId).eq("legal_version", LEGAL_VERSIONS.eula).eq("policy_version", LEGAL_VERSIONS.privacy).eq("consent_type", "health_data")
-      .order("created_at", { ascending: false }).order("decision_sequence" as any, { ascending: false }).limit(1).maybeSingle();
-    const { data: cloudConsent } = await context.supabase.from("consent_records")
-      .select("granted").eq("user_id", context.userId).eq("legal_version", LEGAL_VERSIONS.eula).eq("policy_version", LEGAL_VERSIONS.privacy).eq("consent_type", "health_cloud_sync")
-      .order("created_at", { ascending: false }).order("decision_sequence" as any, { ascending: false }).limit(1).maybeSingle();
+    const { data: healthConsent } = await context.supabase
+      .from("consent_records")
+      .select("granted")
+      .eq("user_id", context.userId)
+      .eq("legal_version", LEGAL_VERSIONS.eula)
+      .eq("policy_version", LEGAL_VERSIONS.privacy)
+      .eq("consent_type", "health_data")
+      .order("created_at", { ascending: false })
+      .order("decision_sequence" as any, { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const { data: cloudConsent } = await context.supabase
+      .from("consent_records")
+      .select("granted")
+      .eq("user_id", context.userId)
+      .eq("legal_version", LEGAL_VERSIONS.eula)
+      .eq("policy_version", LEGAL_VERSIONS.privacy)
+      .eq("consent_type", "health_cloud_sync")
+      .order("created_at", { ascending: false })
+      .order("decision_sequence" as any, { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (healthConsent?.granted !== true || cloudConsent?.granted !== true) {
       throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
     }
