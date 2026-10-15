@@ -5,7 +5,9 @@ const opts = resolveGranularConsentOptions([
   { consent_type: "health_data", granted: false, created_at: "2026-10-15T10:00:00Z" },
   { consent_type: "health_data", granted: true, created_at: "2026-10-14T10:00:00Z" },
   { consent_type: "health_cloud_sync", granted: true, created_at: "2026-10-15T09:00:00Z" },
-  { consent_type: "unknown_category", granted: true, created_at: "2026-10-15T11:00:00Z" },
+  { consent_type: "unknown_category", granted: true, created_at: "2026-10-15T11:00:00Z", decision_sequence: 99 },
+  { consent_type: "health_data", granted: true, created_at: "2026-10-15T10:00:00Z", decision_sequence: 20 },
+  { consent_type: "health_data", granted: false, created_at: "2026-10-15T10:00:00Z", decision_sequence: 21 },
 ]);
 
 assert.equal(opts.health_data, false, "a prior grant must not override a newer revocation");
