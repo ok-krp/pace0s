@@ -41,7 +41,7 @@ assert.match(source, /const pageSize = 500/);
 assert.match(source, /user_state: "id"/);
 assert.match(source, /tables\.sport_program_items = programItems/);
 assert.match(source, /tables\.sport_workout_exercises = workoutExercises/);
-assert.match(source, /tables\.sport_workout_sets = workoutSets/);
+assert.match(source, /tables\.sport_workout_sets = await fetchRowsForParentIds/);
 assert.match(source, /\.in\("program_id", programIds\)/);
 assert.match(source, /\.in\("session_id", sessionIds\)/);
 assert.match(source, /\.in\("workout_exercise_id", workoutExerciseIds\)/);
