@@ -45,7 +45,7 @@ class SyncService {
         final result = await _push(operation, expectedUserId);
         if (!_isCurrentAccount(expectedUserId)) return;
         if (result.accepted) {
-          await localStore.acknowledgeOperation(operation);
+          await localStore.acknowledgeOperation(operation, expectedUserId: expectedUserId);
           continue;
         }
 
@@ -63,7 +63,7 @@ class SyncService {
           result.remoteUpdatedAt!,
         );
         if (!_isCurrentAccount(expectedUserId)) return;
-        await localStore.acknowledgeOperation(operation);
+        await localStore.acknowledgeOperation(operation, expectedUserId: expectedUserId);
       } catch (_) {
         // Preserve the operation for the next reconnect/retry.
         break;
@@ -164,7 +164,7 @@ class SyncService {
         final localTime = DateTime.tryParse(localUpdatedAt);
         if (remoteTime != null && localTime != null && !remoteTime.isAfter(localTime)) continue;
       }
-      await localStore.applyRemote(key, row['value'], remoteUpdatedAt);
+      await localStore.applyRemote(key, row['value'], remoteUpdatedAt, expectedUserId: userId);
     }
   }
 }
