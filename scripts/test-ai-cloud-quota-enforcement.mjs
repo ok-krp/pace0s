@@ -14,6 +14,7 @@ assert.match(migration, /primary key \(user_id, month_start\)/i);
 assert.match(migration, /security definer[\s\S]*?set search_path = ''/i);
 assert.match(migration, /status in \('active', 'trialing'\)/i);
 assert.match(migration, /current_period_end > now\(\)/i);
+assert.match(migration, /when 'trial' then 20/i);
 assert.match(migration, /when 'plus' then 60/i);
 assert.match(migration, /when 'pro' then 250/i);
 assert.match(migration, /when 'coach' then 750/i);
@@ -28,4 +29,12 @@ assert.match(chat, /ai_quota_exceeded/);
 assert.match(nutrition, /consumeCloudAiAction\(context\.supabase\)/);
 assert.match(progression, /consumeCloudAiAction\(context\.supabase\)/);
 
-console.log("AI monthly quota enforcement contract: PASS");
+
+const billingStatus = fs.readFileSync("src/lib/billing.functions.ts", "utf8");
+const billingServer = fs.readFileSync("src/lib/billing.server.ts", "utf8");
+assert.match(billingStatus, /ensureTrial\(context\.userId, data\.deviceId/);
+assert.match(billingStatus, /trialActive/);
+assert.match(billingServer, /PACE_TRIAL_HASH_SECRET/);
+assert.doesNotMatch(billingServer, /pace-trial-salt/);
+
+console.log("AI monthly quota and trial enforcement contract: PASS");
