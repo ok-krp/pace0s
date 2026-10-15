@@ -42,6 +42,23 @@ void main() {
     expect(store.pendingOperations(), hasLength(1));
   });
 
+  test('corrupt primary file restores the last known-good backup', () async {
+    final primary = File('${directory.path}/pace_local.json');
+    final backup = File('${directory.path}/pace_local.json.bak');
+    await primary.writeAsString('{corrupt json');
+    await backup.writeAsString('{"pace.profile.name":"recovered"}');
+
+    final store = await LocalStore.open(directory: directory);
+
+    expect(store.read('pace.profile.name'), 'recovered');
+    expect(await primary.exists(), isTrue);
+    final quarantined = directory
+        .listSync()
+        .whereType<File>()
+        .where((file) => file.path.contains('.corrupt-'));
+    expect(quarantined, isNotEmpty);
+  });
+
   test('account data persists independently across store reopen', () async {
     var store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
