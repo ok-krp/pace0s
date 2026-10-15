@@ -13,11 +13,20 @@ function stripeKey(): string {
   return key;
 }
 
-async function stripeRequest(path: string, params: Record<string, string>): Promise<Record<string, unknown>> {
+async function stripeRequest(
+  path: string,
+  params: Record<string, string>,
+  idempotencyKey?: string,
+): Promise<Record<string, unknown>> {
   const body = new URLSearchParams(params);
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${stripeKey()}`,
+    "Content-Type": "application/x-www-form-urlencoded",
+  };
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   const response = await fetch(`${stripeBase}${path}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${stripeKey()}`, "Content-Type": "application/x-www-form-urlencoded" },
+    headers,
     body,
   });
   const json = (await response.json()) as Record<string, unknown>;
@@ -50,7 +59,7 @@ async function ensureCustomer(
   const customer = await stripeRequest("/customers", {
     email: email ?? "",
     metadata: JSON.stringify({ pace_user_id: userId }),
-  });
+  }, `pace-customer-${userId}`);
   const customerId = String(customer.id);
   const { error } = await supabase.from("billing_customers").upsert({
     user_id: userId,
