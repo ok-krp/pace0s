@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { LEGAL_VERSIONS } from "./legal";
 import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema } from "./nutrition-ai.shared";
 import { calculateReferenceBasedNutrition, findDishReference, scaleDishReference } from "./nutrition-engine";
+import { consumeCloudAiAction } from "./ai-quota.server";
 
 const PHOTO_BUCKET = "nutrition-ai";
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
@@ -64,6 +65,12 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
       if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Format image non autorisé.");
       const imageDataUrl = `data:${contentType};base64,${bytes.toString("base64")}`;
       const prompt = [PHOTO_INSTRUCTIONS, "IMPORTANT : fais d'abord un inventaire exhaustif des composants visibles. N'en omets aucun, même si la portion est petite ou l'identification imparfaite.", "Si le plat correspond à un plat connu, donne son nom canonique clairement.", data.goal ? `Objectif : ${data.goal}.` : "", data.hint ? `Indice : ${data.hint}.` : "", "Réponds en JSON pur avec dish_name, items [{name,brand,grams,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg}], health_score, quality, confidence, confidence_note, notes."].filter(Boolean).join("\n\n");
+      const quota = await consumeCloudAiAction(context.supabase);
+      if (!quota.allowed) {
+        throw new Error(quota.monthly_limit > 0
+          ? `Quota IA cloud mensuel atteint (${quota.used}/${quota.monthly_limit}).`
+          : "Un abonnement actif est nécessaire pour utiliser l’IA cloud Pace.");
+      }
       const { text } = await generateFoodVision(prompt, imageDataUrl, contentType);
       const result = visionSchema.safeParse(extractJson(text));
       if (!result.success) return { error: "Réponse IA invalide", result: null };
@@ -99,5 +106,5 @@ export const nutritionAdvice = createServerFn({ method: "POST" }).middleware([re
   const { data: consent, error: consentError } = await context.supabase.from("legal_consent").select("opts").eq("user_id", context.userId).eq("eula_version", LEGAL_VERSIONS.eula).eq("privacy_version", LEGAL_VERSIONS.privacy).maybeSingle();
   if (consentError) throw new Error(consentError.message);
   if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) return { advice: null, error: "Consentement Analyse IA requis" };
-  try { const { text } = await generateText({ model: getGeminiModel(), messages: [{ role: "user", content: `Tu es un coach nutrition. À partir du résumé ci-dessous, donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français, au format "• conseil". Pas de salutation, pas d’introduction. Ne recalcule jamais les macros dans ce texte : si des macros sont nécessaires, elles doivent provenir du Pace Nutrition Engine.\n\nRésumé :\n${data.summary}` }] }); return { advice: text, error: null }; } catch (e) { return { advice: null, error: e instanceof Error ? e.message : "Erreur IA" }; }
+  try { const quota = await consumeCloudAiAction(context.supabase); if (!quota.allowed) throw new Error(quota.monthly_limit > 0 ? `Quota IA cloud mensuel atteint (${quota.used}/${quota.monthly_limit}).` : "Un abonnement actif est nécessaire pour utiliser l’IA cloud Pace."); const { text } = await generateText({ model: getGeminiModel(), messages: [{ role: "user", content: `Tu es un coach nutrition. À partir du résumé ci-dessous, donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français, au format "• conseil". Pas de salutation, pas d’introduction. Ne recalcule jamais les macros dans ce texte : si des macros sont nécessaires, elles doivent provenir du Pace Nutrition Engine.\n\nRésumé :\n${data.summary}` }] }); return { advice: text, error: null }; } catch (e) { return { advice: null, error: e instanceof Error ? e.message : "Erreur IA" }; }
 });
