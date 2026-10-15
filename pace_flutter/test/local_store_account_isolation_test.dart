@@ -42,6 +42,32 @@ void main() {
     expect(store.pendingOperations(), hasLength(1));
   });
 
+  test('stale sync completions cannot mutate another account', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'account A');
+    final operationA = store.pendingOperations().single;
+
+    await store.activateAccount('user-b');
+    await store.write('pace.profile.name', 'account B');
+
+    await expectLater(
+      store.applyRemote(
+        'pace.profile.name',
+        'stale remote A',
+        DateTime.now().toUtc().toIso8601String(),
+        expectedUserId: 'user-a',
+      ),
+      throwsStateError,
+    );
+    await expectLater(
+      store.acknowledgeOperation(operationA, expectedUserId: 'user-a'),
+      throwsStateError,
+    );
+    expect(store.read('pace.profile.name'), 'account B');
+    expect(store.pendingOperations(), hasLength(1));
+  });
+
   test('corrupt primary file restores the last known-good backup', () async {
     final primary = File('${directory.path}/pace_local.json');
     final backup = File('${directory.path}/pace_local.json.bak');
