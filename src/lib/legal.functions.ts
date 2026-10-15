@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { DEFAULT_LEGAL_OPTS, LEGAL_VERSIONS, type LegalConsentOptions } from "./legal";
+import { GRANULAR_CONSENT_TYPES, LEGAL_VERSIONS, resolveGranularConsentOptions, type LegalConsentOptions } from "./legal";
 
 const consentSchema = z.object({
   opts: z.object({
@@ -17,14 +17,6 @@ const consentSchema = z.object({
     do_not_sell: z.boolean().optional(),
   }),
 });
-
-const GRANULAR_TYPES = [
-  "health_data",
-  "health_cloud_sync",
-  "financial_data",
-  "ai_processing",
-  "marketing",
-] as const;
 
 export const getGeoLegalContext = createServerFn({ method: "GET" }).handler(async () => {
   const { getRequestCountry, legalRegionForCountry } = await import("./legal.server");
@@ -43,13 +35,16 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
       context.supabase
         .from("legal_consent")
         .select("region,eula_version,privacy_version,opts,consented_at,ip_country")
+        .eq("user_id", context.userId)
         .eq("eula_version", LEGAL_VERSIONS.eula)
         .eq("privacy_version", LEGAL_VERSIONS.privacy)
         .maybeSingle(),
       context.supabase
         .from("consent_records")
-        .select("consent_type,granted,created_at")
-        .order("created_at", { ascending: false }),
+        .select("consent_type,granted,created_at,decision_sequence")
+        .eq("user_id", context.userId)
+        .order("created_at", { ascending: false })
+        .order("decision_sequence" as any, { ascending: false }),
     ]);
 
     if (legalError || recordsError) {
@@ -57,12 +52,12 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
       throw new Error("Impossible de charger les préférences de confidentialité.");
     }
 
-    const opts = { ...DEFAULT_LEGAL_OPTS };
-    for (const record of records ?? []) {
-      if (!GRANULAR_TYPES.includes(record.consent_type as (typeof GRANULAR_TYPES)[number])) continue;
-      const key = record.consent_type as keyof LegalConsentOptions;
-      if (opts[key] === false) opts[key] = record.granted;
-    }
+    const opts = resolveGranularConsentOptions((records ?? []) as Array<{
+      consent_type: string;
+      granted: boolean;
+      created_at: string;
+      decision_sequence: number;
+    }>) as LegalConsentOptions;
 
     const legacy = (legal?.opts as Partial<LegalConsentOptions> | null) ?? {};
     for (const key of ["analytics", "notifications", "sync_cloud", "ai", "marketing"] as const) {
@@ -85,39 +80,21 @@ export const saveLegalConsent = createServerFn({ method: "POST" })
     const { getRequestCountry, legalRegionForCountry } = await import("./legal.server");
     const country = getRequestCountry();
     const region = legalRegionForCountry(country);
-    const now = new Date().toISOString();
-
-    const { error: legalError } = await context.supabase.from("legal_consent").upsert(
+    const { data: saved, error: saveError } = await (context.supabase as any).rpc(
+      "save_legal_consent_atomic",
       {
-        user_id: context.userId,
-        region,
-        eula_version: LEGAL_VERSIONS.eula,
-        privacy_version: LEGAL_VERSIONS.privacy,
-        ip_country: country,
-        consented_at: now,
-        opts: data.opts,
+        p_user_id: context.userId,
+        p_region: region,
+        p_eula_version: LEGAL_VERSIONS.eula,
+        p_privacy_version: LEGAL_VERSIONS.privacy,
+        p_ip_country: country,
+        p_opts: data.opts,
       },
-      { onConflict: "user_id,eula_version,privacy_version" },
     );
 
-    if (legalError) {
-      console.error("legal consent save failed", legalError);
+    if (saveError || saved !== true) {
+      console.error("atomic legal consent save failed", saveError?.message ?? "invalid RPC result");
       throw new Error("Impossible d'enregistrer les préférences de confidentialité.");
-    }
-
-    const records = GRANULAR_TYPES.map((consentType) => ({
-      user_id: context.userId,
-      consent_type: consentType,
-      granted: data.opts[consentType],
-      legal_version: LEGAL_VERSIONS.eula,
-      policy_version: LEGAL_VERSIONS.privacy,
-      created_at: now,
-    }));
-
-    const { error: recordsError } = await context.supabase.from("consent_records").insert(records);
-    if (recordsError) {
-      console.error("granular consent save failed", recordsError);
-      throw new Error("Impossible d'enregistrer les consentements détaillés.");
     }
 
     return { ok: true, region, ipCountry: country, opts: data.opts };
