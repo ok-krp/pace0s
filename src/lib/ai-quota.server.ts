@@ -6,15 +6,8 @@ type QuotaRow = {
   month_start: string;
 };
 
-type RpcClient = {
-  rpc: (name: string, args?: Record<string, unknown>) => Promise<{
-    data: unknown;
-    error: { message: string } | null;
-  }>;
-};
-
 /** Atomically consume one platform-cloud AI action. Fail closed on DB errors. */
-export async function consumeCloudAiAction(client: RpcClient): Promise<QuotaRow> {
+export async function consumeCloudAiAction(client: any): Promise<QuotaRow> {
   const { data, error } = await client.rpc("consume_ai_cloud_action");
   if (error) {
     console.error("[ai-quota] quota RPC failed", error.message);
