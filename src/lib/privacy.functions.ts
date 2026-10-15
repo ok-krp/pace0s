@@ -177,6 +177,33 @@ export const exportMyData = createServerFn({ method: "POST" })
       tables[table] = (data ?? []) as unknown[];
     }
 
+    // These child tables inherit ownership through their parent and therefore
+    // have no user_id column. Export them by IDs of the authenticated user's
+    // parent rows rather than querying them globally.
+    const programs = (tables.sport_programs ?? []) as Array<{ id: string }>;
+    const sessions = (tables.sport_workout_sessions ?? []) as Array<{ id: string }>;
+    const programIds = programs.map((row) => row.id);
+    const sessionIds = sessions.map((row) => row.id);
+
+    const { data: programItems, error: programItemsError } = programIds.length
+      ? await (supabaseAdmin as any).from("sport_program_items").select("*").in("program_id", programIds)
+      : { data: [], error: null };
+    if (programItemsError) throw new Error("Impossible d’exporter vos données.");
+    tables.sport_program_items = programItems ?? [];
+
+    const { data: workoutExercises, error: workoutExercisesError } = sessionIds.length
+      ? await (supabaseAdmin as any).from("sport_workout_exercises").select("*").in("session_id", sessionIds)
+      : { data: [], error: null };
+    if (workoutExercisesError) throw new Error("Impossible d’exporter vos données.");
+    tables.sport_workout_exercises = workoutExercises ?? [];
+
+    const workoutExerciseIds = (workoutExercises ?? []).map((row: { id: string }) => row.id);
+    const { data: workoutSets, error: workoutSetsError } = workoutExerciseIds.length
+      ? await (supabaseAdmin as any).from("sport_workout_sets").select("*").in("workout_exercise_id", workoutExerciseIds)
+      : { data: [], error: null };
+    if (workoutSetsError) throw new Error("Impossible d’exporter vos données.");
+    tables.sport_workout_sets = workoutSets ?? [];
+
     return {
       generated_at: new Date().toISOString(),
       user_id: context.userId,
