@@ -37,6 +37,63 @@ const EXPORT_TABLES = [
   "sport_workout_sets",
 ] as const;
 
+const EXPORT_ORDER_BY: Record<string, string> = {
+  food_log: "id",
+  food_scans: "id",
+  health_samples: "id",
+  health_samples_e2ee: "id",
+  health_legacy_migration_map: "legacy_sample_id",
+  health_e2ee_devices: "id",
+  health_e2ee_key_envelopes: "id",
+  health_e2ee_recovery_envelopes: "id",
+  health_e2ee_pairing_sessions: "id",
+  consent_records: "decision_sequence",
+  notification_log: "id",
+  push_subscriptions: "id",
+  reminder_debug_log: "id",
+  ai_action_log: "id",
+  ai_conversations: "id",
+  ai_messages: "id",
+  development_tasks: "id",
+  sport_exercises: "id",
+  sport_programs: "id",
+  sport_program_items: "id",
+  sport_progression_targets: "id",
+  sport_workout_sessions: "id",
+  sport_workout_exercises: "id",
+  sport_workout_sets: "id",
+};
+
+async function fetchAllExportRows(table: string, userId: string): Promise<unknown[]> {
+  const rows: unknown[] = [];
+  const pageSize = 500;
+  const orderColumn = EXPORT_ORDER_BY[table];
+  if (!orderColumn) {
+    const { data, error } = await (supabaseAdmin as any)
+      .from(table)
+      .select("*")
+      .eq("user_id", userId);
+    if (error) throw new Error(`privacy export failed for ${table}`);
+    return (data ?? []) as unknown[];
+  }
+
+  let offset = 0;
+  while (true) {
+    const { data, error } = await (supabaseAdmin as any)
+      .from(table)
+      .select("*")
+      .eq("user_id", userId)
+      .order(orderColumn, { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) throw new Error(`privacy export failed for ${table}`);
+    const page = (data ?? []) as unknown[];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    offset += page.length;
+  }
+  return rows;
+}
+
 type StorageListBucket = {
   list: (prefix: string, options: { limit: number; offset: number; sortBy: { column: string; order: "asc" | "desc" } }) => Promise<{
     data: Array<{ name: string; id: string | null }> | null;
@@ -136,13 +193,12 @@ export const exportMyData = createServerFn({ method: "POST" })
     const tables: Record<string, unknown[]> = {};
 
     for (const table of EXPORT_TABLES) {
-      const query = (supabaseAdmin as any).from(table).select("*");
-      const { data, error } = await query.eq("user_id", context.userId);
-      if (error) {
-        console.error("privacy export failed", { table, error: error.message });
+      try {
+        tables[table] = await fetchAllExportRows(table, context.userId);
+      } catch (error) {
+        console.error("privacy export failed", { table, error: error instanceof Error ? error.message : "unknown" });
         throw new Error("Impossible d’exporter vos données.");
       }
-      tables[table] = (data ?? []) as unknown[];
     }
 
     // These child tables inherit ownership through their parent and therefore
