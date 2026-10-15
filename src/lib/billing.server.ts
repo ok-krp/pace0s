@@ -40,7 +40,12 @@ async function ensureCustomer(
   email: string | undefined,
   supabase: typeof supabaseAdmin,
 ) {
-  const { data: existing } = await supabase.from("billing_customers").select("stripe_customer_id").eq("user_id", userId).maybeSingle();
+  const { data: existing, error: existingError } = await supabase
+    .from("billing_customers")
+    .select("stripe_customer_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw new Error("Impossible de vérifier le client de facturation.");
   if (existing?.stripe_customer_id) return existing.stripe_customer_id;
   const customer = await stripeRequest("/customers", {
     email: email ?? "",
@@ -67,14 +72,24 @@ function hashDeviceId(deviceId: string): string {
 }
 
 export async function ensureTrial(userId: string, deviceId: string, supabase: typeof supabaseAdmin) {
-  const { data: existing } = await supabaseAdmin.from("billing_trials").select("trial_started_at,trial_ends_at,device_hash").eq("user_id", userId).maybeSingle();
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("billing_trials")
+    .select("trial_started_at,trial_ends_at,device_hash")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw new Error("Impossible de vérifier l’essai gratuit.");
   if (existing) return existing;
   const deviceHash = hashDeviceId(deviceId);
   const now = new Date();
   const ends = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const { data, error } = await supabaseAdmin.from("billing_trials").insert({ user_id: userId, device_hash: deviceHash, trial_started_at: now.toISOString(), trial_ends_at: ends.toISOString() }).select("trial_started_at,trial_ends_at,device_hash").single();
   if (error) {
-    const { data: byDevice } = await supabaseAdmin.from("billing_trials").select("user_id,trial_started_at,trial_ends_at,device_hash").eq("device_hash", deviceHash).maybeSingle();
+    const { data: byDevice, error: byDeviceError } = await supabaseAdmin
+      .from("billing_trials")
+      .select("user_id,trial_started_at,trial_ends_at,device_hash")
+      .eq("device_hash", deviceHash)
+      .maybeSingle();
+    if (byDeviceError) throw new Error("Impossible de vérifier l’éligibilité à l’essai gratuit.");
     if (byDevice && byDevice.user_id !== userId) throw new Error("Cet appareil a déjà utilisé l’essai gratuit de Pace.");
     const { data: retry } = await supabaseAdmin.from("billing_trials").select("trial_started_at,trial_ends_at,device_hash").eq("user_id", userId).maybeSingle();
     if (retry) return retry;
@@ -157,7 +172,7 @@ export async function applyStripeSubscription(
     userId = data?.user_id;
   }
   if (!userId) throw new Error("Stripe subscription sans utilisateur Pace.");
-  await supabase.from("billing_subscriptions").upsert({
+  const { error: subscriptionWriteError } = await supabase.from("billing_subscriptions").upsert({
     user_id: userId,
     stripe_subscription_id: subscription.id,
     stripe_customer_id: subscription.customer,
@@ -166,6 +181,10 @@ export async function applyStripeSubscription(
     current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
     cancel_at_period_end: subscription.cancel_at_period_end,
   });
+  if (subscriptionWriteError) {
+    console.error("Stripe subscription sync failed", { subscriptionId: subscription.id, error: subscriptionWriteError.message });
+    throw new Error("Impossible de synchroniser l’abonnement Stripe.");
+  }
 }
 
 export function verifyStripeSignature(payload: string, signature: string, secret: string): boolean {
