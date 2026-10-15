@@ -13,6 +13,8 @@ const atomicMigration = fs.readFileSync("supabase/migrations/20261015111500_atom
 assert.match(consent, /if \(granular\) return granular\.granted === true/);
 assert.match(consent, /if \(typeof opts\?\.ai_processing === "boolean"\) return opts\.ai_processing/);
 assert.match(consent, /if \(granularError\)/);
+assert.match(consent, /\.eq\("legal_version", LEGAL_VERSIONS\.eula\)/);
+assert.match(consent, /\.eq\("policy_version", LEGAL_VERSIONS\.privacy\)/);
 assert.match(consent, /\.order\("decision_sequence", \{ ascending: false \}\)/);
 assert.match(chat, /hasAiProcessingConsent\(client, userId\)/);
 assert.match(chat, /ai_quota_exceeded/);
