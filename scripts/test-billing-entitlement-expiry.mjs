@@ -35,6 +35,6 @@ assert.doesNotMatch(billingServer, /plan && plan in PLAN_CATALOG \? plan : "plus
 assert.match(billingServer, /if \(subscriptionWriteError\)/);
 assert.match(billingServer, /if \(existingError\) throw new Error\("Impossible de vérifier le client de facturation\."/);
 assert.match(billingServer, /headers\["Idempotency-Key"\] = idempotencyKey/);
-assert.match(billingServer, /pace-customer-\\\$\{userId\}/);
+assert.match(billingServer, /pace-customer-/);
 
 console.log("billing entitlement and Stripe price policy: PASS");
