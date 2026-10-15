@@ -118,6 +118,15 @@ export function useHealthToday() {
 
     setLoading(true);
     try {
+      // Fail closed before migration, backfill, or encrypted reads when either
+      // health consent has been revoked or cannot be verified.
+      const consent = await fetchLegalConsent();
+      if (!isCurrent()) return;
+      if (consent.opts.health_data !== true || consent.opts.health_cloud_sync !== true) {
+        setData(EMPTY);
+        return;
+      }
+
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const migrationKey = `pace-health-e2ee-migrated:${user.id}`;
       const migrationAttemptsKey = `pace-health-e2ee-migration-attempts:${user.id}`;
@@ -137,13 +146,8 @@ export function useHealthToday() {
               // Session storage is best-effort; migration failure must never block E2EE reads.
             }
 
-            // Do not read legacy plaintext health data until the server confirms
-            // both granular consents. The migration RPC rechecks consent at write time.
-            const consent = await fetchLegalConsent();
-            if (!isCurrent()) return;
-            if (consent.opts.health_data !== true || consent.opts.health_cloud_sync !== true) {
-              throw new Error("Health migration requires active health and cloud-sync consent");
-            }
+            // The consent preflight above precedes the plaintext read; the migration
+            // RPC rechecks consent and account identity at write time.
             const migration = await migrateLegacyHealthSamplesToE2ee();
             if (!isCurrent()) return;
             localStorage.setItem(migrationKey, "1");
@@ -213,14 +217,28 @@ export function useHealthToday() {
 
   useEffect(() => {
     const handler = () => void refresh();
+    const onLegalChanged = () => {
+      const consent = window.localStorage.getItem("pace.legal.consent");
+      let opts: Record<string, unknown> | null = null;
+      try {
+        opts = consent ? (JSON.parse(consent) as { opts?: Record<string, unknown> }).opts ?? null : null;
+      } catch {
+        opts = null;
+      }
+      if (opts?.health_data !== true || opts?.health_cloud_sync !== true) {
+        refreshGeneration.current += 1;
+        setData(EMPTY);
+      }
+      void refresh();
+    };
     window.addEventListener("pace.health.changed", handler);
-    window.addEventListener("pace.legal.changed", handler);
+    window.addEventListener("pace.legal.changed", onLegalChanged);
     const onOnline = () => void refresh();
     window.addEventListener("online", onOnline);
     if (!user) {
       return () => {
         window.removeEventListener("pace.health.changed", handler);
-        window.removeEventListener("pace.legal.changed", handler);
+        window.removeEventListener("pace.legal.changed", onLegalChanged);
         window.removeEventListener("online", onOnline);
       };
     }
@@ -263,6 +281,7 @@ export function useHealthToday() {
 
     return () => {
       cancelled = true;
+      refreshGeneration.current += 1;
       window.removeEventListener("pace.health.changed", handler);
       window.removeEventListener("pace.legal.changed", handler);
       window.removeEventListener("online", onOnline);
