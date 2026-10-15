@@ -163,7 +163,13 @@ export async function applyStripeSubscription(
   const metadataPlan = subscription.metadata?.pace_plan;
   if (!pricePlan) throw new Error("Stripe subscription has an unrecognized Price ID.");
   if (metadataPlan && metadataPlan !== pricePlan) {
-    throw new Error("Stripe subscription plan metadata does not match its Price ID.");
+    // Stripe Price ID is authoritative, especially after customer-portal plan
+    // changes. Log stale metadata but never let it grant a higher tier.
+    console.warn("Stripe subscription metadata differs from Price ID", {
+      subscriptionId: subscription.id,
+      metadataPlan,
+      pricePlan,
+    });
   }
   const safePlan: PlanId = pricePlan;
   let userId = subscription.metadata?.pace_user_id;
