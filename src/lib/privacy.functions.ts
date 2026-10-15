@@ -30,11 +30,8 @@ const EXPORT_TABLES = [
   "billing_trials",
   "sport_exercises",
   "sport_programs",
-  "sport_program_items",
   "sport_progression_targets",
   "sport_workout_sessions",
-  "sport_workout_exercises",
-  "sport_workout_sets",
 ] as const;
 
 const EXPORT_ORDER_BY: Record<string, string> = {
