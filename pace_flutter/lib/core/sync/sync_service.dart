@@ -54,8 +54,9 @@ class SyncService {
         if (!result.hasRemote || result.remoteUpdatedAt == null) {
           // A rejected RPC without a canonical row is ambiguous (for example,
           // a transient read/RLS failure). Keep the mutation queued; never
-          // silently discard a local change without a confirmed winner.
-          break;
+          // silently discard a local change without a confirmed winner. Continue
+          // with other keys so one blocked mutation cannot stall the whole outbox.
+          continue;
         }
         await localStore.applyRemote(
           operation['key'] as String,
