@@ -138,8 +138,16 @@ export async function applyStripeSubscription(
   },
 ) {
   const priceId = subscription.items?.data?.[0]?.price?.id;
-  const plan = (subscription.metadata?.pace_plan as PlanId | undefined) ?? planFromPriceId(priceId);
-  const safePlan: PlanId = plan && plan in PLAN_CATALOG ? plan : "plus";
+  // The Stripe Price ID is authoritative. Never default an unknown price to a
+  // paid tier, and reject metadata/price mismatches rather than granting the
+  // higher of two conflicting plans.
+  const pricePlan = planFromPriceId(priceId);
+  const metadataPlan = subscription.metadata?.pace_plan;
+  if (!pricePlan) throw new Error("Stripe subscription has an unrecognized Price ID.");
+  if (metadataPlan && metadataPlan !== pricePlan) {
+    throw new Error("Stripe subscription plan metadata does not match its Price ID.");
+  }
+  const safePlan: PlanId = pricePlan;
   let userId = subscription.metadata?.pace_user_id;
   if (!userId) {
     const { data } = await supabase.from("billing_customers").select("user_id").eq("stripe_customer_id", subscription.customer).maybeSingle();
