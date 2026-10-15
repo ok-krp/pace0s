@@ -38,6 +38,8 @@ assert.match(progressionSource, /hasAiProcessingConsent\(context\.supabase, cont
 assert.match(aiConsentSource, /if \(granular\) return granular\.granted === true/);
 assert.match(aiConsentSource, /if \(typeof opts\?\.ai_processing === "boolean"\) return opts\.ai_processing/);
 assert.match(aiConsentSource, /if \(granularError\)/);
+assert.match(aiConsentSource, /\.eq\("legal_version", LEGAL_VERSIONS\.eula\)/);
+assert.match(aiConsentSource, /\.eq\("policy_version", LEGAL_VERSIONS\.privacy\)/);
 assert.match(aiConsentSource, /\.order\("decision_sequence", \{ ascending: false \}\)/);
 assert.match(aiChatSource, /hasAiProcessingConsent\(client, userId\)/);
 assert.match(aiChatSource, /consent_lookup_failed/);
