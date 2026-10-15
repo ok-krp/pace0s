@@ -1,5 +1,10 @@
 name: Pace Native Flutter
 
+concurrency:
+  group: pace-native-${{ github.ref }}
+  cancel-in-progress: true
+
+
 on:
   workflow_dispatch:
   push:
