@@ -7,25 +7,69 @@ import 'package:path_provider/path_provider.dart';
 /// Durable local state used by the native app. It is independent from the web
 /// application and is safe to use while completely offline.
 class LocalStore {
-  LocalStore._(this._file);
+  LocalStore._(this._directory, this._file);
 
-  final File _file;
+  final Directory _directory;
+  File _file;
+  String? _activeUserId;
   Map<String, dynamic> _data = <String, dynamic>{};
   Future<void> _flushQueue = Future<void>.value();
+  Future<void> _accountSwitchQueue = Future<void>.value();
 
-  static Future<LocalStore> open() async {
-    final directory = await getApplicationSupportDirectory();
-    final file = File(p.join(directory.path, 'pace_local.json'));
-    final store = LocalStore._(file);
-    if (await file.exists()) {
-      try {
-        final decoded = jsonDecode(await file.readAsString());
-        if (decoded is Map<String, dynamic>) store._data = decoded;
-      } catch (_) {
-        store._data = <String, dynamic>{};
-      }
-    }
+  /// Null means local guest state. Signed-in users always get a separate file;
+  /// legacy global data stays in the guest file and is never uploaded to a
+  /// newly signed-in account implicitly.
+  String? get activeUserId => _activeUserId;
+
+  static Future<LocalStore> open({Directory? directory}) async {
+    final root = directory ?? await getApplicationSupportDirectory();
+    final file = File(p.join(root.path, 'pace_local.json'));
+    final store = LocalStore._(root, file);
+    await store._loadFile(file);
     return store;
+  }
+
+  Future<void> activateAccount(String? userId) {
+    final nextUserId = userId?.trim().isEmpty == true ? null : userId?.trim();
+    final operation = _accountSwitchQueue.catchError((Object _) {}).then((_) async {
+      if (_activeUserId == nextUserId) return;
+
+      await _flush();
+      _activeUserId = nextUserId;
+      final filename = nextUserId == null
+          ? 'pace_local.json'
+          : 'pace_local_${nextUserId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.json';
+      _file = File(p.join(_directory.path, filename));
+      _data = <String, dynamic>{};
+      await _loadFile(_file);
+    });
+    _accountSwitchQueue = operation;
+    return operation;
+  }
+
+  Future<void> _loadFile(File file) async {
+    final backup = File('${file.path}.bak');
+    if (!await file.exists() && await backup.exists()) {
+      await backup.rename(file.path);
+    }
+    if (!await file.exists()) {
+      _data = <String, dynamic>{};
+      return;
+    }
+
+    try {
+      final decoded = jsonDecode(await file.readAsString());
+      if (decoded is! Map<String, dynamic>) {
+        throw const FormatException('Local state root must be a JSON object');
+      }
+      _data = decoded;
+    } catch (_) {
+      // Preserve corrupt state for recovery instead of silently replacing it
+      // with an empty store.
+      final quarantine = File('${file.path}.corrupt-${DateTime.now().toUtc().microsecondsSinceEpoch}');
+      await file.rename(quarantine.path);
+      _data = <String, dynamic>{};
+    }
   }
 
   dynamic read(String key) => _data[key];
@@ -103,14 +147,29 @@ class LocalStore {
   }
 
   Future<void> _flush() {
-    // Network sync can overlap with a user write. Serializing filesystem
-    // replacement prevents an older flush from racing a newer one.
-    _flushQueue = _flushQueue.then((_) async {
-      await _file.parent.create(recursive: true);
-      final temporary = File('${_file.path}.tmp');
-      await temporary.writeAsString(jsonEncode(_data), flush: true);
-      if (await _file.exists()) await _file.delete();
-      await temporary.rename(_file.path);
+    // Capture both the destination and snapshot now: an account switch must
+    // never redirect a queued write into the next account's file.
+    final targetFile = _file;
+    final serialized = jsonEncode(_data);
+    _flushQueue = _flushQueue.catchError((Object _) {}).then((_) async {
+      await targetFile.parent.create(recursive: true);
+      final temporary = File('${targetFile.path}.tmp');
+      final backup = File('${targetFile.path}.bak');
+      await temporary.writeAsString(serialized, flush: true);
+
+      if (await targetFile.exists()) {
+        if (await backup.exists()) await backup.delete();
+        await targetFile.rename(backup.path);
+      }
+      try {
+        await temporary.rename(targetFile.path);
+        if (await backup.exists()) await backup.delete();
+      } catch (_) {
+        if (!await targetFile.exists() && await backup.exists()) {
+          await backup.rename(targetFile.path);
+        }
+        rethrow;
+      }
     });
     return _flushQueue;
   }
