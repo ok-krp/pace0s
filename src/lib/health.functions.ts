@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { TablesInsert } from "@/integrations/supabase/types";
+import { LEGAL_VERSIONS } from "./legal";
 
 const SampleType = z.enum(["steps", "kcal_active", "kcal_total", "heart_rate", "resting_heart_rate", "distance_m", "sleep_min", "exercise_duration_min", "weight_kg", "oxygen_saturation", "temperature_c", "cadence_rpm", "power_w"]);
 const insertSchema = z.object({ samples: z.array(z.object({ ts: z.string(), type: SampleType, value: z.number().finite(), source: z.string().max(128).default("manual"), source_id: z.string().max(128).optional(), external_id: z.string().max(256).optional(), metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional() })).min(1).max(5000) });
@@ -68,10 +69,10 @@ export const insertEncryptedHealthSamples = createServerFn({ method: "POST" })
   .validator((d: unknown) => encryptedInsertSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: healthConsent } = await context.supabase
-      .from("consent_records").select("granted").eq("consent_type", "health_data")
+      .from("consent_records").select("granted").eq("user_id", context.userId).eq("legal_version", LEGAL_VERSIONS.eula).eq("policy_version", LEGAL_VERSIONS.privacy).eq("consent_type", "health_data")
       .order("created_at", { ascending: false }).order("decision_sequence" as any, { ascending: false }).limit(1).maybeSingle();
     const { data: cloudConsent } = await context.supabase
-      .from("consent_records").select("granted").eq("consent_type", "health_cloud_sync")
+      .from("consent_records").select("granted").eq("user_id", context.userId).eq("legal_version", LEGAL_VERSIONS.eula).eq("policy_version", LEGAL_VERSIONS.privacy).eq("consent_type", "health_cloud_sync")
       .order("created_at", { ascending: false }).order("decision_sequence" as any, { ascending: false }).limit(1).maybeSingle();
     if (healthConsent?.granted !== true || cloudConsent?.granted !== true) {
       throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
@@ -94,10 +95,10 @@ export const listEncryptedHealthSamples = createServerFn({ method: "GET" })
   .validator((d: unknown) => z.object({ limit: z.number().int().min(1).max(10000).default(10000) }).parse(d ?? {}))
   .handler(async ({ data, context }) => {
     const { data: healthConsent } = await context.supabase.from("consent_records")
-      .select("granted").eq("consent_type", "health_data")
+      .select("granted").eq("user_id", context.userId).eq("legal_version", LEGAL_VERSIONS.eula).eq("policy_version", LEGAL_VERSIONS.privacy).eq("consent_type", "health_data")
       .order("created_at", { ascending: false }).order("decision_sequence" as any, { ascending: false }).limit(1).maybeSingle();
     const { data: cloudConsent } = await context.supabase.from("consent_records")
-      .select("granted").eq("consent_type", "health_cloud_sync")
+      .select("granted").eq("user_id", context.userId).eq("legal_version", LEGAL_VERSIONS.eula).eq("policy_version", LEGAL_VERSIONS.privacy).eq("consent_type", "health_cloud_sync")
       .order("created_at", { ascending: false }).order("decision_sequence" as any, { ascending: false }).limit(1).maybeSingle();
     if (healthConsent?.granted !== true || cloudConsent?.granted !== true) {
       throw new Error("Le consentement santé et la synchronisation cloud doivent être activés.");
