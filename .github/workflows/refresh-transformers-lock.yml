@@ -35,7 +35,7 @@ jobs:
           NODE
       - name: Audit production dependencies
         run: |
-          npm install --ignore-scripts --legacy-peer-deps --omit=dev --no-fund --no-package-lock
+          npm install --ignore-scripts --legacy-peer-deps --omit=dev --no-fund
           npm audit --omit=dev || echo '::warning::Production audit still reports advisories; inspect this job log before merging.'
       - name: Commit refreshed Bun lockfile
         run: |
