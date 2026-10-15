@@ -131,7 +131,7 @@ export async function handleAiChat(request: Request) {
     if (!ephemeral) { const { data, error } = await client.from("ai_conversations").select("id").eq("id", conversationId).eq("user_id", userId).eq("agent_type", agentType).maybeSingle(); if (error) fail(503, "db_error", "Erreur base de données."); if (!data) fail(404, "conversation_not_found", "Cette conversation n’existe plus. Créez-en une nouvelle."); }
     const runtime = await getAiRuntimeConfig(client, userId, agentType);
     if (runtime.source === "pace") {
-      let quota;
+      let quota: Awaited<ReturnType<typeof consumeCloudAiAction>>;
       try {
         quota = await consumeCloudAiAction(client);
       } catch {
