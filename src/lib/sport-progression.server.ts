@@ -2,6 +2,7 @@ import { generateText } from "ai";
 import { z } from "zod";
 import { getAiRuntimeConfig } from "./ai-provider.server";
 import type { Json } from "@/integrations/supabase/types";
+import { consumeCloudAiAction } from "./ai-quota.server";
 
 const inputSchema = z.object({
   sessionId: z.string().uuid(),
@@ -155,6 +156,14 @@ export async function generateSportProgressionServer(context: { supabase: any; u
 
     try {
       const runtime = await getAiRuntimeConfig(context.supabase, context.userId, "coach");
+      if (runtime.source === "pace") {
+        const quota = await consumeCloudAiAction(context.supabase);
+        if (!quota.allowed) {
+          throw new Error(quota.monthly_limit > 0
+            ? `Quota IA cloud mensuel atteint (${quota.used}/${quota.monthly_limit}).`
+            : "Un abonnement actif est nécessaire pour utiliser l’IA cloud Pace.");
+        }
+      }
       const exercisePayload = typedExercises.map((exercise) => ({
         id: exercise.id,
         name: exercise.name,
