@@ -16,6 +16,9 @@ assert.ok(
   deletionHandler.indexOf("nutritionBucket.remove") < deletionHandler.indexOf("for (const table of DELETE_TABLES)"),
   "storage cleanup must complete before SQL rows are deleted",
 );
+assert.match(deletionHandler, /remainingNutritionPaths/);
+assert.match(deletionHandler, /remainingNutritionPaths\.length > 0/);
+
 assert.ok(
   deletionHandler.indexOf("nutritionBucket.remove") < deletionHandler.indexOf("auth.admin.deleteUser"),
   "storage cleanup must complete before deleting the Auth user",
