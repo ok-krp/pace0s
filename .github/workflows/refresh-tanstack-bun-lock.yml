@@ -22,25 +22,20 @@ jobs:
       - name: Resolve patched TanStack dependencies
         run: bun install
       - name: Verify fixed versions
+        shell: bash
         run: |
-          node <<'NODE'
-          const lock = JSON.parse(require('fs').readFileSync('./bun.lock', 'utf8'));
-          const packages = lock.packages || {};
-          const start = packages['@tanstack/react-start']?.[0]?.split('@').pop();
-          const core = packages['@tanstack/start-server-core']?.[0]?.split('@').pop();
-          const parse = (value) => String(value || '').split('.').map(Number);
-          const atLeast = (actual, minimum) => {
-            const a = parse(actual), b = parse(minimum);
-            for (let i = 0; i < 3; i++) {
-              if ((a[i] || 0) > (b[i] || 0)) return true;
-              if ((a[i] || 0) < (b[i] || 0)) return false;
-            }
-            return true;
-          };
-          if (!atLeast(start, '1.168.60')) throw new Error('Unpatched @tanstack/react-start: ' + start);
-          if (!atLeast(core, '1.169.39')) throw new Error('Unpatched @tanstack/start-server-core: ' + core);
-          console.log({ reactStart: start, startServerCore: core });
-          NODE
+          set -euo pipefail
+          start="$(grep -oE '"@tanstack/react-start@[^"]+"' bun.lock | head -n 1 | sed -E 's/.*@([0-9]+\.[0-9]+\.[0-9]+)"/\1/')"
+          core="$(grep -oE '"@tanstack/start-server-core@[^"]+"' bun.lock | head -n 1 | sed -E 's/.*@([0-9]+\.[0-9]+\.[0-9]+)"/\1/')"
+          at_least() {
+            local actual="$1" minimum="$2" lowest
+            lowest="$(printf '%s\n%s\n' "$minimum" "$actual" | sort -V | head -n 1)"
+            [ "$lowest" = "$minimum" ]
+          }
+          echo "Resolved @tanstack/react-start=$start"
+          echo "Resolved @tanstack/start-server-core=$core"
+          at_least "$start" "1.168.60" || { echo "::error::Unpatched @tanstack/react-start: $start"; exit 1; }
+          at_least "$core" "1.169.39" || { echo "::error::Unpatched @tanstack/start-server-core: $core"; exit 1; }
       - name: Commit refreshed Bun lockfile
         run: |
           git config user.name "github-actions[bot]"
