@@ -53,8 +53,11 @@ void main() {
     expect(store.pendingOperations(now: now), isEmpty);
     expect(store.hasPendingOperationForKey('pace.profile.name'), isTrue);
     expect(store.hasPendingOperationForKey('pace.profile.other'), isFalse);
+    expect(store.hasDueOperationForKey('pace.profile.name', now: now), isFalse);
+    expect(store.hasDueOperationForKey('pace.profile.other', now: now), isFalse);
     expect(store.pendingOperations(now: now.add(const Duration(seconds: 4))), isEmpty);
     final due = store.pendingOperations(now: now.add(const Duration(seconds: 5)));
+    expect(store.hasDueOperationForKey('pace.profile.name', now: now.add(const Duration(seconds: 5))), isTrue);
     expect(due, hasLength(1));
     expect(due.single['attempts'], 1);
     expect(due.single['nextAttemptAt'], isA<String>());
