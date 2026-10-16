@@ -64,21 +64,51 @@ async function ensureCustomer(
 const trialSchema = z.object({ deviceId: z.string().min(16).max(200) });
 
 function hashDeviceId(deviceId: string): string {
-  const secret = process.env.PACE_BYOK_ENCRYPTION_KEY ?? process.env.SUPABASE_SECRET_KEY ?? "pace-trial-salt";
+  const secret =
+    process.env.PACE_BYOK_ENCRYPTION_KEY ??
+    process.env.SUPABASE_SECRET_KEY ??
+    process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) throw new Error("Configuration serveur insuffisante pour l’essai gratuit.");
   return createHash("sha256").update(`${secret}:${deviceId}`).digest("hex");
 }
 
 export async function ensureTrial(userId: string, deviceId: string, supabase: typeof supabaseAdmin) {
-  const { data: existing } = await supabaseAdmin.from("billing_trials").select("trial_started_at,trial_ends_at,device_hash").eq("user_id", userId).maybeSingle();
+  const { data: existing, error: existingError } = await supabase
+    .from("billing_trials")
+    .select("trial_started_at,trial_ends_at,device_hash")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw new Error("Impossible de vérifier l’essai gratuit.");
   if (existing) return existing;
+
   const deviceHash = hashDeviceId(deviceId);
   const now = new Date();
   const ends = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const { data, error } = await supabaseAdmin.from("billing_trials").insert({ user_id: userId, device_hash: deviceHash, trial_started_at: now.toISOString(), trial_ends_at: ends.toISOString() }).select("trial_started_at,trial_ends_at,device_hash").single();
+  const { data, error } = await supabase
+    .from("billing_trials")
+    .insert({
+      user_id: userId,
+      device_hash: deviceHash,
+      trial_started_at: now.toISOString(),
+      trial_ends_at: ends.toISOString(),
+    })
+    .select("trial_started_at,trial_ends_at,device_hash")
+    .single();
   if (error) {
-    const { data: byDevice } = await supabaseAdmin.from("billing_trials").select("user_id,trial_started_at,trial_ends_at,device_hash").eq("device_hash", deviceHash).maybeSingle();
+    const { data: byDevice, error: deviceError } = await supabase
+      .from("billing_trials")
+      .select("user_id,trial_started_at,trial_ends_at,device_hash")
+      .eq("device_hash", deviceHash)
+      .maybeSingle();
+    if (deviceError) throw new Error("Impossible de vérifier l’éligibilité de l’appareil.");
     if (byDevice && byDevice.user_id !== userId) throw new Error("Cet appareil a déjà utilisé l’essai gratuit de Pace.");
-    const { data: retry } = await supabaseAdmin.from("billing_trials").select("trial_started_at,trial_ends_at,device_hash").eq("user_id", userId).maybeSingle();
+
+    const { data: retry, error: retryError } = await supabase
+      .from("billing_trials")
+      .select("trial_started_at,trial_ends_at,device_hash")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (retryError) throw new Error("Impossible de vérifier l’essai gratuit.");
     if (retry) return retry;
     throw new Error("Impossible d’activer l’essai gratuit.");
   }
