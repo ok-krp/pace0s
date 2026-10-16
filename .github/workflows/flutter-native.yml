@@ -81,7 +81,26 @@ jobs:
           NDK_DIR="${ANDROID_HOME}/ndk/${NDK_VERSION}"
           ndk_is_valid() {
             [ -f "${NDK_DIR}/source.properties" ] &&
-              grep -Eq '^[[:space:]]*Pkg\.Revision[[:space:]]*=[[:space:]]*28\.2\.13676358[[:space:]]*
+              grep -Eq '^[[:space:]]*Pkg[.]Revision[[:space:]]*=[[:space:]]*28[.]2[.]13676358[[:space:]]*$' "${NDK_DIR}/source.properties" &&
+              [ -x "${NDK_DIR}/ndk-build" ] &&
+              [ -x "${NDK_DIR}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]
+          }
+          for attempt in 1 2 3; do
+            if ndk_is_valid; then
+              echo "NDK ${NDK_VERSION} passed revision and toolchain validation"
+              exit 0
+            fi
+            # Never reuse a partially extracted or corrupt NDK directory.
+            rm -rf "${NDK_DIR}"
+            yes | "${SDKMANAGER}" --sdk_root="${ANDROID_HOME}" --install "ndk;${NDK_VERSION}" || true
+            if ndk_is_valid; then
+              echo "NDK ${NDK_VERSION} installed and validated"
+              exit 0
+            fi
+            echo "::warning::NDK installation attempt ${attempt}/3 failed validation; removing partial files before retry"
+            rm -rf "${NDK_DIR}"
+            sleep $((attempt * 5))
+          done
           echo "::error::Unable to install Android NDK ${NDK_VERSION} after 3 attempts"
           exit 1
       - name: Build APK
