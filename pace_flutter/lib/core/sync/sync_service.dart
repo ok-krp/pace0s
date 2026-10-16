@@ -55,7 +55,13 @@ class SyncService {
         preserveLocal: hasPendingAiPreferenceMutation,
       );
       if (!_isCurrentAccount(userId)) return;
-      await _pullRemote(userId);
+      try {
+        await _pullRemote(userId);
+      } catch (_) {
+        // Pulls are best-effort while offline. Keep local state intact and
+        // retry on the next sync trigger instead of leaking an async error
+        // from timer/auth callbacks into Flutter's uncaught-error handler.
+      }
     } finally {
       _running = false;
     }
