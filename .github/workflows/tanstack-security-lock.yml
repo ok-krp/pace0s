@@ -1,0 +1,44 @@
+name: TanStack security lock policy
+
+on:
+  pull_request:
+    paths:
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/tanstack-security-lock.yml"
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/tanstack-security-lock.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-patched-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Verify frozen lockfile
+        run: bun install --frozen-lockfile
+      - name: Enforce patched TanStack versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          start="$(grep -oE '"@tanstack/react-start@[^"]+"' bun.lock | head -n 1 | sed -E 's/.*@([0-9]+\.[0-9]+\.[0-9]+)"/\1/')"
+          core="$(grep -oE '"@tanstack/start-server-core@[^"]+"' bun.lock | head -n 1 | sed -E 's/.*@([0-9]+\.[0-9]+\.[0-9]+)"/\1/')"
+          at_least() {
+            local actual="$1" minimum="$2" lowest
+            lowest="$(printf '%s\n%s\n' "$minimum" "$actual" | sort -V | head -n 1)"
+            [ "$lowest" = "$minimum" ]
+          }
+          echo "Resolved @tanstack/react-start=$start"
+          echo "Resolved @tanstack/start-server-core=$core"
+          at_least "$start" "1.168.60" || { echo "::error::Unpatched @tanstack/react-start: $start"; exit 1; }
+          at_least "$core" "1.169.39" || { echo "::error::Unpatched @tanstack/start-server-core: $core"; exit 1; }
