@@ -17,9 +17,11 @@ assert.ok(
 );
 assert.match(source, /supabaseAdmin\.from\("consent_records"\)\.insert\(records\)/);
 assert.match(source, /supabaseAdmin\.from\("legal_consent"\)\.upsert\(/);
-assert.match(migration, /REVOKE INSERT, UPDATE, DELETE ON TABLE public\.consent_records FROM authenticated/);
+assert.match(migration, /REVOKE UPDATE, DELETE ON TABLE public\.consent_records FROM authenticated/);
+assert.match(migration, /GRANT SELECT, INSERT ON TABLE public\.consent_records TO authenticated/);
+assert.match(migration, /CREATE TRIGGER consent_records_force_created_at[\s\S]*?EXECUTE FUNCTION public\.enforce_consent_timestamps\(\)/);
+assert.match(migration, /NEW\.created_at := now\(\)/);
 assert.match(migration, /REVOKE INSERT, UPDATE, DELETE ON TABLE public\.legal_consent FROM authenticated/);
-assert.match(migration, /GRANT INSERT ON TABLE public\.consent_records TO service_role/);
 assert.match(migration, /GRANT INSERT, UPDATE ON TABLE public\.legal_consent TO service_role/);
 
 console.log("Latest consent order and server-only write contract: PASS");
