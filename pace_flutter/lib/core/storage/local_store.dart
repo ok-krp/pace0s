@@ -65,7 +65,7 @@ class LocalStore {
   Future<void> _loadFile(File file) async {
     final backup = File('${file.path}.bak');
     if (!await file.exists() && await backup.exists()) {
-      await backup.rename(file.path);
+      await backup.copy(file.path);
     }
     if (!await file.exists()) {
       _data = <String, dynamic>{};
