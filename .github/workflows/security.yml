@@ -3,7 +3,7 @@ name: Security
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, fix/paceos-comprehensive-audit-2026-10]
   schedule:
     - cron: "0 5 * * 1"
   workflow_dispatch:
@@ -65,7 +65,7 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           elif [ "$status" = "404" ]; then
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::GitHub Dependency Graph is disabled or unavailable for this repository. Dependency Review was skipped; enable it in Settings → Code security and analysis. The separate production npm audit still runs."
+            echo "::warning::GitHub Dependency Graph is disabled or unavailable for this repository. Dependency Review was skipped; enable it in Settings → Code security and analysis. The separate locked production dependency audit still runs."
           else
             echo "::error::Could not verify Dependency Graph availability (GitHub API HTTP $status)."
             exit 1
@@ -76,13 +76,15 @@ jobs:
           fail-on-severity: high
 
   audit:
-    name: npm audit (production, blocking)
+    name: Bun lockfile audit (production, blocking)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: "22.13"
-      - run: npm install --ignore-scripts --legacy-peer-deps --omit=dev --no-fund
-      - name: Fail on production dependency vulnerabilities
-        run: npm audit --omit=dev
+          bun-version: latest
+      # bun audit reads the committed bun.lock directly. Do not use npm install
+      # here: without package-lock.json, npm would resolve a different dependency
+      # graph and the audit would not describe the reproducible production lock.
+      - name: Audit locked production dependencies
+        run: bun audit --prod
