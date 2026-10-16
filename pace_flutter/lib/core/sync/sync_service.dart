@@ -61,9 +61,6 @@ class SyncService {
       final hasPendingAiPreferenceMutation =
           localStore.hasPendingOperationForKey('pace.settings.ai.confirm_actions') ||
           localStore.hasPendingOperationForKey('pace.settings.ai.memory');
-      final hasDueAiPreferenceMutation =
-          localStore.hasDueOperationForKey('pace.settings.ai.confirm_actions') ||
-          localStore.hasDueOperationForKey('pace.settings.ai.memory');
       // If a local preference write was acknowledged, propagate it to the
       // dedicated ai_preferences table. If it is still deferred by backoff,
       // preserve the local choice but do not bypass retry scheduling.
