@@ -76,5 +76,32 @@ jobs:
           NODE
       - run: bun run build
       - run: bun run typecheck
-      - run: bun run test:rich-note-sanitization
+      - name: Contract test - cloud sync
+        run: bun run test:sync
+      - name: Contract test - nutrition photo
+        run: bun run test:nutrition-photo
+      - name: Contract test - billing and trial policy
+        run: bun run test:billing-plan-policy
+      - name: Contract test - Stripe webhook body limit
+        run: bun run test:stripe-webhook-body-limit
+      - name: Contract test - custom AI SSRF
+        run: bun run test:custom-ai-ssrf-policy
+      - name: Contract test - error-report security
+        run: bun run test:error-report-security
+      - name: Contract test - rich-note sanitization
+        run: bun run test:rich-note-sanitization
+      - name: Contract test - safe redirects
+        run: bun run test:safe-redirect-policy
+      - name: Contract test - latest consent
+        run: bun run test:latest-consent-policy
+      - name: Contract test - Supabase configuration
+        run: bun run test:supabase-config
+      - name: Contract test - AI BYOK
+        run: bun run test:byok
+      - name: Contract test - Health E2EE protocol
+        run: bun run test:health-e2ee
+      - name: Contract test - Health E2EE Realtime
+        run: bun run test:health-e2ee-realtime
+      - name: Contract test - Signal dark mode
+        run: bun run test:signal-dark-mode
       - run: bun run lint
