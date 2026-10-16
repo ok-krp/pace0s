@@ -15,7 +15,8 @@ assert.match(provider, /supabaseAdmin/, "BYOK secrets must use the server-only S
 assert.doesNotMatch(provider, /localStorage/, "BYOK secrets must not use localStorage");
 assert.doesNotMatch(chat, /GEMINI_API_KEY/, "chat handler must not bypass provider selection with a hard-coded Gemini key");
 assert.match(chat, /getAiRuntimeConfig/, "chat handler must resolve its provider at runtime");
-assert.match(chat, /runtime\.source === "byok"/, "chat handler must distinguish BYOK from Pace AI");
+assert.match(chat, /model: runtime\.gateway\(runtime\.model\)/, "chat handler must stream with the resolved provider gateway and model");
+assert.match(chat, /PROVIDER_LABELS\[runtime\.provider\]/, "chat response must report the resolved provider");
 assert.match(settings, /Ma propre clé API/, "BYOK UI option missing");
 assert.match(settings, /Tester la connexion/, "connection test UI missing");
 assert.match(settings, /Supprimer la clé/, "key deletion UI missing");
