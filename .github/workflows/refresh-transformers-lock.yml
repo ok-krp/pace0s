@@ -25,14 +25,18 @@ jobs:
       - name: Resolve the pinned Transformers release
         run: bun install
       - name: Verify Bun lock resolution
+        shell: bash
         run: |
-          node <<'NODE'
-          const lock = JSON.parse(require('fs').readFileSync('./bun.lock', 'utf8'));
-          const entry = lock.packages?.['@huggingface/transformers']?.[0];
-          const version = entry?.split('@').pop();
-          if (version !== '4.3.1') throw new Error('Expected @huggingface/transformers 4.3.1, found ' + version);
-          console.log({ transformers: version });
-          NODE
+          grep -Fq '"@huggingface/transformers@4.3.1"' bun.lock || {
+            echo "::error::bun.lock does not resolve @huggingface/transformers@4.3.1"
+            grep -n -A2 -B2 '@huggingface/transformers' bun.lock || true
+            exit 1
+          }
+          if grep -Fq '"@huggingface/transformers@4.2.0"' bun.lock; then
+            echo "::error::bun.lock still contains vulnerable @huggingface/transformers@4.2.0"
+            exit 1
+          fi
+          echo "Verified @huggingface/transformers@4.3.1 in bun.lock"
       - name: Audit production dependencies
         run: |
           npm install --ignore-scripts --legacy-peer-deps --omit=dev --no-fund
