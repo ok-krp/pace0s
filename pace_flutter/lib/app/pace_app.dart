@@ -190,7 +190,9 @@ class _PaceShellState extends State<PaceShell> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) => unawaited(widget.sync.syncNow()));
+    // Bound background polling to reduce repeated full user_state reads.
+    // Cross-device updates may take up to one minute when Realtime is unavailable.
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) => unawaited(widget.sync.syncNow()));
   }
 
   @override
