@@ -181,6 +181,12 @@ class LocalStore {
     return List.unmodifiable(due);
   }
 
+  /// True while an outbox mutation exists, including mutations deferred by
+  /// retry backoff. Pulls must not overwrite local values just because a
+  /// queued mutation is temporarily not due for replay.
+  bool hasPendingOperationForKey(String key) =>
+      _outbox.any((entry) => entry['key'] == key);
+
   Future<void> deferOperation(
     Map<String, dynamic> operation, {
     required String expectedUserId,
