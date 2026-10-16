@@ -112,7 +112,25 @@ function serializeSafeNode(node: Node): string {
   return open + Array.from(el.childNodes).map(serializeSafeNode).join("") + `</${tag.toLowerCase()}>`;
 }
 
-/** Retourne du HTML sûr, destiné à être injecté dans l'éditeur de notes. */
+/** Builds a sanitized DOM fragment without routing untrusted text through an innerHTML sink. */
+export function sanitizeNoteFragment(html: string, ownerDocument: Document): DocumentFragment {
+  const fragment = ownerDocument.createDocumentFragment();
+  if (typeof html !== "string" || !html) return fragment;
+  if (typeof DOMParser === "undefined") {
+    fragment.appendChild(ownerDocument.createTextNode(html));
+    return fragment;
+  }
+
+  const doc = new DOMParser().parseFromString(`<!doctype html><body>${html}`, "text/html");
+  cleanNode(doc.body);
+  while (doc.body.firstChild) {
+    fragment.appendChild(ownerDocument.importNode(doc.body.firstChild, true));
+    doc.body.removeChild(doc.body.firstChild);
+  }
+  return fragment;
+}
+
+/** Retourne du HTML sûr, destiné à être stocké dans les notes riches. */
 export function sanitizeNoteHtml(html: string): string {
   if (typeof html !== "string" || !html) return "";
   if (typeof DOMParser === "undefined") return escapeText(html);
