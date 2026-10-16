@@ -51,6 +51,8 @@ void main() {
 
     await store.deferOperation(operation, expectedUserId: 'user-a', now: now);
     expect(store.pendingOperations(now: now), isEmpty);
+    expect(store.hasPendingOperationForKey('pace.profile.name'), isTrue);
+    expect(store.hasPendingOperationForKey('pace.profile.other'), isFalse);
     expect(store.pendingOperations(now: now.add(const Duration(seconds: 4))), isEmpty);
     final due = store.pendingOperations(now: now.add(const Duration(seconds: 5)));
     expect(due, hasLength(1));
