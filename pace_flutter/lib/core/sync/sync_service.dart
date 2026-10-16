@@ -95,7 +95,10 @@ class SyncService {
         } catch (_) {
           // An account switch is already in progress; leave the outbox untouched.
         }
-        break;
+        // Continue with independent keys. A transient failure on one key must
+        // not starve unrelated mutations; this snapshot is finite and each
+        // failed operation has already been deferred with bounded backoff.
+        continue;
       }
     }
   }
