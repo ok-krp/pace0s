@@ -33,6 +33,7 @@ void main() {
       expect(SyncService.isUserStateWriteAccepted({'updated_at': 'now'}), isFalse);
       expect(SyncService.isUserStateWriteAccepted('true'), isFalse);
     });
+  });
 
   group('SyncService.shouldPropagateAiPreferences', () {
     test('does not bypass backoff while any local preference mutation remains', () {
@@ -64,7 +65,5 @@ void main() {
         isFalse,
       );
     });
-  });
-
   });
 }
