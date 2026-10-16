@@ -71,6 +71,17 @@ void main() {
       );
     });
 
+    test('forces a full scan when the saved delta cursor is in the future', () {
+      expect(
+        SyncService.shouldRunFullReconciliation(
+          cursorAt: now.add(const Duration(days: 1)),
+          lastFullPullAt: now.subtract(const Duration(minutes: 1)),
+          now: now,
+        ),
+        isTrue,
+      );
+    });
+
     test('recovers safely if the local clock moves behind the last full pull', () {
       expect(
         SyncService.shouldRunFullReconciliation(

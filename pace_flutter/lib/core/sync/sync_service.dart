@@ -33,7 +33,7 @@ class SyncService {
     required DateTime now,
   }) {
     if (cursorAt == null || lastFullPullAt == null) return true;
-    if (lastFullPullAt.isAfter(now)) return true;
+    if (cursorAt.isAfter(now) || lastFullPullAt.isAfter(now)) return true;
     return now.difference(lastFullPullAt) >= fullReconciliationInterval;
   }
 
