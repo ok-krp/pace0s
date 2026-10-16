@@ -284,7 +284,7 @@ class SyncService {
             (newestSeen == null || remoteTime.isAfter(newestSeen))) {
           newestSeen = remoteTime;
         }
-        if (remoteUpdatedAt == null || localStore.hasPendingOperationForKey(key)) continue;
+        if (remoteUpdatedAt == null || remoteTime == null || localStore.hasPendingOperationForKey(key)) continue;
 
         final localUpdatedAt = localStore.lastSyncedAt(key);
         if (localUpdatedAt != null) {
