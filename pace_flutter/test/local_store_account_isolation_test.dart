@@ -69,6 +69,26 @@ void main() {
     expect(store.hasPendingOperationForKey('pace.profile.name'), isFalse);
   });
 
+  test('retry backoff is capped at fifteen minutes', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'account A');
+
+    var now = DateTime.utc(2026, 10, 16, 10);
+    var operation = store.pendingOperations(now: now).single;
+    for (var attempt = 0; attempt < 10; attempt++) {
+      await store.deferOperation(operation, expectedUserId: 'user-a', now: now);
+      final delaySeconds = (5 * (1 << attempt.clamp(0, 8))).clamp(5, 900);
+      now = now.add(Duration(seconds: delaySeconds));
+      operation = store.pendingOperations(now: now).single;
+    }
+
+    final nextAttempt = DateTime.parse(operation['nextAttemptAt'] as String);
+    expect(nextAttempt.difference(now), const Duration(seconds: 900));
+    expect(store.pendingOperations(now: now.add(const Duration(seconds: 899))), isEmpty);
+    expect(store.pendingOperations(now: now.add(const Duration(seconds: 900))), hasLength(1));
+  });
+
   test('stale sync completions cannot mutate another account', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
