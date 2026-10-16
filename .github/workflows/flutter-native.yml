@@ -79,13 +79,14 @@ jobs:
           NDK_VERSION="28.2.13676358"
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
           for attempt in 1 2 3; do
-            if [ -d "${ANDROID_HOME}/ndk/${NDK_VERSION}" ]; then
+            if [ -f "${ANDROID_HOME}/ndk/${NDK_VERSION}/source.properties" ]; then
               echo "NDK ${NDK_VERSION} is already installed"
               exit 0
             fi
             rm -rf "${ANDROID_HOME}/ndk/${NDK_VERSION}"
-            if yes | "${SDKMANAGER}" --install "ndk;${NDK_VERSION}"; then
-              test -d "${ANDROID_HOME}/ndk/${NDK_VERSION}" && exit 0
+            yes | "${SDKMANAGER}" --install "ndk;${NDK_VERSION}" || true
+            if [ -f "${ANDROID_HOME}/ndk/${NDK_VERSION}/source.properties" ]; then
+              exit 0
             fi
             echo "::warning::NDK installation attempt ${attempt}/3 failed; retrying after cleaning partial files"
             rm -rf "${ANDROID_HOME}/ndk/${NDK_VERSION}"
