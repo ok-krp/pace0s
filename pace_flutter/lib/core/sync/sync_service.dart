@@ -199,12 +199,15 @@ class SyncService {
       final remoteConfirm = row['confirm_actions'];
       final remoteMemory = row['memory_level'];
       if (!_isCurrentAccount(expectedUserId)) return;
-      if (remoteConfirm is bool) {
+      if (remoteConfirm is bool &&
+          localStore.read('pace.settings.ai.confirm_actions') != remoteConfirm) {
         await localStore.write('pace.settings.ai.confirm_actions', remoteConfirm, enqueueSync: false);
       }
       if (!_isCurrentAccount(expectedUserId)) return;
-      if (remoteMemory is String) {
-        await localStore.write('pace.settings.ai.memory', remoteMemory != 'none', enqueueSync: false);
+      final memoryEnabled = remoteMemory == 'limited';
+      if (remoteMemory is String &&
+          localStore.read('pace.settings.ai.memory') != memoryEnabled) {
+        await localStore.write('pace.settings.ai.memory', memoryEnabled, enqueueSync: false);
       }
     } catch (_) {
       // Cloud preference sync is best-effort; local settings remain available.
