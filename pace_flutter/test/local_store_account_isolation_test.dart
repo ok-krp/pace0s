@@ -122,6 +122,17 @@ void main() {
     expect(reopened.read('pace.profile.name'), 'first value');
   });
 
+  test('missing primary restores backup without consuming the recovery copy', () async {
+    final backup = File('${directory.path}/pace_local.json.bak');
+    await backup.writeAsString('{"pace.profile.name":"recovered"}');
+
+    final store = await LocalStore.open(directory: directory);
+
+    expect(store.read('pace.profile.name'), 'recovered');
+    expect(await File('${directory.path}/pace_local.json').exists(), isTrue);
+    expect(await backup.exists(), isTrue);
+  });
+
   test('account data persists independently across store reopen', () async {
     var store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
