@@ -35,7 +35,7 @@ jobs:
             if (inString) {
               normalized += ch;
               if (escaped) escaped = false;
-              else if (ch === '\\\\') escaped = true;
+              else if (ch === '\\') escaped = true;
               else if (ch === '"') inString = false;
               continue;
             }
@@ -46,7 +46,7 @@ jobs:
             }
             if (ch === ',') {
               let next = i + 1;
-              while (next < raw.length && /\\s/.test(raw[next])) next += 1;
+              while (next < raw.length && /\s/.test(raw[next])) next += 1;
               if (raw[next] === '}' || raw[next] === ']') continue;
             }
             normalized += ch;
