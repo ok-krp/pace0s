@@ -18,11 +18,15 @@ export const getBillingStatus = createServerFn({ method: "GET" })
     const { ensureTrial } = await import("./billing.server");
     const trial = await ensureTrial(context.userId, data.deviceId, context.supabase);
     */
-    const { data: subscription } = await context.supabase
+    const { data: subscription, error: subscriptionError } = await context.supabase
       .from("billing_subscriptions")
       .select("plan,status,current_period_end,cancel_at_period_end")
       .eq("user_id", context.userId)
       .maybeSingle();
+    if (subscriptionError) {
+      console.error("billing status lookup failed", subscriptionError);
+      throw new Error("Impossible de charger le statut de facturation.");
+    }
 
     const paidPlan = subscription?.plan && isPaidPlan(subscription.plan as PlanId) ? (subscription.plan as PlanId) : null;
     const trialActive = false;

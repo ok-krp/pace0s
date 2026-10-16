@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../src/lib/billing.server.ts", import.meta.url), "utf8");
+const billingFunctions = readFileSync(new URL("../src/lib/billing.functions.ts", import.meta.url), "utf8");
 
 // Entitlements must be backed by a configured Stripe Price ID, never metadata alone.
 assert.match(source, /const plan = planFromPriceId\(priceId\);/);
@@ -23,4 +24,13 @@ assert.doesNotMatch(trialBody, /supabaseAdmin\.from\("billing_trials"\)/);
 assert.match(trialBody, /if \(deviceError\) throw new Error/);
 assert.match(trialBody, /if \(retryError\) throw new Error/);
 
-console.log("Billing plan, trial fail-closed behavior, and customer/subscription persistence contract: PASS");
+assert.match(
+  billingFunctions,
+  /const \{ data: subscription, error: subscriptionError \} = await context\.supabase/,
+);
+assert.match(
+  billingFunctions,
+  /if \(subscriptionError\) \{[\s\S]*?throw new Error\("Impossible de charger le statut de facturation\."/,
+);
+
+console.log("Billing plan, trial, status-read, and persistence contract: PASS");
