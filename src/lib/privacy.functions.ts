@@ -47,7 +47,7 @@ const EXPORT_ORDER_BY: Record<string, string> = {
   consent_records: "id",
   legal_consent: "id",
   reminder_settings: "id",
-  user_state: "id",
+  user_state: "key",
   notification_log: "id",
   push_subscriptions: "id",
   reminder_debug_log: "id",
