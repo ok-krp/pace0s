@@ -72,20 +72,24 @@ class LocalStore {
       return;
     }
 
+    // Read errors are not evidence of corrupt JSON. Let I/O/permission failures
+    // propagate without renaming a potentially valid primary file.
+    final contents = await file.readAsString();
     try {
-      final decoded = jsonDecode(await file.readAsString());
+      final decoded = jsonDecode(contents);
       if (decoded is! Map<String, dynamic>) {
         throw const FormatException('Local state root must be a JSON object');
       }
       _data = decoded;
-    } catch (_) {
+    } on FormatException {
       // Preserve corrupt state for recovery instead of silently replacing it
       // with an empty store. If the last known-good backup exists, restore it.
       final quarantine = File('${file.path}.corrupt-${DateTime.now().toUtc().microsecondsSinceEpoch}');
       await file.rename(quarantine.path);
       if (await backup.exists()) {
         try {
-          final backupDecoded = jsonDecode(await backup.readAsString());
+          final backupContents = await backup.readAsString();
+          final backupDecoded = jsonDecode(backupContents);
           if (backupDecoded is! Map<String, dynamic>) {
             throw const FormatException('Local state backup root must be a JSON object');
           }
