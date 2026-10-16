@@ -25,6 +25,7 @@ function sanitizeStyle(style: string): string {
 }
 
 export function isSafeLinkHref(href: string): boolean {
+  if (!href.trim()) return false;
   try {
     const url = new URL(href, "https://pace.invalid");
     return url.protocol === "https:" || url.protocol === "http:" || url.protocol === "mailto:";
