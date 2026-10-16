@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../storage/local_store.dart';
@@ -10,6 +12,7 @@ class SyncService {
   final LocalStore localStore;
   final SupabaseClient? client;
   bool _running = false;
+  bool _rerunRequested = false;
 
   bool _isCurrentAccount(String expectedUserId) =>
       client?.auth.currentUser?.id == expectedUserId &&
@@ -35,10 +38,17 @@ class SyncService {
   Future<void> syncNow() async {
     final activeClient = client;
     final userId = activeClient?.auth.currentUser?.id;
-    if (_running || activeClient == null || userId == null) return;
+    if (activeClient == null || userId == null) return;
     // Guest/offline mutations must never be replayed under whichever account
     // happens to be signed in later.
     if (localStore.activeUserId != userId) return;
+    if (_running) {
+      // Account activation can request a sync while an older account's network
+      // request is still unwinding. Queue one follow-up so the new account is
+      // not left waiting for the next 60-second timer tick.
+      _rerunRequested = true;
+      return;
+    }
 
     _running = true;
     try {
@@ -76,6 +86,10 @@ class SyncService {
       }
     } finally {
       _running = false;
+      if (_rerunRequested) {
+        _rerunRequested = false;
+        unawaited(syncNow());
+      }
     }
   }
 
