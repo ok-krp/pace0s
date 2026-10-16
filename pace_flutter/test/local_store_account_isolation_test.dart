@@ -105,6 +105,23 @@ void main() {
     expect(quarantined, isNotEmpty);
   });
 
+  test('successful flush keeps a durable previous snapshot for recovery', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'first value');
+    await store.write('pace.profile.name', 'second value');
+
+    final primary = File('${directory.path}/pace_local_user-a.json');
+    final backup = File('${directory.path}/pace_local_user-a.json.bak');
+    expect(await backup.exists(), isTrue);
+    expect((await backup.readAsString()).contains('first value'), isTrue);
+
+    await primary.writeAsString('{corrupt json');
+    final reopened = await LocalStore.open(directory: directory);
+    await reopened.activateAccount('user-a');
+    expect(reopened.read('pace.profile.name'), 'first value');
+  });
+
   test('account data persists independently across store reopen', () async {
     var store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
