@@ -17,7 +17,7 @@ assert.doesNotMatch(chat, /GEMINI_API_KEY/, "chat handler must not bypass provid
 assert.match(chat, /getAiRuntimeConfig/, "chat handler must resolve its provider at runtime");
 assert.match(chat, /model: runtime\.gateway\(runtime\.model\)/, "chat handler must stream with the resolved provider gateway and model");
 assert.match(chat, /PROVIDER_LABELS\[runtime\.provider\]/, "chat response must report the resolved provider");
-assert.match(settings, /Ma propre clé API/, "BYOK UI option missing");
+assert.match(settings, /Cloud — ma clé API/, "BYOK UI option missing");
 assert.match(settings, /Tester la connexion/, "connection test UI missing");
 assert.match(settings, /Supprimer la clé/, "key deletion UI missing");
 assert.match(migration, /ai_provider_secrets/, "secret table migration missing");
