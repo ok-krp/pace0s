@@ -257,7 +257,7 @@ class SyncService {
             .from('user_state')
             .select('key,value,updated_at')
             .eq('user_id', userId)
-            .gte('updated_at', cursorAt.toIso8601String());
+            .gte('updated_at', cursorAt!.toIso8601String());
     if (!_isCurrentAccount(userId)) return;
 
     var newestSeen = cursorAt != null && !cursorAt.isAfter(now) ? cursorAt : null;
