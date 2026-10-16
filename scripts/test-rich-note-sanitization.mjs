@@ -10,6 +10,9 @@ assert.match(sanitizer, /isSafeLinkHref/);
 assert.match(sanitizer, /if \(typeof DOMParser === "undefined"\) return escapeText\(html\);/);
 assert.match(sanitizer, /if \(typeof DOMParser === "undefined"\) return html\.trim\(\);/);
 assert.doesNotMatch(sanitizer, /html\.replace/);
+assert.match(sanitizer, /function serializeSafeNode\(node: Node\)/);
+assert.doesNotMatch(sanitizer, /return doc\.body\.innerHTML/);
+assert.match(sanitizer, /if \(!href\.trim\(\)\) return false/);
 assert.match(route, /innerHTML = sanitizeNoteHtml\(note\.html\)/);
 assert.match(route, /html: sanitizeNoteHtml\(editorRef\.current\.innerHTML\)/);
 assert.match(route, /htmlToPlainText\(sanitizeNoteHtml\(html\)\)/);
@@ -38,6 +41,8 @@ try {
 assert.equal(isSafeLinkHref("https://example.com/path"), true);
 assert.equal(isSafeLinkHref("http://example.com/path"), true);
 assert.equal(isSafeLinkHref("mailto:help@example.com"), true);
+assert.equal(isSafeLinkHref(""), false);
+assert.equal(isSafeLinkHref("   "), false);
 for (const href of ["javascript:alert(1)", "data:text/html,<script>alert(1)</script>", "vbscript:msgbox(1)", "file:///etc/passwd"]) {
   assert.equal(isSafeLinkHref(href), false, `unsafe link scheme should be rejected: ${href}`);
 }
