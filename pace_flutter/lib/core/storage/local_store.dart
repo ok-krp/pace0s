@@ -87,17 +87,21 @@ class LocalStore {
       final quarantine = File('${file.path}.corrupt-${DateTime.now().toUtc().microsecondsSinceEpoch}');
       await file.rename(quarantine.path);
       if (await backup.exists()) {
+        final backupContents = await backup.readAsString();
+        dynamic backupDecoded;
         try {
-          final backupContents = await backup.readAsString();
-          final backupDecoded = jsonDecode(backupContents);
+          backupDecoded = jsonDecode(backupContents);
           if (backupDecoded is! Map<String, dynamic>) {
             throw const FormatException('Local state backup root must be a JSON object');
           }
-          _data = backupDecoded;
-          await backup.copy(file.path);
-          return;
-        } catch (_) {
+        } on FormatException {
           // Keep the backup untouched for manual recovery if it is also invalid.
+          backupDecoded = null;
+        }
+        if (backupDecoded is Map<String, dynamic>) {
+          await backup.copy(file.path);
+          _data = backupDecoded;
+          return;
         }
       }
       _data = <String, dynamic>{};
