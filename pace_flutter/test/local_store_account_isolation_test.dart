@@ -83,6 +83,8 @@ void main() {
       operation = store.pendingOperations(now: now).single;
     }
 
+    await store.deferOperation(operation, expectedUserId: 'user-a', now: now);
+    operation = store.pendingOperations(now: now.add(const Duration(seconds: 900))).single;
     final nextAttempt = DateTime.parse(operation['nextAttemptAt'] as String);
     expect(nextAttempt.difference(now), const Duration(seconds: 900));
     expect(store.pendingOperations(now: now.add(const Duration(seconds: 899))), isEmpty);
