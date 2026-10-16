@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { DEFAULT_LEGAL_OPTS, LEGAL_VERSIONS, type LegalConsentOptions } from "./legal";
 
 const consentSchema = z.object({
@@ -93,6 +92,7 @@ export const saveLegalConsent = createServerFn({ method: "POST" })
     const { getRequestCountry, legalRegionForCountry } = await import("./legal.server");
     const country = getRequestCountry();
     const region = legalRegionForCountry(country);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const now = new Date().toISOString();
 
     // Persist granular choices first: if their write fails, do not update the legacy
