@@ -195,6 +195,20 @@ class LocalStore {
   bool hasPendingOperationForKey(String key) =>
       _outbox.any((entry) => entry['key'] == key);
 
+  /// True only when this key's queued mutation is eligible for replay now.
+  /// This is separate from [hasPendingOperationForKey], which also protects
+  /// deferred local edits from being overwritten by remote pulls.
+  bool hasDueOperationForKey(String key, {DateTime? now}) {
+    final current = (now ?? DateTime.now().toUtc()).toUtc();
+    return _outbox.any((entry) {
+      if (entry['key'] != key) return false;
+      final rawNextAttempt = entry['nextAttemptAt'];
+      if (rawNextAttempt is! String) return true;
+      final nextAttempt = DateTime.tryParse(rawNextAttempt);
+      return nextAttempt == null || !nextAttempt.isAfter(current);
+    });
+  }
+
   Future<void> deferOperation(
     Map<String, dynamic> operation, {
     required String expectedUserId,
