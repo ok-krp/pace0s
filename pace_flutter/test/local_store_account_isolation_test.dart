@@ -61,7 +61,12 @@ void main() {
 
     await store.deferOperation(due.single, expectedUserId: 'user-a', now: now.add(const Duration(seconds: 5)));
     expect(store.pendingOperations(now: now.add(const Duration(seconds: 14))), isEmpty);
-    expect(store.pendingOperations(now: now.add(const Duration(seconds: 15))), hasLength(1));
+    final dueAgain = store.pendingOperations(now: now.add(const Duration(seconds: 15)));
+    expect(dueAgain, hasLength(1));
+    expect(store.hasPendingOperationForKey('pace.profile.name'), isTrue);
+
+    await store.acknowledgeOperation(dueAgain.single, expectedUserId: 'user-a');
+    expect(store.hasPendingOperationForKey('pace.profile.name'), isFalse);
   });
 
   test('stale sync completions cannot mutate another account', () async {
