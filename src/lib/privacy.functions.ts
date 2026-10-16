@@ -91,6 +91,50 @@ async function fetchRowsForParentIds(
   return rows;
 }
 
+async function fetchIdsForParentIds(
+  table: string,
+  parentColumn: string,
+  parentIds: string[],
+): Promise<string[]> {
+  const ids: string[] = [];
+  const parentBatchSize = 100;
+  const pageSize = 500;
+
+  for (let parentOffset = 0; parentOffset < parentIds.length; parentOffset += parentBatchSize) {
+    const parentBatch = parentIds.slice(parentOffset, parentOffset + parentBatchSize);
+    let offset = 0;
+    while (true) {
+      const { data, error } = await (supabaseAdmin as any)
+        .from(table)
+        .select("id")
+        .in(parentColumn, parentBatch)
+        .order("id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw new Error(`cleanup:${table}:lookup`);
+      const page = (data ?? []) as Array<{ id: string }>;
+      ids.push(...page.map((row) => row.id));
+      if (page.length < pageSize) break;
+      offset += page.length;
+    }
+  }
+  return ids;
+}
+
+async function deleteByParentIdsInBatches(
+  table: string,
+  parentColumn: string,
+  parentIds: string[],
+): Promise<void> {
+  const batchSize = 100;
+  for (let offset = 0; offset < parentIds.length; offset += batchSize) {
+    const { error } = await (supabaseAdmin as any)
+      .from(table)
+      .delete()
+      .in(parentColumn, parentIds.slice(offset, offset + batchSize));
+    if (error) throw new Error(`cleanup:${table}`);
+  }
+}
+
 async function fetchAllExportRows(table: string, userId: string): Promise<unknown[]> {
   const rows: unknown[] = [];
   const pageSize = 500;
@@ -282,41 +326,21 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
         throw new Error("cleanup:storage:nutrition-ai:objects-remain");
       }
 
-      const [
-        { data: programs, error: programsError },
-        { data: sessions, error: sessionsError },
-      ] = await Promise.all([
-        supabaseAdmin.from("sport_programs").select("id").eq("user_id", userId),
-        supabaseAdmin.from("sport_workout_sessions").select("id").eq("user_id", userId),
-      ]);
-      if (programsError) throw new Error("cleanup:sport_programs:lookup");
-      if (sessionsError) throw new Error("cleanup:sport_workout_sessions:lookup");
+      // Enumerate every owned parent and child row in stable pages before
+      // deleting any workout data. This avoids PostgREST row caps and oversized IN clauses.
+      const programs = await fetchAllExportRows("sport_programs", userId) as Array<{ id: string }>;
+      const sessions = await fetchAllExportRows("sport_workout_sessions", userId) as Array<{ id: string }>;
+      const programIds = programs.map((row) => row.id);
+      const sessionIds = sessions.map((row) => row.id);
+      const workoutExerciseIds = await fetchIdsForParentIds(
+        "sport_workout_exercises",
+        "session_id",
+        sessionIds,
+      );
 
-      const programIds = (programs ?? []).map((row) => row.id);
-      const sessionIds = (sessions ?? []).map((row) => row.id);
-      let workoutExercises: Array<{ id: string }> = [];
-      if (sessionIds.length) {
-        const { data, error } = await supabaseAdmin
-          .from("sport_workout_exercises")
-          .select("id")
-          .in("session_id", sessionIds);
-        if (error) throw new Error("cleanup:sport_workout_exercises:lookup");
-        workoutExercises = data ?? [];
-      }
-      const workoutExerciseIds = workoutExercises.map((row) => row.id);
-
-      if (workoutExerciseIds.length) {
-        const { error } = await supabaseAdmin.from("sport_workout_sets").delete().in("workout_exercise_id", workoutExerciseIds);
-        if (error) throw new Error("cleanup:sport_workout_sets");
-      }
-      if (sessionIds.length) {
-        const { error } = await supabaseAdmin.from("sport_workout_exercises").delete().in("session_id", sessionIds);
-        if (error) throw new Error("cleanup:sport_workout_exercises");
-      }
-      if (programIds.length) {
-        const { error } = await supabaseAdmin.from("sport_program_items").delete().in("program_id", programIds);
-        if (error) throw new Error("cleanup:sport_program_items");
-      }
+      await deleteByParentIdsInBatches("sport_workout_sets", "workout_exercise_id", workoutExerciseIds);
+      await deleteByParentIdsInBatches("sport_workout_exercises", "session_id", sessionIds);
+      await deleteByParentIdsInBatches("sport_program_items", "program_id", programIds);
 
       const adminDb = supabaseAdmin as any;
       for (const table of DELETE_TABLES) {
