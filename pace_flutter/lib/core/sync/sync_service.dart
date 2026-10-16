@@ -37,7 +37,23 @@ class SyncService {
           localStore.hasPendingOperationForKey('pace.settings.ai.memory');
       await _pushPending(userId);
       if (!_isCurrentAccount(userId)) return;
-      await _syncAiPreferences(expectedUserId: userId, pushLocal: hadLocalAiPreferenceMutation);
+
+      final hasPendingAiPreferenceMutation =
+          localStore.hasPendingOperationForKey('pace.settings.ai.confirm_actions') ||
+          localStore.hasPendingOperationForKey('pace.settings.ai.memory');
+      final hasDueAiPreferenceMutation =
+          localStore.hasDueOperationForKey('pace.settings.ai.confirm_actions') ||
+          localStore.hasDueOperationForKey('pace.settings.ai.memory');
+      // If a local preference write was acknowledged, propagate it to the
+      // dedicated ai_preferences table. If it is still deferred by backoff,
+      // preserve the local choice but do not bypass retry scheduling.
+      final shouldPushAiPreferences = hadLocalAiPreferenceMutation &&
+          (!hasPendingAiPreferenceMutation || hasDueAiPreferenceMutation);
+      await _syncAiPreferences(
+        expectedUserId: userId,
+        pushLocal: shouldPushAiPreferences,
+        preserveLocal: hasPendingAiPreferenceMutation,
+      );
       if (!_isCurrentAccount(userId)) return;
       await _pullRemote(userId);
     } finally {
@@ -116,7 +132,11 @@ class SyncService {
     );
   }
 
-  Future<void> _syncAiPreferences({required String expectedUserId, required bool pushLocal}) async {
+  Future<void> _syncAiPreferences({
+    required String expectedUserId,
+    required bool pushLocal,
+    required bool preserveLocal,
+  }) async {
     if (!_isCurrentAccount(expectedUserId)) return;
     final user = client!.auth.currentUser;
     if (user == null || user.id != expectedUserId) return;
@@ -133,6 +153,9 @@ class SyncService {
         if (patch.length > 1) await client!.from('ai_preferences').upsert(patch);
         return;
       }
+
+      // Do not pull cloud preferences over a local mutation waiting for retry.
+      if (preserveLocal) return;
 
       final rows = await client!
           .from('ai_preferences')
