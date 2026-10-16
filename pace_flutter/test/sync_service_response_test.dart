@@ -33,5 +33,38 @@ void main() {
       expect(SyncService.isUserStateWriteAccepted({'updated_at': 'now'}), isFalse);
       expect(SyncService.isUserStateWriteAccepted('true'), isFalse);
     });
+
+  group('SyncService.shouldPropagateAiPreferences', () {
+    test('does not bypass backoff while any local preference mutation remains', () {
+      expect(
+        SyncService.shouldPropagateAiPreferences(
+          hadLocalMutation: true,
+          hasPendingMutation: true,
+        ),
+        isFalse,
+      );
+    });
+
+    test('propagates local preferences after the outbox is acknowledged', () {
+      expect(
+        SyncService.shouldPropagateAiPreferences(
+          hadLocalMutation: true,
+          hasPendingMutation: false,
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not push preferences when there was no local mutation', () {
+      expect(
+        SyncService.shouldPropagateAiPreferences(
+          hadLocalMutation: false,
+          hasPendingMutation: false,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   });
 }
