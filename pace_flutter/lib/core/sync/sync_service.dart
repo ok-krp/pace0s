@@ -33,8 +33,13 @@ class SyncService {
   }
 
   Future<void> syncNow() async {
-    final user = client?.auth.currentUser;
-    if (client == null || user == null) return;
+    final supabaseClient = client;
+    if (supabaseClient == null) return;
+    final user = supabaseClient.auth.currentUser;
+    if (user == null) {
+      await _clearRealtimeSubscription();
+      return;
+    }
     if (_running) {
       _syncRequestedWhileRunning = true;
       return;
@@ -89,6 +94,23 @@ class SyncService {
     return deviceId;
   }
 
+  Future<void> _clearRealtimeSubscription() async {
+    final channel = _realtimeChannel;
+    _realtimeChannel = null;
+    _realtimeUserId = null;
+    _realtimeHealthy = false;
+    _realtimeNeedsPull = false;
+    _syncRequestedWhileRunning = false;
+    _pendingRetryNeeded = false;
+    if (channel == null) return;
+    try {
+      await client?.removeChannel(channel);
+    } catch (_) {
+      // Auth is already cleared locally; a failed remote channel cleanup must
+      // never keep the previous account's events eligible for application.
+    }
+  }
+
   Future<void> _ensureRealtimeSubscription(String userId, String deviceId) async {
     if (_realtimeUserId == userId && _realtimeChannel != null && _realtimeHealthy) return;
 
@@ -103,16 +125,24 @@ class SyncService {
     final channel = client!.channel('pace-flutter-user-state-$userId');
 
     void handlePayload(PostgresChangePayload payload) {
-      // P1.1 deliberately handles INSERT/UPDATE only. DELETE/tombstone
-      // semantics are implemented in P1.3 so a DELETE can never be mistaken
-      // for an empty user_state value here.
+      // Reject late callbacks from a signed-out or previous account before
+      // touching local storage. Removing a channel is asynchronous, so cleanup
+      // alone is not a sufficient account-isolation boundary.
+      if (!shouldAcceptRealtimeUserStateForAccount(
+        authenticatedUserId: client?.auth.currentUser?.id,
+        subscribedUserId: userId,
+        activeRealtimeUserId: _realtimeUserId,
+      )) {
+        return;
+      }
+      // INSERT/UPDATE only: DELETE/tombstone semantics are handled separately.
       final record = Map<String, dynamic>.from(payload.newRecord);
       if (record['updated_by'] == deviceId) return;
       final key = record['key'];
       final value = record['value'];
       final updatedAt = record['updated_at'];
       if (key is! String || updatedAt is! String) return;
-      unawaited(_applyRealtimeRow(key, value, updatedAt));
+      unawaited(_applyRealtimeRow(key, value, updatedAt, userId));
     }
 
     channel
@@ -182,7 +212,15 @@ class SyncService {
     String key,
     dynamic value,
     String updatedAt,
+    String subscribedUserId,
   ) async {
+    if (!shouldAcceptRealtimeUserStateForAccount(
+      authenticatedUserId: client?.auth.currentUser?.id,
+      subscribedUserId: subscribedUserId,
+      activeRealtimeUserId: _realtimeUserId,
+    )) {
+      return;
+    }
     if (_running) {
       _realtimeNeedsPull = true;
       _syncRequestedWhileRunning = true;
@@ -360,6 +398,18 @@ class SyncService {
       await localStore.applyRemote(key, row['value'], remoteUpdatedAt);
     }
   }
+}
+
+/// Prevents delayed Realtime callbacks from an old subscription from
+/// applying one account's cloud rows to another account's local store.
+bool shouldAcceptRealtimeUserStateForAccount({
+  required String? authenticatedUserId,
+  required String subscribedUserId,
+  required String? activeRealtimeUserId,
+}) {
+  return authenticatedUserId != null &&
+      authenticatedUserId == subscribedUserId &&
+      activeRealtimeUserId == subscribedUserId;
 }
 
 /// Returns whether a Realtime user_state row is newer than the local
