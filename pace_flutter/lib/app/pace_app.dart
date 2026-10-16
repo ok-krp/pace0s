@@ -124,6 +124,14 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   Future<void> _activateAccount(String? userId) async {
+    // Supabase emits token-refresh and other same-session auth events. Do not
+    // hide and recreate the signed-in shell unless the account actually changes
+    // or a previous account activation failed and needs another attempt.
+    if (widget.localStore.activeUserId == userId &&
+        ((userId == null && !_signedIn) || (userId != null && _signedIn))) {
+      return;
+    }
+
     final generation = ++_accountGeneration;
     if (mounted) setState(() => _signedIn = false);
 
