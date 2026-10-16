@@ -22,6 +22,8 @@ assert.match(atomicConsentMigration, /save_legal_consent_atomic/);
 assert.match(atomicConsentMigration, /auth\.uid\(\) <> p_user_id/);
 assert.match(atomicConsentMigration, /insert into public\.consent_records/);
 assert.match(legalFunctions, /rpc\(\s*"save_legal_consent_atomic"/);
+assert.match(legalFunctions, /\.eq\("legal_version", LEGAL_VERSIONS\.eula\)/);
+assert.match(legalFunctions, /\.eq\("policy_version", LEGAL_VERSIONS\.privacy\)/);
 assert.doesNotMatch(legalFunctions, /from\("consent_records"\)\.insert\(records\)/);
 
 const consentMigration = fs.readFileSync("supabase/migrations/20261015110000_consent_decision_sequence.sql", "utf8");
