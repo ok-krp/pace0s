@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { DEFAULT_LEGAL_OPTS, LEGAL_VERSIONS, type LegalConsentOptions } from "./legal";
 
 const consentSchema = z.object({
@@ -105,13 +106,13 @@ export const saveLegalConsent = createServerFn({ method: "POST" })
       created_at: now,
     }));
 
-    const { error: recordsError } = await context.supabase.from("consent_records").insert(records);
+    const { error: recordsError } = await supabaseAdmin.from("consent_records").insert(records);
     if (recordsError) {
       console.error("granular consent save failed", recordsError);
       throw new Error("Impossible d'enregistrer les consentements détaillés.");
     }
 
-    const { error: legalError } = await context.supabase.from("legal_consent").upsert(
+    const { error: legalError } = await supabaseAdmin.from("legal_consent").upsert(
       {
         user_id: context.userId,
         region,

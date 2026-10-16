@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("../src/lib/legal.functions.ts", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../supabase/migrations/20261016180000_lock_down_consent_writes.sql", import.meta.url), "utf8");
 assert.match(source, /const seenConsentTypes = new Set<string>\(\)/);
 assert.match(source, /\.from\("legal_consent"\)\s*\.select\([^)]*\)\s*\.eq\("user_id", context\.userId\)/);
 assert.match(source, /\.from\("consent_records"\)\s*\.select\([^)]*\)\s*\.eq\("user_id", context\.userId\)/);
@@ -14,4 +15,11 @@ assert.ok(
   granularWrite >= 0 && legacyWrite >= 0 && granularWrite < legacyWrite,
   "granular consent must be persisted before the legacy consent row",
 );
-console.log("Latest granular consent and write-order contract: PASS");
+assert.match(source, /supabaseAdmin\.from\("consent_records"\)\.insert\(records\)/);
+assert.match(source, /supabaseAdmin\.from\("legal_consent"\)\.upsert\(/);
+assert.match(migration, /REVOKE INSERT, UPDATE, DELETE ON TABLE public\.consent_records FROM authenticated/);
+assert.match(migration, /REVOKE INSERT, UPDATE, DELETE ON TABLE public\.legal_consent FROM authenticated/);
+assert.match(migration, /GRANT INSERT ON TABLE public\.consent_records TO service_role/);
+assert.match(migration, /GRANT INSERT, UPDATE ON TABLE public\.legal_consent TO service_role/);
+
+console.log("Latest consent order and server-only write contract: PASS");
