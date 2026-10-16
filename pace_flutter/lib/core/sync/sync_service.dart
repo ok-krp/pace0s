@@ -22,6 +22,16 @@ class SyncService {
     return response is Map && response['accepted'] == true;
   }
 
+  static bool shouldPropagateAiPreferences({
+    required bool hadLocalMutation,
+    required bool hasPendingMutation,
+  }) {
+    // Do not bypass outbox retry backoff by mirroring a still-pending local
+    // value into the dedicated preferences table. Propagate only after every
+    // local AI preference mutation has been acknowledged.
+    return hadLocalMutation && !hasPendingMutation;
+  }
+
   Future<void> syncNow() async {
     final activeClient = client;
     final userId = activeClient?.auth.currentUser?.id;
@@ -47,8 +57,10 @@ class SyncService {
       // If a local preference write was acknowledged, propagate it to the
       // dedicated ai_preferences table. If it is still deferred by backoff,
       // preserve the local choice but do not bypass retry scheduling.
-      final shouldPushAiPreferences = hadLocalAiPreferenceMutation &&
-          (!hasPendingAiPreferenceMutation || hasDueAiPreferenceMutation);
+      final shouldPushAiPreferences = shouldPropagateAiPreferences(
+        hadLocalMutation: hadLocalAiPreferenceMutation,
+        hasPendingMutation: hasPendingAiPreferenceMutation,
+      );
       await _syncAiPreferences(
         expectedUserId: userId,
         pushLocal: shouldPushAiPreferences,
