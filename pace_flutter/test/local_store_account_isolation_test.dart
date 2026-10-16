@@ -78,7 +78,7 @@ void main() {
     var operation = store.pendingOperations(now: now).single;
     for (var attempt = 0; attempt < 10; attempt++) {
       await store.deferOperation(operation, expectedUserId: 'user-a', now: now);
-      final delaySeconds = (5 * (1 << attempt.clamp(0, 8))).clamp(5, 900);
+      final delaySeconds = (5 * (1 << attempt.clamp(0, 8).toInt())).clamp(5, 900).toInt();
       now = now.add(Duration(seconds: delaySeconds));
       operation = store.pendingOperations(now: now).single;
     }
