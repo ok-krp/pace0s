@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { listEncryptedHealthSamples } from "@/lib/health.functions";
 import { decryptHealthPayload } from "@/lib/health.crypto";
 import { migrateLegacyHealthSamplesToE2ee } from "@/lib/health.migration";
 import { backfillHealthE2eeDedupeHashes } from "@/lib/health.dedupe.backfill";
+import { getLegalConsentStatus } from "@/lib/legal.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -96,17 +97,36 @@ function aggregateHealthSamples(samples: HealthSample[], timeZone: string): Heal
 export function useHealthToday() {
   const { user } = useAuth();
   const fetchEncrypted = useServerFn(listEncryptedHealthSamples);
+  const fetchLegalConsent = useServerFn(getLegalConsentStatus);
   const [data, setData] = useState<HealthToday>(EMPTY);
   const [loading, setLoading] = useState(false);
+  const refreshGeneration = useRef(0);
+  const currentUserId = useRef<string | null>(user?.id ?? null);
+  currentUserId.current = user?.id ?? null;
 
   const refresh = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
+    const requestedUserId = user?.id ?? null;
+    const isCurrent = () =>
+      generation === refreshGeneration.current && currentUserId.current === requestedUserId;
+
     if (!user) {
       setData(EMPTY);
+      setLoading(false);
       return;
     }
 
     setLoading(true);
     try {
+      // Fail closed before migration, backfill, or encrypted reads when either
+      // health consent has been revoked or cannot be verified.
+      const consent = await fetchLegalConsent();
+      if (!isCurrent()) return;
+      if (consent.opts.health_data !== true || consent.opts.health_cloud_sync !== true) {
+        setData(EMPTY);
+        return;
+      }
+
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
       const migrationKey = `pace-health-e2ee-migrated:${user.id}`;
       const migrationAttemptsKey = `pace-health-e2ee-migration-attempts:${user.id}`;
@@ -126,7 +146,10 @@ export function useHealthToday() {
               // Session storage is best-effort; migration failure must never block E2EE reads.
             }
 
+            // The consent preflight above precedes the plaintext read; the migration
+            // RPC rechecks consent and account identity at write time.
             const migration = await migrateLegacyHealthSamplesToE2ee();
+            if (!isCurrent()) return;
             localStorage.setItem(migrationKey, "1");
             if (migration.deleted > 0) {
               window.dispatchEvent(new Event("pace.health.changed"));
@@ -137,10 +160,13 @@ export function useHealthToday() {
         }
       }
 
+      if (!isCurrent()) return;
+
       const dedupeBackfillKey = `pace-health-e2ee-dedupe-backfilled:${user.id}`;
       if (localStorage.getItem(dedupeBackfillKey) !== "1") {
         try {
           const backfill = await backfillHealthE2eeDedupeHashes();
+          if (!isCurrent()) return;
           if (backfill.skipped === 0) localStorage.setItem(dedupeBackfillKey, "1");
         } catch (error) {
           console.warn("health E2EE dedupe backfill deferred", error);
@@ -148,10 +174,12 @@ export function useHealthToday() {
       }
 
       const response = await fetchEncrypted({ data: { limit: 10000 } });
+      if (!isCurrent()) return;
       const records = response.records as EncryptedHealthRecord[];
       const samples: HealthSample[] = [];
 
       for (const record of records) {
+        if (!isCurrent()) return;
         try {
           if (record.algorithm !== "AES-256-GCM" || !Number.isInteger(record.key_version) || record.key_version < 1) continue;
           const payload = await decryptHealthPayload(record.ciphertext, record.nonce, record.key_version);
@@ -172,14 +200,16 @@ export function useHealthToday() {
         }
       }
 
-      setData(aggregateHealthSamples(samples, timeZone));
+      if (isCurrent()) setData(aggregateHealthSamples(samples, timeZone));
     } catch (error) {
-      console.error("health refresh", error);
-      setData(EMPTY);
+      if (isCurrent()) {
+        console.error("health refresh", error);
+        setData(EMPTY);
+      }
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [user, fetchEncrypted]);
+  }, [user, fetchEncrypted, fetchLegalConsent]);
 
   useEffect(() => {
     void refresh();
@@ -187,12 +217,28 @@ export function useHealthToday() {
 
   useEffect(() => {
     const handler = () => void refresh();
+    const onLegalChanged = () => {
+      const consent = window.localStorage.getItem("pace.legal.consent");
+      let opts: Record<string, unknown> | null = null;
+      try {
+        opts = consent ? (JSON.parse(consent) as { opts?: Record<string, unknown> }).opts ?? null : null;
+      } catch {
+        opts = null;
+      }
+      if (opts?.health_data !== true || opts?.health_cloud_sync !== true) {
+        refreshGeneration.current += 1;
+        setData(EMPTY);
+      }
+      void refresh();
+    };
     window.addEventListener("pace.health.changed", handler);
+    window.addEventListener("pace.legal.changed", onLegalChanged);
     const onOnline = () => void refresh();
     window.addEventListener("online", onOnline);
     if (!user) {
       return () => {
         window.removeEventListener("pace.health.changed", handler);
+        window.removeEventListener("pace.legal.changed", onLegalChanged);
         window.removeEventListener("online", onOnline);
       };
     }
@@ -235,7 +281,9 @@ export function useHealthToday() {
 
     return () => {
       cancelled = true;
+      refreshGeneration.current += 1;
       window.removeEventListener("pace.health.changed", handler);
+      window.removeEventListener("pace.legal.changed", onLegalChanged);
       window.removeEventListener("online", onOnline);
       if (refreshTimer) clearTimeout(refreshTimer);
       if (channel) void supabase.removeChannel(channel);
