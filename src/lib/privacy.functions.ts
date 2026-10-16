@@ -76,19 +76,22 @@ async function fetchRowsForParentIds(
 
   for (let parentOffset = 0; parentOffset < parentIds.length; parentOffset += parentBatchSize) {
     const parentBatch = parentIds.slice(parentOffset, parentOffset + parentBatchSize);
-    let offset = 0;
+    let lastId: string | null = null;
     while (true) {
-      const { data, error } = await (supabaseAdmin as any)
+      let query = (supabaseAdmin as any)
         .from(table)
         .select("*")
         .in(parentColumn, parentBatch)
         .order("id", { ascending: true })
-        .range(offset, offset + pageSize - 1);
+        .limit(pageSize);
+      if (lastId !== null) query = query.gt("id", lastId);
+      const { data, error } = await query;
       if (error) throw new Error(`privacy export failed for ${table}`);
-      const page = (data ?? []) as unknown[];
+      const page = (data ?? []) as Array<{ id: string }>;
       rows.push(...page);
       if (page.length < pageSize) break;
-      offset += page.length;
+      lastId = page[page.length - 1]?.id ?? null;
+      if (lastId === null) throw new Error(`privacy export pagination failed for ${table}`);
     }
   }
   return rows;
@@ -106,19 +109,22 @@ async function fetchIdsForParentIds(
 
   for (let parentOffset = 0; parentOffset < parentIds.length; parentOffset += parentBatchSize) {
     const parentBatch = parentIds.slice(parentOffset, parentOffset + parentBatchSize);
-    let offset = 0;
+    let lastId: string | null = null;
     while (true) {
-      const { data, error } = await (supabaseAdmin as any)
+      let query = (supabaseAdmin as any)
         .from(table)
         .select("id")
         .in(parentColumn, parentBatch)
         .order("id", { ascending: true })
-        .range(offset, offset + pageSize - 1);
+        .limit(pageSize);
+      if (lastId !== null) query = query.gt("id", lastId);
+      const { data, error } = await query;
       if (error) throw new Error(`cleanup:${table}:lookup`);
       const page = (data ?? []) as Array<{ id: string }>;
       ids.push(...page.map((row) => row.id));
       if (page.length < pageSize) break;
-      offset += page.length;
+      lastId = page[page.length - 1]?.id ?? null;
+      if (lastId === null) throw new Error(`cleanup:${table}:pagination`);
     }
   }
   return ids;
@@ -153,19 +159,22 @@ async function fetchAllExportRows(supabaseAdmin: any, table: string, userId: str
     return (data ?? []) as unknown[];
   }
 
-  let offset = 0;
+  let lastValue: unknown = null;
   while (true) {
-    const { data, error } = await (supabaseAdmin as any)
+    let query = (supabaseAdmin as any)
       .from(table)
       .select("*")
       .eq("user_id", userId)
       .order(orderColumn, { ascending: true })
-      .range(offset, offset + pageSize - 1);
+      .limit(pageSize);
+    if (lastValue !== null) query = query.gt(orderColumn, lastValue);
+    const { data, error } = await query;
     if (error) throw new Error(`privacy export failed for ${table}`);
-    const page = (data ?? []) as unknown[];
+    const page = (data ?? []) as Array<Record<string, unknown>>;
     rows.push(...page);
     if (page.length < pageSize) break;
-    offset += page.length;
+    lastValue = page[page.length - 1]?.[orderColumn] ?? null;
+    if (lastValue === null) throw new Error(`privacy export pagination failed for ${table}`);
   }
   return rows;
 }
