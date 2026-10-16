@@ -33,7 +33,7 @@ export async function exportHealthDevicePublicKey(key: CryptoKey): Promise<Healt
 }
 async function deriveWrappingKey(privateKey: CryptoKey, peerPublicKey: HealthE2eeDevicePublicKey): Promise<CryptoKey> {
   const publicKey = await crypto.subtle.importKey("jwk", peerPublicKey, { name: "ECDH", namedCurve: "P-256" }, false, []);
-  return crypto.subtle.deriveKey({ name: "ECDH", public: publicKey }, privateKey, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  return crypto.subtle.deriveKey({ name: "ECDH", public: publicKey }, privateKey, { name: "AES-GCM", length: 256 }, false, ["wrapKey", "unwrapKey"]);
 }
 function envelopeAad(deviceId: string, senderDeviceId: string, keyVersion: number): Uint8Array<ArrayBuffer> {
   return Uint8Array.from(new TextEncoder().encode(`pace-health-e2ee|device=${deviceId}|sender=${senderDeviceId}|v=${keyVersion}`));
