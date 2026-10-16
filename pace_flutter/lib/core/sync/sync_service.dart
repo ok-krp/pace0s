@@ -247,49 +247,64 @@ class SyncService {
     // Most passes fetch only rows changed since the last cursor. A bounded full
     // reconciliation catches late commits, clock skew, and any gap caused by a
     // concurrent write sharing an update timestamp. Cursor metadata is local to
-    // the account-scoped file and is never enqueued for cloud sync.
-    final rows = fullPull
-        ? await client!
-            .from('user_state')
-            .select('key,value,updated_at')
-            .eq('user_id', userId)
-        : await client!
-            .from('user_state')
-            .select('key,value,updated_at')
-            .eq('user_id', userId)
-            .gte('updated_at', cursorAt!.toIso8601String());
-    if (!_isCurrentAccount(userId)) return;
-
+    // the account-scoped file and is never enqueued for cloud sync. Page results
+    // so accounts with more than PostgREST's default row cap do not silently skip
+    // keys when the cursor advances.
+    const pageSize = 500;
+    var offset = 0;
     var newestSeen = cursorAt != null && !cursorAt.isAfter(now) ? cursorAt : null;
-    for (final raw in rows) {
+    while (true) {
+      final rows = fullPull
+          ? await client!
+              .from('user_state')
+              .select('key,value,updated_at')
+              .eq('user_id', userId)
+              .order('updated_at', ascending: true)
+              .order('key', ascending: true)
+              .range(offset, offset + pageSize - 1)
+          : await client!
+              .from('user_state')
+              .select('key,value,updated_at')
+              .eq('user_id', userId)
+              .gte('updated_at', cursorAt!.toIso8601String())
+              .order('updated_at', ascending: true)
+              .order('key', ascending: true)
+              .range(offset, offset + pageSize - 1);
       if (!_isCurrentAccount(userId)) return;
-      final row = Map<String, dynamic>.from(raw);
-      final key = row['key'] as String;
-      final remoteUpdatedAt = row['updated_at'] as String?;
-      final remoteTime = remoteUpdatedAt == null
-          ? null
-          : DateTime.tryParse(remoteUpdatedAt)?.toUtc();
-      if (remoteTime != null &&
-          (newestSeen == null || remoteTime.isAfter(newestSeen))) {
-        newestSeen = remoteTime;
-      }
-      if (remoteUpdatedAt == null || localStore.hasPendingOperationForKey(key)) continue;
 
-      final localUpdatedAt = localStore.lastSyncedAt(key);
-      if (localUpdatedAt != null) {
-        final localTime = DateTime.tryParse(localUpdatedAt);
+      for (final raw in rows) {
+        if (!_isCurrentAccount(userId)) return;
+        final row = Map<String, dynamic>.from(raw);
+        final key = row['key'] as String;
+        final remoteUpdatedAt = row['updated_at'] as String?;
+        final remoteTime = remoteUpdatedAt == null
+            ? null
+            : DateTime.tryParse(remoteUpdatedAt)?.toUtc();
         if (remoteTime != null &&
-            localTime != null &&
-            !remoteTime.isAfter(localTime)) {
-          continue;
+            (newestSeen == null || remoteTime.isAfter(newestSeen))) {
+          newestSeen = remoteTime;
         }
+        if (remoteUpdatedAt == null || localStore.hasPendingOperationForKey(key)) continue;
+
+        final localUpdatedAt = localStore.lastSyncedAt(key);
+        if (localUpdatedAt != null) {
+          final localTime = DateTime.tryParse(localUpdatedAt);
+          if (remoteTime != null &&
+              localTime != null &&
+              !remoteTime.isAfter(localTime)) {
+            continue;
+          }
+        }
+        await localStore.applyRemote(
+          key,
+          row['value'],
+          remoteUpdatedAt,
+          expectedUserId: userId,
+        );
       }
-      await localStore.applyRemote(
-        key,
-        row['value'],
-        remoteUpdatedAt,
-        expectedUserId: userId,
-      );
+
+      if (rows.length < pageSize) break;
+      offset += pageSize;
     }
 
     if (!_isCurrentAccount(userId)) return;
