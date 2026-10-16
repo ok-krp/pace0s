@@ -35,6 +35,54 @@ void main() {
     });
   });
 
+  group('SyncService.shouldRunFullReconciliation', () {
+    final now = DateTime.utc(2026, 10, 16, 12);
+
+    test('runs a full pull when no cursor exists', () {
+      expect(
+        SyncService.shouldRunFullReconciliation(
+          cursorAt: null,
+          lastFullPullAt: null,
+          now: now,
+        ),
+        isTrue,
+      );
+    });
+
+    test('uses a delta pull while the full-reconcile interval is fresh', () {
+      expect(
+        SyncService.shouldRunFullReconciliation(
+          cursorAt: now.subtract(const Duration(minutes: 1)),
+          lastFullPullAt: now.subtract(const Duration(minutes: 9)),
+          now: now,
+        ),
+        isFalse,
+      );
+    });
+
+    test('forces a full pull after ten minutes', () {
+      expect(
+        SyncService.shouldRunFullReconciliation(
+          cursorAt: now.subtract(const Duration(minutes: 11)),
+          lastFullPullAt: now.subtract(const Duration(minutes: 10)),
+          now: now,
+        ),
+        isTrue,
+      );
+    });
+
+    test('recovers safely if the local clock moves behind the last full pull', () {
+      expect(
+        SyncService.shouldRunFullReconciliation(
+          cursorAt: now,
+          lastFullPullAt: now.add(const Duration(minutes: 1)),
+          now: now,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('SyncService.shouldPropagateAiPreferences', () {
     test('does not bypass backoff while any local preference mutation remains', () {
       expect(

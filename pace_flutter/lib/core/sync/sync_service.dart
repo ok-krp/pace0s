@@ -25,6 +25,18 @@ class SyncService {
     return response is Map && response['accepted'] == true;
   }
 
+  static const Duration fullReconciliationInterval = Duration(minutes: 10);
+
+  static bool shouldRunFullReconciliation({
+    required DateTime? cursorAt,
+    required DateTime? lastFullPullAt,
+    required DateTime now,
+  }) {
+    if (cursorAt == null || lastFullPullAt == null) return true;
+    if (lastFullPullAt.isAfter(now)) return true;
+    return now.difference(lastFullPullAt) >= fullReconciliationInterval;
+  }
+
   static bool shouldPropagateAiPreferences({
     required bool hadLocalMutation,
     required bool hasPendingMutation,
@@ -217,26 +229,81 @@ class SyncService {
 
   Future<void> _pullRemote(String userId) async {
     if (!_isCurrentAccount(userId)) return;
-    final rows = await client!
-        .from('user_state')
-        .select('key,value,updated_at')
-        .eq('user_id', userId);
+    final now = DateTime.now().toUtc();
+    final cursorAt = DateTime.tryParse(
+      localStore.read('pace.__sync_last_pull_at') as String? ?? '',
+    )?.toUtc();
+    final lastFullPullAt = DateTime.tryParse(
+      localStore.read('pace.__sync_last_full_pull_at') as String? ?? '',
+    )?.toUtc();
+    final fullPull = shouldRunFullReconciliation(
+      cursorAt: cursorAt,
+      lastFullPullAt: lastFullPullAt,
+      now: now,
+    );
+
+    // Most passes fetch only rows changed since the last cursor. A bounded full
+    // reconciliation catches late commits, clock skew, and any gap caused by a
+    // concurrent write sharing an update timestamp. Cursor metadata is local to
+    // the account-scoped file and is never enqueued for cloud sync.
+    final rows = fullPull
+        ? await client!
+            .from('user_state')
+            .select('key,value,updated_at')
+            .eq('user_id', userId)
+        : await client!
+            .from('user_state')
+            .select('key,value,updated_at')
+            .eq('user_id', userId)
+            .gte('updated_at', cursorAt.toIso8601String());
     if (!_isCurrentAccount(userId)) return;
 
+    var newestSeen = cursorAt;
     for (final raw in rows) {
       if (!_isCurrentAccount(userId)) return;
       final row = Map<String, dynamic>.from(raw);
       final key = row['key'] as String;
       final remoteUpdatedAt = row['updated_at'] as String?;
+      final remoteTime = remoteUpdatedAt == null
+          ? null
+          : DateTime.tryParse(remoteUpdatedAt)?.toUtc();
+      if (remoteTime != null &&
+          (newestSeen == null || remoteTime.isAfter(newestSeen))) {
+        newestSeen = remoteTime;
+      }
       if (remoteUpdatedAt == null || localStore.hasPendingOperationForKey(key)) continue;
 
       final localUpdatedAt = localStore.lastSyncedAt(key);
       if (localUpdatedAt != null) {
-        final remoteTime = DateTime.tryParse(remoteUpdatedAt);
         final localTime = DateTime.tryParse(localUpdatedAt);
-        if (remoteTime != null && localTime != null && !remoteTime.isAfter(localTime)) continue;
+        if (remoteTime != null &&
+            localTime != null &&
+            !remoteTime.isAfter(localTime)) {
+          continue;
+        }
       }
-      await localStore.applyRemote(key, row['value'], remoteUpdatedAt, expectedUserId: userId);
+      await localStore.applyRemote(
+        key,
+        row['value'],
+        remoteUpdatedAt,
+        expectedUserId: userId,
+      );
+    }
+
+    if (!_isCurrentAccount(userId)) return;
+    if (newestSeen != null) {
+      await localStore.write(
+        'pace.__sync_last_pull_at',
+        newestSeen.toIso8601String(),
+        enqueueSync: false,
+      );
+    }
+    if (fullPull) {
+      await localStore.write(
+        'pace.__sync_last_full_pull_at',
+        now.toIso8601String(),
+        enqueueSync: false,
+      );
     }
   }
 }
