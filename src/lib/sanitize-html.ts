@@ -71,13 +71,53 @@ function cleanNode(node: Node): void {
 
 const escapeText = (value: string) => value.replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char] as string);
 
+function serializeSafeNode(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return escapeText(node.nodeValue ?? "");
+  if (node.nodeType !== Node.ELEMENT_NODE) return "";
+
+  const el = node as HTMLElement;
+  const tag = el.tagName.toUpperCase();
+  if (!ALLOWED_TAGS.has(tag)) {
+    return Array.from(el.childNodes).map(serializeSafeNode).join("");
+  }
+
+  const attrs: string[] = [];
+  for (const attr of Array.from(el.attributes)) {
+    const name = attr.name.toLowerCase();
+    const value = attr.value;
+    if (name === "style") {
+      const safe = sanitizeStyle(value);
+      if (safe) attrs.push(`style="${escapeText(safe)}"`);
+    } else if (name === "class") {
+      const safe = value.split(/\\s+/).filter((item) => item === "pace-check").join(" ");
+      if (safe) attrs.push(`class="${escapeText(safe)}"`);
+    } else if (name === "href" && tag === "A" && isSafeLinkHref(value)) {
+      attrs.push(`href="${escapeText(value)}"`);
+    } else if (name === "contenteditable" && tag === "SPAN" && value === "true") {
+      attrs.push('contenteditable="true"');
+    } else if (tag === "INPUT" && name === "type" && value.toLowerCase() === "checkbox") {
+      attrs.push('type="checkbox"');
+    } else if (tag === "INPUT" && name === "checked") {
+      attrs.push('checked=""');
+    } else if (tag === "FONT" && ["color", "size", "face"].includes(name) && SAFE_STYLE_VALUE.test(value)) {
+      attrs.push(`${name}="${escapeText(value)}"`);
+    }
+  }
+  if (tag === "A" && isSafeLinkHref(el.getAttribute("href") ?? "")) {
+    attrs.push('rel="noopener noreferrer nofollow"', 'target="_blank"');
+  }
+  const open = `<${tag.toLowerCase()}${attrs.length ? " " + attrs.join(" ") : ""}>`;
+  if (tag === "INPUT" || tag === "BR" || tag === "HR") return open;
+  return open + Array.from(el.childNodes).map(serializeSafeNode).join("") + `</${tag.toLowerCase()}>`;
+}
+
 /** Retourne du HTML sûr, destiné à être injecté dans l'éditeur de notes. */
 export function sanitizeNoteHtml(html: string): string {
   if (typeof html !== "string" || !html) return "";
   if (typeof DOMParser === "undefined") return escapeText(html);
   const doc = new DOMParser().parseFromString(`<!doctype html><body>${html}`, "text/html");
   cleanNode(doc.body);
-  return doc.body.innerHTML;
+  return Array.from(doc.body.childNodes).map(serializeSafeNode).join("");
 }
 
 export function htmlToPlainText(html: string): string {
