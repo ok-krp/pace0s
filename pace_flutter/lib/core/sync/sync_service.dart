@@ -230,12 +230,14 @@ class SyncService {
   Future<void> _pullRemote(String userId) async {
     if (!_isCurrentAccount(userId)) return;
     final now = DateTime.now().toUtc();
-    final cursorAt = DateTime.tryParse(
-      localStore.read('pace.__sync_last_pull_at') as String? ?? '',
-    )?.toUtc();
-    final lastFullPullAt = DateTime.tryParse(
-      localStore.read('pace.__sync_last_full_pull_at') as String? ?? '',
-    )?.toUtc();
+    final rawCursor = localStore.read('pace.__sync_last_pull_at');
+    final rawLastFullPull = localStore.read('pace.__sync_last_full_pull_at');
+    final cursorAt = rawCursor is String
+        ? DateTime.tryParse(rawCursor)?.toUtc()
+        : null;
+    final lastFullPullAt = rawLastFullPull is String
+        ? DateTime.tryParse(rawLastFullPull)?.toUtc()
+        : null;
     final fullPull = shouldRunFullReconciliation(
       cursorAt: cursorAt,
       lastFullPullAt: lastFullPullAt,
@@ -258,7 +260,7 @@ class SyncService {
             .gte('updated_at', cursorAt.toIso8601String());
     if (!_isCurrentAccount(userId)) return;
 
-    var newestSeen = cursorAt;
+    var newestSeen = cursorAt != null && !cursorAt.isAfter(now) ? cursorAt : null;
     for (final raw in rows) {
       if (!_isCurrentAccount(userId)) return;
       final row = Map<String, dynamic>.from(raw);
