@@ -63,6 +63,7 @@ const EXPORT_ORDER_BY: Record<string, string> = {
 };
 
 async function fetchRowsForParentIds(
+  supabaseAdmin: any,
   table: string,
   parentColumn: string,
   parentIds: string[],
@@ -92,6 +93,7 @@ async function fetchRowsForParentIds(
 }
 
 async function fetchIdsForParentIds(
+  supabaseAdmin: any,
   table: string,
   parentColumn: string,
   parentIds: string[],
@@ -121,6 +123,7 @@ async function fetchIdsForParentIds(
 }
 
 async function deleteByParentIdsInBatches(
+  supabaseAdmin: any,
   table: string,
   parentColumn: string,
   parentIds: string[],
@@ -135,7 +138,7 @@ async function deleteByParentIdsInBatches(
   }
 }
 
-async function fetchAllExportRows(table: string, userId: string): Promise<unknown[]> {
+async function fetchAllExportRows(supabaseAdmin: any, table: string, userId: string): Promise<unknown[]> {
   const rows: unknown[] = [];
   const pageSize = 500;
   const orderColumn = EXPORT_ORDER_BY[table];
@@ -265,7 +268,7 @@ export const exportMyData = createServerFn({ method: "POST" })
 
     for (const table of EXPORT_TABLES) {
       try {
-        tables[table] = await fetchAllExportRows(table, context.userId);
+        tables[table] = await fetchAllExportRows(supabaseAdmin, table, context.userId);
       } catch (error) {
         console.error("privacy export failed", { table, error: error instanceof Error ? error.message : "unknown" });
         throw new Error("Impossible d’exporter vos données.");
@@ -280,14 +283,15 @@ export const exportMyData = createServerFn({ method: "POST" })
     const programIds = programs.map((row) => row.id);
     const sessionIds = sessions.map((row) => row.id);
 
-    const programItems = await fetchRowsForParentIds("sport_program_items", "program_id", programIds);
+    const programItems = await fetchRowsForParentIds(supabaseAdmin, "sport_program_items", "program_id", programIds);
     tables.sport_program_items = programItems;
 
-    const workoutExercises = await fetchRowsForParentIds("sport_workout_exercises", "session_id", sessionIds);
+    const workoutExercises = await fetchRowsForParentIds(supabaseAdmin, "sport_workout_exercises", "session_id", sessionIds);
     tables.sport_workout_exercises = workoutExercises;
 
     const workoutExerciseIds = workoutExercises.map((row) => (row as { id: string }).id);
     tables.sport_workout_sets = await fetchRowsForParentIds(
+      supabaseAdmin,
       "sport_workout_sets",
       "workout_exercise_id",
       workoutExerciseIds,
@@ -328,19 +332,20 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
 
       // Enumerate every owned parent and child row in stable pages before
       // deleting any workout data. This avoids PostgREST row caps and oversized IN clauses.
-      const programs = await fetchAllExportRows("sport_programs", userId) as Array<{ id: string }>;
-      const sessions = await fetchAllExportRows("sport_workout_sessions", userId) as Array<{ id: string }>;
+      const programs = await fetchAllExportRows(supabaseAdmin, "sport_programs", userId) as Array<{ id: string }>;
+      const sessions = await fetchAllExportRows(supabaseAdmin, "sport_workout_sessions", userId) as Array<{ id: string }>;
       const programIds = programs.map((row) => row.id);
       const sessionIds = sessions.map((row) => row.id);
       const workoutExerciseIds = await fetchIdsForParentIds(
+        supabaseAdmin,
         "sport_workout_exercises",
         "session_id",
         sessionIds,
       );
 
-      await deleteByParentIdsInBatches("sport_workout_sets", "workout_exercise_id", workoutExerciseIds);
-      await deleteByParentIdsInBatches("sport_workout_exercises", "session_id", sessionIds);
-      await deleteByParentIdsInBatches("sport_program_items", "program_id", programIds);
+      await deleteByParentIdsInBatches(supabaseAdmin, "sport_workout_sets", "workout_exercise_id", workoutExerciseIds);
+      await deleteByParentIdsInBatches(supabaseAdmin, "sport_workout_exercises", "session_id", sessionIds);
+      await deleteByParentIdsInBatches(supabaseAdmin, "sport_program_items", "program_id", programIds);
 
       const adminDb = supabaseAdmin as any;
       for (const table of DELETE_TABLES) {
