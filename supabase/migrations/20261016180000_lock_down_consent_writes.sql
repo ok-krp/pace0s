@@ -21,9 +21,25 @@ RETURNS trigger
 LANGUAGE plpgsql
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  previous_created_at timestamptz;
 BEGIN
   IF TG_TABLE_NAME = 'consent_records' THEN
-    NEW.created_at := now();
+    -- The E2EE consent policy chooses the newest record by created_at. Serialize
+    -- writes per user/category and make timestamps strictly increasing so a rapid
+    -- revocation cannot tie with an earlier grant and accidentally leave access enabled.
+    PERFORM pg_advisory_xact_lock(
+      hashtextextended(NEW.user_id::text || ':' || NEW.consent_type, 0)
+    );
+    SELECT max(c.created_at)
+      INTO previous_created_at
+      FROM public.consent_records AS c
+      WHERE c.user_id = NEW.user_id
+        AND c.consent_type = NEW.consent_type;
+    NEW.created_at := GREATEST(
+      clock_timestamp(),
+      COALESCE(previous_created_at + interval '1 microsecond', '-infinity'::timestamptz)
+    );
   ELSIF TG_TABLE_NAME = 'legal_consent' THEN
     NEW.consented_at := now();
     IF TG_OP = 'INSERT' THEN

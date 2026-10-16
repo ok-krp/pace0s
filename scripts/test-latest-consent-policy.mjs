@@ -20,7 +20,9 @@ assert.match(source, /supabaseAdmin\.from\("legal_consent"\)\.upsert\(/);
 assert.match(migration, /REVOKE UPDATE, DELETE ON TABLE public\.consent_records FROM authenticated/);
 assert.match(migration, /GRANT SELECT, INSERT ON TABLE public\.consent_records TO authenticated/);
 assert.match(migration, /CREATE TRIGGER consent_records_force_created_at[\s\S]*?EXECUTE FUNCTION public\.enforce_consent_timestamps\(\)/);
-assert.match(migration, /NEW\.created_at := now\(\)/);
+assert.match(migration, /pg_advisory_xact_lock\([\s\S]*?hashtextextended\(NEW\.user_id::text \|\| ':' \|\| NEW\.consent_type, 0\)/);
+assert.match(migration, /clock_timestamp\(\)/);
+assert.match(migration, /previous_created_at \+ interval '1 microsecond'/);
 assert.match(migration, /REVOKE INSERT, UPDATE, DELETE ON TABLE public\.legal_consent FROM authenticated/);
 assert.match(migration, /GRANT INSERT, UPDATE ON TABLE public\.legal_consent TO service_role/);
 
