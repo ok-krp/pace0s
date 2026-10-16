@@ -97,6 +97,9 @@
     "@capacitor/core": "^8.5.2",
     "@capgo/capacitor-health": "^8.11.2"
   },
+  "overrides": {
+    "source-map-js": "^1.2.2"
+  },
   "optionalDependencies": {
     "@rolldown/binding-linux-x64-gnu": "1.0.3"
   },
