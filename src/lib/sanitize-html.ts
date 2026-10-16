@@ -90,7 +90,7 @@ function serializeSafeNode(node: Node): string {
       const safe = sanitizeStyle(value);
       if (safe) attrs.push(`style="${escapeText(safe)}"`);
     } else if (name === "class") {
-      const safe = value.split(/\\s+/).filter((item) => item === "pace-check").join(" ");
+      const safe = value.split(/\s+/).filter((item) => item === "pace-check").join(" ");
       if (safe) attrs.push(`class="${escapeText(safe)}"`);
     } else if (name === "href" && tag === "A" && isSafeLinkHref(value)) {
       attrs.push(`href="${escapeText(value)}"`);
