@@ -239,15 +239,18 @@ class LocalStore {
       await temporary.writeAsString(serialized, flush: true);
 
       if (await targetFile.exists()) {
-        if (await backup.exists()) await backup.delete();
-        await targetFile.rename(backup.path);
+        // Keep the previous complete snapshot as a durable recovery point.
+        // Copy first; the primary remains intact if backup creation fails.
+        await targetFile.copy(backup.path);
+        await targetFile.delete();
       }
       try {
         await temporary.rename(targetFile.path);
-        if (await backup.exists()) await backup.delete();
+        // Intentionally retain .bak as the last known-good snapshot. The next
+        // successful flush replaces it with the current primary file.
       } catch (_) {
         if (!await targetFile.exists() && await backup.exists()) {
-          await backup.rename(targetFile.path);
+          await backup.copy(targetFile.path);
         }
         rethrow;
       }
