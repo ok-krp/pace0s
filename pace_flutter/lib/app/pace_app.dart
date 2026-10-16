@@ -54,6 +54,13 @@ class _PaceAppState extends State<PaceApp> {
     unawaited(widget.sync.syncNow());
   }
 
+  // Account switching loads a different local settings file. Apply its theme
+  // without writing it back or creating an unnecessary sync mutation.
+  void _applyStoredThemeMode(ThemeMode mode) {
+    if (!mounted) return;
+    setState(() => _themeMode = mode);
+  }
+
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Pace',
@@ -66,6 +73,7 @@ class _PaceAppState extends State<PaceApp> {
           auth: widget.auth,
           sync: widget.sync,
           onThemeChanged: setThemeMode,
+          onThemeLoaded: _applyStoredThemeMode,
           themeMode: _themeMode,
         ),
       );
@@ -77,12 +85,14 @@ class _AuthGate extends StatefulWidget {
     required this.auth,
     required this.sync,
     required this.onThemeChanged,
+    required this.onThemeLoaded,
     required this.themeMode,
   });
   final LocalStore localStore;
   final PaceAuthService auth;
   final SyncService sync;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<ThemeMode> onThemeLoaded;
   final ThemeMode themeMode;
 
   @override
@@ -126,6 +136,12 @@ class _AuthGateState extends State<_AuthGate> {
     }
 
     if (!mounted || generation != _accountGeneration) return;
+    final storedTheme = switch (widget.localStore.read('pace.settings.theme')) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
+    widget.onThemeLoaded(storedTheme);
     setState(() => _signedIn = userId != null);
     if (userId != null) await widget.sync.syncNow();
   }
