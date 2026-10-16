@@ -377,6 +377,9 @@ class SyncService {
         .eq('user_id', userId);
 
     for (final raw in rows) {
+      // The auth session may change while the network request is in flight.
+      // Never apply a previous account's response to the currently active store.
+      if (client?.auth.currentUser?.id != userId) return;
       final row = Map<String, dynamic>.from(raw);
       final key = row['key'] as String;
       final remoteUpdatedAt = row['updated_at'] as String?;
