@@ -15,6 +15,13 @@ class SyncService {
       client?.auth.currentUser?.id == expectedUserId &&
       localStore.activeUserId == expectedUserId;
 
+  /// The RPC returns a JSON object with an `accepted` field, not a bare bool.
+  /// Accept the legacy bool shape too so an older compatible backend still works.
+  static bool isUserStateWriteAccepted(dynamic response) {
+    if (response == true) return true;
+    return response is Map && response['accepted'] == true;
+  }
+
   Future<void> syncNow() async {
     final activeClient = client;
     final userId = activeClient?.auth.currentUser?.id;
@@ -92,7 +99,7 @@ class SyncService {
     });
 
     if (!_isCurrentAccount(userId)) throw StateError('Account changed during sync push');
-    if (response == true) return const _PushResult.accepted();
+    if (isUserStateWriteAccepted(response)) return const _PushResult.accepted();
 
     final rows = await client!
         .from('user_state')
