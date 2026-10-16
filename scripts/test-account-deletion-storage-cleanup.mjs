@@ -40,7 +40,7 @@ assert.match(source, /async function fetchRowsForParentIds/);
 assert.match(source, /\.in\(parentColumn, parentBatch\)/);
 assert.match(source, /\.range\(offset, offset \+ pageSize - 1\)/);
 assert.match(source, /const pageSize = 500/);
-assert.match(source, /user_state: "id"/);
+assert.match(source, /user_state: "key"/);
 assert.match(source, /tables\.sport_program_items = programItems/);
 assert.match(source, /tables\.sport_workout_exercises = workoutExercises/);
 assert.match(source, /tables\.sport_workout_sets = await fetchRowsForParentIds/);
