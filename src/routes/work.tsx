@@ -1,4 +1,4 @@
-import { htmlToPlainText, sanitizeNoteHtml } from "@/lib/sanitize-html";
+import { htmlToPlainText, sanitizeNoteFragment, sanitizeNoteHtml } from "@/lib/sanitize-html";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Play, Pause, RotateCcw, Briefcase, Plus, Check, StickyNote, Trash2, Search, Bold, Italic, Underline, Strikethrough, List, ListOrdered, ListTodo, AlignLeft, AlignCenter, AlignRight, Link as LinkIcon, Pin, PinOff, Palette, Undo2, Redo2 } from "lucide-react";
@@ -53,7 +53,7 @@ function WorkPage() {
 
 function NoteEditor({ note, onChange, onDelete }: { note: Note; onChange: (patch: Partial<Note>) => void; onDelete: () => void }) {
   const editorRef = useRef<HTMLDivElement>(null); const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => { if (editorRef.current && editorRef.current.innerHTML !== note.html) editorRef.current.innerHTML = sanitizeNoteHtml(note.html); }, [note.id]);
+  useEffect(() => { if (editorRef.current) editorRef.current.replaceChildren(sanitizeNoteFragment(note.html, editorRef.current.ownerDocument)); }, [note.id]);
   const scheduleSave = () => { if (saveTimer.current) clearTimeout(saveTimer.current); saveTimer.current = setTimeout(() => { if (editorRef.current) onChange({ html: sanitizeNoteHtml(editorRef.current.innerHTML) }); }, 400); };
   const exec = (command: string, value?: string) => { editorRef.current?.focus(); document.execCommand(command, false, value); scheduleSave(); };
   const insertChecklist = () => { editorRef.current?.focus(); document.execCommand("insertHTML", false, `<div class="pace-check" style="display:flex;align-items:center;gap:6px;margin:2px 0"><input type="checkbox" /><span contenteditable="true">Élément</span></div><br/>`); scheduleSave(); };
