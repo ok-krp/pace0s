@@ -191,7 +191,7 @@ class _PaceShellState extends State<PaceShell> {
   void initState() {
     super.initState();
     // Bound background polling to reduce repeated full user_state reads.
-    // Cross-device updates may take up to one minute when Realtime is unavailable.
+    // Cross-device updates may take up to one minute between polling cycles.
     _timer = Timer.periodic(const Duration(seconds: 60), (_) => unawaited(widget.sync.syncNow()));
   }
 
