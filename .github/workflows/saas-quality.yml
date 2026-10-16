@@ -20,4 +20,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run build
       - run: bun run typecheck
+      - run: bun run test:billing-entitlement
+      - run: bun run test:ai-cloud-quota
+      - run: bun run test:ai-consent
       - run: bun run lint

@@ -13,11 +13,20 @@ function stripeKey(): string {
   return key;
 }
 
-async function stripeRequest(path: string, params: Record<string, string>): Promise<Record<string, unknown>> {
+async function stripeRequest(
+  path: string,
+  params: Record<string, string>,
+  idempotencyKey?: string,
+): Promise<Record<string, unknown>> {
   const body = new URLSearchParams(params);
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${stripeKey()}`,
+    "Content-Type": "application/x-www-form-urlencoded",
+  };
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   const response = await fetch(`${stripeBase}${path}`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${stripeKey()}`, "Content-Type": "application/x-www-form-urlencoded" },
+    headers,
     body,
   });
   const json = (await response.json()) as Record<string, unknown>;
@@ -40,12 +49,17 @@ async function ensureCustomer(
   email: string | undefined,
   supabase: typeof supabaseAdmin,
 ) {
-  const { data: existing } = await supabase.from("billing_customers").select("stripe_customer_id").eq("user_id", userId).maybeSingle();
+  const { data: existing, error: existingError } = await supabase
+    .from("billing_customers")
+    .select("stripe_customer_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw new Error("Impossible de vérifier le client de facturation.");
   if (existing?.stripe_customer_id) return existing.stripe_customer_id;
   const customer = await stripeRequest("/customers", {
     email: email ?? "",
     metadata: JSON.stringify({ pace_user_id: userId }),
-  });
+  }, `pace-customer-${userId}`);
   const customerId = String(customer.id);
   const { error } = await supabase.from("billing_customers").upsert({
     user_id: userId,
@@ -59,19 +73,32 @@ async function ensureCustomer(
 const trialSchema = z.object({ deviceId: z.string().min(16).max(200) });
 
 function hashDeviceId(deviceId: string): string {
-  const secret = process.env.PACE_BYOK_ENCRYPTION_KEY ?? process.env.SUPABASE_SECRET_KEY ?? "pace-trial-salt";
+  const secret = process.env.PACE_TRIAL_HASH_SECRET
+    ?? process.env.SUPABASE_SECRET_KEY
+    ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) throw new Error("PACE_TRIAL_HASH_SECRET or a Supabase server secret is required.");
   return createHash("sha256").update(`${secret}:${deviceId}`).digest("hex");
 }
 
 export async function ensureTrial(userId: string, deviceId: string, supabase: typeof supabaseAdmin) {
-  const { data: existing } = await supabaseAdmin.from("billing_trials").select("trial_started_at,trial_ends_at,device_hash").eq("user_id", userId).maybeSingle();
+  const { data: existing, error: existingError } = await supabaseAdmin
+    .from("billing_trials")
+    .select("trial_started_at,trial_ends_at,device_hash")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (existingError) throw new Error("Impossible de vérifier l’essai gratuit.");
   if (existing) return existing;
   const deviceHash = hashDeviceId(deviceId);
   const now = new Date();
   const ends = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
   const { data, error } = await supabaseAdmin.from("billing_trials").insert({ user_id: userId, device_hash: deviceHash, trial_started_at: now.toISOString(), trial_ends_at: ends.toISOString() }).select("trial_started_at,trial_ends_at,device_hash").single();
   if (error) {
-    const { data: byDevice } = await supabaseAdmin.from("billing_trials").select("user_id,trial_started_at,trial_ends_at,device_hash").eq("device_hash", deviceHash).maybeSingle();
+    const { data: byDevice, error: byDeviceError } = await supabaseAdmin
+      .from("billing_trials")
+      .select("user_id,trial_started_at,trial_ends_at,device_hash")
+      .eq("device_hash", deviceHash)
+      .maybeSingle();
+    if (byDeviceError) throw new Error("Impossible de vérifier l’éligibilité à l’essai gratuit.");
     if (byDevice && byDevice.user_id !== userId) throw new Error("Cet appareil a déjà utilisé l’essai gratuit de Pace.");
     const { data: retry } = await supabaseAdmin.from("billing_trials").select("trial_started_at,trial_ends_at,device_hash").eq("user_id", userId).maybeSingle();
     if (retry) return retry;
@@ -138,15 +165,29 @@ export async function applyStripeSubscription(
   },
 ) {
   const priceId = subscription.items?.data?.[0]?.price?.id;
-  const plan = (subscription.metadata?.pace_plan as PlanId | undefined) ?? planFromPriceId(priceId);
-  const safePlan: PlanId = plan && plan in PLAN_CATALOG ? plan : "plus";
+  // The Stripe Price ID is authoritative. Never default an unknown price to a
+  // paid tier, and reject metadata/price mismatches rather than granting the
+  // higher of two conflicting plans.
+  const pricePlan = planFromPriceId(priceId);
+  const metadataPlan = subscription.metadata?.pace_plan;
+  if (!pricePlan) throw new Error("Stripe subscription has an unrecognized Price ID.");
+  if (metadataPlan && metadataPlan !== pricePlan) {
+    // Stripe Price ID is authoritative, especially after customer-portal plan
+    // changes. Log stale metadata but never let it grant a higher tier.
+    console.warn("Stripe subscription metadata differs from Price ID", {
+      subscriptionId: subscription.id,
+      metadataPlan,
+      pricePlan,
+    });
+  }
+  const safePlan: PlanId = pricePlan;
   let userId = subscription.metadata?.pace_user_id;
   if (!userId) {
     const { data } = await supabase.from("billing_customers").select("user_id").eq("stripe_customer_id", subscription.customer).maybeSingle();
     userId = data?.user_id;
   }
   if (!userId) throw new Error("Stripe subscription sans utilisateur Pace.");
-  await supabase.from("billing_subscriptions").upsert({
+  const { error: subscriptionWriteError } = await supabase.from("billing_subscriptions").upsert({
     user_id: userId,
     stripe_subscription_id: subscription.id,
     stripe_customer_id: subscription.customer,
@@ -155,6 +196,10 @@ export async function applyStripeSubscription(
     current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
     cancel_at_period_end: subscription.cancel_at_period_end,
   });
+  if (subscriptionWriteError) {
+    console.error("Stripe subscription sync failed", { subscriptionId: subscription.id, error: subscriptionWriteError.message });
+    throw new Error("Impossible de synchroniser l’abonnement Stripe.");
+  }
 }
 
 export function verifyStripeSignature(payload: string, signature: string, secret: string): boolean {
