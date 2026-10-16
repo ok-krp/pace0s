@@ -32,9 +32,9 @@ class SyncService {
 
     _running = true;
     try {
-      final hadLocalAiPreferenceMutation = localStore.pendingOperations().any(
-        (operation) => operation['key'] == 'pace.settings.ai.confirm_actions' || operation['key'] == 'pace.settings.ai.memory',
-      );
+      final hadLocalAiPreferenceMutation =
+          localStore.hasPendingOperationForKey('pace.settings.ai.confirm_actions') ||
+          localStore.hasPendingOperationForKey('pace.settings.ai.memory');
       await _pushPending(userId);
       if (!_isCurrentAccount(userId)) return;
       await _syncAiPreferences(expectedUserId: userId, pushLocal: hadLocalAiPreferenceMutation);
@@ -169,7 +169,7 @@ class SyncService {
       final row = Map<String, dynamic>.from(raw);
       final key = row['key'] as String;
       final remoteUpdatedAt = row['updated_at'] as String?;
-      if (remoteUpdatedAt == null || localStore.pendingOperations().any((op) => op['key'] == key)) continue;
+      if (remoteUpdatedAt == null || localStore.hasPendingOperationForKey(key)) continue;
 
       final localUpdatedAt = localStore.lastSyncedAt(key);
       if (localUpdatedAt != null) {
