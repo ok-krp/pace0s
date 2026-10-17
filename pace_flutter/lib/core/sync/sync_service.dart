@@ -37,6 +37,17 @@ class SyncService {
     return now.difference(lastFullPullAt) >= fullReconciliationInterval;
   }
 
+  /// A full reconciliation must not seed its max timestamp from the old
+  /// cursor: if the table is empty, the cursor must advance to the scan time.
+  static DateTime? cursorSeedBeforePull({
+    required DateTime? cursorAt,
+    required bool fullPull,
+    required DateTime now,
+  }) {
+    if (fullPull || cursorAt == null || cursorAt.isAfter(now)) return null;
+    return cursorAt;
+  }
+
   /// Advances an empty successful full scan to its scan time. Without this,
   /// an account with no valid rows would keep a null cursor and repeat a full
   /// table read on every sync tick instead of using delta reads until reconcile.
@@ -264,9 +275,11 @@ class SyncService {
     // keys when the cursor advances.
     const pageSize = 500;
     var offset = 0;
-    var newestSeen = !fullPull && cursorAt != null && !cursorAt.isAfter(now)
-        ? cursorAt
-        : null;
+    var newestSeen = cursorSeedBeforePull(
+      cursorAt: cursorAt,
+      fullPull: fullPull,
+      now: now,
+    );
     while (true) {
       final rows = fullPull
           ? await client!
