@@ -160,11 +160,16 @@ class LocalStore extends ChangeNotifier {
     dynamic value, {
     bool enqueueSync = true,
     bool notify = true,
-  }) {
-    if (_switchingAccount || _activeUserId != expectedUserId) {
-      throw StateError('Local account changed before scoped write');
+  }) async {
+    if (_switchingAccount || _activeUserId != expectedUserId) return;
+    try {
+      await write(key, value, enqueueSync: enqueueSync, notify: notify);
+    } on StateError {
+      // A switch can be requested after the initial scope check but before
+      // [write] starts. Treat that as a stale callback, not an app-level error.
+      if (_switchingAccount || _activeUserId != expectedUserId) return;
+      rethrow;
     }
-    return write(key, value, enqueueSync: enqueueSync, notify: notify);
   }
 
   Future<void> removeForAccount(
@@ -172,11 +177,14 @@ class LocalStore extends ChangeNotifier {
     String key, {
     bool enqueueSync = true,
     bool notify = true,
-  }) {
-    if (_switchingAccount || _activeUserId != expectedUserId) {
-      throw StateError('Local account changed before scoped remove');
+  }) async {
+    if (_switchingAccount || _activeUserId != expectedUserId) return;
+    try {
+      await remove(key, enqueueSync: enqueueSync, notify: notify);
+    } on StateError {
+      if (_switchingAccount || _activeUserId != expectedUserId) return;
+      rethrow;
     }
-    return remove(key, enqueueSync: enqueueSync, notify: notify);
   }
 
   Future<void> write(
