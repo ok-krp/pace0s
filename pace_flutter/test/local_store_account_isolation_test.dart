@@ -118,6 +118,28 @@ void main() {
     expect(store.lastSyncedAt('pace.profile.name'), serverUpdatedAt);
   });
 
+  test('malformed per-key sync metadata is ignored without crashing', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.write(
+      '__sync_meta',
+      {
+        'pace.profile.name': 123,
+        'pace.profile.weight': '2026-10-17T10:00:00Z',
+      },
+      enqueueSync: false,
+    );
+
+    expect(store.lastSyncedAt('pace.profile.name'), isNull);
+    expect(
+      store.lastSyncedAt('pace.profile.weight'),
+      '2026-10-17T10:00:00Z',
+    );
+    expect(
+      store.syncedMetadata(),
+      {'pace.profile.weight': '2026-10-17T10:00:00Z'},
+    );
+  });
+
   test('notifies listeners for durable state changes but can batch remote pulls', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
