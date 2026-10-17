@@ -24,7 +24,7 @@ LANGUAGE sql
 STABLE
 SECURITY INVOKER
 SET search_path = ''
-AS $
+AS $$
   SELECT
     COALESCE((
       SELECT c.granted
@@ -43,7 +43,7 @@ AS $
       ORDER BY c.created_at DESC, c.id DESC
       LIMIT 1
     ), false);
-$;
+$$;
 
 REVOKE ALL ON FUNCTION public.has_current_health_e2ee_consent() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.has_current_health_e2ee_consent() TO authenticated;
