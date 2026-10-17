@@ -126,6 +126,22 @@ class SyncService {
       // future. Clamp the cursor to scan time so every 60-second tick does not
       // trigger another full reconciliation until the local clock catches up.
       final candidate = newestSeen.isAfter(now) ? now : newestSeen;
+
+      // The cursor is advanced only by syncable rows. If a delta page contains
+      // only device-local/excluded rows, newestSeen remains equal to the prior
+      // cursor and those old rows would be fetched on every 60-second tick.
+      // Move such a stalled cursor forward with a bounded overlap; the periodic
+      // full reconciliation remains the recovery path for late commits.
+      if (!fullPull &&
+          previousCursorAt != null &&
+          !previousCursorAt.isAfter(now) &&
+          !candidate.isAfter(previousCursorAt)) {
+        final overlapCursor = now.subtract(cursorOverlapWindow);
+        return previousCursorAt.isAfter(overlapCursor)
+            ? previousCursorAt
+            : overlapCursor;
+      }
+
       // A full scan can see only old rows. Never move a valid cursor backward
       // just because the newest row timestamp predates it.
       if (fullPull &&
