@@ -12,6 +12,31 @@ class RoutinePage extends StatefulWidget {
 }
 
 class _RoutinePageState extends State<RoutinePage> {
+  @override
+  void initState() {
+    super.initState();
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant RoutinePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
+  }
+
   String get _today {
     final d = DateTime.now();
     return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
