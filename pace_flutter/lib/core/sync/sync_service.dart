@@ -21,8 +21,13 @@ class SyncService {
   /// The RPC returns a JSON object with an `accepted` field, not a bare bool.
   /// Accept the legacy bool shape too so an older compatible backend still works.
   static bool isUserStateWriteAccepted(dynamic response) {
+    // Older compatible RPCs may return a bare bool. The current server
+    // contract returns both acceptance and the authoritative database version;
+    // a partial object must not be treated as a committed write.
     if (response == true) return true;
-    return response is Map && response['accepted'] == true;
+    if (response is! Map || response['accepted'] != true) return false;
+    final updatedAt = response['updated_at'];
+    return updatedAt is String && DateTime.tryParse(updatedAt) != null;
   }
 
   /// The RPC's accepted payload contains the database's authoritative
