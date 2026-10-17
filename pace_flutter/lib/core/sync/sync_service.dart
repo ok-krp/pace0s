@@ -25,6 +25,13 @@ class SyncService {
     return response is Map && response['accepted'] == true;
   }
 
+  /// Keys that are intentionally device-local in the web sync contract.
+  /// Keep native push and pull behavior aligned with src/hooks/use-cloud-sync-engine.tsx.
+  static const Set<String> excludedSyncKeys = {'pace.sport.active'};
+
+  static bool isSyncableKey(String key) =>
+      key.startsWith('pace.') && !excludedSyncKeys.contains(key);
+
   static const Duration fullReconciliationInterval = Duration(minutes: 10);
 
   static bool shouldRunFullReconciliation({
@@ -146,6 +153,12 @@ class SyncService {
     for (final operation in List<Map<String, dynamic>>.from(localStore.pendingOperations())) {
       if (!_isCurrentAccount(expectedUserId)) return;
       try {
+        final key = operation['key'] as String;
+        if (!isSyncableKey(key)) {
+          // Clear obsolete/device-local outbox entries without sending them to cloud.
+          await localStore.acknowledgeOperation(operation, expectedUserId: expectedUserId);
+          continue;
+        }
         final result = await _push(operation, expectedUserId);
         if (!_isCurrentAccount(expectedUserId)) return;
         if (result.accepted) {
@@ -328,7 +341,10 @@ class SyncService {
             (newestSeen == null || remoteTime.isAfter(newestSeen))) {
           newestSeen = remoteTime;
         }
-        if (remoteUpdatedAt == null || remoteTime == null || localStore.hasPendingOperationForKey(key)) continue;
+        if (!isSyncableKey(key) ||
+            remoteUpdatedAt == null ||
+            remoteTime == null ||
+            localStore.hasPendingOperationForKey(key)) continue;
 
         final localUpdatedAt = localStore.lastSyncedAt(key);
         if (localUpdatedAt != null) {
