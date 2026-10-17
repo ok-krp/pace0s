@@ -12,6 +12,31 @@ class NotesPage extends StatefulWidget {
 }
 
 class _NotesPageState extends State<NotesPage> {
+  @override
+  void initState() {
+    super.initState();
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant NotesPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
+  }
+
   List<Map<String, dynamic>> _notes() {
     final raw = widget.localStore.read('pace.notes');
     if (raw is! List) return [];
