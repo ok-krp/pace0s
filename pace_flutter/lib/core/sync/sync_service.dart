@@ -18,22 +18,20 @@ class SyncService {
       client?.auth.currentUser?.id == expectedUserId &&
       localStore.activeUserId == expectedUserId;
 
-  /// The RPC returns a JSON object with an `accepted` field, not a bare bool.
-  /// Accept the legacy bool shape too so an older compatible backend still works.
+  /// Supports the boolean return type in the checked-in SQL migration and
+  /// structured responses from compatible deployments that include metadata.
   static bool isUserStateWriteAccepted(dynamic response) {
-    // Older compatible RPCs may return a bare bool. The current server
-    // contract returns both acceptance and the authoritative database version;
-    // a partial object must not be treated as a committed write.
+    // The checked-in RPC returns bool; newer deployments may return an object
+    // containing acceptance and the database timestamp. Reject partial objects.
     if (response == true) return true;
     if (response is! Map || response['accepted'] != true) return false;
     final updatedAt = response['updated_at'];
     return updatedAt is String && DateTime.tryParse(updatedAt) != null;
   }
 
-  /// The RPC's accepted payload contains the database's authoritative
-  /// updated_at. Never substitute the client queue timestamp when that value
-  /// is available: client/server clock skew would otherwise poison local
-  /// version metadata and make later conflict decisions incorrect.
+  /// Prefer a database-authoritative updated_at when a structured RPC
+  /// response provides one. The checked-in boolean RPC writes p_updated_at
+  /// directly, so its fallback is the exact timestamp sent to PostgreSQL.
   static String userStateWriteUpdatedAt(
     dynamic response, {
     required String fallback,
