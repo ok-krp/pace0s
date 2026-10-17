@@ -209,4 +209,4 @@ grant execute on function public.delete_migrated_health_legacy_chunk(uuid, uuid[
 
 -- Disable the unsafe one-argument client path. Older clients will fail closed
 -- and retain plaintext rather than continue a migration without account binding.
-revoke all on function public.migrate_health_legacy_chunk(jsonb) from authenticated;
+revoke all on function public.migrate_health_legacy_chunk(jsonb) from public, anon, authenticated, service_role;

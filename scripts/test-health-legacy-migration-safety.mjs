@@ -24,7 +24,7 @@ assert.match(migration, /migration\.dedupe_hash/);
 assert.match(migration, /encrypted\.dedupe_hash = migration\.dedupe_hash/);
 assert.match(migration, /Unmapped dedupe collision requires payload verification/);
 assert.match(migration, /Legacy mapping predates verified dedupe; reconciliation required/);
-assert.match(migration, /revoke all on function public\.migrate_health_legacy_chunk\(jsonb\) from authenticated/i);
+assert.match(migration, /revoke all on function public\.migrate_health_legacy_chunk\(jsonb\) from public, anon, authenticated, service_role/i);
 
 assert.match(client, /\.range\(offset, offset \+ PAGE_SIZE - 1\)/);
 assert.match(client, /\.order\("id", \{ ascending: true \}\)/);
