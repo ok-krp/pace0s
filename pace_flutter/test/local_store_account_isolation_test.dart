@@ -55,6 +55,35 @@ void main() {
     expect(store.pendingOperations(), isEmpty);
   });
 
+  test('rebases a concurrent edit after the server acknowledges a later timestamp', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'first value');
+    final inFlight = store.pendingOperations().single;
+
+    // This local edit arrives while the first request is in flight. Its
+    // queuedAt predates the server's authoritative timestamp returned later.
+    await store.write('pace.profile.name', 'newer local value');
+    final beforeAck = store.pendingOperations().single;
+    final serverUpdatedAt = DateTime.utc(2026, 10, 18, 10).toIso8601String();
+    expect(DateTime.parse(beforeAck['queuedAt'] as String).isBefore(DateTime.parse(serverUpdatedAt)), isTrue);
+
+    await store.acknowledgeOperation(
+      inFlight,
+      expectedUserId: 'user-a',
+      syncedAt: serverUpdatedAt,
+    );
+
+    final remaining = store.pendingOperations();
+    expect(remaining, hasLength(1));
+    expect(remaining.single['value'], 'newer local value');
+    expect(
+      DateTime.parse(remaining.single['queuedAt'] as String).isAfter(DateTime.parse(serverUpdatedAt)),
+      isTrue,
+    );
+    expect(store.lastSyncedAt('pace.profile.name'), serverUpdatedAt);
+  });
+
   test('notifies listeners for durable state changes but can batch remote pulls', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
