@@ -289,8 +289,7 @@ class SyncService {
         final localUpdatedAt = localStore.lastSyncedAt(key);
         if (localUpdatedAt != null) {
           final localTime = DateTime.tryParse(localUpdatedAt);
-          if (remoteTime != null &&
-              localTime != null &&
+          if (localTime != null &&
               !remoteTime.isAfter(localTime)) {
             continue;
           }
