@@ -151,7 +151,7 @@ void main() {
   group('SyncService.cursorAfterPull', () {
     final now = DateTime.utc(2026, 10, 17, 10);
 
-    test('an empty successful full scan establishes a cursor', () {
+    test('an empty successful full scan establishes an overlapped cursor', () {
       expect(
         SyncService.cursorAfterPull(
           newestSeen: null,
@@ -159,7 +159,20 @@ void main() {
           fullPull: true,
           now: now,
         ),
-        now,
+        now.subtract(SyncService.cursorOverlapWindow),
+      );
+    });
+
+    test('an empty full scan does not move a recent valid cursor backward', () {
+      final previous = now.subtract(const Duration(seconds: 30));
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: null,
+          previousCursorAt: previous,
+          fullPull: true,
+          now: now,
+        ),
+        previous,
       );
     });
 
