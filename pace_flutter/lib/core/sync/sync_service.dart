@@ -176,7 +176,11 @@ class SyncService {
         final result = await _push(operation, expectedUserId);
         if (!_isCurrentAccount(expectedUserId)) return;
         if (result.accepted) {
-          await localStore.acknowledgeOperation(operation, expectedUserId: expectedUserId);
+          await localStore.acknowledgeOperation(
+            operation,
+            expectedUserId: expectedUserId,
+            syncedAt: result.remoteUpdatedAt,
+          );
           continue;
         }
 
@@ -226,7 +230,9 @@ class SyncService {
     });
 
     if (!_isCurrentAccount(userId)) throw StateError('Account changed during sync push');
-    if (isUserStateWriteAccepted(response)) return const _PushResult.accepted();
+    if (isUserStateWriteAccepted(response)) {
+      return _PushResult.accepted(remoteUpdatedAt: updatedAt);
+    }
 
     final rows = await client!
         .from('user_state')
@@ -408,11 +414,10 @@ class SyncService {
 }
 
 class _PushResult {
-  const _PushResult.accepted()
+  const _PushResult.accepted({required this.remoteUpdatedAt})
       : accepted = true,
         hasRemote = false,
-        remoteValue = null,
-        remoteUpdatedAt = null;
+        remoteValue = null;
 
   const _PushResult.rejected()
       : accepted = false,
