@@ -295,7 +295,7 @@ class LocalStore extends ChangeNotifier {
       _outbox.any((entry) {
         if (entry['key'] != operation['key']) return false;
         final queuedAt = operation['queuedAt'];
-        if (queuedAt != null && entry['queuedAt'] != queuedAt) return false;
+        if (entry['queuedAt'] != queuedAt) return false;
         return entry['operation'] == operation['operation'] &&
             entry['value'] == operation['value'];
       });
@@ -326,7 +326,7 @@ class LocalStore extends ChangeNotifier {
     final queuedAt = operation['queuedAt'];
     final index = outbox.indexWhere((entry) {
       if (entry['key'] != operation['key']) return false;
-      if (queuedAt != null && entry['queuedAt'] != queuedAt) return false;
+      if (entry['queuedAt'] != queuedAt) return false;
       // queuedAt is a timestamp, not a unique operation ID. Match the payload
       // as well so a stale in-flight response cannot defer a replacement write
       // if two mutations happen to receive the same timestamp.
@@ -358,7 +358,7 @@ class LocalStore extends ChangeNotifier {
     final queuedAt = operation['queuedAt'];
     outbox.removeWhere((entry) {
       if (entry['key'] != operation['key']) return false;
-      if (queuedAt != null && entry['queuedAt'] != queuedAt) return false;
+      if (entry['queuedAt'] != queuedAt) return false;
       // Never acknowledge a newer payload solely because its timestamp
       // collides with the operation whose network request just completed.
       return entry['operation'] == operation['operation'] &&
