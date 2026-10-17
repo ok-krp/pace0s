@@ -37,6 +37,18 @@ class SyncService {
     return now.difference(lastFullPullAt) >= fullReconciliationInterval;
   }
 
+  /// Advances an empty successful full scan to its scan time. Without this,
+  /// an account with no valid rows would keep a null cursor and repeat a full
+  /// table read on every sync tick instead of using delta reads until reconcile.
+  static DateTime? cursorAfterPull({
+    required DateTime? newestSeen,
+    required bool fullPull,
+    required DateTime now,
+  }) {
+    if (newestSeen != null) return newestSeen;
+    return fullPull ? now : null;
+  }
+
   static bool shouldPropagateAiPreferences({
     required bool hadLocalMutation,
     required bool hasPendingMutation,
@@ -307,10 +319,15 @@ class SyncService {
     }
 
     if (!_isCurrentAccount(userId)) return;
-    if (newestSeen != null) {
+    final cursorToSave = cursorAfterPull(
+      newestSeen: newestSeen,
+      fullPull: fullPull,
+      now: now,
+    );
+    if (cursorToSave != null) {
       await localStore.write(
         'pace.__sync_last_pull_at',
-        newestSeen.toIso8601String(),
+        cursorToSave.toIso8601String(),
         enqueueSync: false,
       );
     }
