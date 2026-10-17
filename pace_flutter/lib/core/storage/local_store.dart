@@ -272,10 +272,17 @@ class LocalStore extends ChangeNotifier {
     _data['__sync_meta'] = meta;
   }
 
-  List<Map<String, dynamic>> get _outbox => ((_data['__outbox'] as List?) ?? const [])
-      .whereType<Map>()
-      .map((entry) => Map<String, dynamic>.from(entry))
-      .toList();
+  List<Map<String, dynamic>> get _outbox {
+    // A valid JSON document can still contain a malformed reserved field from
+    // an older build or a partial/manual repair. Do not let a wrong top-level
+    // type crash reads of otherwise recoverable local state.
+    final raw = _data['__outbox'];
+    if (raw is! List) return <Map<String, dynamic>>[];
+    return raw
+        .whereType<Map>()
+        .map((entry) => Map<String, dynamic>.from(entry))
+        .toList();
+  }
 
   List<Map<String, dynamic>> pendingOperations({DateTime? now}) {
     final current = (now ?? DateTime.now().toUtc()).toUtc();
