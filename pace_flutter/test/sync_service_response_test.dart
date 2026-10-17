@@ -117,7 +117,7 @@ void main() {
   });
 
   group('SyncService.isUserStateWriteAccepted', () {
-    test('accepts the JSON object returned by upsert_user_state_if_newer', () {
+    test('accepts structured RPC responses with acceptance and timestamp', () {
       expect(
         SyncService.isUserStateWriteAccepted({
           'accepted': true,
