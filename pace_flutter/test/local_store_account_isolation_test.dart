@@ -15,6 +15,43 @@ void main() {
     if (await directory.exists()) await directory.delete(recursive: true);
   });
 
+  test('queued timestamps advance when the clock repeats or moves backwards', () {
+    final latest = DateTime.utc(2026, 10, 17, 10, 0, 0, 0, 123);
+    expect(
+      LocalStore.monotonicQueuedAt(now: latest, latestKnownAt: latest),
+      latest.add(const Duration(microseconds: 1)),
+    );
+    expect(
+      LocalStore.monotonicQueuedAt(
+        now: latest.subtract(const Duration(seconds: 1)),
+        latestKnownAt: latest,
+      ),
+      latest.add(const Duration(microseconds: 1)),
+    );
+    final newerNow = latest.add(const Duration(microseconds: 10));
+    expect(
+      LocalStore.monotonicQueuedAt(now: newerNow, latestKnownAt: latest),
+      newerNow,
+    );
+  });
+
+  test('acknowledging an accepted write records its server timestamp', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'account A');
+    final operation = store.pendingOperations().single;
+    final queuedAt = operation['queuedAt'] as String;
+
+    await store.acknowledgeOperation(
+      operation,
+      expectedUserId: 'user-a',
+      syncedAt: queuedAt,
+    );
+
+    expect(store.lastSyncedAt('pace.profile.name'), queuedAt);
+    expect(store.pendingOperations(), isEmpty);
+  });
+
   test('guest and signed-in accounts use isolated state and outboxes', () async {
     final store = await LocalStore.open(directory: directory);
 
