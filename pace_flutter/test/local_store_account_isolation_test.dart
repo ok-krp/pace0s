@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:pace/core/storage/local_store.dart';
+import 'package:pace/core/supabase/pace_supabase.dart';
+import 'package:pace/core/sync/sync_service.dart';
+import 'package:pace/features/ai/ai_service.dart';
 
 void main() {
   late Directory directory;
@@ -231,6 +234,27 @@ void main() {
     expect(store.read('pace.profile.name'), 'account B');
     expect(store.pendingOperations(), hasLength(1));
     expect(store.pendingOperations().single['value'], 'account B');
+  });
+
+  test('stale AI service cannot read or write the next account state', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    final ai = PaceAiService(
+      localStore: store,
+      sync: SyncService(localStore: store, client: null),
+      auth: const PaceAuthService(null),
+    );
+
+    await store.activateAccount('user-b');
+    final accountBMemory = <Map<String, dynamic>>[
+      {'id': 'b-memory', 'text': 'account B only', 'createdAt': '2026-10-17T10:00:00Z'},
+    ];
+    await store.write('pace.ai.memory', accountBMemory);
+
+    expect(ai.loadMemory(), isEmpty);
+    await ai.addMemory('late response from account A');
+
+    expect(store.read('pace.ai.memory'), accountBMemory);
   });
 
   test('stale sync completions cannot mutate another account', () async {
