@@ -133,6 +133,13 @@ class _AuthGateState extends State<_AuthGate> {
     }
 
     final generation = ++_accountGeneration;
+    if (_signedIn && widget.localStore.activeUserId != userId) {
+      // Feature routes are pushed onto MaterialApp's root navigator. Remove
+      // them before changing account scope so a signed-out account cannot leave
+      // a cached page visible above the authentication screen.
+      Navigator.maybeOf(context, rootNavigator: true)
+          ?.popUntil((route) => route.isFirst);
+    }
     if (mounted) setState(() => _signedIn = false);
 
     try {
