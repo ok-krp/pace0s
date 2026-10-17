@@ -353,7 +353,26 @@ class LocalStore extends ChangeNotifier {
           entry['value'] == operation['value'];
     });
     if (syncedAt != null) {
-      _setSyncedAt(operation['key'] as String, syncedAt);
+      final key = operation['key'] as String;
+      _setSyncedAt(key, syncedAt);
+      final acceptedAt = DateTime.tryParse(syncedAt)?.toUtc();
+      if (acceptedAt != null) {
+        // A newer local edit may have been queued while this operation was
+        // in flight. Its timestamp was generated before the server's
+        // authoritative acknowledgement arrived; rebase it if necessary so
+        // the next push cannot be rejected as older and then overwrite the
+        // newer local value with the server copy.
+        for (final entry in outbox) {
+          if (entry['key'] != key || entry['queuedAt'] is! String) continue;
+          final queuedAt = DateTime.tryParse(entry['queuedAt'] as String)?.toUtc();
+          if (queuedAt == null || !queuedAt.isAfter(acceptedAt)) {
+            entry['queuedAt'] = monotonicQueuedAt(
+              now: DateTime.now().toUtc(),
+              latestKnownAt: acceptedAt,
+            ).toIso8601String();
+          }
+        }
+      }
     }
     _data['__outbox'] = outbox;
     await _flush();
