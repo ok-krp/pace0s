@@ -12,9 +12,11 @@ class SleepPage extends StatefulWidget {
 }
 
 class _SleepPageState extends State<SleepPage> {
+  late String? _accountUserId;
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
     widget.localStore.addListener(_onLocalStoreChanged);
   }
 
@@ -67,7 +69,7 @@ class _SleepPageState extends State<SleepPage> {
     controller.dispose();
     if (value == null) return;
     data[day] = {'hours': value};
-    await widget.localStore.write('pace.sleep', data);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.sleep', data);
     if (mounted) setState(() {});
   }
 
