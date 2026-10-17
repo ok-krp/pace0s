@@ -12,9 +12,11 @@ class CalendarPage extends StatefulWidget {
 }
 
 class _CalendarPageState extends State<CalendarPage> {
+  late String? _accountUserId;
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
     widget.localStore.addListener(_onLocalStoreChanged);
   }
 
@@ -59,13 +61,13 @@ class _CalendarPageState extends State<CalendarPage> {
     if (result == null || result['title']!.isEmpty) return;
     final events = _events();
     events.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), ...result});
-    await widget.localStore.write('pace.calendar.events', events);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.calendar.events', events);
     if (mounted) setState(() {});
   }
 
   Future<void> _delete(Map<String, dynamic> event) async {
     final events = _events()..removeWhere((e) => e['id']?.toString() == event['id']?.toString());
-    await widget.localStore.write('pace.calendar.events', events);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.calendar.events', events);
     if (mounted) setState(() {});
   }
 
