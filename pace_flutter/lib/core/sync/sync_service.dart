@@ -244,6 +244,18 @@ class SyncService {
           await localStore.deferOperation(operation, expectedUserId: expectedUserId);
           continue;
         }
+        if (!localStore.isPendingOperation(operation)) {
+          // This request became stale because a newer local edit replaced its
+          // outbox entry while the network call was in flight. Record the
+          // server version and rebase the newer mutation's timestamp, but do
+          // not overwrite the user's current local value with the conflict row.
+          await localStore.acknowledgeOperation(
+            operation,
+            expectedUserId: expectedUserId,
+            syncedAt: result.remoteUpdatedAt,
+          );
+          continue;
+        }
         await localStore.applyRemote(
           operation['key'] as String,
           result.remoteValue,
