@@ -149,7 +149,10 @@ class LocalStore extends ChangeNotifier {
 
   dynamic read(String key) => _data[key];
 
-  String? lastSyncedAt(String key) => _syncMeta[key] as String?;
+  String? lastSyncedAt(String key) {
+    final value = _syncMeta[key];
+    return value is String ? value : null;
+  }
 
   /// Persist a UI-originated mutation only if it still belongs to the account
   /// that created the operation. This prevents delayed async callbacks from a
