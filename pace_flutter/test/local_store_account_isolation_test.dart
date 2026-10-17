@@ -67,7 +67,10 @@ void main() {
     final beforeAck = store.pendingOperations().single;
     expect(store.isPendingOperation(inFlight), isFalse);
     expect(store.isPendingOperation(beforeAck), isTrue);
-    final serverUpdatedAt = DateTime.utc(2026, 10, 18, 10).toIso8601String();
+    final serverUpdatedAt = DateTime.now()
+        .toUtc()
+        .add(const Duration(days: 1))
+        .toIso8601String();
     expect(DateTime.parse(beforeAck['queuedAt'] as String).isBefore(DateTime.parse(serverUpdatedAt)), isTrue);
 
     await store.acknowledgeOperation(
