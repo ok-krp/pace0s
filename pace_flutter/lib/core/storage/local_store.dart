@@ -288,6 +288,18 @@ class LocalStore extends ChangeNotifier {
   bool hasPendingOperationForKey(String key) =>
       _outbox.any((entry) => entry['key'] == key);
 
+  /// Whether [operation] is still the current queued mutation for its key.
+  /// Network requests can finish after a newer local edit replaces the outbox
+  /// entry; conflict handling must not apply the server row over that edit.
+  bool isPendingOperation(Map<String, dynamic> operation) =>
+      _outbox.any((entry) {
+        if (entry['key'] != operation['key']) return false;
+        final queuedAt = operation['queuedAt'];
+        if (queuedAt != null && entry['queuedAt'] != queuedAt) return false;
+        return entry['operation'] == operation['operation'] &&
+            entry['value'] == operation['value'];
+      });
+
   /// True only when this key's queued mutation is eligible for replay now.
   /// This is separate from [hasPendingOperationForKey], which also protects
   /// deferred local edits from being overwritten by remote pulls.
