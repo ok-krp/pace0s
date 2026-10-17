@@ -337,7 +337,10 @@ class SyncService {
         final remoteTime = remoteUpdatedAt == null
             ? null
             : DateTime.tryParse(remoteUpdatedAt)?.toUtc();
-        if (remoteTime != null &&
+        // Device-local rows must not advance the cloud-sync cursor; otherwise
+        // an excluded key could move the checkpoint past a late syncable write.
+        if (isSyncableKey(key) &&
+            remoteTime != null &&
             (newestSeen == null || remoteTime.isAfter(newestSeen))) {
           newestSeen = remoteTime;
         }
