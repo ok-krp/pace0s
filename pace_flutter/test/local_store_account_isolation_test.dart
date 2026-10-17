@@ -236,6 +236,25 @@ void main() {
     expect(store.pendingOperations().single['value'], 'account B');
   });
 
+  test('AI service reads memory while its guest account scope is current', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.write('pace.ai.memory', <Map<String, dynamic>>[
+      {
+        'id': 'guest-memory',
+        'text': 'guest memory remains readable',
+        'createdAt': '2026-10-17T10:00:00Z',
+      },
+    ]);
+    final ai = PaceAiService(
+      localStore: store,
+      sync: SyncService(localStore: store, client: null),
+      auth: const PaceAuthService(null),
+    );
+
+    expect(ai.loadMemory(), hasLength(1));
+    expect(ai.loadMemory().single.text, 'guest memory remains readable');
+  });
+
   test('stale AI service cannot read or write the next account state', () async {
     final store = await LocalStore.open(directory: directory);
     // A guest-created AI service can finish an async task after sign-in.
