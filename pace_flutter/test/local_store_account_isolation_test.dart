@@ -65,6 +65,8 @@ void main() {
     // queuedAt predates the server's authoritative timestamp returned later.
     await store.write('pace.profile.name', 'newer local value');
     final beforeAck = store.pendingOperations().single;
+    expect(store.isPendingOperation(inFlight), isFalse);
+    expect(store.isPendingOperation(beforeAck), isTrue);
     final serverUpdatedAt = DateTime.utc(2026, 10, 18, 10).toIso8601String();
     expect(DateTime.parse(beforeAck['queuedAt'] as String).isBefore(DateTime.parse(serverUpdatedAt)), isTrue);
 
