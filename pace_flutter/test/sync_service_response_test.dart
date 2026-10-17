@@ -139,6 +139,7 @@ void main() {
       expect(
         SyncService.cursorAfterPull(
           newestSeen: null,
+          previousCursorAt: null,
           fullPull: true,
           now: now,
         ),
@@ -151,6 +152,7 @@ void main() {
       expect(
         SyncService.cursorAfterPull(
           newestSeen: newest,
+          previousCursorAt: null,
           fullPull: true,
           now: now,
         ),
@@ -158,10 +160,25 @@ void main() {
       );
     });
 
+    test('a full scan with only older rows never moves a valid cursor backward', () {
+      final previous = now.subtract(const Duration(minutes: 2));
+      final newest = now.subtract(const Duration(minutes: 5));
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: newest,
+          previousCursorAt: previous,
+          fullPull: true,
+          now: now,
+        ),
+        previous,
+      );
+    });
+
     test('an empty delta scan does not invent a cursor', () {
       expect(
         SyncService.cursorAfterPull(
           newestSeen: null,
+          previousCursorAt: null,
           fullPull: false,
           now: now,
         ),
