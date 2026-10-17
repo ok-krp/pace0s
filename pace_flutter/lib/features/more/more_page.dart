@@ -124,7 +124,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   }
 
   void _onLocalStoreChanged() {
-    if (!mounted) return;
+    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
     final confirmations = _ai.confirmActions;
     final notifications =
         widget.localStore.read('pace.settings.notifications') as bool? ?? true;
