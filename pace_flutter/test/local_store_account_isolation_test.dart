@@ -111,6 +111,37 @@ void main() {
     expect(store.pendingOperations(now: now.add(const Duration(seconds: 900))), hasLength(1));
   });
 
+  test('stale outbox callbacks cannot match a replacement by timestamp alone', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'first value');
+    final staleOperation = store.pendingOperations().single;
+
+    await store.write('pace.profile.name', 'replacement value');
+    final replacement = store.pendingOperations().single;
+
+    // Simulate two writes sharing the same timestamp while carrying different
+    // payloads; timestamps are not guaranteed to be unique operation IDs.
+    final collidingStaleOperation = <String, dynamic>{
+      ...staleOperation,
+      'queuedAt': replacement['queuedAt'],
+    };
+    await store.deferOperation(
+      collidingStaleOperation,
+      expectedUserId: 'user-a',
+      now: DateTime.utc(2026, 10, 17, 10),
+    );
+    await store.acknowledgeOperation(
+      collidingStaleOperation,
+      expectedUserId: 'user-a',
+    );
+
+    expect(store.read('pace.profile.name'), 'replacement value');
+    expect(store.pendingOperations(), hasLength(1));
+    expect(store.pendingOperations().single['value'], 'replacement value');
+    expect(store.hasDueOperationForKey('pace.profile.name'), isTrue);
+  });
+
   test('stale sync completions cannot mutate another account', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
