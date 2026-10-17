@@ -97,6 +97,7 @@ class PaceAiService {
           .eq('agent_type', agent.name)
           .eq('is_ephemeral', false)
           .order('updated_at', ascending: false);
+      if (!_isAccountScopeCurrent) return const <AiConversation>[];
       final remote = rows.whereType<Map>().map((row) {
         final value = Map<String, dynamic>.from(row);
         return AiConversation(
@@ -112,9 +113,9 @@ class PaceAiService {
       }
       final result = merged.values.where((item) => item.agent == agent).toList()..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       await _saveLocalConversations(result);
-      return result;
+      return _isAccountScopeCurrent ? result : const <AiConversation>[];
     } catch (_) {
-      return local;
+      return _isAccountScopeCurrent ? local : const <AiConversation>[];
     }
   }
 
@@ -186,6 +187,7 @@ class PaceAiService {
     if (client == null || user == null) return local.messages;
     try {
       final rows = await client.from('ai_messages').select('id,role,plain_text,created_at').eq('conversation_id', id).eq('user_id', user.id).order('created_at');
+      if (!_isAccountScopeCurrent) return const <AiMessage>[];
       final messages = rows.whereType<Map>().map((row) => AiMessage(
             id: row['id']?.toString() ?? _uuid(),
             role: row['role']?.toString() ?? 'assistant',
@@ -193,9 +195,9 @@ class PaceAiService {
             createdAt: DateTime.tryParse(row['created_at']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
           )).toList();
       await _replaceMessages(id, messages);
-      return messages;
+      return _isAccountScopeCurrent ? messages : const <AiMessage>[];
     } catch (_) {
-      return local.messages;
+      return _isAccountScopeCurrent ? local.messages : const <AiMessage>[];
     }
   }
 
