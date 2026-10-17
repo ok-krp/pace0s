@@ -264,7 +264,9 @@ class SyncService {
     // keys when the cursor advances.
     const pageSize = 500;
     var offset = 0;
-    var newestSeen = cursorAt != null && !cursorAt.isAfter(now) ? cursorAt : null;
+    var newestSeen = !fullPull && cursorAt != null && !cursorAt.isAfter(now)
+        ? cursorAt
+        : null;
     while (true) {
       final rows = fullPull
           ? await client!
