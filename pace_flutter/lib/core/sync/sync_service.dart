@@ -53,10 +53,23 @@ class SyncService {
   /// table read on every sync tick instead of using delta reads until reconcile.
   static DateTime? cursorAfterPull({
     required DateTime? newestSeen,
+    required DateTime? previousCursorAt,
     required bool fullPull,
     required DateTime now,
   }) {
-    if (newestSeen != null) return newestSeen;
+    if (newestSeen != null) {
+      // A full scan can see only old rows. Never move a valid cursor backward
+      // just because the newest row timestamp predates it.
+      if (fullPull &&
+          previousCursorAt != null &&
+          !previousCursorAt.isAfter(now) &&
+          previousCursorAt.isAfter(newestSeen)) {
+        return previousCursorAt;
+      }
+      return newestSeen;
+    }
+    // Empty full scans have no row timestamp to advance from. Use the scan
+    // time, but only after the full query succeeded.
     return fullPull ? now : null;
   }
 
@@ -336,6 +349,7 @@ class SyncService {
     if (!_isCurrentAccount(userId)) return;
     final cursorToSave = cursorAfterPull(
       newestSeen: newestSeen,
+      previousCursorAt: cursorAt,
       fullPull: fullPull,
       now: now,
     );
