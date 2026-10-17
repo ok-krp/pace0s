@@ -2,6 +2,22 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
+  group('SyncService.isSyncableKey', () {
+    test('keeps ordinary Pace state syncable', () {
+      expect(SyncService.isSyncableKey('pace.settings.theme'), isTrue);
+      expect(SyncService.isSyncableKey('pace.sport.sessions'), isTrue);
+    });
+
+    test('excludes device-local active sessions to match the web client', () {
+      expect(SyncService.isSyncableKey('pace.sport.active'), isFalse);
+    });
+
+    test('rejects keys outside the Pace namespace', () {
+      expect(SyncService.isSyncableKey('lt.profile.name'), isFalse);
+      expect(SyncService.isSyncableKey('__outbox'), isFalse);
+    });
+  });
+
   group('SyncService.isUserStateWriteAccepted', () {
     test('accepts the JSON object returned by upsert_user_state_if_newer', () {
       expect(
