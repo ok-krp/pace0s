@@ -347,6 +347,32 @@ void main() {
         isNull,
       );
     });
+
+    test('a stalled delta cursor advances with a bounded overlap', () {
+      final previous = now.subtract(const Duration(minutes: 10));
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: previous,
+          previousCursorAt: previous,
+          fullPull: false,
+          now: now,
+        ),
+        now.subtract(SyncService.cursorOverlapWindow),
+      );
+    });
+
+    test('a recent stalled delta cursor is not moved forward past the overlap', () {
+      final previous = now.subtract(const Duration(seconds: 30));
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: previous,
+          previousCursorAt: previous,
+          fullPull: false,
+          now: now,
+        ),
+        previous,
+      );
+    });
   });
 
   group('SyncService.shouldPropagateAiPreferences', () {
