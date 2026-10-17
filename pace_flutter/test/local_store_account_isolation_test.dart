@@ -213,6 +213,33 @@ void main() {
     expect(store.hasDueOperationForKey('pace.profile.name'), isTrue);
   });
 
+  test('scoped writes and removes cannot cross an account switch', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'account A');
+
+    await store.activateAccount('user-b');
+    await store.write('pace.profile.name', 'account B');
+
+    await expectLater(
+      store.writeForAccount('user-a', 'pace.profile.name', 'late account A write'),
+      throwsA(isA<StateError>()),
+    );
+    await expectLater(
+      store.removeForAccount('user-a', 'pace.profile.name'),
+      throwsA(isA<StateError>()),
+    );
+
+    expect(store.activeUserId, 'user-b');
+    expect(store.read('pace.profile.name'), 'account B');
+    expect(store.pendingOperations().single['value'], 'account B');
+
+    await expectLater(
+      store.writeForAccount(null, 'pace.profile.name', 'late guest write'),
+      throwsA(isA<StateError>()),
+    );
+  });
+
   test('stale sync completions cannot mutate another account', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
