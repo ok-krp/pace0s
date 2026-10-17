@@ -140,6 +140,21 @@ void main() {
     );
   });
 
+  test('malformed outbox field does not crash local reads or sync inspection', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.write('pace.profile.name', 'recoverable value', enqueueSync: false);
+    await store.write('__outbox', 'not-a-list', enqueueSync: false);
+
+    expect(store.read('pace.profile.name'), 'recoverable value');
+    expect(store.pendingOperations(), isEmpty);
+    expect(store.hasPendingOperationForKey('pace.profile.name'), isFalse);
+
+    // The next normal mutation repairs the reserved field into a valid list.
+    await store.write('pace.profile.weight', 53);
+    expect(store.pendingOperations(), hasLength(1));
+    expect(store.pendingOperations().single['key'], 'pace.profile.weight');
+  });
+
   test('notifies listeners for durable state changes but can batch remote pulls', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
