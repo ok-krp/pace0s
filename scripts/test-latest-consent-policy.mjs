@@ -18,6 +18,7 @@ assert.ok(
 assert.match(source, /supabaseAdmin\.from\("consent_records"\)\.insert\(records\)/);
 assert.match(source, /supabaseAdmin\.from\("legal_consent"\)\.upsert\(/);
 assert.match(migration, /SET search_path = ''/);
+assert.ok(migration.includes("AS $\\n  SELECT"), "health consent SQL function must use a complete dollar-quoted body");
 assert.match(migration, /CREATE OR REPLACE FUNCTION public\.has_current_health_e2ee_consent\(\)[\s\S]*?ORDER BY c\.created_at DESC, c\.id DESC[\s\S]*?LIMIT 1/);
 assert.match(migration, /COALESCE\(\([\s\S]*?SELECT c\.granted[\s\S]*?\), false\)/);
 assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.has_current_health_e2ee_consent\(\) TO authenticated/);
