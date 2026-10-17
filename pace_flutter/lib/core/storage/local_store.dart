@@ -1,12 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 /// Durable local state used by the native app. It is independent from the web
 /// application and is safe to use while completely offline.
-class LocalStore {
+class LocalStore extends ChangeNotifier {
   LocalStore._(this._directory, this._file);
 
   final Directory _directory;
@@ -91,6 +92,7 @@ class LocalStore {
               rethrow;
             }
             _activeUserId = nextUserId;
+            notifyListeners();
           } finally {
             _pendingAccountSwitches--;
           }
@@ -149,7 +151,12 @@ class LocalStore {
 
   String? lastSyncedAt(String key) => _syncMeta[key] as String?;
 
-  Future<void> write(String key, dynamic value, {bool enqueueSync = true}) async {
+  Future<void> write(
+    String key,
+    dynamic value, {
+    bool enqueueSync = true,
+    bool notify = true,
+  }) async {
     if (_switchingAccount) throw StateError('Local account is switching');
     _data[key] = value;
     if (enqueueSync) {
@@ -165,9 +172,14 @@ class LocalStore {
       _data['__outbox'] = outbox;
     }
     await _flush();
+    if (notify) notifyListeners();
   }
 
-  Future<void> remove(String key, {bool enqueueSync = true}) async {
+  Future<void> remove(
+    String key, {
+    bool enqueueSync = true,
+    bool notify = true,
+  }) async {
     if (_switchingAccount) throw StateError('Local account is switching');
     _data.remove(key);
     if (enqueueSync) {
@@ -182,6 +194,7 @@ class LocalStore {
       _data['__outbox'] = outbox;
     }
     await _flush();
+    if (notify) notifyListeners();
   }
 
   Future<void> applyRemote(
@@ -189,6 +202,7 @@ class LocalStore {
     dynamic value,
     String updatedAt, {
     required String expectedUserId,
+    bool notify = true,
   }) async {
     if (_switchingAccount || _activeUserId != expectedUserId) {
       throw StateError('Local account changed before remote apply');
@@ -196,6 +210,7 @@ class LocalStore {
     _data[key] = value;
     _setSyncedAt(key, updatedAt);
     await _flush();
+    if (notify) notifyListeners();
   }
 
   Map<String, String> syncedMetadata() => Map<String, String>.from(_syncMeta);
