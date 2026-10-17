@@ -16,6 +16,38 @@ REVOKE UPDATE, DELETE ON TABLE public.consent_records FROM authenticated;
 GRANT SELECT, INSERT ON TABLE public.consent_records TO authenticated;
 GRANT INSERT ON TABLE public.consent_records TO service_role;
 
+-- Resolve historical timestamp ties deterministically. The latest row alone decides
+-- whether health E2EE access is permitted; any latest denial must override older grants.
+CREATE OR REPLACE FUNCTION public.has_current_health_e2ee_consent()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY INVOKER
+SET search_path = ''
+AS $
+  SELECT
+    COALESCE((
+      SELECT c.granted
+      FROM public.consent_records AS c
+      WHERE c.user_id = (SELECT auth.uid())
+        AND c.consent_type = 'health_data'
+      ORDER BY c.created_at DESC, c.id DESC
+      LIMIT 1
+    ), false)
+    AND
+    COALESCE((
+      SELECT c.granted
+      FROM public.consent_records AS c
+      WHERE c.user_id = (SELECT auth.uid())
+        AND c.consent_type = 'health_cloud_sync'
+      ORDER BY c.created_at DESC, c.id DESC
+      LIMIT 1
+    ), false);
+$;
+
+REVOKE ALL ON FUNCTION public.has_current_health_e2ee_consent() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.has_current_health_e2ee_consent() TO authenticated;
+
 CREATE OR REPLACE FUNCTION public.enforce_consent_timestamps()
 RETURNS trigger
 LANGUAGE plpgsql

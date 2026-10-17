@@ -18,6 +18,9 @@ assert.ok(
 assert.match(source, /supabaseAdmin\.from\("consent_records"\)\.insert\(records\)/);
 assert.match(source, /supabaseAdmin\.from\("legal_consent"\)\.upsert\(/);
 assert.match(migration, /SET search_path = ''/);
+assert.match(migration, /CREATE OR REPLACE FUNCTION public\.has_current_health_e2ee_consent\(\)[\s\S]*?ORDER BY c\.created_at DESC, c\.id DESC[\s\S]*?LIMIT 1/);
+assert.match(migration, /COALESCE\(\([\s\S]*?SELECT c\.granted[\s\S]*?\), false\)/);
+assert.match(migration, /GRANT EXECUTE ON FUNCTION public\.has_current_health_e2ee_consent\(\) TO authenticated/);
 assert.match(migration, /REVOKE UPDATE, DELETE ON TABLE public\.consent_records FROM authenticated/);
 assert.match(migration, /GRANT SELECT, INSERT ON TABLE public\.consent_records TO authenticated/);
 assert.match(migration, /CREATE TRIGGER consent_records_force_created_at[\s\S]*?EXECUTE FUNCTION public\.enforce_consent_timestamps\(\)/);
