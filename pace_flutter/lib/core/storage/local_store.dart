@@ -366,21 +366,33 @@ class LocalStore extends ChangeNotifier {
     });
     if (syncedAt != null) {
       final key = operation['key'] as String;
-      _setSyncedAt(key, syncedAt);
       final acceptedAt = DateTime.tryParse(syncedAt)?.toUtc();
       if (acceptedAt != null) {
+        final previouslySyncedAt =
+            DateTime.tryParse(lastSyncedAt(key) ?? '')?.toUtc();
+        final latestKnownAt = previouslySyncedAt != null &&
+                previouslySyncedAt.isAfter(acceptedAt)
+            ? previouslySyncedAt
+            : acceptedAt;
+
+        // Out-of-order completions must never move the local version cursor
+        // backward. A stale acknowledgement may arrive after a newer pull or
+        // another sync worker has already recorded a later server version.
+        if (previouslySyncedAt == null ||
+            !previouslySyncedAt.isAfter(acceptedAt)) {
+          _setSyncedAt(key, syncedAt);
+        }
+
         // A newer local edit may have been queued while this operation was
-        // in flight. Its timestamp was generated before the server's
-        // authoritative acknowledgement arrived; rebase it if necessary so
-        // the next push cannot be rejected as older and then overwrite the
-        // newer local value with the server copy.
+        // in flight. Rebase it against the newest known server version so the
+        // next push cannot be rejected as older and then overwrite the edit.
         for (final entry in outbox) {
           if (entry['key'] != key || entry['queuedAt'] is! String) continue;
           final queuedAt = DateTime.tryParse(entry['queuedAt'] as String)?.toUtc();
-          if (queuedAt == null || !queuedAt.isAfter(acceptedAt)) {
+          if (queuedAt == null || !queuedAt.isAfter(latestKnownAt)) {
             entry['queuedAt'] = monotonicQueuedAt(
               now: DateTime.now().toUtc(),
-              latestKnownAt: acceptedAt,
+              latestKnownAt: latestKnownAt,
             ).toIso8601String();
           }
         }
