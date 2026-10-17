@@ -167,9 +167,12 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     } else {
       await PaceNotificationService.instance.cancelAll();
     }
+    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
     setState(() => _notifications = value);
     await widget.localStore.writeForAccount(_accountUserId, 'pace.settings.notifications', value);
-    await widget.sync.syncNow();
+    if (widget.localStore.activeUserId == _accountUserId) {
+      await widget.sync.syncNow();
+    }
   }
 
   String _themeLabel(ThemeMode mode) {
