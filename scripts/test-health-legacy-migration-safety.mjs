@@ -13,7 +13,7 @@ const consentHelperStart = migration.indexOf("create or replace function public.
 const consentHelperEnd = migration.indexOf("revoke all on function public.has_current_health_e2ee_consent()", consentHelperStart);
 assert.ok(consentHelperStart >= 0 && consentHelperEnd > consentHelperStart);
 const consentHelper = migration.slice(consentHelperStart, consentHelperEnd);
-assert.ok(consentHelper.includes("as " + "$".repeat(2) + "\\n"), "consent helper must use a valid dollar-quoted SQL body");
+assert.ok(consentHelper.includes("as " + "$".repeat(2) + "\n"), "consent helper must use a valid dollar-quoted SQL body");
 assert.ok(consentHelper.trimEnd().endsWith("$".repeat(2) + ";"), "consent helper must close its dollar-quoted SQL body");
 
 assert.match(migration, /c\.legal_version = '2026-07-10'/i);
