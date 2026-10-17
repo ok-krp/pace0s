@@ -36,6 +36,11 @@ class SyncService {
   static bool isSyncableKey(String key) =>
       key.startsWith('pace.') && !excludedSyncKeys.contains(key);
 
+  /// Maps legacy cloud keys to the canonical Pace namespace, matching the web
+  /// sync engine. This does not import the unscoped legacy local file.
+  static String normalizeRemoteKey(String key) =>
+      key.startsWith('lt.') ? 'pace.${key.substring(3)}' : key;
+
   static const Duration fullReconciliationInterval = Duration(minutes: 10);
   // Keep a small overlap because the client and database clocks may differ.
   static const Duration cursorOverlapWindow = Duration(minutes: 2);
@@ -352,7 +357,7 @@ class SyncService {
       for (final raw in rows) {
         if (!_isCurrentAccount(userId)) return;
         final row = Map<String, dynamic>.from(raw);
-        final key = row['key'] as String;
+        final key = normalizeRemoteKey(row['key'] as String);
         final remoteUpdatedAt = row['updated_at'] as String?;
         final remoteTime = remoteUpdatedAt == null
             ? null
