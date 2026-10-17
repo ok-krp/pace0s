@@ -205,7 +205,10 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 trailing: DropdownButton<ThemeMode>(
                   value: widget.themeMode,
                   onChanged: (mode) {
-                    if (mode != null) widget.onThemeChanged(mode);
+                    if (mode != null &&
+                        widget.localStore.activeUserId == _accountUserId) {
+                      widget.onThemeChanged(mode);
+                    }
                   },
                   items: const [
                     DropdownMenuItem(value: ThemeMode.system, child: Text('Système')),
