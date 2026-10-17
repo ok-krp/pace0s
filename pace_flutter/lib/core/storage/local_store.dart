@@ -228,8 +228,12 @@ class LocalStore {
     final queuedAt = operation['queuedAt'];
     final index = outbox.indexWhere((entry) {
       if (entry['key'] != operation['key']) return false;
-      if (queuedAt != null) return entry['queuedAt'] == queuedAt;
-      return entry['operation'] == operation['operation'] && entry['value'] == operation['value'];
+      if (queuedAt != null && entry['queuedAt'] != queuedAt) return false;
+      // queuedAt is a timestamp, not a unique operation ID. Match the payload
+      // as well so a stale in-flight response cannot defer a replacement write
+      // if two mutations happen to receive the same timestamp.
+      return entry['operation'] == operation['operation'] &&
+          entry['value'] == operation['value'];
     });
     if (index < 0) return;
 
@@ -255,8 +259,11 @@ class LocalStore {
     final queuedAt = operation['queuedAt'];
     outbox.removeWhere((entry) {
       if (entry['key'] != operation['key']) return false;
-      if (queuedAt != null) return entry['queuedAt'] == queuedAt;
-      return entry['operation'] == operation['operation'] && entry['value'] == operation['value'];
+      if (queuedAt != null && entry['queuedAt'] != queuedAt) return false;
+      // Never acknowledge a newer payload solely because its timestamp
+      // collides with the operation whose network request just completed.
+      return entry['operation'] == operation['operation'] &&
+          entry['value'] == operation['value'];
     });
     _data['__outbox'] = outbox;
     await _flush();
