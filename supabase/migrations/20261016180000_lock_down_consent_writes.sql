@@ -19,7 +19,7 @@ GRANT INSERT ON TABLE public.consent_records TO service_role;
 CREATE OR REPLACE FUNCTION public.enforce_consent_timestamps()
 RETURNS trigger
 LANGUAGE plpgsql
-SET search_path = public, pg_temp
+SET search_path = ''
 AS $$
 DECLARE
   previous_created_at timestamptz;
