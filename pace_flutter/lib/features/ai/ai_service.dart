@@ -14,11 +14,24 @@ import 'ai_models.dart';
 /// first; the existing Pace AI HTTP endpoint is used only for model inference.
 /// It is never used to render the Pace UI.
 class PaceAiService {
-  PaceAiService({required this.localStore, required this.sync, required this.auth});
+  PaceAiService({required this.localStore, required this.sync, required this.auth})
+      : _accountUserId = localStore.activeUserId;
 
   final LocalStore localStore;
   final SyncService sync;
   final PaceAuthService auth;
+  final String? _accountUserId;
+
+  bool get _isAccountScopeCurrent {
+    if (localStore.activeUserId != _accountUserId) return false;
+    final user = _scopedUser;
+    return _accountUserId == null ? user == null : user?.id == _accountUserId;
+  }
+
+  User? get _scopedUser {
+    if (!_isAccountScopeCurrent || _accountUserId == null) return null;
+    return auth.currentUser;
+  }
 
   static const _conversationKey = 'pace.ai.conversations';
   static const _memoryKey = 'pace.ai.memory';
@@ -35,16 +48,16 @@ class PaceAiService {
   bool get confirmActions => localStore.read(_confirmKey) as bool? ?? true;
 
   Future<void> setMemoryEnabled(bool enabled) async {
-    await localStore.write(_memoryEnabledKey, enabled);
-    if (!enabled) await localStore.write(_memoryKey, <dynamic>[]);
+    await localStore.writeForAccount(_accountUserId, _memoryEnabledKey, enabled);
+    if (!enabled) await localStore.writeForAccount(_accountUserId, _memoryKey, <dynamic>[]);
     unawaited(sync.syncNow());
   }
 
   Future<void> setConfirmActions(bool enabled) async {
-    await localStore.write(_confirmKey, enabled);
+    await localStore.writeForAccount(_accountUserId, _confirmKey, enabled);
     unawaited(sync.syncNow());
     final client = _client;
-    final user = auth.currentUser;
+    final user = _scopedUser;
     if (client != null && user != null) {
       await client.from('ai_preferences').upsert({
         'user_id': user.id,
@@ -67,7 +80,7 @@ class PaceAiService {
   Future<List<AiConversation>> loadConversations({PaceAiAgent agent = PaceAiAgent.coach}) async {
     final local = loadLocalConversations().where((item) => item.agent == agent).toList();
     final client = _client;
-    final user = auth.currentUser;
+    final user = _scopedUser;
     if (client == null || user == null) return local;
 
     try {
@@ -112,7 +125,7 @@ class PaceAiService {
       final conversations = loadLocalConversations()..insert(0, conversation);
       await _saveLocalConversations(conversations);
       final client = _client;
-      final user = auth.currentUser;
+      final user = _scopedUser;
       if (client != null && user != null) {
         try {
           await client.from('ai_conversations').insert({
@@ -140,7 +153,7 @@ class PaceAiService {
       await _saveLocalConversations(conversations);
     }
     final client = _client;
-    final user = auth.currentUser;
+    final user = _scopedUser;
     if (client != null && user != null) {
       await client.from('ai_conversations').update({'title': clean}).eq('id', id).eq('user_id', user.id);
     }
@@ -150,7 +163,7 @@ class PaceAiService {
     final conversations = loadLocalConversations()..removeWhere((item) => item.id == id);
     await _saveLocalConversations(conversations);
     final client = _client;
-    final user = auth.currentUser;
+    final user = _scopedUser;
     if (client != null && user != null) {
       await client.from('ai_conversations').delete().eq('id', id).eq('user_id', user.id);
     }
@@ -163,7 +176,7 @@ class PaceAiService {
     );
     if (local.id.isNotEmpty && local.messages.isNotEmpty) return local.messages;
     final client = _client;
-    final user = auth.currentUser;
+    final user = _scopedUser;
     if (client == null || user == null) return local.messages;
     try {
       final rows = await client.from('ai_messages').select('id,role,plain_text,created_at').eq('conversation_id', id).eq('user_id', user.id).order('created_at');
@@ -203,6 +216,9 @@ class PaceAiService {
   }
 
   Future<String> _requestModel({required AiConversation conversation, required List<AiMessage> messages}) async {
+    if (!_isAccountScopeCurrent || _accountUserId == null) {
+      throw StateError('Le compte Pace a changé pendant la requête IA.');
+    }
     final token = _client?.auth.currentSession?.accessToken;
     if (token == null || token.isEmpty) {
       throw StateError('Connectez-vous à Pace pour utiliser l’IA.');
@@ -226,6 +242,9 @@ class PaceAiService {
       headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json', 'Accept': 'text/plain'},
       body: jsonEncode(payload),
     ).timeout(const Duration(minutes: 2));
+    if (!_isAccountScopeCurrent) {
+      throw StateError('Le compte Pace a changé pendant la requête IA.');
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(response.body.isEmpty ? 'Le service IA a refusé la requête (${response.statusCode}).' : response.body);
     }
@@ -272,24 +291,25 @@ class PaceAiService {
     if (!memoryEnabled || text.trim().isEmpty) return;
     final item = AiMemoryItem(id: _uuid(), text: text.trim(), createdAt: DateTime.now());
     final values = loadMemory().map((value) => value.toJson()).toList()..add(item.toJson());
-    await localStore.write(_memoryKey, values);
+    await localStore.writeForAccount(_accountUserId, _memoryKey, values);
     unawaited(sync.syncNow());
   }
 
   Future<void> updateMemory(String id, String text) async {
     final values = loadMemory().map((item) => item.id == id ? AiMemoryItem(id: item.id, text: text.trim(), createdAt: item.createdAt, updatedAt: DateTime.now()).toJson() : item.toJson()).toList();
-    await localStore.write(_memoryKey, values);
+    await localStore.writeForAccount(_accountUserId, _memoryKey, values);
     unawaited(sync.syncNow());
   }
 
   Future<void> deleteMemory(String id) async {
     final values = loadMemory().where((item) => item.id != id).map((item) => item.toJson()).toList();
-    await localStore.write(_memoryKey, values);
+    await localStore.writeForAccount(_accountUserId, _memoryKey, values);
     unawaited(sync.syncNow());
   }
 
   Future<void> _saveLocalConversations(List<AiConversation> conversations) async {
-    await localStore.write(_conversationKey, conversations.map((item) => item.toJson()).toList());
+    if (!_isAccountScopeCurrent) return;
+    await localStore.writeForAccount(_accountUserId, _conversationKey, conversations.map((item) => item.toJson()).toList());
     unawaited(sync.syncNow());
   }
 
@@ -304,7 +324,7 @@ class PaceAiService {
   Future<void> _insertCloudMessage(AiConversation conversation, AiMessage message) async {
     if (conversation.ephemeral) return;
     final client = _client;
-    final user = auth.currentUser;
+    final user = _scopedUser;
     if (client == null || user == null) return;
     try {
       await client.from('ai_messages').upsert({
