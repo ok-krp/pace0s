@@ -107,6 +107,7 @@ class SettingsPageBridge extends StatefulWidget {
 }
 
 class _SettingsPageBridgeState extends State<SettingsPageBridge> {
+  late String? _accountUserId;
   late final PaceAiService _ai = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
   late bool _aiConfirmations;
   late bool _notifications;
@@ -115,6 +116,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
     _aiConfirmations = _ai.confirmActions;
     _notifications = widget.localStore.read('pace.settings.notifications') as bool? ?? true;
     _memory = _ai.memoryEnabled;
@@ -166,7 +168,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       await PaceNotificationService.instance.cancelAll();
     }
     setState(() => _notifications = value);
-    await widget.localStore.write('pace.settings.notifications', value);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.settings.notifications', value);
     await widget.sync.syncNow();
   }
 
