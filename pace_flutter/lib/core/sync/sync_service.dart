@@ -41,6 +41,29 @@ class SyncService {
   static String normalizeRemoteKey(String key) =>
       key.startsWith('lt.') ? 'pace.${key.substring(3)}' : key;
 
+  static bool isEmptyValue(dynamic value) {
+    if (value == null || value == '') return true;
+    if (value is List) return value.isEmpty;
+    if (value is Map) return value.isEmpty;
+    return false;
+  }
+
+  /// Mirrors the web client's legacy recovery rule while retaining the native
+  /// requirement that remote timestamps must be valid before applying a row.
+  static bool shouldApplyRemoteValue({
+    required bool isLegacy,
+    required dynamic localValue,
+    required dynamic remoteValue,
+    required DateTime? localUpdatedAt,
+    required DateTime remoteUpdatedAt,
+  }) {
+    final shouldRecoverLegacy =
+        isLegacy && isEmptyValue(localValue) && !isEmptyValue(remoteValue);
+    return shouldRecoverLegacy ||
+        localUpdatedAt == null ||
+        remoteUpdatedAt.isAfter(localUpdatedAt);
+  }
+
   static const Duration fullReconciliationInterval = Duration(minutes: 10);
   // Keep a small overlap because the client and database clocks may differ.
   static const Duration cursorOverlapWindow = Duration(minutes: 2);
@@ -357,7 +380,9 @@ class SyncService {
       for (final raw in rows) {
         if (!_isCurrentAccount(userId)) return;
         final row = Map<String, dynamic>.from(raw);
-        final key = normalizeRemoteKey(row['key'] as String);
+        final rawKey = row['key'] as String;
+        final isLegacy = rawKey.startsWith('lt.');
+        final key = normalizeRemoteKey(rawKey);
         final remoteUpdatedAt = row['updated_at'] as String?;
         final remoteTime = remoteUpdatedAt == null
             ? null
@@ -374,13 +399,18 @@ class SyncService {
             remoteTime == null ||
             localStore.hasPendingOperationForKey(key)) continue;
 
-        final localUpdatedAt = localStore.lastSyncedAt(key);
-        if (localUpdatedAt != null) {
-          final localTime = DateTime.tryParse(localUpdatedAt);
-          if (localTime != null &&
-              !remoteTime.isAfter(localTime)) {
-            continue;
-          }
+        final rawLocalUpdatedAt = localStore.lastSyncedAt(key);
+        final localTime = rawLocalUpdatedAt == null
+            ? null
+            : DateTime.tryParse(rawLocalUpdatedAt)?.toUtc();
+        if (!shouldApplyRemoteValue(
+          isLegacy: isLegacy,
+          localValue: localStore.read(key),
+          remoteValue: row['value'],
+          localUpdatedAt: localTime,
+          remoteUpdatedAt: remoteTime,
+        )) {
+          continue;
         }
         await localStore.applyRemote(
           key,
