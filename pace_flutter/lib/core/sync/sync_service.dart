@@ -27,14 +27,12 @@ class SyncService {
 
   /// Keys that are intentionally device-local in the web sync contract.
   /// Keep native push and pull behavior aligned with src/hooks/use-cloud-sync-engine.tsx.
-  static const Set<String> excludedSyncKeys = {
-    'pace.sport.active',
-    'pace.__sync_last_pull_at',
-    'pace.__sync_last_full_pull_at',
-  };
+  static const Set<String> excludedSyncKeys = {'pace.sport.active'};
 
   static bool isSyncableKey(String key) =>
-      key.startsWith('pace.') && !excludedSyncKeys.contains(key);
+      key.startsWith('pace.') &&
+      !key.startsWith('pace.__sync_') &&
+      !excludedSyncKeys.contains(key);
 
   /// Maps legacy cloud keys to the canonical Pace namespace, matching the web
   /// sync engine. This does not import the unscoped legacy local file.
