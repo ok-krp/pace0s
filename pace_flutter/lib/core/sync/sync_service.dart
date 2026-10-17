@@ -367,13 +367,13 @@ class SyncService {
       if (!_isCurrentAccount(expectedUserId)) return;
       if (remoteConfirm is bool &&
           localStore.read('pace.settings.ai.confirm_actions') != remoteConfirm) {
-        await localStore.write('pace.settings.ai.confirm_actions', remoteConfirm, enqueueSync: false);
+        await localStore.writeForAccount(expectedUserId, 'pace.settings.ai.confirm_actions', remoteConfirm, enqueueSync: false);
       }
       if (!_isCurrentAccount(expectedUserId)) return;
       if (remoteMemory is String) {
         final memoryEnabled = remoteMemory != 'none';
         if (localStore.read('pace.settings.ai.memory') != memoryEnabled) {
-          await localStore.write('pace.settings.ai.memory', memoryEnabled, enqueueSync: false);
+          await localStore.writeForAccount(expectedUserId, 'pace.settings.ai.memory', memoryEnabled, enqueueSync: false);
         }
       }
     } catch (_) {
@@ -490,7 +490,8 @@ class SyncService {
       now: now,
     );
     if (cursorToSave != null) {
-      await localStore.write(
+      await localStore.writeForAccount(
+        userId,
         'pace.__sync_last_pull_at',
         cursorToSave.toIso8601String(),
         enqueueSync: false,
@@ -498,7 +499,8 @@ class SyncService {
       );
     }
     if (fullPull) {
-      await localStore.write(
+      await localStore.writeForAccount(
+        userId,
         'pace.__sync_last_full_pull_at',
         now.toIso8601String(),
         enqueueSync: false,
