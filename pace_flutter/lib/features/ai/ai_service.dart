@@ -24,13 +24,16 @@ class PaceAiService {
 
   bool get _isAccountScopeCurrent {
     if (localStore.activeUserId != _accountUserId) return false;
-    final user = _scopedUser;
+    // Read the auth state directly here. Calling _scopedUser from this getter
+    // would recurse through _scopedUser's own scope guard indefinitely.
+    final user = auth.currentUser;
     return _accountUserId == null ? user == null : user?.id == _accountUserId;
   }
 
   User? get _scopedUser {
     if (!_isAccountScopeCurrent || _accountUserId == null) return null;
-    return auth.currentUser;
+    final user = auth.currentUser;
+    return user?.id == _accountUserId ? user : null;
   }
 
   static const _conversationKey = 'pace.ai.conversations';
