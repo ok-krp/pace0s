@@ -12,6 +12,33 @@ class SportPage extends StatefulWidget {
 }
 
 class _SportPageState extends State<SportPage> {
+  late String? _accountUserId;
+  @override
+  void initState() {
+    super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant SportPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
+  }
+
   String _today() {
     final d = DateTime.now();
     return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -43,7 +70,7 @@ class _SportPageState extends State<SportPage> {
       'startedAt': DateTime.now().millisecondsSinceEpoch,
       'exercises': <dynamic>[],
     };
-    await widget.localStore.write('pace.sport.active', session);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.sport.active', session);
     if (mounted) setState(() {});
   }
 
@@ -56,8 +83,8 @@ class _SportPageState extends State<SportPage> {
     session['durationMin'] = ((ended - ((session['startedAt'] as num?)?.toInt() ?? ended)) / 60000).round();
     final sessions = _sessions();
     sessions.insert(0, session);
-    await widget.localStore.write('pace.sport.sessions', sessions);
-    await widget.localStore.remove('pace.sport.active');
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.sport.sessions', sessions);
+    await widget.localStore.removeForAccount(_accountUserId, 'pace.sport.active');
     if (mounted) setState(() {});
   }
 
@@ -73,7 +100,7 @@ class _SportPageState extends State<SportPage> {
     if (result == null || result['name']!.isEmpty) return;
     final exercises = _exercises();
     exercises.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'name': result['name'], 'muscle': result['muscle'] ?? ''});
-    await widget.localStore.write('pace.sport.exercises', exercises);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.sport.exercises', exercises);
     if (mounted) setState(() {});
   }
 

@@ -12,6 +12,33 @@ class ShoppingPage extends StatefulWidget {
 }
 
 class _ShoppingPageState extends State<ShoppingPage> {
+  late String? _accountUserId;
+  @override
+  void initState() {
+    super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant ShoppingPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
+  }
+
   List<Map<String, dynamic>> _items() {
     final raw = widget.localStore.read('pace.shopping');
     if (raw is! List) return [];
@@ -27,7 +54,7 @@ class _ShoppingPageState extends State<ShoppingPage> {
     if (result == null || result['name']!.isEmpty) return;
     final items = _items();
     items.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'name': result['name'], 'quantity': result['quantity'], 'checked': false});
-    await widget.localStore.write('pace.shopping', items);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.shopping', items);
     if (mounted) setState(() {});
   }
 
@@ -36,13 +63,13 @@ class _ShoppingPageState extends State<ShoppingPage> {
     final index = items.indexWhere((e) => e['id']?.toString() == item['id']?.toString());
     if (index < 0) return;
     items[index]['checked'] = !(items[index]['checked'] == true);
-    await widget.localStore.write('pace.shopping', items);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.shopping', items);
     if (mounted) setState(() {});
   }
 
   Future<void> _delete(Map<String, dynamic> item) async {
     final items = _items()..removeWhere((e) => e['id']?.toString() == item['id']?.toString());
-    await widget.localStore.write('pace.shopping', items);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.shopping', items);
     if (mounted) setState(() {});
   }
 

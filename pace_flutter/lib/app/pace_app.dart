@@ -45,13 +45,23 @@ class _PaceAppState extends State<PaceApp> {
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
+    final expectedUserId = widget.localStore.activeUserId;
     setState(() => _themeMode = mode);
-    await widget.localStore.write('pace.settings.theme', switch (mode) {
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.settings.theme', switch (mode) {
       ThemeMode.light => 'light',
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     });
-    unawaited(widget.sync.syncNow());
+    if (widget.localStore.activeUserId == expectedUserId) {
+      unawaited(widget.sync.syncNow());
+    }
+  }
+
+  // Account switching loads a different local settings file. Apply its theme
+  // without writing it back or creating an unnecessary sync mutation.
+  void _applyStoredThemeMode(ThemeMode mode) {
+    if (!mounted) return;
+    setState(() => _themeMode = mode);
   }
 
   @override
@@ -66,6 +76,7 @@ class _PaceAppState extends State<PaceApp> {
           auth: widget.auth,
           sync: widget.sync,
           onThemeChanged: setThemeMode,
+          onThemeLoaded: _applyStoredThemeMode,
           themeMode: _themeMode,
         ),
       );
@@ -77,12 +88,14 @@ class _AuthGate extends StatefulWidget {
     required this.auth,
     required this.sync,
     required this.onThemeChanged,
+    required this.onThemeLoaded,
     required this.themeMode,
   });
   final LocalStore localStore;
   final PaceAuthService auth;
   final SyncService sync;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<ThemeMode> onThemeLoaded;
   final ThemeMode themeMode;
 
   @override
@@ -94,19 +107,61 @@ class _AuthGateState extends State<_AuthGate> {
   bool _configured = false;
   bool _signedIn = false;
 
+  int _accountGeneration = 0;
+
   @override
   void initState() {
     super.initState();
     _configured = widget.auth.client != null;
-    _signedIn = widget.auth.currentUser != null;
+    // Do not render a signed-in shell until its account-specific local store
+    // has been loaded. This prevents a previous account's data flashing on
+    // screen during app startup or account switching.
+    _signedIn = false;
     if (_configured) {
+      final currentUser = widget.auth.currentUser;
+      if (currentUser != null) unawaited(_activateAccount(currentUser.id));
       _subscription = widget.auth.authStateChanges.listen((state) {
-        if (!mounted) return;
-        setState(() => _signedIn = state.session != null);
-        if (state.session != null) unawaited(widget.sync.syncNow());
+        unawaited(_activateAccount(state.session?.user.id));
       });
-      if (_signedIn) unawaited(widget.sync.syncNow());
     }
+  }
+
+  Future<void> _activateAccount(String? userId) async {
+    // Supabase emits token-refresh and other same-session auth events. Do not
+    // hide and recreate the signed-in shell unless the account actually changes
+    // or a previous account activation failed and needs another attempt.
+    if (widget.localStore.activeUserId == userId &&
+        ((userId == null && !_signedIn) || (userId != null && _signedIn))) {
+      return;
+    }
+
+    final generation = ++_accountGeneration;
+    if (_signedIn && widget.localStore.activeUserId != userId) {
+      // Feature routes are pushed onto MaterialApp's root navigator. Remove
+      // them before changing account scope so a signed-out account cannot leave
+      // a cached page visible above the authentication screen.
+      Navigator.maybeOf(context, rootNavigator: true)
+          ?.popUntil((route) => route.isFirst);
+    }
+    if (mounted) setState(() => _signedIn = false);
+
+    try {
+      await widget.localStore.activateAccount(userId);
+    } catch (_) {
+      // Fail closed: keep the authenticated shell hidden if account-local
+      // storage cannot be switched safely.
+      return;
+    }
+
+    if (!mounted || generation != _accountGeneration) return;
+    final storedTheme = switch (widget.localStore.read('pace.settings.theme')) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
+    widget.onThemeLoaded(storedTheme);
+    setState(() => _signedIn = userId != null);
+    if (userId != null) await widget.sync.syncNow();
   }
 
   @override
@@ -153,7 +208,9 @@ class _PaceShellState extends State<PaceShell> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) => unawaited(widget.sync.syncNow()));
+    // Bound background polling to reduce repeated full user_state reads.
+    // Cross-device updates may take up to one minute between polling cycles.
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) => unawaited(widget.sync.syncNow()));
   }
 
   @override

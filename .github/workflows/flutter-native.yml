@@ -1,5 +1,10 @@
 name: Pace Native Flutter
 
+concurrency:
+  group: pace-native-${{ github.ref }}
+  cancel-in-progress: true
+
+
 on:
   workflow_dispatch:
   push:
@@ -67,22 +72,72 @@ jobs:
       - name: Test
         working-directory: pace_flutter
         run: flutter test
+      - name: Install Android NDK with bounded retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          NDK_VERSION="28.2.13676358"
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          NDK_DIR="${ANDROID_HOME}/ndk/${NDK_VERSION}"
+          ndk_is_valid() {
+            [ -f "${NDK_DIR}/source.properties" ] &&
+              grep -Eq '^[[:space:]]*Pkg[.]Revision[[:space:]]*=[[:space:]]*28[.]2[.]13676358[[:space:]]*$' "${NDK_DIR}/source.properties" &&
+              [ -x "${NDK_DIR}/ndk-build" ] &&
+              [ -x "${NDK_DIR}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]
+          }
+          for attempt in 1 2 3; do
+            if ndk_is_valid; then
+              echo "NDK ${NDK_VERSION} passed revision and toolchain validation"
+              exit 0
+            fi
+            # Never reuse a partially extracted or corrupt NDK directory.
+            rm -rf "${NDK_DIR}"
+            yes | "${SDKMANAGER}" --sdk_root="${ANDROID_HOME}" --install "ndk;${NDK_VERSION}" || true
+            if ndk_is_valid; then
+              echo "NDK ${NDK_VERSION} installed and validated"
+              exit 0
+            fi
+            echo "::warning::NDK installation attempt ${attempt}/3 failed validation; removing partial files before retry"
+            rm -rf "${NDK_DIR}"
+            sleep $((attempt * 5))
+          done
+          echo "::error::Unable to install Android NDK ${NDK_VERSION} after 3 attempts"
+          exit 1
+      - name: Validate Supabase build configuration
+        id: supabase_config
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Supabase build configuration is missing. Native builds will run in offline/local-only mode and artifacts will be labelled offline. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables to enable cloud authentication and sync."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Build APK
         working-directory: pace_flutter
-        run: flutter build apk --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter build apk --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish APK
         uses: actions/upload-artifact@v4
         with:
-          name: pace-android-apk
+          name: pace-android-apk-${{ steps.supabase_config.outputs.configured == 'true' && 'cloud' || 'offline' }}
           path: pace_flutter/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
       - name: Build AAB
         working-directory: pace_flutter
-        run: flutter build appbundle --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter build appbundle --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish AAB
         uses: actions/upload-artifact@v4
         with:
-          name: pace-android-aab
+          name: pace-android-aab-${{ steps.supabase_config.outputs.configured == 'true' && 'cloud' || 'offline' }}
           path: pace_flutter/build/app/outputs/bundle/release/app-release.aab
           if-no-files-found: error
 
@@ -111,13 +166,29 @@ jobs:
       - name: Test
         working-directory: pace_flutter
         run: flutter test
+      - name: Validate Supabase build configuration
+        id: supabase_config
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Supabase build configuration is missing. Native builds will run in offline/local-only mode and artifacts will be labelled offline. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables to enable cloud authentication and sync."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Build Linux
         working-directory: pace_flutter
-        run: flutter build linux --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter build linux --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish Linux build
         uses: actions/upload-artifact@v4
         with:
-          name: pace-linux
+          name: pace-linux-${{ steps.supabase_config.outputs.configured == 'true' && 'cloud' || 'offline' }}
           path: pace_flutter/build/linux/x64/release/bundle
           if-no-files-found: error
 
@@ -144,13 +215,29 @@ jobs:
       - name: Test
         working-directory: pace_flutter
         run: flutter test
+      - name: Validate Supabase build configuration
+        id: supabase_config
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Supabase build configuration is missing. Native builds will run in offline/local-only mode and artifacts will be labelled offline. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables to enable cloud authentication and sync."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Build Windows
         working-directory: pace_flutter
-        run: flutter build windows --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter build windows --release "--dart-define=SUPABASE_URL=$env:SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY"
       - name: Publish Windows build
         uses: actions/upload-artifact@v4
         with:
-          name: pace-windows
+          name: pace-windows-${{ steps.supabase_config.outputs.configured == 'true' && 'cloud' || 'offline' }}
           path: pace_flutter/build/windows/x64/runner/Release
           if-no-files-found: error
 
@@ -187,21 +274,40 @@ jobs:
       - name: Test
         working-directory: pace_flutter
         run: flutter test
+      - name: Validate Supabase build configuration
+        id: supabase_config
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Supabase build configuration is missing. Native builds will run in offline/local-only mode and artifacts will be labelled offline. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables to enable cloud authentication and sync."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
       - name: Build iOS
         working-directory: pace_flutter
-        run: flutter build ios --release --no-codesign --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter build ios --release --no-codesign "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish iOS build
         uses: actions/upload-artifact@v4
         with:
-          name: pace-ios
+          name: pace-ios-${{ steps.supabase_config.outputs.configured == 'true' && 'cloud' || 'offline' }}
           path: pace_flutter/build/ios/iphoneos/Runner.app
           if-no-files-found: error
       - name: Build macOS
         working-directory: pace_flutter
-        run: flutter build macos --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter build macos --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish macOS build
         uses: actions/upload-artifact@v4
         with:
-          name: pace-macos
+          name: pace-macos-${{ steps.supabase_config.outputs.configured == 'true' && 'cloud' || 'offline' }}
           path: pace_flutter/build/macos/Build/Products/Release/pace.app
           if-no-files-found: error

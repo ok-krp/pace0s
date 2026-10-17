@@ -13,6 +13,33 @@ class NutritionPage extends StatefulWidget {
 }
 
 class _NutritionPageState extends State<NutritionPage> {
+  late String? _accountUserId;
+  @override
+  void initState() {
+    super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant NutritionPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
+  }
+
   String _todayKey() {
     final now = DateTime.now();
     return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -92,7 +119,7 @@ class _NutritionPageState extends State<NutritionPage> {
       ...result,
     });
     data[day] = list;
-    await widget.localStore.write('pace.nutrition.items', data);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.nutrition.items', data);
     await _recalculateTotals(data);
     if (mounted) setState(() {});
   }
@@ -121,7 +148,7 @@ class _NutritionPageState extends State<NutritionPage> {
         'f': hasF ? dayF : null,
       };
     }
-    await widget.localStore.write('pace.nutrition.totals', totals);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.nutrition.totals', totals);
   }
 
   Future<void> _deleteItem(Map<String, dynamic> item) async {
@@ -134,7 +161,7 @@ class _NutritionPageState extends State<NutritionPage> {
     list.removeWhere((entry) => entry is Map && entry['id']?.toString() == item['id']?.toString());
     if (list.length == before) return;
     data[day] = list;
-    await widget.localStore.write('pace.nutrition.items', data);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.nutrition.items', data);
     await _recalculateTotals(data);
     if (mounted) setState(() {});
   }

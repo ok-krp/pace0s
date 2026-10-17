@@ -107,6 +107,7 @@ class SettingsPageBridge extends StatefulWidget {
 }
 
 class _SettingsPageBridgeState extends State<SettingsPageBridge> {
+  late String? _accountUserId;
   late final PaceAiService _ai = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
   late bool _aiConfirmations;
   late bool _notifications;
@@ -115,9 +116,45 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
     _aiConfirmations = _ai.confirmActions;
     _notifications = widget.localStore.read('pace.settings.notifications') as bool? ?? true;
     _memory = _ai.memoryEnabled;
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+    final confirmations = _ai.confirmActions;
+    final notifications =
+        widget.localStore.read('pace.settings.notifications') as bool? ?? true;
+    final memory = _ai.memoryEnabled;
+    if (confirmations == _aiConfirmations &&
+        notifications == _notifications &&
+        memory == _memory) {
+      return;
+    }
+    setState(() {
+      _aiConfirmations = confirmations;
+      _notifications = notifications;
+      _memory = memory;
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingsPageBridge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+      _onLocalStoreChanged();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
   }
 
   Future<void> _setNotification(bool value) async {
@@ -130,9 +167,12 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     } else {
       await PaceNotificationService.instance.cancelAll();
     }
+    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
     setState(() => _notifications = value);
-    await widget.localStore.write('pace.settings.notifications', value);
-    await widget.sync.syncNow();
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.settings.notifications', value);
+    if (widget.localStore.activeUserId == _accountUserId) {
+      await widget.sync.syncNow();
+    }
   }
 
   String _themeLabel(ThemeMode mode) {
@@ -168,7 +208,10 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 trailing: DropdownButton<ThemeMode>(
                   value: widget.themeMode,
                   onChanged: (mode) {
-                    if (mode != null) widget.onThemeChanged(mode);
+                    if (mode != null &&
+                        widget.localStore.activeUserId == _accountUserId) {
+                      widget.onThemeChanged(mode);
+                    }
                   },
                   items: const [
                     DropdownMenuItem(value: ThemeMode.system, child: Text('Système')),
