@@ -238,7 +238,7 @@ void main() {
 
   test('stale AI service cannot read or write the next account state', () async {
     final store = await LocalStore.open(directory: directory);
-    await store.activateAccount('user-a');
+    // A guest-created AI service can finish an async task after sign-in.
     final ai = PaceAiService(
       localStore: store,
       sync: SyncService(localStore: store, client: null),
@@ -252,7 +252,7 @@ void main() {
     await store.write('pace.ai.memory', accountBMemory);
 
     expect(ai.loadMemory(), isEmpty);
-    await ai.addMemory('late response from account A');
+    await ai.addMemory('late response from the guest session');
 
     expect(store.read('pace.ai.memory'), accountBMemory);
   });
