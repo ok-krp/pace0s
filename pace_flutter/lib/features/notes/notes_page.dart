@@ -12,9 +12,11 @@ class NotesPage extends StatefulWidget {
 }
 
 class _NotesPageState extends State<NotesPage> {
+  late String? _accountUserId;
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
     widget.localStore.addListener(_onLocalStoreChanged);
   }
 
@@ -70,13 +72,13 @@ class _NotesPageState extends State<NotesPage> {
       final index = notes.indexWhere((note) => note['id']?.toString() == id);
       if (index >= 0) notes[index] = next;
     }
-    await widget.localStore.write('pace.notes', notes);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.notes', notes);
     if (mounted) setState(() {});
   }
 
   Future<void> _delete(Map<String, dynamic> note) async {
     final notes = _notes()..removeWhere((n) => n['id']?.toString() == note['id']?.toString());
-    await widget.localStore.write('pace.notes', notes);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.notes', notes);
     if (mounted) setState(() {});
   }
 
