@@ -160,6 +160,18 @@ void main() {
       );
     });
 
+    test('a future row timestamp is clamped to scan time', () {
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: now.add(const Duration(minutes: 5)),
+          previousCursorAt: null,
+          fullPull: false,
+          now: now,
+        ),
+        now,
+      );
+    });
+
     test('a full scan with only older rows never moves a valid cursor backward', () {
       final previous = now.subtract(const Duration(minutes: 2));
       final newest = now.subtract(const Duration(minutes: 5));
