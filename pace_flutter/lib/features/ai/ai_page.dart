@@ -31,11 +31,33 @@ class _AiPageState extends State<AiPage> {
   @override
   void initState() {
     super.initState();
+    widget.localStore.addListener(_onLocalStoreChanged);
     _openInitialConversation();
+  }
+
+  void _onLocalStoreChanged() {
+    if (!mounted || _loading || _ephemeral) return;
+    final history = _service.loadLocalConversations();
+    final currentId = _conversation?.id;
+    AiConversation? updatedCurrent;
+    for (final item in history) {
+      if (item.id == currentId) {
+        updatedCurrent = item;
+        break;
+      }
+    }
+    setState(() {
+      _history = history;
+      if (updatedCurrent != null) {
+        _conversation = updatedCurrent;
+        _messages = updatedCurrent.messages;
+      }
+    });
   }
 
   @override
   void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -251,6 +273,23 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
   void initState() {
     super.initState();
     _items = widget.service.loadMemory();
+    widget.service.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (!mounted) return;
+    final enabled = widget.service.memoryEnabled;
+    final items = widget.service.loadMemory();
+    setState(() {
+      _enabled = enabled;
+      _items = items;
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.service.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
   }
 
   Future<void> _add() async {
