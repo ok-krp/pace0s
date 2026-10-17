@@ -51,7 +51,7 @@ class _HealthPageState extends State<HealthPage> {
   }
 
   void _onLocalStoreChanged() {
-    if (!mounted) return;
+    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
     final samples = _readStoredSamples();
     setState(() => _samples = samples);
   }
