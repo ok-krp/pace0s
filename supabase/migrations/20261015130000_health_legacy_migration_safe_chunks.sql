@@ -13,7 +13,7 @@ language sql
 stable
 security invoker
 set search_path = ''
-as $
+as $$
   select
     coalesce((
       select c.granted
@@ -35,7 +35,7 @@ as $
       order by c.created_at desc, c.decision_sequence desc
       limit 1
     ), false);
-$;
+$$;
 
 revoke all on function public.has_current_health_e2ee_consent() from public, anon;
 grant execute on function public.has_current_health_e2ee_consent() to authenticated;
