@@ -94,6 +94,44 @@ void main() {
     });
   });
 
+  group('SyncService.cursorSeedBeforePull', () {
+    final now = DateTime.utc(2026, 10, 17, 10);
+
+    test('a full reconciliation does not inherit an old cursor', () {
+      expect(
+        SyncService.cursorSeedBeforePull(
+          cursorAt: now.subtract(const Duration(days: 1)),
+          fullPull: true,
+          now: now,
+        ),
+        isNull,
+      );
+    });
+
+    test('a delta pull preserves a valid existing cursor', () {
+      final cursor = now.subtract(const Duration(minutes: 1));
+      expect(
+        SyncService.cursorSeedBeforePull(
+          cursorAt: cursor,
+          fullPull: false,
+          now: now,
+        ),
+        cursor,
+      );
+    });
+
+    test('a future cursor is discarded to force recovery', () {
+      expect(
+        SyncService.cursorSeedBeforePull(
+          cursorAt: now.add(const Duration(minutes: 1)),
+          fullPull: false,
+          now: now,
+        ),
+        isNull,
+      );
+    });
+  });
+
   group('SyncService.cursorAfterPull', () {
     final now = DateTime.utc(2026, 10, 17, 10);
 
