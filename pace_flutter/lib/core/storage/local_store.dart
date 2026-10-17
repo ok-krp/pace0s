@@ -15,7 +15,9 @@ class LocalStore {
   Map<String, dynamic> _data = <String, dynamic>{};
   Future<void> _flushQueue = Future<void>.value();
   Future<void> _accountSwitchQueue = Future<void>.value();
-  bool _switchingAccount = false;
+  int _pendingAccountSwitches = 0;
+
+  bool get _switchingAccount => _pendingAccountSwitches > 0;
 
   /// Null means local guest state. Signed-in users always get a separate file;
   /// legacy global data stays in the guest file and is never uploaded to a
@@ -32,32 +34,37 @@ class LocalStore {
 
   Future<void> activateAccount(String? userId) {
     final nextUserId = userId?.trim().isEmpty == true ? null : userId?.trim();
-    final operation = _accountSwitchQueue.catchError((Object _) {}).then((_) async {
-      if (_activeUserId == nextUserId) return;
+    // Close the write/apply gate synchronously when the switch is requested,
+    // not later when its queued file operation begins. Otherwise a UI callback
+    // can persist one last mutation into the account being signed out.
+    _pendingAccountSwitches++;
+    final operation = _accountSwitchQueue
+        .catchError((Object _) {})
+        .then((_) async {
+          try {
+            if (_activeUserId == nextUserId) return;
 
-      final previousFile = _file;
-      final previousData = _data;
-      _switchingAccount = true;
-      try {
-        await _flush();
-        final filename = nextUserId == null
-            ? 'pace_local.json'
-            : 'pace_local_${nextUserId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.json';
-        final nextFile = File(p.join(_directory.path, filename));
-        _file = nextFile;
-        _data = <String, dynamic>{};
-        try {
-          await _loadFile(nextFile);
-        } catch (_) {
-          _file = previousFile;
-          _data = previousData;
-          rethrow;
-        }
-        _activeUserId = nextUserId;
-      } finally {
-        _switchingAccount = false;
-      }
-    });
+            final previousFile = _file;
+            final previousData = _data;
+            await _flush();
+            final filename = nextUserId == null
+                ? 'pace_local.json'
+                : 'pace_local_${nextUserId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.json';
+            final nextFile = File(p.join(_directory.path, filename));
+            _file = nextFile;
+            _data = <String, dynamic>{};
+            try {
+              await _loadFile(nextFile);
+            } catch (_) {
+              _file = previousFile;
+              _data = previousData;
+              rethrow;
+            }
+            _activeUserId = nextUserId;
+          } finally {
+            _pendingAccountSwitches--;
+          }
+        });
     _accountSwitchQueue = operation;
     return operation;
   }

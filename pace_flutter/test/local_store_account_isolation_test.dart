@@ -42,6 +42,23 @@ void main() {
     expect(store.pendingOperations(), hasLength(1));
   });
 
+  test('blocks writes immediately when an account switch is requested', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'account A');
+
+    final switching = store.activateAccount('user-b');
+    await expectLater(
+      store.write('pace.profile.name', 'late write'),
+      throwsA(isA<StateError>()),
+    );
+    await switching;
+
+    expect(store.activeUserId, 'user-b');
+    expect(store.read('pace.profile.name'), isNull);
+    expect(store.pendingOperations(), isEmpty);
+  });
+
   test('failed outbox operations use bounded exponential retry backoff', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
