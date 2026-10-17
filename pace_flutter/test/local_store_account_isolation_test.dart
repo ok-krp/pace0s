@@ -248,6 +248,26 @@ void main() {
     expect(store.pendingOperations(), hasLength(1));
     expect(store.pendingOperations().single['value'], 'replacement value');
     expect(store.hasDueOperationForKey('pace.profile.name'), isTrue);
+
+    // A legacy/stale callback without queuedAt must not match a replacement
+    // merely because the payload is identical.
+    final missingTimestampOperation = <String, dynamic>{
+      ...replacement,
+      'queuedAt': null,
+    };
+    expect(store.isPendingOperation(missingTimestampOperation), isFalse);
+    await store.deferOperation(
+      missingTimestampOperation,
+      expectedUserId: 'user-a',
+      now: DateTime.now().toUtc(),
+    );
+    await store.acknowledgeOperation(
+      missingTimestampOperation,
+      expectedUserId: 'user-a',
+    );
+    expect(store.pendingOperations(), hasLength(1));
+    expect(store.pendingOperations().single['value'], 'replacement value');
+    expect(store.pendingOperations().single['nextAttemptAt'], isNull);
   });
 
   test('scoped writes and removes cannot cross an account switch', () async {
