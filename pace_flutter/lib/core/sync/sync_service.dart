@@ -140,13 +140,24 @@ class SyncService {
             : overlapCursor;
       }
 
-      // A full scan can see only old rows. Never move a valid cursor backward
-      // just because the newest row timestamp predates it.
-      if (fullPull &&
-          previousCursorAt != null &&
-          !previousCursorAt.isAfter(now) &&
-          previousCursorAt.isAfter(candidate)) {
-        return previousCursorAt;
+      if (fullPull) {
+        // A full scan already visited every row, so seeding the next delta
+        // cursor with a years-old row timestamp would fetch the whole table
+        // again on the next tick. Advance old full-scan results to the bounded
+        // overlap checkpoint; the periodic reconciliation recovers late commits.
+        final overlapCursor = now.subtract(cursorOverlapWindow);
+        final safeCandidate = candidate.isBefore(overlapCursor)
+            ? overlapCursor
+            : candidate;
+
+        // Never move a valid checkpoint backward when a full scan sees only
+        // older rows than the previously stored cursor.
+        if (previousCursorAt != null &&
+            !previousCursorAt.isAfter(now) &&
+            previousCursorAt.isAfter(safeCandidate)) {
+          return previousCursorAt;
+        }
+        return safeCandidate;
       }
       return candidate;
     }
