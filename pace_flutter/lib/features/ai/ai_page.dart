@@ -50,7 +50,11 @@ class _AiPageState extends State<AiPage> {
       _history = history;
       if (updatedCurrent != null) {
         _conversation = updatedCurrent;
-        _messages = updatedCurrent.messages;
+        // Do not erase an already-loaded transcript if a metadata-only local
+        // snapshot arrives before its messages have been cached.
+        if (updatedCurrent.messages.isNotEmpty || _messages.isEmpty) {
+          _messages = updatedCurrent.messages;
+        }
       }
     });
   }
