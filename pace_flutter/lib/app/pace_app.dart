@@ -45,13 +45,16 @@ class _PaceAppState extends State<PaceApp> {
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
+    final expectedUserId = widget.localStore.activeUserId;
     setState(() => _themeMode = mode);
-    await widget.localStore.write('pace.settings.theme', switch (mode) {
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.settings.theme', switch (mode) {
       ThemeMode.light => 'light',
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     });
-    unawaited(widget.sync.syncNow());
+    if (widget.localStore.activeUserId == expectedUserId) {
+      unawaited(widget.sync.syncNow());
+    }
   }
 
   // Account switching loads a different local settings file. Apply its theme
