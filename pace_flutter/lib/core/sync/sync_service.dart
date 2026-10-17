@@ -351,6 +351,7 @@ class SyncService {
     // keys when the cursor advances.
     const pageSize = 500;
     var offset = 0;
+    var appliedRemoteRows = false;
     var newestSeen = cursorSeedBeforePull(
       cursorAt: cursorAt,
       fullPull: fullPull,
@@ -415,7 +416,9 @@ class SyncService {
           row['value'],
           remoteUpdatedAt,
           expectedUserId: userId,
+          notify: false,
         );
+        appliedRemoteRows = true;
       }
 
       if (rows.length < pageSize) break;
@@ -434,6 +437,7 @@ class SyncService {
         'pace.__sync_last_pull_at',
         cursorToSave.toIso8601String(),
         enqueueSync: false,
+        notify: false,
       );
     }
     if (fullPull) {
@@ -441,8 +445,10 @@ class SyncService {
         'pace.__sync_last_full_pull_at',
         now.toIso8601String(),
         enqueueSync: false,
+        notify: false,
       );
     }
+    if (appliedRemoteRows) localStore.notifyListeners();
   }
 }
 
