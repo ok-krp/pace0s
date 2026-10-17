@@ -58,15 +58,19 @@ class SyncService {
     required DateTime now,
   }) {
     if (newestSeen != null) {
+      // Client/server clock skew can make a row timestamp appear to be in the
+      // future. Clamp the cursor to scan time so every 60-second tick does not
+      // trigger another full reconciliation until the local clock catches up.
+      final candidate = newestSeen.isAfter(now) ? now : newestSeen;
       // A full scan can see only old rows. Never move a valid cursor backward
       // just because the newest row timestamp predates it.
       if (fullPull &&
           previousCursorAt != null &&
           !previousCursorAt.isAfter(now) &&
-          previousCursorAt.isAfter(newestSeen)) {
+          previousCursorAt.isAfter(candidate)) {
         return previousCursorAt;
       }
-      return newestSeen;
+      return candidate;
     }
     // Empty full scans have no row timestamp to advance from. Use the scan
     // time, but only after the full query succeeded.
