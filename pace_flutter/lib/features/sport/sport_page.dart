@@ -12,6 +12,31 @@ class SportPage extends StatefulWidget {
 }
 
 class _SportPageState extends State<SportPage> {
+  @override
+  void initState() {
+    super.initState();
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant SportPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
+  }
+
   String _today() {
     final d = DateTime.now();
     return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
