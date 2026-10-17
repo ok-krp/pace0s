@@ -25,6 +25,26 @@ class SyncService {
     return response is Map && response['accepted'] == true;
   }
 
+  /// The RPC's accepted payload contains the database's authoritative
+  /// updated_at. Never substitute the client queue timestamp when that value
+  /// is available: client/server clock skew would otherwise poison local
+  /// version metadata and make later conflict decisions incorrect.
+  static String userStateWriteUpdatedAt(
+    dynamic response, {
+    required String fallback,
+  }) {
+    if (response is Map) {
+      final raw = response['updated_at'];
+      if (raw is String) {
+        final parsed = DateTime.tryParse(raw);
+        if (parsed != null) return parsed.toUtc().toIso8601String();
+      }
+    }
+    // Older compatible RPCs may return a bare boolean; retain their existing
+    // fallback behavior instead of making a successful write fail locally.
+    return fallback;
+  }
+
   /// Keys that are intentionally device-local in the web sync contract.
   /// Keep native push and pull behavior aligned with src/hooks/use-cloud-sync-engine.tsx.
   static const Set<String> excludedSyncKeys = {'pace.sport.active'};
@@ -257,7 +277,9 @@ class SyncService {
 
     if (!_isCurrentAccount(userId)) throw StateError('Account changed during sync push');
     if (isUserStateWriteAccepted(response)) {
-      return _PushResult.accepted(remoteUpdatedAt: updatedAt);
+      return _PushResult.accepted(
+        remoteUpdatedAt: userStateWriteUpdatedAt(response, fallback: updatedAt),
+      );
     }
 
     final rows = await client!
