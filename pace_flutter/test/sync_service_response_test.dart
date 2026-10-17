@@ -94,6 +94,44 @@ void main() {
     });
   });
 
+  group('SyncService.cursorAfterPull', () {
+    final now = DateTime.utc(2026, 10, 17, 10);
+
+    test('an empty successful full scan establishes a cursor', () {
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: null,
+          fullPull: true,
+          now: now,
+        ),
+        now,
+      );
+    });
+
+    test('a non-empty scan preserves the newest server timestamp', () {
+      final newest = now.subtract(const Duration(seconds: 30));
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: newest,
+          fullPull: true,
+          now: now,
+        ),
+        newest,
+      );
+    });
+
+    test('an empty delta scan does not invent a cursor', () {
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: null,
+          fullPull: false,
+          now: now,
+        ),
+        isNull,
+      );
+    });
+  });
+
   group('SyncService.shouldPropagateAiPreferences', () {
     test('does not bypass backoff while any local preference mutation remains', () {
       expect(
