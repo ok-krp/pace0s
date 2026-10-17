@@ -151,6 +151,34 @@ class LocalStore extends ChangeNotifier {
 
   String? lastSyncedAt(String key) => _syncMeta[key] as String?;
 
+  /// Persist a UI-originated mutation only if it still belongs to the account
+  /// that created the operation. This prevents delayed async callbacks from a
+  /// disposed page writing account A's data into account B's local file.
+  Future<void> writeForAccount(
+    String? expectedUserId,
+    String key,
+    dynamic value, {
+    bool enqueueSync = true,
+    bool notify = true,
+  }) {
+    if (_switchingAccount || _activeUserId != expectedUserId) {
+      throw StateError('Local account changed before scoped write');
+    }
+    return write(key, value, enqueueSync: enqueueSync, notify: notify);
+  }
+
+  Future<void> removeForAccount(
+    String? expectedUserId,
+    String key, {
+    bool enqueueSync = true,
+    bool notify = true,
+  }) {
+    if (_switchingAccount || _activeUserId != expectedUserId) {
+      throw StateError('Local account changed before scoped remove');
+    }
+    return remove(key, enqueueSync: enqueueSync, notify: notify);
+  }
+
   Future<void> write(
     String key,
     dynamic value, {
