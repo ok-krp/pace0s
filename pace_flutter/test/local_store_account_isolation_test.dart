@@ -55,6 +55,35 @@ void main() {
     expect(store.pendingOperations(), isEmpty);
   });
 
+  test('late acknowledgements cannot move synced metadata backwards', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'first value');
+    final olderOperation = store.pendingOperations().single;
+
+    await store.write('pace.profile.name', 'newer value');
+    final newerOperation = store.pendingOperations().single;
+    final newerServerTimestamp = DateTime.now()
+        .toUtc()
+        .add(const Duration(days: 1))
+        .toIso8601String();
+    await store.acknowledgeOperation(
+      newerOperation,
+      expectedUserId: 'user-a',
+      syncedAt: newerServerTimestamp,
+    );
+
+    await store.acknowledgeOperation(
+      olderOperation,
+      expectedUserId: 'user-a',
+      syncedAt: DateTime.now().toUtc().toIso8601String(),
+    );
+
+    expect(store.read('pace.profile.name'), 'newer value');
+    expect(store.lastSyncedAt('pace.profile.name'), newerServerTimestamp);
+    expect(store.pendingOperations(), isEmpty);
+  });
+
   test('rebases a concurrent edit after the server acknowledges a later timestamp', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
