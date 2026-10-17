@@ -357,6 +357,17 @@ void main() {
         ),
         previous,
       );
+
+      final recentPrevious = now.subtract(const Duration(seconds: 30));
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: newest,
+          previousCursorAt: recentPrevious,
+          fullPull: true,
+          now: now,
+        ),
+        recentPrevious,
+      );
     });
 
     test('an empty delta scan does not invent a cursor', () {
