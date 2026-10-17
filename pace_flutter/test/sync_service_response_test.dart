@@ -82,6 +82,40 @@ void main() {
     });
   });
 
+  group('SyncService.userStateWriteUpdatedAt', () {
+    test('uses the database timestamp from an accepted RPC response', () {
+      expect(
+        SyncService.userStateWriteUpdatedAt(
+          {
+            'accepted': true,
+            'updated_at': '2026-10-17T17:00:00.123456+00:00',
+          },
+          fallback: '2026-10-17T16:59:59.999999Z',
+        ),
+        '2026-10-17T17:00:00.123456Z',
+      );
+    });
+
+    test('falls back for older boolean RPC responses', () {
+      const fallback = '2026-10-17T17:00:00Z';
+      expect(
+        SyncService.userStateWriteUpdatedAt(true, fallback: fallback),
+        fallback,
+      );
+    });
+
+    test('falls back when the response timestamp is malformed', () {
+      const fallback = '2026-10-17T17:00:00Z';
+      expect(
+        SyncService.userStateWriteUpdatedAt(
+          {'accepted': true, 'updated_at': 'not-a-timestamp'},
+          fallback: fallback,
+        ),
+        fallback,
+      );
+    });
+  });
+
   group('SyncService.isUserStateWriteAccepted', () {
     test('accepts the JSON object returned by upsert_user_state_if_newer', () {
       expect(
