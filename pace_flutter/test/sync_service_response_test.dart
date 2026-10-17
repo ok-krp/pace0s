@@ -2,6 +2,50 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
+  group('SyncService.shouldApplyRemoteValue', () {
+    final older = DateTime.utc(2026, 10, 16, 10);
+    final newer = DateTime.utc(2026, 10, 17, 10);
+
+    test('recovers non-empty legacy cloud data when local state is empty', () {
+      expect(
+        SyncService.shouldApplyRemoteValue(
+          isLegacy: true,
+          localValue: <dynamic>[],
+          remoteValue: ['legacy item'],
+          localUpdatedAt: newer,
+          remoteUpdatedAt: older,
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not overwrite non-empty local state with older legacy data', () {
+      expect(
+        SyncService.shouldApplyRemoteValue(
+          isLegacy: true,
+          localValue: ['current item'],
+          remoteValue: ['legacy item'],
+          localUpdatedAt: newer,
+          remoteUpdatedAt: older,
+        ),
+        isFalse,
+      );
+    });
+
+    test('applies a newer canonical cloud value', () {
+      expect(
+        SyncService.shouldApplyRemoteValue(
+          isLegacy: false,
+          localValue: 'local',
+          remoteValue: 'remote',
+          localUpdatedAt: older,
+          remoteUpdatedAt: newer,
+        ),
+        isTrue,
+      );
+    });
+  });
+
   group('SyncService.normalizeRemoteKey', () {
     test('maps legacy cloud keys into the canonical Pace namespace', () {
       expect(SyncService.normalizeRemoteKey('lt.profile.name'), 'pace.profile.name');
