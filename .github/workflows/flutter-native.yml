@@ -104,34 +104,41 @@ jobs:
           echo "::error::Unable to install Android NDK ${NDK_VERSION} after 3 attempts"
           exit 1
       - name: Validate Supabase build configuration
+        id: supabase_config
         shell: bash
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
-            echo "::error::Missing SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY. Configure them as GitHub Actions secrets or repository variables; refusing to publish an unconfigured Android build."
-            exit 1
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Supabase build configuration is missing. Tests will run, but native build and artifact publishing will be skipped. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Build APK
+        if: steps.supabase_config.outputs.configured == 'true'
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: flutter build apk --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish APK
+        if: steps.supabase_config.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: pace-android-apk
           path: pace_flutter/build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
       - name: Build AAB
+        if: steps.supabase_config.outputs.configured == 'true'
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: flutter build appbundle --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish AAB
+        if: steps.supabase_config.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: pace-android-aab
@@ -164,22 +171,27 @@ jobs:
         working-directory: pace_flutter
         run: flutter test
       - name: Validate Supabase build configuration
+        id: supabase_config
         shell: bash
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
-            echo "::error::Missing SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY. Configure them as GitHub Actions secrets or repository variables; refusing to publish an unconfigured Linux build."
-            exit 1
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Supabase build configuration is missing. Tests will run, but native build and artifact publishing will be skipped. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Build Linux
+        if: steps.supabase_config.outputs.configured == 'true'
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: flutter build linux --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish Linux build
+        if: steps.supabase_config.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: pace-linux
@@ -210,22 +222,27 @@ jobs:
         working-directory: pace_flutter
         run: flutter test
       - name: Validate Supabase build configuration
+        id: supabase_config
         shell: bash
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
-            echo "::error::Missing SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY. Configure them as GitHub Actions secrets or repository variables; refusing to publish an unconfigured Windows build."
-            exit 1
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Supabase build configuration is missing. Tests will run, but native build and artifact publishing will be skipped. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Build Windows
+        if: steps.supabase_config.outputs.configured == 'true'
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: flutter build windows --release "--dart-define=SUPABASE_URL=$env:SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY"
       - name: Publish Windows build
+        if: steps.supabase_config.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: pace-windows
@@ -266,34 +283,41 @@ jobs:
         working-directory: pace_flutter
         run: flutter test
       - name: Validate Supabase build configuration
+        id: supabase_config
         shell: bash
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
-            echo "::error::Missing SUPABASE_URL or SUPABASE_PUBLISHABLE_KEY. Configure them as GitHub Actions secrets or repository variables; refusing to publish an unconfigured Apple build."
-            exit 1
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Supabase build configuration is missing. Tests will run, but native build and artifact publishing will be skipped. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables."
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Build iOS
+        if: steps.supabase_config.outputs.configured == 'true'
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: flutter build ios --release --no-codesign "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish iOS build
+        if: steps.supabase_config.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: pace-ios
           path: pace_flutter/build/ios/iphoneos/Runner.app
           if-no-files-found: error
       - name: Build macOS
+        if: steps.supabase_config.outputs.configured == 'true'
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: flutter build macos --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish macOS build
+        if: steps.supabase_config.outputs.configured == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: pace-macos
