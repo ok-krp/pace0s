@@ -70,9 +70,10 @@ void main() {
       expect(SyncService.isSyncableKey('pace.sport.active'), isFalse);
     });
 
-    test('keeps account-local sync cursors out of the cloud outbox', () {
+    test('keeps all account-local sync metadata out of the cloud outbox', () {
       expect(SyncService.isSyncableKey('pace.__sync_last_pull_at'), isFalse);
       expect(SyncService.isSyncableKey('pace.__sync_last_full_pull_at'), isFalse);
+      expect(SyncService.isSyncableKey('pace.__sync_future_cursor'), isFalse);
     });
 
     test('rejects keys outside the Pace namespace', () {
