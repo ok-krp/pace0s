@@ -255,7 +255,10 @@ class LocalStore extends ChangeNotifier {
   /// Public notification hook for batched remote pulls after silent row writes.
   void notifyStateChanged() => notifyListeners();
 
-  Map<String, String> syncedMetadata() => Map<String, String>.from(_syncMeta);
+  Map<String, String> syncedMetadata() => {
+        for (final entry in _syncMeta.entries)
+          if (entry.value is String) entry.key: entry.value as String,
+      };
 
   Map<String, dynamic> get _syncMeta {
     final raw = _data['__sync_meta'];
