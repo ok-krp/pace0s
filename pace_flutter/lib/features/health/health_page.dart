@@ -15,6 +15,7 @@ class HealthPage extends StatefulWidget {
 }
 
 class _HealthPageState extends State<HealthPage> {
+  late String? _accountUserId;
   final NativeHealthAdapter _adapter = NativeHealthAdapter();
   bool? _available;
   bool _busy = false;
@@ -23,6 +24,7 @@ class _HealthPageState extends State<HealthPage> {
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
     widget.localStore.addListener(_onLocalStoreChanged);
     _samples = _readStoredSamples();
   }
@@ -81,7 +83,7 @@ class _HealthPageState extends State<HealthPage> {
         final payload = samples
             .map((sample) => {'type': sample.type, 'value': sample.value, 'timestamp': sample.timestamp.toUtc().toIso8601String(), 'unit': sample.unit, 'source': sample.source})
             .toList();
-        await widget.localStore.write('pace.health.samples', payload);
+        await widget.localStore.writeForAccount(_accountUserId, 'pace.health.samples', payload);
         await widget.sync.syncNow();
       }
       if (!mounted) return;
