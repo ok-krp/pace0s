@@ -52,6 +52,40 @@ void main() {
     expect(store.pendingOperations(), isEmpty);
   });
 
+  test('notifies listeners for durable state changes but can batch remote pulls', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    var notifications = 0;
+    store.addListener(() => notifications++);
+
+    await store.write('pace.profile.name', 'local');
+    expect(notifications, 1);
+
+    await store.write('pace.__sync_last_pull_at', '2026-10-17T10:00:00Z',
+        enqueueSync: false, notify: false);
+    expect(notifications, 1);
+
+    await store.applyRemote(
+      'pace.profile.name',
+      'remote',
+      '2026-10-17T10:01:00Z',
+      expectedUserId: 'user-a',
+    );
+    expect(notifications, 2);
+
+    await store.applyRemote(
+      'pace.profile.other',
+      'remote',
+      '2026-10-17T10:02:00Z',
+      expectedUserId: 'user-a',
+      notify: false,
+    );
+    expect(notifications, 2);
+
+    store.notifyListeners();
+    expect(notifications, 3);
+  });
+
   test('guest and signed-in accounts use isolated state and outboxes', () async {
     final store = await LocalStore.open(directory: directory);
 
