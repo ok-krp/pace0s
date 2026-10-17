@@ -12,9 +12,11 @@ class RoutinePage extends StatefulWidget {
 }
 
 class _RoutinePageState extends State<RoutinePage> {
+  late String? _accountUserId;
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
     widget.localStore.addListener(_onLocalStoreChanged);
   }
 
@@ -66,7 +68,7 @@ class _RoutinePageState extends State<RoutinePage> {
       done.add(id);
     }
     data[_today] = done;
-    await widget.localStore.write('pace.routine.done', data);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.routine.done', data);
     if (mounted) setState(() {});
   }
 
@@ -84,7 +86,7 @@ class _RoutinePageState extends State<RoutinePage> {
     if (name == null || name.isEmpty) return;
     final habits = _habits();
     habits.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'name': name});
-    await widget.localStore.write('pace.routine.list', habits);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.routine.list', habits);
     if (mounted) setState(() {});
   }
 
