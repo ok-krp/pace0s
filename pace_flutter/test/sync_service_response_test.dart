@@ -142,9 +142,20 @@ void main() {
       expect(SyncService.isUserStateWriteAccepted(false), isFalse);
     });
 
-    test('fails closed for malformed or missing responses', () {
+    test('fails closed for malformed or incomplete responses', () {
       expect(SyncService.isUserStateWriteAccepted(null), isFalse);
       expect(SyncService.isUserStateWriteAccepted({'updated_at': 'now'}), isFalse);
+      expect(
+        SyncService.isUserStateWriteAccepted({'accepted': true}),
+        isFalse,
+      );
+      expect(
+        SyncService.isUserStateWriteAccepted({
+          'accepted': true,
+          'updated_at': 'not-a-timestamp',
+        }),
+        isFalse,
+      );
       expect(SyncService.isUserStateWriteAccepted('true'), isFalse);
     });
   });
