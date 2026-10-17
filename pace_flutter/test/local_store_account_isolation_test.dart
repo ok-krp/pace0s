@@ -160,6 +160,10 @@ void main() {
       store.write('pace.profile.name', 'late write'),
       throwsA(isA<StateError>()),
     );
+    // The scoped helper must fail closed too while the switch is queued,
+    // even though account A is still the active ID until its file flush ends.
+    await store.writeForAccount('user-a', 'pace.profile.name', 'late scoped write');
+    await store.removeForAccount('user-a', 'pace.profile.name');
     await switching;
 
     expect(store.activeUserId, 'user-b');
