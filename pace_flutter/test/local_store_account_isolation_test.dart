@@ -82,7 +82,7 @@ void main() {
     );
     expect(notifications, 2);
 
-    store.notifyListeners();
+    store.notifyStateChanged();
     expect(notifications, 3);
   });
 
