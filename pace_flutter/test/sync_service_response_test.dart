@@ -310,6 +310,29 @@ void main() {
       );
     });
 
+    test('a full scan with only old rows advances to the overlap checkpoint', () {
+      final oldRow = now.subtract(const Duration(days: 30));
+      final overlap = now.subtract(SyncService.cursorOverlapWindow);
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: oldRow,
+          previousCursorAt: null,
+          fullPull: true,
+          now: now,
+        ),
+        overlap,
+      );
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: oldRow,
+          previousCursorAt: now.subtract(const Duration(minutes: 20)),
+          fullPull: true,
+          now: now,
+        ),
+        overlap,
+      );
+    });
+
     test('a future row timestamp is clamped to scan time', () {
       expect(
         SyncService.cursorAfterPull(
