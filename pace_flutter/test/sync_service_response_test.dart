@@ -176,6 +176,18 @@ void main() {
       );
     });
 
+    test('an empty full scan discards a future cursor', () {
+      expect(
+        SyncService.cursorAfterPull(
+          newestSeen: null,
+          previousCursorAt: now.add(const Duration(minutes: 5)),
+          fullPull: true,
+          now: now,
+        ),
+        now.subtract(SyncService.cursorOverlapWindow),
+      );
+    });
+
     test('a non-empty scan preserves the newest server timestamp', () {
       final newest = now.subtract(const Duration(seconds: 30));
       expect(
