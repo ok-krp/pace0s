@@ -396,7 +396,9 @@ class SyncService {
         if (!isSyncableKey(key) ||
             remoteUpdatedAt == null ||
             remoteTime == null ||
-            localStore.hasPendingOperationForKey(key)) continue;
+            localStore.hasPendingOperationForKey(key)) {
+          continue;
+        }
 
         final rawLocalUpdatedAt = localStore.lastSyncedAt(key);
         final localTime = rawLocalUpdatedAt == null
@@ -448,7 +450,9 @@ class SyncService {
         notify: false,
       );
     }
-    if (appliedRemoteRows) localStore.notifyListeners();
+    if (appliedRemoteRows) {
+      localStore.notifyStateChanged();
+    }
   }
 }
 
