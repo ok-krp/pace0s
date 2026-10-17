@@ -2,6 +2,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
+  group('SyncService.normalizeRemoteKey', () {
+    test('maps legacy cloud keys into the canonical Pace namespace', () {
+      expect(SyncService.normalizeRemoteKey('lt.profile.name'), 'pace.profile.name');
+      expect(SyncService.normalizeRemoteKey('pace.profile.name'), 'pace.profile.name');
+      expect(SyncService.normalizeRemoteKey('other.key'), 'other.key');
+    });
+
+    test('normalizes legacy active-session keys before applying exclusions', () {
+      final normalized = SyncService.normalizeRemoteKey('lt.sport.active');
+      expect(normalized, 'pace.sport.active');
+      expect(SyncService.isSyncableKey(normalized), isFalse);
+    });
+  });
+
   group('SyncService.isSyncableKey', () {
     test('keeps ordinary Pace state syncable', () {
       expect(SyncService.isSyncableKey('pace.settings.theme'), isTrue);
