@@ -19,6 +19,36 @@ class LocalStore {
 
   bool get _switchingAccount => _pendingAccountSwitches > 0;
 
+  /// Produces a per-key monotonic timestamp for server-side newest-wins writes.
+  /// DateTime.now() can repeat within one microsecond or move backwards after
+  /// a system-clock adjustment; either case must not create an equal/older write.
+  static DateTime monotonicQueuedAt({
+    required DateTime now,
+    required DateTime? latestKnownAt,
+  }) {
+    final current = now.toUtc();
+    final latest = latestKnownAt?.toUtc();
+    if (latest != null && !current.isAfter(latest)) {
+      return latest.add(const Duration(microseconds: 1));
+    }
+    return current;
+  }
+
+  String _nextQueuedAt(String key, List<Map<String, dynamic>> outbox) {
+    DateTime? latest = DateTime.tryParse(lastSyncedAt(key) ?? '')?.toUtc();
+    for (final entry in outbox) {
+      if (entry['key'] != key || entry['queuedAt'] is! String) continue;
+      final queuedAt = DateTime.tryParse(entry['queuedAt'] as String)?.toUtc();
+      if (queuedAt != null && (latest == null || queuedAt.isAfter(latest))) {
+        latest = queuedAt;
+      }
+    }
+    return monotonicQueuedAt(
+      now: DateTime.now().toUtc(),
+      latestKnownAt: latest,
+    ).toIso8601String();
+  }
+
   /// Null means local guest state. Signed-in users always get a separate file;
   /// legacy global data stays in the guest file and is never uploaded to a
   /// newly signed-in account implicitly.
@@ -124,12 +154,13 @@ class LocalStore {
     _data[key] = value;
     if (enqueueSync) {
       final outbox = _outbox;
+      final queuedAt = _nextQueuedAt(key, outbox);
       outbox.removeWhere((entry) => entry['key'] == key);
       outbox.add({
         'key': key,
         'value': value,
         'operation': 'upsert',
-        'queuedAt': DateTime.now().toUtc().toIso8601String(),
+        'queuedAt': queuedAt,
       });
       _data['__outbox'] = outbox;
     }
@@ -141,11 +172,12 @@ class LocalStore {
     _data.remove(key);
     if (enqueueSync) {
       final outbox = _outbox;
+      final queuedAt = _nextQueuedAt(key, outbox);
       outbox.removeWhere((entry) => entry['key'] == key);
       outbox.add({
         'key': key,
         'operation': 'delete',
-        'queuedAt': DateTime.now().toUtc().toIso8601String(),
+        'queuedAt': queuedAt,
       });
       _data['__outbox'] = outbox;
     }
@@ -251,6 +283,7 @@ class LocalStore {
   Future<void> acknowledgeOperation(
     Map<String, dynamic> operation, {
     required String expectedUserId,
+    String? syncedAt,
   }) async {
     if (_switchingAccount || _activeUserId != expectedUserId) {
       throw StateError('Local account changed before outbox acknowledgement');
@@ -265,6 +298,9 @@ class LocalStore {
       return entry['operation'] == operation['operation'] &&
           entry['value'] == operation['value'];
     });
+    if (syncedAt != null) {
+      _setSyncedAt(operation['key'] as String, syncedAt);
+    }
     _data['__outbox'] = outbox;
     await _flush();
   }
