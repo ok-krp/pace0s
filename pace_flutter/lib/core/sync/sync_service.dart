@@ -33,6 +33,8 @@ class SyncService {
       key.startsWith('pace.') && !excludedSyncKeys.contains(key);
 
   static const Duration fullReconciliationInterval = Duration(minutes: 10);
+  // Keep a small overlap because the client and database clocks may differ.
+  static const Duration cursorOverlapWindow = Duration(minutes: 2);
 
   static bool shouldRunFullReconciliation({
     required DateTime? cursorAt,
@@ -55,9 +57,9 @@ class SyncService {
     return cursorAt;
   }
 
-  /// Advances an empty successful full scan to its scan time. Without this,
-  /// an account with no valid rows would keep a null cursor and repeat a full
-  /// table read on every sync tick instead of using delta reads until reconcile.
+  /// Establishes a checkpoint after an empty successful full scan. A small
+  /// overlap protects against client/server clock skew: a row inserted just
+  /// after the scan can still have a timestamp slightly behind the client clock.
   static DateTime? cursorAfterPull({
     required DateTime? newestSeen,
     required DateTime? previousCursorAt,
@@ -79,9 +81,17 @@ class SyncService {
       }
       return candidate;
     }
-    // Empty full scans have no row timestamp to advance from. Use the scan
-    // time, but only after the full query succeeded.
-    return fullPull ? now : null;
+    // Empty full scans have no row timestamp to advance from. Use a bounded
+    // overlap rather than the exact client time so slightly-behind server
+    // timestamps are not missed until the next periodic full reconciliation.
+    if (!fullPull) return null;
+    final fallbackCursor = now.subtract(cursorOverlapWindow);
+    if (previousCursorAt != null &&
+        !previousCursorAt.isAfter(now) &&
+        previousCursorAt.isAfter(fallbackCursor)) {
+      return previousCursorAt;
+    }
+    return fallbackCursor;
   }
 
   static bool shouldPropagateAiPreferences({
