@@ -44,8 +44,10 @@ class PaceAiService {
 
   SupabaseClient? get _client => auth.client;
 
-  bool get memoryEnabled => localStore.read(_memoryEnabledKey) as bool? ?? true;
-  bool get confirmActions => localStore.read(_confirmKey) as bool? ?? true;
+  bool get memoryEnabled =>
+      _isAccountScopeCurrent ? localStore.read(_memoryEnabledKey) as bool? ?? true : true;
+  bool get confirmActions =>
+      _isAccountScopeCurrent ? localStore.read(_confirmKey) as bool? ?? true : true;
 
   Future<void> setMemoryEnabled(bool enabled) async {
     await localStore.writeForAccount(_accountUserId, _memoryEnabledKey, enabled);
@@ -67,6 +69,7 @@ class PaceAiService {
   }
 
   List<AiConversation> loadLocalConversations() {
+    if (!_isAccountScopeCurrent) return const <AiConversation>[];
     final raw = localStore.read(_conversationKey);
     if (raw is! List) return const <AiConversation>[];
     return raw
@@ -282,6 +285,7 @@ class PaceAiService {
   }
 
   List<AiMemoryItem> loadMemory() {
+    if (!_isAccountScopeCurrent) return const <AiMemoryItem>[];
     final raw = localStore.read(_memoryKey);
     if (!memoryEnabled || raw is! List) return const <AiMemoryItem>[];
     return raw.whereType<Map>().map((item) => AiMemoryItem.fromJson(Map<String, dynamic>.from(item))).toList();
