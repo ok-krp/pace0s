@@ -490,6 +490,9 @@ void main() {
     );
 
     final malformed = store.pendingOperations().single;
+    // Invalid overflow dates must be treated as due, not parsed into a future
+    // deadline that could strand this local edit until the clock catches up.
+    expect(store.hasDueOperationForKey('pace.profile.name'), isTrue);
     final now = DateTime.utc(2026, 10, 18, 10);
     await store.deferOperation(malformed, expectedUserId: 'user-a', now: now);
 
