@@ -256,7 +256,13 @@ class SyncService {
     final pending = List<Map<String, dynamic>>.from(localStore.pendingOperations());
     // pendingOperations() also sanitizes malformed persisted entries. Flush
     // that quarantine before an empty queue returns without any other write.
-    await localStore.persistOutboxRepairs(expectedUserId: expectedUserId);
+    try {
+      await localStore.persistOutboxRepairs(expectedUserId: expectedUserId);
+    } catch (_) {
+      // Do not let a local disk failure escape a timer/auth-triggered sync.
+      // The existing on-disk outbox remains authoritative; retry next pass.
+      return;
+    }
     if (!_isCurrentAccount(expectedUserId)) return;
     for (final operation in pending) {
       if (!_isCurrentAccount(expectedUserId)) return;
