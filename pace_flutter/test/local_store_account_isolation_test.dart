@@ -403,6 +403,24 @@ void main() {
     expect(store.pendingOperations(), hasLength(1));
   });
 
+  test('account filename escaping cannot collide with a literal user ID', () async {
+    final store = await LocalStore.open(directory: directory);
+
+    // Under the previous underscore-only suffix, these IDs both mapped to
+    // pace_local_user_a__dXNlci9h.json and could share private local state.
+    await store.activateAccount('user/a');
+    await store.write('pace.profile.name', 'private to slash ID');
+    expect(store.read('pace.profile.name'), 'private to slash ID');
+
+    await store.activateAccount('user_a__dXNlci9h');
+    expect(store.read('pace.profile.name'), isNull);
+    await store.write('pace.profile.name', 'private to literal ID');
+
+    await store.activateAccount('user/a');
+    expect(store.read('pace.profile.name'), 'private to slash ID');
+    await store.activateAccount('user_a__dXNlci9h');
+    expect(store.read('pace.profile.name'), 'private to literal ID');
+  });
   test('blocks writes immediately when an account switch is requested', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
