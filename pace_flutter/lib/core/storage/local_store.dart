@@ -17,6 +17,8 @@ class LocalStore extends ChangeNotifier {
   Future<void> _flushQueue = Future<void>.value();
   Future<void> _accountSwitchQueue = Future<void>.value();
   int _pendingAccountSwitches = 0;
+  int _outboxRepairRevision = 0;
+  int _persistedOutboxRepairRevision = 0;
 
   bool get _switchingAccount => _pendingAccountSwitches > 0;
 
@@ -273,6 +275,7 @@ class LocalStore extends ChangeNotifier {
   }
 
   void _appendQuarantineEntry(String reason, dynamic payload) {
+    _outboxRepairRevision++;
     final rawQuarantine = _data['__outbox_quarantine'];
     final quarantine = rawQuarantine is List
         ? List<dynamic>.from(rawQuarantine)
@@ -317,8 +320,28 @@ class LocalStore extends ChangeNotifier {
         _appendQuarantineEntry('malformed-outbox-entry', entry);
       }
     }
-    if (valid.length != raw.length) _data['__outbox'] = valid;
+    if (valid.length != raw.length) {
+      _data['__outbox'] = valid;
+      // The getter is synchronous, so persist this repair explicitly from the
+      // sync worker before it returns early on an empty queue.
+      _outboxRepairRevision++;
+    }
     return valid;
+  }
+
+  /// Flushes any quarantine/normalization performed by the synchronous
+  /// outbox reader. Without this, malformed entries could be quarantined only
+  /// in memory and reappear after process restart when no valid work remains.
+  Future<void> persistOutboxRepairs({required String expectedUserId}) async {
+    if (_persistedOutboxRepairRevision == _outboxRepairRevision) return;
+    if (_switchingAccount || _activeUserId != expectedUserId) {
+      throw StateError('Local account changed before outbox repair persistence');
+    }
+    final revision = _outboxRepairRevision;
+    await _flush();
+    if (revision == _outboxRepairRevision) {
+      _persistedOutboxRepairRevision = revision;
+    }
   }
 
   List<Map<String, dynamic>> pendingOperations({DateTime? now}) {
