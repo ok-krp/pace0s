@@ -66,11 +66,12 @@ class AiConversation {
         ),
         title: json['title']?.toString() ?? 'Nouvelle conversation',
         updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
-        messages: (json['messages'] as List?)
-                ?.whereType<Map>()
+        messages: json['messages'] is List
+            ? (json['messages'] as List)
+                .whereType<Map>()
                 .map((value) => AiMessage.fromJson(Map<String, dynamic>.from(value)))
-                .toList() ??
-            const <AiMessage>[],
+                .toList()
+            : const <AiMessage>[],
         ephemeral: json['ephemeral'] == true,
       );
 }
