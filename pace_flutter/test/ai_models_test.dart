@@ -19,6 +19,19 @@ void main() {
     expect(restored.messages.single.text, 'Bonjour');
   });
 
+  test('malformed messages field falls back to an empty message list', () {
+    final conversation = AiConversation.fromJson(<String, dynamic>{
+      'id': 'recovered-conversation',
+      'agent': 'coach',
+      'title': 'Recovered',
+      'updatedAt': '2026-10-18T10:00:00Z',
+      'messages': 'not-a-list',
+    });
+
+    expect(conversation.id, 'recovered-conversation');
+    expect(conversation.messages, isEmpty);
+  });
+
   test('ephemeral conversation is explicitly marked and serializable', () {
     final conversation = AiConversation(
       id: 'ephemeral-1',
