@@ -127,10 +127,11 @@ class _NutritionPageState extends State<NutritionPage> {
   Future<void> _recalculateTotals(Map<String, dynamic> data) async {
     final totals = <String, dynamic>{};
     for (final entry in data.entries) {
-      if (entry.value is! List) continue;
+      final rawItems = entry.value;
+      if (rawItems is! List) continue;
       var dayKcal = 0.0, dayP = 0.0, dayC = 0.0, dayF = 0.0;
       var hasKcal = false, hasP = false, hasC = false, hasF = false;
-      for (final item in entry.value as List) {
+      for (final item in rawItems) {
         if (item is! Map) continue;
         final kcal = item['kcal'];
         final p = item['p'];
