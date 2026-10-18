@@ -535,6 +535,21 @@ void main() {
     });
   });
 
+  group('SyncService.aiMemoryEnabledFromLevel', () {
+    test('maps every supported database enum value explicitly', () {
+      expect(SyncService.aiMemoryEnabledFromLevel('none'), isFalse);
+      expect(SyncService.aiMemoryEnabledFromLevel('limited'), isTrue);
+      expect(SyncService.aiMemoryEnabledFromLevel('complete'), isTrue);
+    });
+
+    test('ignores unknown, null, and non-string values', () {
+      expect(SyncService.aiMemoryEnabledFromLevel('enabled'), isNull);
+      expect(SyncService.aiMemoryEnabledFromLevel(''), isNull);
+      expect(SyncService.aiMemoryEnabledFromLevel(null), isNull);
+      expect(SyncService.aiMemoryEnabledFromLevel(1), isNull);
+    });
+  });
+
   group('SyncService.shouldPropagateAiPreferences', () {
     test('does not bypass backoff while any local preference mutation remains', () {
       expect(
