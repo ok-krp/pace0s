@@ -48,10 +48,10 @@ class LocalStore extends ChangeNotifier {
     return kind == 'delete';
   }
 
-  /// DateTime.parse accepts some overflowing date components by normalizing
-  /// them (for example, an invalid day can roll into the next month). Persisted
-  /// queue metadata must be rejected, not silently reinterpreted as another
-  /// instant before it is sent to the server.
+  /// Validates timestamps used by local metadata and the Supabase sync API.
+  /// DateTime.parse normalizes some overflowing components (for example, an
+  /// invalid day can roll into the next month), so those values must be rejected
+  /// rather than silently reinterpreted as a different instant.
   static bool isValidIsoTimestamp(String value) {
     final match = RegExp(
       r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|([+-])(\d{2}):(\d{2}))?$',
