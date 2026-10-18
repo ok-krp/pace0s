@@ -81,8 +81,9 @@ class _SportPageState extends State<SportPage> {
     final ended = DateTime.now().millisecondsSinceEpoch;
     final rawStartedAt = session['startedAt'];
     final startedAt = rawStartedAt is num ? rawStartedAt.toInt() : ended;
+    final elapsedMs = ended >= startedAt ? ended - startedAt : 0;
     session['endedAt'] = ended;
-    session['durationMin'] = ((ended - startedAt) / 60000).round().clamp(0, 24 * 60 * 365).toInt();
+    session['durationMin'] = (elapsedMs / 60000).round();
     final sessions = _sessions();
     sessions.insert(0, session);
     await widget.localStore.writeForAccount(_accountUserId, 'pace.sport.sessions', sessions);
