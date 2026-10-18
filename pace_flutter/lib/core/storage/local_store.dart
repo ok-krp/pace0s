@@ -515,7 +515,9 @@ class LocalStore extends ChangeNotifier {
       if (entry['key'] != key) return false;
       final rawNextAttempt = entry['nextAttemptAt'];
       if (rawNextAttempt is! String) return true;
-      final nextAttempt = DateTime.tryParse(rawNextAttempt);
+      final nextAttempt = isValidIsoTimestamp(rawNextAttempt)
+          ? DateTime.tryParse(rawNextAttempt)
+          : null;
       return nextAttempt == null || !nextAttempt.isAfter(current);
     });
   }
