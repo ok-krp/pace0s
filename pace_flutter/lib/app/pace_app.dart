@@ -171,15 +171,24 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   @override
-  Widget build(BuildContext context) => !_configured || _signedIn
-      ? PaceShell(
-          localStore: widget.localStore,
-          sync: widget.sync,
-          auth: widget.auth,
-          onThemeChanged: widget.onThemeChanged,
-          themeMode: widget.themeMode,
-        )
-      : AuthPage(auth: widget.auth);
+  Widget build(BuildContext context) {
+    // Capture the account that owns this shell. A delayed callback from a
+    // disposed shell must not apply its theme choice to the next account.
+    final shellUserId = widget.localStore.activeUserId;
+    if (!_configured || _signedIn) {
+      return PaceShell(
+        localStore: widget.localStore,
+        sync: widget.sync,
+        auth: widget.auth,
+        onThemeChanged: (mode) {
+          if (widget.localStore.activeUserId != shellUserId) return;
+          widget.onThemeChanged(mode);
+        },
+        themeMode: widget.themeMode,
+      );
+    }
+    return AuthPage(auth: widget.auth);
+  }
 }
 
 class PaceShell extends StatefulWidget {
