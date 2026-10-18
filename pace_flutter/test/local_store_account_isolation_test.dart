@@ -396,11 +396,11 @@ void main() {
     expect(notifications, 3);
   });
 
-  test('feature mutations use account-scoped local store helpers', () async {
-    final features = Directory('lib/features');
-    expect(await features.exists(), isTrue);
+  test('application mutations use account-scoped local store helpers', () async {
+    final library = Directory('lib');
+    expect(await library.exists(), isTrue);
     final violations = <String>[];
-    await for (final entity in features.list(recursive: true)) {
+    await for (final entity in library.list(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) continue;
       final source = await entity.readAsString();
       if (RegExp(r'\blocalStore\.(?:write|remove)\s*\(').hasMatch(source)) {
@@ -410,7 +410,7 @@ void main() {
     expect(
       violations,
       isEmpty,
-      reason: 'Feature writes must use writeForAccount/removeForAccount to reject stale account callbacks.',
+      reason: 'App writes must use writeForAccount/removeForAccount to reject stale account callbacks.',
     );
   });
   test('guest and signed-in accounts use isolated state and outboxes', () async {
