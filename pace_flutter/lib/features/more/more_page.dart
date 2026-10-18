@@ -118,7 +118,8 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     super.initState();
     _accountUserId = widget.localStore.activeUserId;
     _aiConfirmations = _ai.confirmActions;
-    _notifications = widget.localStore.read('pace.settings.notifications') as bool? ?? true;
+    final storedNotifications = widget.localStore.read('pace.settings.notifications');
+    _notifications = storedNotifications is bool ? storedNotifications : true;
     _memory = _ai.memoryEnabled;
     widget.localStore.addListener(_onLocalStoreChanged);
   }
@@ -126,8 +127,8 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   void _onLocalStoreChanged() {
     if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
     final confirmations = _ai.confirmActions;
-    final notifications =
-        widget.localStore.read('pace.settings.notifications') as bool? ?? true;
+    final storedNotifications = widget.localStore.read('pace.settings.notifications');
+    final notifications = storedNotifications is bool ? storedNotifications : true;
     final memory = _ai.memoryEnabled;
     if (confirmations == _aiConfirmations &&
         notifications == _notifications &&
