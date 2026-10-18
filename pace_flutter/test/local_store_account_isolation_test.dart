@@ -67,7 +67,7 @@ void main() {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
     final invalidFutureTimestamp =
-        '${DateTime.now().toUtc().year}-13-01T10:00:00Z';
+        '${DateTime.now().toUtc().year}-13-31T23:59:59Z';
 
     // Both reserved sync metadata and a malformed outbox entry are untrusted
     // local JSON. Neither may push a fresh mutation into a future year.
