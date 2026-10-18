@@ -535,6 +535,47 @@ void main() {
     });
   });
 
+  group('SyncService.buildAiPreferencesPatch', () {
+    test('updates confirm_actions without overwriting memory_level', () {
+      expect(
+        SyncService.buildAiPreferencesPatch(
+          userId: 'user-a',
+          localConfirm: false,
+          localMemory: true,
+          pushConfirm: true,
+          pushMemory: false,
+        ),
+        {'user_id': 'user-a', 'confirm_actions': false},
+      );
+    });
+
+    test('updates memory_level without overwriting confirm_actions', () {
+      expect(
+        SyncService.buildAiPreferencesPatch(
+          userId: 'user-a',
+          localConfirm: true,
+          localMemory: false,
+          pushConfirm: false,
+          pushMemory: true,
+        ),
+        {'user_id': 'user-a', 'memory_level': 'none'},
+      );
+    });
+
+    test('does not invent values for invalid local preferences', () {
+      expect(
+        SyncService.buildAiPreferencesPatch(
+          userId: 'user-a',
+          localConfirm: 'yes',
+          localMemory: 1,
+          pushConfirm: true,
+          pushMemory: true,
+        ),
+        {'user_id': 'user-a'},
+      );
+    });
+  });
+
   group('SyncService.aiMemoryEnabledFromLevel', () {
     test('maps every supported database enum value explicitly', () {
       expect(SyncService.aiMemoryEnabledFromLevel('none'), isFalse);
