@@ -121,6 +121,23 @@ void main() {
     expect(store.pendingOperations(), isEmpty);
   });
 
+  test('rejects malformed remote timestamps before changing local state', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'local value', enqueueSync: false);
+
+    await expectLater(
+      store.applyRemote(
+        'pace.profile.name',
+        'invalid remote value',
+        '2026-13-01T10:00:00Z',
+        expectedUserId: 'user-a',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+    expect(store.read('pace.profile.name'), 'local value');
+    expect(store.lastSyncedAt('pace.profile.name'), isNull);
+  });
   test('late acknowledgements cannot move synced metadata backwards', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
