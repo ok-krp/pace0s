@@ -82,6 +82,54 @@ void main() {
     });
   });
 
+  group('SyncService.isValidOutboxOperation', () {
+    test('accepts a valid upsert and delete operation', () {
+      expect(
+        SyncService.isValidOutboxOperation({
+          'key': 'pace.profile.name',
+          'queuedAt': '2026-10-18T10:00:00Z',
+          'operation': 'upsert',
+          'value': 'Pace',
+        }),
+        isTrue,
+      );
+      expect(
+        SyncService.isValidOutboxOperation({
+          'key': 'pace.profile.name',
+          'queuedAt': '2026-10-18T10:00:00Z',
+          'operation': 'delete',
+        }),
+        isTrue,
+      );
+    });
+
+    test('rejects missing keys, malformed timestamps, and unknown operation kinds', () {
+      expect(
+        SyncService.isValidOutboxOperation({
+          'queuedAt': '2026-10-18T10:00:00Z',
+          'operation': 'upsert',
+        }),
+        isFalse,
+      );
+      expect(
+        SyncService.isValidOutboxOperation({
+          'key': 'pace.profile.name',
+          'queuedAt': 'not-a-timestamp',
+          'operation': 'upsert',
+        }),
+        isFalse,
+      );
+      expect(
+        SyncService.isValidOutboxOperation({
+          'key': 'pace.profile.name',
+          'queuedAt': '2026-10-18T10:00:00Z',
+          'operation': 'unknown',
+        }),
+        isFalse,
+      );
+    });
+  });
+
   group('SyncService.userStateWriteUpdatedAt', () {
     test('uses the database timestamp from an accepted RPC response', () {
       expect(
