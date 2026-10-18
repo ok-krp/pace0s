@@ -64,7 +64,13 @@ class SyncService {
     // dates but are not valid operation clocks and may make a local edit look
     // older than the remote value, triggering an unsafe conflict resolution.
     final hasFullTime = RegExp(
-      r'^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})?  /// Older local files may contain a local timestamp without an explicit zone;
+      r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$',
+    ).hasMatch(value);
+    return hasFullTime && DateTime.tryParse(value) != null;
+  }
+
+  /// Normalize queued timestamps to UTC before sending them to PostgreSQL.
+  /// Older local files may contain a local timestamp without an explicit zone;
   /// sending that raw string would make its meaning depend on the DB session TZ.
   static String normalizedOutboxTimestamp(
     dynamic queuedAt, {
