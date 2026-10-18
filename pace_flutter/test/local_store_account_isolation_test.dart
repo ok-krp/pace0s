@@ -148,6 +148,7 @@ void main() {
       'operation': 'unknown-operation',
       'queuedAt': '2026-10-18T10:00:00Z',
     };
+    await store.write('__outbox_quarantine', 'preserve-this-legacy-payload', enqueueSync: false);
     await store.write('__outbox', <dynamic>[malformed], enqueueSync: false);
 
     await store.quarantineOperation(
@@ -158,9 +159,11 @@ void main() {
 
     expect(store.pendingOperations(), isEmpty);
     final quarantine = store.read('__outbox_quarantine') as List;
-    expect(quarantine, hasLength(1));
-    expect(quarantine.single['reason'], 'invalid-outbox-operation-shape');
-    expect(quarantine.single['operation']['value']['important'], 'preserve-me');
+    expect(quarantine, hasLength(2));
+    expect(quarantine.first['reason'], 'malformed-quarantine-container');
+    expect(quarantine.first['operation'], 'preserve-this-legacy-payload');
+    expect(quarantine.last['reason'], 'invalid-outbox-operation-shape');
+    expect(quarantine.last['operation']['value']['important'], 'preserve-me');
   });
 
   test('malformed outbox field does not crash local reads or sync inspection', () async {
