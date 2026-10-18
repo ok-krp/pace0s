@@ -93,6 +93,16 @@ void main() {
       );
     });
 
+    test('uses the fallback for overflowing calendar timestamps', () {
+      expect(
+        SyncService.normalizedOutboxTimestamp(
+          '2026-13-01T10:00:00Z',
+          fallbackNow: DateTime.utc(2026, 10, 18),
+        ),
+        '2026-10-18T00:00:00.000Z',
+      );
+    });
+
     test('uses the supplied fallback for malformed timestamps', () {
       expect(
         SyncService.normalizedOutboxTimestamp(
@@ -200,6 +210,16 @@ void main() {
       );
     });
 
+    test('falls back when the response timestamp has overflowing components', () {
+      expect(
+        SyncService.userStateWriteUpdatedAt(
+          {'accepted': true, 'updated_at': '2026-13-01T10:00:00Z'},
+          fallback: '2026-10-17T17:00:00Z',
+        ),
+        '2026-10-17T17:00:00Z',
+      );
+    });
+
     test('falls back when the response timestamp is malformed', () {
       const fallback = '2026-10-17T17:00:00Z';
       expect(
@@ -236,6 +256,16 @@ void main() {
     test('preserves compatibility with a bare boolean response', () {
       expect(SyncService.isUserStateWriteAccepted(true), isTrue);
       expect(SyncService.isUserStateWriteAccepted(false), isFalse);
+    });
+
+    test('rejects overflowing calendar timestamps in structured responses', () {
+      expect(
+        SyncService.isUserStateWriteAccepted({
+          'accepted': true,
+          'updated_at': '2026-13-01T10:00:00Z',
+        }),
+        isFalse,
+      );
     });
 
     test('fails closed for malformed or incomplete responses', () {
