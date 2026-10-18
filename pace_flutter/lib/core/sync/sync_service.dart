@@ -253,7 +253,12 @@ class SyncService {
   }
 
   Future<void> _pushPending(String expectedUserId) async {
-    for (final operation in List<Map<String, dynamic>>.from(localStore.pendingOperations())) {
+    final pending = List<Map<String, dynamic>>.from(localStore.pendingOperations());
+    // pendingOperations() also sanitizes malformed persisted entries. Flush
+    // that quarantine before an empty queue returns without any other write.
+    await localStore.persistOutboxRepairs(expectedUserId: expectedUserId);
+    if (!_isCurrentAccount(expectedUserId)) return;
+    for (final operation in pending) {
       if (!_isCurrentAccount(expectedUserId)) return;
       try {
         if (!isValidOutboxOperation(operation)) {
