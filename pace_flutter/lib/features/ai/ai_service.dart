@@ -47,10 +47,17 @@ class PaceAiService {
 
   SupabaseClient? get _client => auth.client;
 
-  bool get memoryEnabled =>
-      _isAccountScopeCurrent ? localStore.read(_memoryEnabledKey) as bool? ?? true : true;
-  bool get confirmActions =>
-      _isAccountScopeCurrent ? localStore.read(_confirmKey) as bool? ?? true : true;
+  bool get memoryEnabled {
+    if (!_isAccountScopeCurrent) return true;
+    final value = localStore.read(_memoryEnabledKey);
+    return value is bool ? value : true;
+  }
+
+  bool get confirmActions {
+    if (!_isAccountScopeCurrent) return true;
+    final value = localStore.read(_confirmKey);
+    return value is bool ? value : true;
+  }
 
   Future<void> setMemoryEnabled(bool enabled) async {
     await localStore.writeForAccount(_accountUserId, _memoryEnabledKey, enabled);
