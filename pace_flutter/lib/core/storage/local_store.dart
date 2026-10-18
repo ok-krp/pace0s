@@ -459,8 +459,7 @@ class LocalStore extends ChangeNotifier {
     final due = _outbox.where((entry) {
       final rawNextAttempt = entry['nextAttemptAt'];
       if (rawNextAttempt is! String) return true;
-      final nextAttempt = rawNextAttempt is String &&
-              isValidIsoTimestamp(rawNextAttempt)
+      final nextAttempt = isValidIsoTimestamp(rawNextAttempt)
           ? DateTime.tryParse(rawNextAttempt)
           : null;
       return nextAttempt == null || !nextAttempt.isAfter(current);
