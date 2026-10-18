@@ -589,6 +589,26 @@ void main() {
     expect(await backup.exists(), isTrue);
   });
 
+  test('sanitized account filenames cannot collide across distinct user IDs', () async {
+    var store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user/a');
+    await store.write('pace.profile.name', 'slash account');
+    final slashFile = File('${directory.path}/pace_local_user_a__dXNlci9h.json');
+    expect(await slashFile.exists(), isTrue);
+
+    await store.activateAccount('user_a');
+    expect(store.read('pace.profile.name'), isNull);
+    await store.write('pace.profile.name', 'underscore account');
+    final underscoreFile = File('${directory.path}/pace_local_user_a.json');
+    expect(await underscoreFile.exists(), isTrue);
+
+    store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user/a');
+    expect(store.read('pace.profile.name'), 'slash account');
+    await store.activateAccount('user_a');
+    expect(store.read('pace.profile.name'), 'underscore account');
+  });
+
   test('account data persists independently across store reopen', () async {
     var store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
