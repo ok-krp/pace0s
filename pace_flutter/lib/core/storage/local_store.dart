@@ -342,6 +342,9 @@ class LocalStore extends ChangeNotifier {
     if (_switchingAccount || _activeUserId != expectedUserId) {
       throw StateError('Local account changed before remote apply');
     }
+    if (!isValidIsoTimestamp(updatedAt)) {
+      throw FormatException('Remote updated_at must be a valid ISO timestamp');
+    }
     _data[key] = value;
     _setSyncedAt(key, updatedAt);
     await _flush();
