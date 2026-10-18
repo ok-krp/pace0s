@@ -153,6 +153,15 @@ void main() {
       expect(
         SyncService.isValidOutboxOperation({
           'key': 'pace.profile.name',
+          'queuedAt': '2026-10-18',
+          'operation': 'upsert',
+          'value': 'preserve local data',
+        }),
+        isFalse,
+      );
+      expect(
+        SyncService.isValidOutboxOperation({
+          'key': 'pace.profile.name',
           'queuedAt': '2026-10-18T10:00:00Z',
           'operation': 'upsert',
         }),
