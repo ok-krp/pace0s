@@ -441,6 +441,19 @@ void main() {
     await store.activateAccount('user_a__dXNlci9h');
     expect(store.read('pace.profile.name'), 'private to literal ID');
   });
+  test('keeps ordinary account filenames compatible with existing local state', () async {
+    final legacyAccountFile = File(
+      '${directory.path}/pace_local_user-a.json',
+    );
+    await legacyAccountFile.writeAsString(
+      '{"pace.profile.name":"existing account value"}',
+      flush: true,
+    );
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+
+    expect(store.read('pace.profile.name'), 'existing account value');
+  });
   test('ambiguous legacy account files are not assigned to either colliding ID', () async {
     final legacyCollision = File(
       '${directory.path}/pace_local_user_a__dXNlci9h.json',
