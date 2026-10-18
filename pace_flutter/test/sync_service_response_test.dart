@@ -82,6 +82,28 @@ void main() {
     });
   });
 
+  group('SyncService.normalizedOutboxTimestamp', () {
+    test('normalizes offset timestamps to UTC before remote writes', () {
+      expect(
+        SyncService.normalizedOutboxTimestamp(
+          '2026-10-18T12:00:00+02:00',
+          fallbackNow: DateTime.utc(2026, 10, 18),
+        ),
+        '2026-10-18T10:00:00.000Z',
+      );
+    });
+
+    test('uses the supplied fallback for malformed timestamps', () {
+      expect(
+        SyncService.normalizedOutboxTimestamp(
+          'invalid',
+          fallbackNow: DateTime.utc(2026, 10, 18),
+        ),
+        '2026-10-18T00:00:00.000Z',
+      );
+    });
+  });
+
   group('SyncService.isValidOutboxOperation', () {
     test('accepts a valid upsert and delete operation', () {
       expect(
