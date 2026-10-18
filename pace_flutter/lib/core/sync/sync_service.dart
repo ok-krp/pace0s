@@ -63,11 +63,18 @@ class SyncService {
     final key = operation['key'];
     final queuedAt = operation['queuedAt'];
     final kind = operation['operation'];
-    return key is String &&
-        key.isNotEmpty &&
-        queuedAt is String &&
-        DateTime.tryParse(queuedAt) != null &&
-        (kind == 'upsert' || kind == 'delete');
+    if (key is! String ||
+        key.isEmpty ||
+        queuedAt is! String ||
+        DateTime.tryParse(queuedAt) == null) {
+      return false;
+    }
+    if (kind == 'upsert') {
+      // A missing value is not equivalent to an intentional JSON null: pushing
+      // it could overwrite a valid remote value after local-file corruption.
+      return operation.containsKey('value');
+    }
+    return kind == 'delete';
   }
 
   /// Maps legacy cloud keys to the canonical Pace namespace, matching the web
