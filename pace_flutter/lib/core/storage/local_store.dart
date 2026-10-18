@@ -272,16 +272,51 @@ class LocalStore extends ChangeNotifier {
     _data['__sync_meta'] = meta;
   }
 
+  void _appendQuarantineEntry(String reason, dynamic payload) {
+    final rawQuarantine = _data['__outbox_quarantine'];
+    final quarantine = rawQuarantine is List
+        ? List<dynamic>.from(rawQuarantine)
+        : <dynamic>[];
+    if (rawQuarantine != null && rawQuarantine is! List) {
+      quarantine.add({
+        'reason': 'malformed-quarantine-container',
+        'quarantinedAt': DateTime.now().toUtc().toIso8601String(),
+        'operation': rawQuarantine,
+      });
+    }
+    quarantine.add({
+      'reason': reason,
+      'quarantinedAt': DateTime.now().toUtc().toIso8601String(),
+      'operation': payload,
+    });
+    _data['__outbox_quarantine'] = quarantine;
+  }
+
   List<Map<String, dynamic>> get _outbox {
-    // A valid JSON document can still contain a malformed reserved field from
-    // an older build or a partial/manual repair. Do not let a wrong top-level
-    // type crash reads of otherwise recoverable local state.
+    // A valid JSON document can still contain malformed reserved fields or
+    // entries. Preserve the raw payload in quarantine instead of silently
+    // dropping it when a later mutation repairs the queue.
     final raw = _data['__outbox'];
-    if (raw is! List) return <Map<String, dynamic>>[];
-    return raw
-        .whereType<Map>()
-        .map((entry) => Map<String, dynamic>.from(entry))
-        .toList();
+    if (raw is! List) {
+      if (raw != null) _appendQuarantineEntry('malformed-outbox-container', raw);
+      _data['__outbox'] = <dynamic>[];
+      return <Map<String, dynamic>>[];
+    }
+
+    final valid = <Map<String, dynamic>>[];
+    for (final entry in raw) {
+      if (entry is! Map) {
+        _appendQuarantineEntry('malformed-outbox-entry', entry);
+        continue;
+      }
+      try {
+        valid.add(Map<String, dynamic>.from(entry));
+      } on TypeError {
+        _appendQuarantineEntry('malformed-outbox-entry', entry);
+      }
+    }
+    if (valid.length != raw.length) _data['__outbox'] = valid;
+    return valid;
   }
 
   List<Map<String, dynamic>> pendingOperations({DateTime? now}) {
