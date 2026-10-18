@@ -186,6 +186,28 @@ void main() {
     expect(store.pendingOperations().single['key'], 'pace.profile.weight');
   });
 
+  test('outbox quarantine repairs survive restart when no valid operation remains', () async {
+    var store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write(
+      '__outbox',
+      <dynamic>['preserve-across-restart'],
+      enqueueSync: false,
+    );
+
+    expect(store.pendingOperations(), isEmpty);
+    await store.persistOutboxRepairs(expectedUserId: 'user-a');
+
+    store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    expect(store.pendingOperations(), isEmpty);
+    final quarantine = store.read('__outbox_quarantine') as List;
+    expect(quarantine, hasLength(1));
+    expect(quarantine.single['reason'], 'malformed-outbox-entry');
+    expect(quarantine.single['operation'], 'preserve-across-restart');
+    expect(store.read('__outbox'), isEmpty);
+  });
+
   test('non-map outbox entries are quarantined rather than silently dropped', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
