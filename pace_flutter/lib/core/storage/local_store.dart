@@ -54,7 +54,37 @@ class LocalStore extends ChangeNotifier {
   /// instant before it is sent to the server.
   static bool _isValidQueuedTimestamp(String value) {
     final match = RegExp(
-      r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|([+-])(\d{2}):(\d{2}))?
+      r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|([+-])(\d{2}):(\d{2}))?$',
+    ).firstMatch(value);
+    if (match == null || DateTime.tryParse(value) == null) return false;
+
+    final year = int.parse(match.group(1)!);
+    final month = int.parse(match.group(2)!);
+    final day = int.parse(match.group(3)!);
+    final hour = int.parse(match.group(4)!);
+    final minute = int.parse(match.group(5)!);
+    final second = int.parse(match.group(6)!);
+    final normalized = DateTime.utc(year, month, day, hour, minute, second);
+    if (normalized.year != year ||
+        normalized.month != month ||
+        normalized.day != day ||
+        normalized.hour != hour ||
+        normalized.minute != minute ||
+        normalized.second != second) {
+      return false;
+    }
+
+    // The regex allows an optional timezone for legacy local timestamps. If
+    // an offset is present, its numeric fields still need valid ranges.
+    if (match.group(8) != null && match.group(8) != 'Z') {
+      final offsetHours = int.parse(match.group(10)!);
+      final offsetMinutes = int.parse(match.group(11)!);
+      if (offsetHours > 23 || offsetMinutes > 59) return false;
+    }
+    return true;
+  }
+
+  String _nextQueuedAt(String key, List<Map<String, dynamic>> outbox) {
     DateTime? latest = DateTime.tryParse(lastSyncedAt(key) ?? '')?.toUtc();
     for (final entry in outbox) {
       if (entry['key'] != key || entry['queuedAt'] is! String) continue;
