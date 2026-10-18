@@ -63,6 +63,44 @@ void main() {
     }
   });
 
+  test('invalid timestamps cannot poison the next queued write', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    final invalidFutureTimestamp =
+        '' + DateTime.now().toUtc().year.toString() + '-13-01T10:00:00Z';
+
+    // Both reserved sync metadata and a malformed outbox entry are untrusted
+    // local JSON. Neither may push a fresh mutation into a future year.
+    await store.write(
+      '__sync_meta',
+      {'pace.profile.name': invalidFutureTimestamp},
+      enqueueSync: false,
+    );
+    await store.write(
+      '__outbox',
+      <dynamic>[
+        {
+          'key': 'pace.profile.name',
+          'operation': 'upsert',
+          'queuedAt': invalidFutureTimestamp,
+        },
+      ],
+      enqueueSync: false,
+    );
+
+    final before = DateTime.now().toUtc();
+    await store.write('pace.profile.name', 'safe replacement');
+    final queuedAt = DateTime.parse(
+      store.pendingOperations().single['queuedAt'] as String,
+    );
+
+    expect(queuedAt.isAfter(before.subtract(const Duration(minutes: 1))), isTrue);
+    expect(queuedAt.isBefore(before.add(const Duration(days: 1))), isTrue);
+    final quarantine = store.read('__outbox_quarantine') as List;
+    expect(quarantine, hasLength(1));
+    expect(quarantine.single['reason'], 'malformed-outbox-operation-replaced');
+  });
+
   test('acknowledging an accepted write records its server timestamp', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
