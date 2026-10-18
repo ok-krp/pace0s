@@ -322,6 +322,15 @@ class LocalStore extends ChangeNotifier {
     final quarantine = rawQuarantine is List
         ? List<dynamic>.from(rawQuarantine)
         : <dynamic>[];
+    if (rawQuarantine != null && rawQuarantine is! List) {
+      // Preserve an invalid quarantine container too; recovery code must not
+      // replace one malformed field by silently losing another payload.
+      quarantine.add({
+        'reason': 'malformed-quarantine-container',
+        'quarantinedAt': DateTime.now().toUtc().toIso8601String(),
+        'operation': rawQuarantine,
+      });
+    }
     final entry = rawOutbox.removeAt(index);
     quarantine.add({
       'reason': reason,
