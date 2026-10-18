@@ -101,6 +101,15 @@ void main() {
         }),
         isTrue,
       );
+      expect(
+        SyncService.isValidOutboxOperation({
+          'key': 'pace.profile.name',
+          'queuedAt': '2026-10-18T10:00:00Z',
+          'operation': 'upsert',
+          'value': null,
+        }),
+        isTrue,
+      );
     });
 
     test('rejects missing keys, malformed timestamps, and unknown operation kinds', () {
@@ -115,6 +124,14 @@ void main() {
         SyncService.isValidOutboxOperation({
           'key': 'pace.profile.name',
           'queuedAt': 'not-a-timestamp',
+          'operation': 'upsert',
+        }),
+        isFalse,
+      );
+      expect(
+        SyncService.isValidOutboxOperation({
+          'key': 'pace.profile.name',
+          'queuedAt': '2026-10-18T10:00:00Z',
           'operation': 'upsert',
         }),
         isFalse,
