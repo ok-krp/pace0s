@@ -784,7 +784,7 @@ void main() {
     var store = await LocalStore.open(directory: directory);
     await store.activateAccount('user/a');
     await store.write('pace.profile.name', 'slash account');
-    final slashFile = File('${directory.path}/pace_local_user_a__dXNlci9h.json');
+    final slashFile = File('${directory.path}/pace_local_user_a~dXNlci9h.json');
     expect(await slashFile.exists(), isTrue);
 
     await store.activateAccount('user_a');
