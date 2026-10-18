@@ -19,6 +19,62 @@ void main() {
     expect(restored.messages.single.text, 'Bonjour');
   });
 
+  test('stale remote metadata cannot overwrite a newer offline rename', () {
+    final local = AiConversation(
+      id: 'conversation-1',
+      agent: PaceAiAgent.coach,
+      title: 'Titre local récent',
+      updatedAt: DateTime.utc(2026, 10, 18, 12),
+      messages: [
+        AiMessage(
+          id: 'message-1',
+          role: 'user',
+          text: 'message local',
+          createdAt: DateTime.utc(2026, 10, 18, 12),
+        ),
+      ],
+    );
+    final staleRemote = AiConversation(
+      id: 'conversation-1',
+      agent: PaceAiAgent.coach,
+      title: 'Ancien titre distant',
+      updatedAt: DateTime.utc(2026, 10, 18, 11),
+    );
+
+    final merged = local.mergeRemoteMetadata(staleRemote);
+    expect(merged.title, 'Titre local récent');
+    expect(merged.updatedAt, local.updatedAt);
+    expect(merged.messages.single.text, 'message local');
+  });
+
+  test('newer remote metadata updates the title without discarding local messages', () {
+    final local = AiConversation(
+      id: 'conversation-1',
+      agent: PaceAiAgent.coach,
+      title: 'Ancien titre local',
+      updatedAt: DateTime.utc(2026, 10, 18, 11),
+      messages: [
+        AiMessage(
+          id: 'message-1',
+          role: 'user',
+          text: 'message local',
+          createdAt: DateTime.utc(2026, 10, 18, 11),
+        ),
+      ],
+    );
+    final newerRemote = AiConversation(
+      id: 'conversation-1',
+      agent: PaceAiAgent.coach,
+      title: 'Titre distant récent',
+      updatedAt: DateTime.utc(2026, 10, 18, 12),
+    );
+
+    final merged = local.mergeRemoteMetadata(newerRemote);
+    expect(merged.title, 'Titre distant récent');
+    expect(merged.updatedAt, newerRemote.updatedAt);
+    expect(merged.messages.single.text, 'message local');
+  });
+
   test('malformed messages field falls back to an empty message list', () {
     final conversation = AiConversation.fromJson(<String, dynamic>{
       'id': 'recovered-conversation',
