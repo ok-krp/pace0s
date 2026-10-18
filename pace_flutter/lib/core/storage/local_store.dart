@@ -43,7 +43,7 @@ class LocalStore extends ChangeNotifier {
     final queuedAt = operation['queuedAt'];
     final kind = operation['operation'];
     if (key is! String || key.isEmpty || queuedAt is! String) return false;
-    if (!_isValidQueuedTimestamp(queuedAt)) return false;
+    if (!isValidIsoTimestamp(queuedAt)) return false;
     if (kind == 'upsert') return operation.containsKey('value');
     return kind == 'delete';
   }
@@ -52,7 +52,7 @@ class LocalStore extends ChangeNotifier {
   /// them (for example, an invalid day can roll into the next month). Persisted
   /// queue metadata must be rejected, not silently reinterpreted as another
   /// instant before it is sent to the server.
-  static bool _isValidQueuedTimestamp(String value) {
+  static bool isValidIsoTimestamp(String value) {
     final match = RegExp(
       r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|([+-])(\d{2}):(\d{2}))?$',
     ).firstMatch(value);
@@ -86,13 +86,13 @@ class LocalStore extends ChangeNotifier {
 
   String _nextQueuedAt(String key, List<Map<String, dynamic>> outbox) {
     final syncedAt = lastSyncedAt(key);
-    DateTime? latest = syncedAt != null && _isValidQueuedTimestamp(syncedAt)
+    DateTime? latest = syncedAt != null && isValidIsoTimestamp(syncedAt)
         ? DateTime.tryParse(syncedAt)?.toUtc()
         : null;
     for (final entry in outbox) {
       if (entry['key'] != key || entry['queuedAt'] is! String) continue;
       final rawQueuedAt = entry['queuedAt'] as String;
-      if (!_isValidQueuedTimestamp(rawQueuedAt)) continue;
+      if (!isValidIsoTimestamp(rawQueuedAt)) continue;
       final queuedAt = DateTime.tryParse(rawQueuedAt)?.toUtc();
       if (queuedAt != null && (latest == null || queuedAt.isAfter(latest))) {
         latest = queuedAt;
