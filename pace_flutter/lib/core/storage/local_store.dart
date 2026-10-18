@@ -160,10 +160,15 @@ class LocalStore extends ChangeNotifier {
   /// Ordinary UUID-like IDs retain the existing filename for compatibility.
   static String _accountFileName(String userId) {
     final safeUserId = userId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
-    final collisionGuard = safeUserId == userId
-        ? ''
-        : '__${base64Url.encode(utf8.encode(userId)).replaceAll('=', '')}';
-    return 'pace_local_$safeUserId$collisionGuard.json';
+    // Keep ordinary UUID-like IDs compatible with existing account files.
+    if (safeUserId == userId) return 'pace_local_$safeUserId.json';
+
+    // The separator is deliberately outside the safe-ID alphabet. Appending
+    // base64 to an underscore-only name is not injective: an escaped ID such
+    // as "user/a" could collide with a different literal ID such as
+    // "user_a__dXNlci9h". A tilde makes escaped and unescaped names disjoint.
+    final encodedUserId = base64Url.encode(utf8.encode(userId)).replaceAll('=', '');
+    return 'pace_local_$safeUserId~$encodedUserId.json';
   }
 
   Future<void> _loadFile(File file) async {
