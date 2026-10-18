@@ -49,6 +49,13 @@ class AiConversation {
         ephemeral: ephemeral,
       );
 
+  /// Merge remote metadata only when it is newer. A stale cloud row must not
+  /// erase an offline rename or move a locally newer conversation backward.
+  AiConversation mergeRemoteMetadata(AiConversation remote) {
+    if (remote.id != id || !remote.updatedAt.isAfter(updatedAt)) return this;
+    return copyWith(title: remote.title, updatedAt: remote.updatedAt);
+  }
+
   Map<String, dynamic> toJson() => {
         'id': id,
         'agent': agent.name,
