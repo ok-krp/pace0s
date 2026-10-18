@@ -298,8 +298,10 @@ class LocalStore extends ChangeNotifier {
     // dropping it when a later mutation repairs the queue.
     final raw = _data['__outbox'];
     if (raw is! List) {
-      if (raw != null) _appendQuarantineEntry('malformed-outbox-container', raw);
-      _data['__outbox'] = <dynamic>[];
+      if (raw != null) {
+        _appendQuarantineEntry('malformed-outbox-container', raw);
+        _data['__outbox'] = <dynamic>[];
+      }
       return <Map<String, dynamic>>[];
     }
 
