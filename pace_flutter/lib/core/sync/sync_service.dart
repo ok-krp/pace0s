@@ -258,9 +258,13 @@ class SyncService {
   }
 
   Future<void> _pushPending(String expectedUserId) async {
+    // Inspect sync metadata as well as the outbox before persisting repairs.
+    // Otherwise malformed metadata could remain only in memory when the
+    // device is offline and the subsequent pull fails before its next write.
+    localStore.syncedMetadata();
     final pending = List<Map<String, dynamic>>.from(localStore.pendingOperations());
-    // pendingOperations() also sanitizes malformed persisted entries. Flush
-    // that quarantine before an empty queue returns without any other write.
+    // The synchronous readers quarantine malformed reserved fields/entries.
+    // Flush those repairs before an empty queue returns without another write.
     try {
       await localStore.persistOutboxRepairs(expectedUserId: expectedUserId);
     } catch (_) {
