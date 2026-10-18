@@ -111,7 +111,7 @@ class PaceAiService {
           id: value['id']?.toString() ?? '',
           agent: agent,
           title: value['title']?.toString() ?? 'Nouvelle conversation',
-          updatedAt: DateTime.tryParse(value['updated_at']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
+          updatedAt: DateTime.tryParse(value['updated_at']?.toString() ?? '')?.toLocal() ?? DateTime.fromMillisecondsSinceEpoch(0),
         );
       }).toList();
       final merged = <String, AiConversation>{for (final item in local) item.id: item};

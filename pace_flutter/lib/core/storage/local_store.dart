@@ -37,6 +37,20 @@ class LocalStore extends ChangeNotifier {
     return current;
   }
 
+  /// Validate the durable outbox envelope before replay or replacement.
+  static bool isValidOutboxOperation(Map<String, dynamic> operation) {
+    final key = operation['key'];
+    final queuedAt = operation['queuedAt'];
+    final kind = operation['operation'];
+    if (key is! String || key.isEmpty || queuedAt is! String) return false;
+    final fullTimestamp = RegExp(
+      r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$',
+    ).hasMatch(queuedAt);
+    if (!fullTimestamp || DateTime.tryParse(queuedAt) == null) return false;
+    if (kind == 'upsert') return operation.containsKey('value');
+    return kind == 'delete';
+  }
+
   String _nextQueuedAt(String key, List<Map<String, dynamic>> outbox) {
     DateTime? latest = DateTime.tryParse(lastSyncedAt(key) ?? '')?.toUtc();
     for (final entry in outbox) {
@@ -214,6 +228,7 @@ class LocalStore extends ChangeNotifier {
     if (enqueueSync) {
       final outbox = _outbox;
       final queuedAt = _nextQueuedAt(key, outbox);
+      _quarantineMalformedReplacedOperations(outbox, key);
       outbox.removeWhere((entry) => entry['key'] == key);
       outbox.add({
         'key': key,
@@ -237,6 +252,7 @@ class LocalStore extends ChangeNotifier {
     if (enqueueSync) {
       final outbox = _outbox;
       final queuedAt = _nextQueuedAt(key, outbox);
+      _quarantineMalformedReplacedOperations(outbox, key);
       outbox.removeWhere((entry) => entry['key'] == key);
       outbox.add({
         'key': key,
@@ -283,6 +299,19 @@ class LocalStore extends ChangeNotifier {
     final meta = _syncMeta;
     meta[key] = timestamp;
     _data['__sync_meta'] = meta;
+  }
+
+  void _quarantineMalformedReplacedOperations(
+    List<Map<String, dynamic>> outbox,
+    String key,
+  ) {
+    final malformed = outbox
+        .where((entry) =>
+            entry['key'] == key && !LocalStore.isValidOutboxOperation(entry))
+        .toList();
+    for (final entry in malformed) {
+      _appendQuarantineEntry('malformed-outbox-operation-replaced', entry);
+    }
   }
 
   void _appendQuarantineEntry(String reason, dynamic payload) {

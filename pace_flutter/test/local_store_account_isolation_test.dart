@@ -166,6 +166,27 @@ void main() {
     expect(quarantine.last['operation']['value']['important'], 'preserve-me');
   });
 
+  test('replacing a malformed same-key upsert preserves its original payload', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    final malformed = <String, dynamic>{
+      'key': 'pace.profile.name',
+      'queuedAt': '2026-01-01T00:00:00Z',
+      'operation': 'upsert',
+    };
+    await store.write('__outbox', <dynamic>[malformed], enqueueSync: false);
+
+    await store.write('pace.profile.name', 'corrected value');
+
+    final pending = store.pendingOperations();
+    expect(pending, hasLength(1));
+    expect(pending.single['value'], 'corrected value');
+    final quarantine = store.read('__outbox_quarantine') as List;
+    expect(quarantine, hasLength(1));
+    expect(quarantine.single['reason'], 'malformed-outbox-operation-replaced');
+    expect(quarantine.single['operation'], malformed);
+  });
+
   test('malformed outbox field does not crash local reads or sync inspection', () async {
     final store = await LocalStore.open(directory: directory);
     await store.write('pace.profile.name', 'recoverable value', enqueueSync: false);

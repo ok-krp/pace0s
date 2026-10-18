@@ -59,15 +59,8 @@ class SyncService {
 
   /// Reject malformed persisted operations before any network request. Such
   /// entries are quarantined locally so one poison record cannot retry forever.
-  static bool _isPlausibleQueuedTimestamp(String value) {
-    // DateTime.tryParse also accepts date-only values. Those can be valid Dart
-    // dates but are not valid operation clocks and may make a local edit look
-    // older than the remote value, triggering an unsafe conflict resolution.
-    final hasFullTime = RegExp(
-      r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?$',
-    ).hasMatch(value);
-    return hasFullTime && DateTime.tryParse(value) != null;
-  }
+  static bool isValidOutboxOperation(Map<String, dynamic> operation) =>
+      LocalStore.isValidOutboxOperation(operation);
 
   /// Normalize queued timestamps to UTC before sending them to PostgreSQL.
   /// Older local files may contain a local timestamp without an explicit zone;
