@@ -192,6 +192,22 @@ class SyncService {
     return fallbackCursor;
   }
 
+  /// Convert only supported database enum values to the native boolean
+  /// preference. Unknown values must not be interpreted as memory enabled.
+  /// The native UI currently models memory as enabled/disabled, so both
+  /// supported non-none levels map to true.
+  static bool? aiMemoryEnabledFromLevel(dynamic level) {
+    switch (level) {
+      case 'none':
+        return false;
+      case 'limited':
+      case 'complete':
+        return true;
+      default:
+        return null;
+    }
+  }
+
   static bool shouldPropagateAiPreferences({
     required bool hadLocalMutation,
     required bool hasPendingMutation,
@@ -423,11 +439,15 @@ class SyncService {
         await localStore.writeForAccount(expectedUserId, 'pace.settings.ai.confirm_actions', remoteConfirm, enqueueSync: false);
       }
       if (!_isCurrentAccount(expectedUserId)) return;
-      if (remoteMemory is String) {
-        final memoryEnabled = remoteMemory != 'none';
-        if (localStore.read('pace.settings.ai.memory') != memoryEnabled) {
-          await localStore.writeForAccount(expectedUserId, 'pace.settings.ai.memory', memoryEnabled, enqueueSync: false);
-        }
+      final memoryEnabled = aiMemoryEnabledFromLevel(remoteMemory);
+      if (memoryEnabled != null &&
+          localStore.read('pace.settings.ai.memory') != memoryEnabled) {
+        await localStore.writeForAccount(
+          expectedUserId,
+          'pace.settings.ai.memory',
+          memoryEnabled,
+          enqueueSync: false,
+        );
       }
     } catch (_) {
       // Cloud preference sync is best-effort; local settings remain available.
