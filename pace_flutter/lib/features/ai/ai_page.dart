@@ -302,6 +302,7 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
     controller.dispose();
     if (text != null && text.trim().isNotEmpty) {
       await widget.service.addMemory(text);
+      if (!mounted) return;
       setState(() => _items = widget.service.loadMemory());
     }
   }
@@ -312,7 +313,7 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
         body: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            SwitchListTile.adaptive(title: const Text('Mémoire IA'), subtitle: const Text('Autoriser Pace IA à conserver des souvenirs persistants.'), value: _enabled, onChanged: (value) async { await widget.service.setMemoryEnabled(value); setState(() { _enabled = value; _items = widget.service.loadMemory(); }); }),
+            SwitchListTile.adaptive(title: const Text('Mémoire IA'), subtitle: const Text('Autoriser Pace IA à conserver des souvenirs persistants.'), value: _enabled, onChanged: (value) async { await widget.service.setMemoryEnabled(value); if (!mounted) return; setState(() { _enabled = value; _items = widget.service.loadMemory(); }); }),
             const SizedBox(height: 8),
             if (!_enabled)
               const Card(
@@ -324,7 +325,7 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
             if (_enabled) ...[
               FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('Ajouter un souvenir')),
               const SizedBox(height: 12),
-              for (final item in _items) Card(child: ListTile(title: Text(item.text), subtitle: Text('Ajouté le ${item.createdAt.day}/${item.createdAt.month}/${item.createdAt.year}'), trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async { await widget.service.deleteMemory(item.id); setState(() => _items = widget.service.loadMemory()); }))),
+              for (final item in _items) Card(child: ListTile(title: Text(item.text), subtitle: Text('Ajouté le ${item.createdAt.day}/${item.createdAt.month}/${item.createdAt.year}'), trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async { await widget.service.deleteMemory(item.id); if (!mounted) return; setState(() => _items = widget.service.loadMemory()); }))),
             ],
           ],
         ),
