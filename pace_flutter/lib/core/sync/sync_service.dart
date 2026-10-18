@@ -243,7 +243,22 @@ class SyncService {
     for (final operation in List<Map<String, dynamic>>.from(localStore.pendingOperations())) {
       if (!_isCurrentAccount(expectedUserId)) return;
       try {
-        final key = operation['key'] as String;
+        final rawKey = operation['key'];
+        final rawQueuedAt = operation['queuedAt'];
+        final rawOperation = operation['operation'];
+        if (rawKey is! String ||
+            rawKey.isEmpty ||
+            rawQueuedAt is! String ||
+            DateTime.tryParse(rawQueuedAt) == null ||
+            (rawOperation != 'upsert' && rawOperation != 'delete')) {
+          await localStore.quarantineOperation(
+            operation,
+            expectedUserId: expectedUserId,
+            reason: 'invalid-outbox-operation-shape',
+          );
+          continue;
+        }
+        final key = rawKey;
         if (!isSyncableKey(key)) {
           // Clear obsolete/device-local outbox entries without sending them to cloud.
           await localStore.acknowledgeOperation(operation, expectedUserId: expectedUserId);
