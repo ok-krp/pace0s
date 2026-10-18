@@ -82,7 +82,7 @@ class LocalStore extends ChangeNotifier {
             await _flush();
             final filename = nextUserId == null
                 ? 'pace_local.json'
-                : 'pace_local_${nextUserId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_')}.json';
+                : _accountFileName(nextUserId);
             final nextFile = File(p.join(_directory.path, filename));
             _file = nextFile;
             _data = <String, dynamic>{};
@@ -101,6 +101,17 @@ class LocalStore extends ChangeNotifier {
         });
     _accountSwitchQueue = operation;
     return operation;
+  }
+
+  /// Keep account files distinct even if unusual auth IDs normalize to the
+  /// same filesystem-safe characters (for example, `user/a` and `user_a`).
+  /// Ordinary UUID-like IDs retain the existing filename for compatibility.
+  static String _accountFileName(String userId) {
+    final safeUserId = userId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    final collisionGuard = safeUserId == userId
+        ? ''
+        : '__${base64Url.encode(utf8.encode(userId)).replaceAll('=', '')}';
+    return 'pace_local_$safeUserId$collisionGuard.json';
   }
 
   Future<void> _loadFile(File file) async {
