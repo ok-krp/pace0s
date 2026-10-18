@@ -119,7 +119,7 @@ class _SportPageState extends State<SportPage> {
       Text('Programmes', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
       const SizedBox(height: 8),
       if (programs.isEmpty) const PaceGlassCard(child: ListTile(title: Text('Aucun programme configuré'))),
-      for (final program in programs) Padding(padding: const EdgeInsets.only(bottom: 8), child: PaceGlassCard(child: ListTile(title: Text(program['name']?.toString() ?? 'Programme'), subtitle: Text('${(program['items'] as List?)?.length ?? 0} exercices')))),
+      for (final program in programs) Padding(padding: const EdgeInsets.only(bottom: 8), child: PaceGlassCard(child: ListTile(title: Text(program['name']?.toString() ?? 'Programme'), subtitle: Text('${program['items'] is List ? (program['items'] as List).length : 0} exercices')))),
       const SizedBox(height: 14),
       Text('Exercices', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
       const SizedBox(height: 8),
