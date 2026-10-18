@@ -235,26 +235,31 @@ class SyncService {
 
     _running = true;
     try {
-      final hadLocalAiPreferenceMutation =
-          localStore.hasPendingOperationForKey('pace.settings.ai.confirm_actions') ||
-          localStore.hasPendingOperationForKey('pace.settings.ai.memory');
+      const confirmKey = 'pace.settings.ai.confirm_actions';
+      const memoryKey = 'pace.settings.ai.memory';
+      final hadConfirmMutation = localStore.hasPendingOperationForKey(confirmKey);
+      final hadMemoryMutation = localStore.hasPendingOperationForKey(memoryKey);
       await _pushPending(userId);
       if (!_isCurrentAccount(userId)) return;
 
-      final hasPendingAiPreferenceMutation =
-          localStore.hasPendingOperationForKey('pace.settings.ai.confirm_actions') ||
-          localStore.hasPendingOperationForKey('pace.settings.ai.memory');
-      // If a local preference write was acknowledged, propagate it to the
-      // dedicated ai_preferences table. If it is still deferred by backoff,
-      // preserve the local choice but do not bypass retry scheduling.
-      final shouldPushAiPreferences = shouldPropagateAiPreferences(
-        hadLocalMutation: hadLocalAiPreferenceMutation,
-        hasPendingMutation: hasPendingAiPreferenceMutation,
+      final confirmStillPending = localStore.hasPendingOperationForKey(confirmKey);
+      final memoryStillPending = localStore.hasPendingOperationForKey(memoryKey);
+      // Propagate each preference only if its own outbox mutation was
+      // acknowledged. Updating confirm_actions must not rewrite an unrelated
+      // memory_level, including the web client's distinct complete setting.
+      final pushConfirm = shouldPropagateAiPreferences(
+        hadLocalMutation: hadConfirmMutation,
+        hasPendingMutation: confirmStillPending,
+      );
+      final pushMemory = shouldPropagateAiPreferences(
+        hadLocalMutation: hadMemoryMutation,
+        hasPendingMutation: memoryStillPending,
       );
       await _syncAiPreferences(
         expectedUserId: userId,
-        pushLocal: shouldPushAiPreferences,
-        preserveLocal: hasPendingAiPreferenceMutation,
+        pushConfirm: pushConfirm,
+        pushMemory: pushMemory,
+        preserveLocal: confirmStillPending || memoryStillPending,
       );
       if (!_isCurrentAccount(userId)) return;
       try {
@@ -401,7 +406,8 @@ class SyncService {
 
   Future<void> _syncAiPreferences({
     required String expectedUserId,
-    required bool pushLocal,
+    required bool pushConfirm,
+    required bool pushMemory,
     required bool preserveLocal,
   }) async {
     if (!_isCurrentAccount(expectedUserId)) return;
@@ -409,13 +415,14 @@ class SyncService {
     if (user == null || user.id != expectedUserId) return;
 
     try {
-      if (pushLocal) {
+      if (pushConfirm || pushMemory) {
         final localConfirm = localStore.read('pace.settings.ai.confirm_actions');
         final localMemory = localStore.read('pace.settings.ai.memory');
         final patch = <String, dynamic>{
           'user_id': user.id,
-          if (localConfirm is bool) 'confirm_actions': localConfirm,
-          if (localMemory is bool) 'memory_level': localMemory ? 'limited' : 'none',
+          if (pushConfirm && localConfirm is bool) 'confirm_actions': localConfirm,
+          if (pushMemory && localMemory is bool)
+            'memory_level': localMemory ? 'limited' : 'none',
         };
         if (patch.length > 1) await client!.from('ai_preferences').upsert(patch);
         return;
