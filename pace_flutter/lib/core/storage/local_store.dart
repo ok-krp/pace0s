@@ -349,9 +349,14 @@ class LocalStore extends ChangeNotifier {
     if (index < 0) return;
 
     final entry = outbox[index];
-    final attempts = (entry['attempts'] as num?)?.toInt() ?? 0;
-    final exponent = attempts.clamp(0, 8).toInt();
-    final delaySeconds = (5 * (1 << exponent)).clamp(5, 900).toInt();
+    final rawAttempts = entry['attempts'];
+    // A readable local JSON file can still contain stale or manually edited
+    // retry metadata. Normalize it instead of letting a String/bool overflow
+    // the cast and abort sync retry scheduling.
+    final attempts = rawAttempts is num && rawAttempts.isFinite && rawAttempts >= 0
+        ? rawAttempts.toInt().clamp(0, 8).toInt()
+        : 0;
+    final delaySeconds = (5 * (1 << attempts)).clamp(5, 900).toInt();
     final current = (now ?? DateTime.now().toUtc()).toUtc();
     entry['attempts'] = attempts + 1;
     entry['nextAttemptAt'] = current.add(Duration(seconds: delaySeconds)).toIso8601String();
