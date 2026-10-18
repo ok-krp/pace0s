@@ -238,6 +238,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 value: _memory,
                 onChanged: (value) async {
                   await _ai.setMemoryEnabled(value);
+                  if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
                   setState(() => _memory = value);
                 },
               ),
