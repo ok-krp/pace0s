@@ -221,6 +221,58 @@ void main() {
       store.syncedMetadata(),
       {'pace.profile.weight': '2026-10-17T10:00:00Z'},
     );
+    final quarantine = store.read('__outbox_quarantine') as List;
+    expect(quarantine, hasLength(1));
+    expect(quarantine.single['reason'], 'malformed-sync-meta-entry');
+    expect(quarantine.single['operation']['key'], 'pace.profile.name');
+    expect(quarantine.single['operation']['value'], 123);
+  });
+
+  test('invalid sync metadata timestamps are quarantined and persisted', () async {
+    var store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write(
+      '__sync_meta',
+      {
+        'pace.profile.name': '2026-13-01T10:00:00Z',
+        'pace.profile.weight': '2026-10-17T10:00:00Z',
+      },
+      enqueueSync: false,
+    );
+
+    expect(store.lastSyncedAt('pace.profile.name'), isNull);
+    expect(store.lastSyncedAt('pace.profile.weight'), '2026-10-17T10:00:00Z');
+    await store.persistOutboxRepairs(expectedUserId: 'user-a');
+
+    store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    expect(store.lastSyncedAt('pace.profile.name'), isNull);
+    expect(store.lastSyncedAt('pace.profile.weight'), '2026-10-17T10:00:00Z');
+    final quarantine = store.read('__outbox_quarantine') as List;
+    expect(quarantine, hasLength(1));
+    expect(quarantine.single['reason'], 'malformed-sync-meta-entry');
+    expect(
+      quarantine.single['operation'],
+      {'key': 'pace.profile.name', 'value': '2026-13-01T10:00:00Z'},
+    );
+  });
+
+  test('malformed sync metadata container is quarantined before replacement', () async {
+    var store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('__sync_meta', 'keep-this-legacy-metadata', enqueueSync: false);
+
+    expect(store.syncedMetadata(), isEmpty);
+    await store.persistOutboxRepairs(expectedUserId: 'user-a');
+
+    store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    expect(store.syncedMetadata(), isEmpty);
+    expect(store.read('__sync_meta'), isEmpty);
+    final quarantine = store.read('__outbox_quarantine') as List;
+    expect(quarantine, hasLength(1));
+    expect(quarantine.single['reason'], 'malformed-sync-meta-container');
+    expect(quarantine.single['operation'], 'keep-this-legacy-metadata');
   });
 
   test('malformed outbox operation is quarantined without losing its payload', () async {
