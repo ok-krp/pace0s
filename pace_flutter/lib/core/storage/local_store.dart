@@ -543,6 +543,7 @@ class LocalStore extends ChangeNotifier {
     // never redirect a queued write into the next account's file.
     final targetFile = _file;
     final serialized = jsonEncode(_data);
+    final repairRevision = _outboxRepairRevision;
     _flushQueue = _flushQueue.catchError((Object _) {}).then((_) async {
       await targetFile.parent.create(recursive: true);
       final temporary = File('${targetFile.path}.tmp');
@@ -557,6 +558,12 @@ class LocalStore extends ChangeNotifier {
       }
       try {
         await temporary.rename(targetFile.path);
+        // Mark synchronous outbox repairs durable only if this exact snapshot
+        // included the latest repair revision. A concurrent repair must force
+        // another flush rather than being mistaken for persisted data.
+        if (repairRevision == _outboxRepairRevision) {
+          _persistedOutboxRepairRevision = repairRevision;
+        }
         // Intentionally retain .bak as the last known-good snapshot. The next
         // successful flush replaces it with the current primary file.
       } catch (_) {
