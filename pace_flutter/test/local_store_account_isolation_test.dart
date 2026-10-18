@@ -140,6 +140,29 @@ void main() {
     );
   });
 
+  test('malformed outbox operation is quarantined without losing its payload', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    final malformed = <String, dynamic>{
+      'value': <String, dynamic>{'important': 'preserve-me'},
+      'operation': 'unknown-operation',
+      'queuedAt': '2026-10-18T10:00:00Z',
+    };
+    await store.write('__outbox', <dynamic>[malformed], enqueueSync: false);
+
+    await store.quarantineOperation(
+      malformed,
+      expectedUserId: 'user-a',
+      reason: 'invalid-outbox-operation-shape',
+    );
+
+    expect(store.pendingOperations(), isEmpty);
+    final quarantine = store.read('__outbox_quarantine') as List;
+    expect(quarantine, hasLength(1));
+    expect(quarantine.single['reason'], 'invalid-outbox-operation-shape');
+    expect(quarantine.single['operation']['value']['important'], 'preserve-me');
+  });
+
   test('malformed outbox field does not crash local reads or sync inspection', () async {
     final store = await LocalStore.open(directory: directory);
     await store.write('pace.profile.name', 'recoverable value', enqueueSync: false);
