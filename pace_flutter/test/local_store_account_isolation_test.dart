@@ -38,6 +38,31 @@ void main() {
     );
   });
 
+  test('strictly validates queued timestamp components and offsets', () {
+    final valid = <String, dynamic>{
+      'key': 'pace.profile.name',
+      'value': 'value',
+      'operation': 'upsert',
+      'queuedAt': '2026-10-18T10:00:00+02:00',
+    };
+    expect(LocalStore.isValidOutboxOperation(valid), isTrue);
+
+    for (final timestamp in [
+      '2026-02-30T10:00:00Z',
+      '2026-13-01T10:00:00Z',
+      '2026-10-18T25:00:00Z',
+      '2026-10-18T10:61:00Z',
+      '2026-10-18T10:00:61Z',
+      '2026-10-18T10:00:00+99:99',
+    ]) {
+      expect(
+        LocalStore.isValidOutboxOperation({...valid, 'queuedAt': timestamp}),
+        isFalse,
+        reason: 'must reject malformed timestamp: $timestamp',
+      );
+    }
+  });
+
   test('acknowledging an accepted write records its server timestamp', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
