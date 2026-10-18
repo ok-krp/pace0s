@@ -50,3 +50,22 @@ The first native shell contains:
 - Android build generation from Flutter rather than the legacy WebView wrapper.
 
 This is an intentionally incomplete product migration. Feature parity is reached domain-by-domain before the corresponding web implementation is retired.
+
+## Supabase-enabled builds
+
+The native app reads its Supabase endpoint and client key at **compile time**:
+
+- `SUPABASE_URL`: the project's HTTPS URL;
+- `SUPABASE_PUBLISHABLE_KEY`: the project's publishable/anon client key.
+
+For a local run, pass both values without committing them into source:
+
+```sh
+flutter run \
+  --dart-define=SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co \
+  --dart-define=SUPABASE_PUBLISHABLE_KEY=YOUR_PUBLISHABLE_KEY
+```
+
+For GitHub Actions, configure both values under **Repository Settings → Secrets and variables → Actions**. The workflow accepts either repository variables or Actions secrets with those names. Use only the public client key intended for mobile/web clients; **never** put a `service_role` key in a Flutter build or client-side configuration.
+
+If either value is absent, CI deliberately builds an offline/local-only artifact and appends `-offline` to the artifact name. When both are configured, artifacts are labelled `-cloud`. A successful offline build verifies compilation and unit tests, but it does not verify Supabase authentication, RLS, or cross-device sync.
