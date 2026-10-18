@@ -472,9 +472,10 @@ class LocalStore extends ChangeNotifier {
     return valid;
   }
 
-  /// Flushes any quarantine/normalization performed by the synchronous
-  /// outbox reader. Without this, malformed entries could be quarantined only
-  /// in memory and reappear after process restart when no valid work remains.
+  /// Flushes quarantine/normalization performed by synchronous local-state
+  /// readers, including outbox entries and sync metadata. Without this, malformed
+  /// values could be quarantined only in memory and reappear after restart when
+  /// there is no valid outbox work to trigger another durable write.
   Future<void> persistOutboxRepairs({required String expectedUserId}) async {
     if (_persistedOutboxRepairRevision == _outboxRepairRevision) return;
     if (_switchingAccount || _activeUserId != expectedUserId) {
