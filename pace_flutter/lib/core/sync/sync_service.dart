@@ -192,6 +192,23 @@ class SyncService {
     return fallbackCursor;
   }
 
+  /// Build a partial update so changing one native AI setting cannot
+  /// overwrite a separate preference owned by another UI/domain.
+  static Map<String, dynamic> buildAiPreferencesPatch({
+    required String userId,
+    required dynamic localConfirm,
+    required dynamic localMemory,
+    required bool pushConfirm,
+    required bool pushMemory,
+  }) =>
+      <String, dynamic>{
+        'user_id': userId,
+        if (pushConfirm && localConfirm is bool)
+          'confirm_actions': localConfirm,
+        if (pushMemory && localMemory is bool)
+          'memory_level': localMemory ? 'limited' : 'none',
+      };
+
   /// Convert only supported database enum values to the native boolean
   /// preference. Unknown values must not be interpreted as memory enabled.
   /// The native UI currently models memory as enabled/disabled, so both
@@ -418,12 +435,13 @@ class SyncService {
       if (pushConfirm || pushMemory) {
         final localConfirm = localStore.read('pace.settings.ai.confirm_actions');
         final localMemory = localStore.read('pace.settings.ai.memory');
-        final patch = <String, dynamic>{
-          'user_id': user.id,
-          if (pushConfirm && localConfirm is bool) 'confirm_actions': localConfirm,
-          if (pushMemory && localMemory is bool)
-            'memory_level': localMemory ? 'limited' : 'none',
-        };
+        final patch = buildAiPreferencesPatch(
+          userId: user.id,
+          localConfirm: localConfirm,
+          localMemory: localMemory,
+          pushConfirm: pushConfirm,
+          pushMemory: pushMemory,
+        );
         if (patch.length > 1) await client!.from('ai_preferences').upsert(patch);
         return;
       }
