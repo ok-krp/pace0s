@@ -356,13 +356,46 @@ class LocalStore extends ChangeNotifier {
 
   Map<String, String> syncedMetadata() => {
         for (final entry in _syncMeta.entries)
-          if (entry.value is String) entry.key: entry.value as String,
+          entry.key: entry.value as String,
       };
 
   Map<String, dynamic> get _syncMeta {
     final raw = _data['__sync_meta'];
-    if (raw is Map) return Map<String, dynamic>.from(raw);
-    return <String, dynamic>{};
+    if (raw == null) return <String, dynamic>{};
+
+    if (raw is! Map) {
+      // Valid JSON can still contain a malformed reserved metadata field.
+      // Preserve the payload before replacing it with a safe empty map.
+      _appendQuarantineEntry('malformed-sync-meta-container', raw);
+      _data['__sync_meta'] = <String, dynamic>{};
+      return <String, dynamic>{};
+    }
+
+    final valid = <String, dynamic>{};
+    for (final entry in raw.entries) {
+      final key = entry.key;
+      final value = entry.value;
+      if (key is String &&
+          key.isNotEmpty &&
+          value is String &&
+          isValidIsoTimestamp(value)) {
+        valid[key] = value;
+      } else {
+        // Invalid timestamps must not be exposed as checkpoints or silently
+        // discarded when the next successful sync updates this metadata map.
+        _appendQuarantineEntry('malformed-sync-meta-entry', {
+          'key': key,
+          'value': value,
+        });
+      }
+    }
+
+    if (valid.length != raw.length) {
+      // The repair is synchronous; the shared repair revision makes the sync
+      // worker persist the quarantine even when the outbox itself is empty.
+      _data['__sync_meta'] = valid;
+    }
+    return valid;
   }
 
   void _setSyncedAt(String key, String timestamp) {
