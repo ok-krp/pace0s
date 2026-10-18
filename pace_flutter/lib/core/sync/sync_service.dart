@@ -73,24 +73,6 @@ class SyncService {
     return (parsed ?? fallbackNow).toUtc().toIso8601String();
   }
 
-  static bool isValidOutboxOperation(Map<String, dynamic> operation) {
-    final key = operation['key'];
-    final queuedAt = operation['queuedAt'];
-    final kind = operation['operation'];
-    if (key is! String ||
-        key.isEmpty ||
-        queuedAt is! String ||
-        !_isPlausibleQueuedTimestamp(queuedAt)) {
-      return false;
-    }
-    if (kind == 'upsert') {
-      // A missing value is not equivalent to an intentional JSON null: pushing
-      // it could overwrite a valid remote value after local-file corruption.
-      return operation.containsKey('value');
-    }
-    return kind == 'delete';
-  }
-
   /// Maps legacy cloud keys to the canonical Pace namespace, matching the web
   /// sync engine. This does not import the unscoped legacy local file.
   static String normalizeRemoteKey(String key) =>
