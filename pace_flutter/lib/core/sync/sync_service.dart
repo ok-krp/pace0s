@@ -26,7 +26,7 @@ class SyncService {
     if (response == true) return true;
     if (response is! Map || response['accepted'] != true) return false;
     final updatedAt = response['updated_at'];
-    return updatedAt is String && DateTime.tryParse(updatedAt) != null;
+    return updatedAt is String && LocalStore.isValidIsoTimestamp(updatedAt);
   }
 
   /// Prefer a database-authoritative updated_at when a structured RPC
@@ -38,9 +38,9 @@ class SyncService {
   }) {
     if (response is Map) {
       final raw = response['updated_at'];
-      if (raw is String) {
-        final parsed = DateTime.tryParse(raw);
-        if (parsed != null) return parsed.toUtc().toIso8601String();
+      if (raw is String && LocalStore.isValidIsoTimestamp(raw)) {
+        final parsed = DateTime.parse(raw);
+        return parsed.toUtc().toIso8601String();
       }
     }
     // Older compatible RPCs may return a bare boolean; retain their existing
@@ -69,7 +69,9 @@ class SyncService {
     dynamic queuedAt, {
     required DateTime fallbackNow,
   }) {
-    final parsed = queuedAt is String ? DateTime.tryParse(queuedAt) : null;
+    final parsed = queuedAt is String && LocalStore.isValidIsoTimestamp(queuedAt)
+        ? DateTime.tryParse(queuedAt)
+        : null;
     return (parsed ?? fallbackNow).toUtc().toIso8601String();
   }
 
@@ -433,12 +435,13 @@ class SyncService {
     final now = DateTime.now().toUtc();
     final rawCursor = localStore.read('pace.__sync_last_pull_at');
     final rawLastFullPull = localStore.read('pace.__sync_last_full_pull_at');
-    final cursorAt = rawCursor is String
+    final cursorAt = rawCursor is String && LocalStore.isValidIsoTimestamp(rawCursor)
         ? DateTime.tryParse(rawCursor)?.toUtc()
         : null;
-    final lastFullPullAt = rawLastFullPull is String
-        ? DateTime.tryParse(rawLastFullPull)?.toUtc()
-        : null;
+    final lastFullPullAt =
+        rawLastFullPull is String && LocalStore.isValidIsoTimestamp(rawLastFullPull)
+            ? DateTime.tryParse(rawLastFullPull)?.toUtc()
+            : null;
     final fullPull = shouldRunFullReconciliation(
       cursorAt: cursorAt,
       lastFullPullAt: lastFullPullAt,
@@ -485,7 +488,8 @@ class SyncService {
         final isLegacy = rawKey.startsWith('lt.');
         final key = normalizeRemoteKey(rawKey);
         final remoteUpdatedAt = row['updated_at'] as String?;
-        final remoteTime = remoteUpdatedAt == null
+        final remoteTime = remoteUpdatedAt == null ||
+                !LocalStore.isValidIsoTimestamp(remoteUpdatedAt)
             ? null
             : DateTime.tryParse(remoteUpdatedAt)?.toUtc();
         // Device-local rows must not advance the cloud-sync cursor; otherwise
@@ -503,7 +507,8 @@ class SyncService {
         }
 
         final rawLocalUpdatedAt = localStore.lastSyncedAt(key);
-        final localTime = rawLocalUpdatedAt == null
+        final localTime = rawLocalUpdatedAt == null ||
+                !LocalStore.isValidIsoTimestamp(rawLocalUpdatedAt)
             ? null
             : DateTime.tryParse(rawLocalUpdatedAt)?.toUtc();
         if (!shouldApplyRemoteValue(
