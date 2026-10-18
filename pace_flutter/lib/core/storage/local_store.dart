@@ -85,10 +85,15 @@ class LocalStore extends ChangeNotifier {
   }
 
   String _nextQueuedAt(String key, List<Map<String, dynamic>> outbox) {
-    DateTime? latest = DateTime.tryParse(lastSyncedAt(key) ?? '')?.toUtc();
+    final syncedAt = lastSyncedAt(key);
+    DateTime? latest = syncedAt != null && _isValidQueuedTimestamp(syncedAt)
+        ? DateTime.tryParse(syncedAt)?.toUtc()
+        : null;
     for (final entry in outbox) {
       if (entry['key'] != key || entry['queuedAt'] is! String) continue;
-      final queuedAt = DateTime.tryParse(entry['queuedAt'] as String)?.toUtc();
+      final rawQueuedAt = entry['queuedAt'] as String;
+      if (!_isValidQueuedTimestamp(rawQueuedAt)) continue;
+      final queuedAt = DateTime.tryParse(rawQueuedAt)?.toUtc();
       if (queuedAt != null && (latest == null || queuedAt.isAfter(latest))) {
         latest = queuedAt;
       }
