@@ -57,6 +57,19 @@ class SyncService {
       !key.startsWith('pace.__sync_') &&
       !excludedSyncKeys.contains(key);
 
+  /// Reject malformed persisted operations before any network request. Such
+  /// entries are quarantined locally so one poison record cannot retry forever.
+  static bool isValidOutboxOperation(Map<String, dynamic> operation) {
+    final key = operation['key'];
+    final queuedAt = operation['queuedAt'];
+    final kind = operation['operation'];
+    return key is String &&
+        key.isNotEmpty &&
+        queuedAt is String &&
+        DateTime.tryParse(queuedAt) != null &&
+        (kind == 'upsert' || kind == 'delete');
+  }
+
   /// Maps legacy cloud keys to the canonical Pace namespace, matching the web
   /// sync engine. This does not import the unscoped legacy local file.
   static String normalizeRemoteKey(String key) =>
@@ -243,14 +256,7 @@ class SyncService {
     for (final operation in List<Map<String, dynamic>>.from(localStore.pendingOperations())) {
       if (!_isCurrentAccount(expectedUserId)) return;
       try {
-        final rawKey = operation['key'];
-        final rawQueuedAt = operation['queuedAt'];
-        final rawOperation = operation['operation'];
-        if (rawKey is! String ||
-            rawKey.isEmpty ||
-            rawQueuedAt is! String ||
-            DateTime.tryParse(rawQueuedAt) == null ||
-            (rawOperation != 'upsert' && rawOperation != 'delete')) {
+        if (!isValidOutboxOperation(operation)) {
           await localStore.quarantineOperation(
             operation,
             expectedUserId: expectedUserId,
@@ -258,7 +264,7 @@ class SyncService {
           );
           continue;
         }
-        final key = rawKey;
+        final key = operation['key'] as String;
         if (!isSyncableKey(key)) {
           // Clear obsolete/device-local outbox entries without sending them to cloud.
           await localStore.acknowledgeOperation(operation, expectedUserId: expectedUserId);
