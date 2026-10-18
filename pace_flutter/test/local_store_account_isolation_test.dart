@@ -424,6 +424,25 @@ void main() {
     await store.activateAccount('user_a__dXNlci9h');
     expect(store.read('pace.profile.name'), 'private to literal ID');
   });
+  test('ambiguous legacy account files are not assigned to either colliding ID', () async {
+    final legacyCollision = File(
+      '${directory.path}/pace_local_user_a__dXNlci9h.json',
+    );
+    await legacyCollision.writeAsString(
+      '{"pace.profile.name":"ambiguous legacy value"}',
+      flush: true,
+    );
+    final store = await LocalStore.open(directory: directory);
+
+    await store.activateAccount('user/a');
+    expect(store.read('pace.profile.name'), isNull);
+    await store.activateAccount('user_a__dXNlci9h');
+    expect(store.read('pace.profile.name'), isNull);
+
+    // The ambiguous legacy file is preserved for manual recovery rather than
+    // silently exposing its contents to whichever account signs in first.
+    expect(await legacyCollision.exists(), isTrue);
+  });
   test('blocks writes immediately when an account switch is requested', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
