@@ -295,6 +295,44 @@ class LocalStore extends ChangeNotifier {
     return List.unmodifiable(due);
   }
 
+  /// Moves an un-replayable outbox entry to a local quarantine instead of
+  /// retrying it forever or silently deleting its payload.
+  Future<void> quarantineOperation(
+    Map<String, dynamic> operation, {
+    required String expectedUserId,
+    required String reason,
+  }) async {
+    if (_switchingAccount || _activeUserId != expectedUserId) {
+      throw StateError('Local account changed before outbox quarantine');
+    }
+    final rawOutbox = _data['__outbox'];
+    if (rawOutbox is! List) return;
+    final serializedOperation = jsonEncode(operation);
+    final index = rawOutbox.indexWhere((entry) {
+      if (entry is! Map) return false;
+      try {
+        return jsonEncode(Map<String, dynamic>.from(entry)) == serializedOperation;
+      } on TypeError {
+        return false;
+      }
+    });
+    if (index < 0) return;
+
+    final rawQuarantine = _data['__outbox_quarantine'];
+    final quarantine = rawQuarantine is List
+        ? List<dynamic>.from(rawQuarantine)
+        : <dynamic>[];
+    final entry = rawOutbox.removeAt(index);
+    quarantine.add({
+      'reason': reason,
+      'quarantinedAt': DateTime.now().toUtc().toIso8601String(),
+      'operation': entry,
+    });
+    _data['__outbox'] = rawOutbox;
+    _data['__outbox_quarantine'] = quarantine;
+    await _flush();
+  }
+
   /// True while an outbox mutation exists, including mutations deferred by
   /// retry backoff. Pulls must not overwrite local values just because a
   /// queued mutation is temporarily not due for replay.
