@@ -59,6 +59,17 @@ class SyncService {
 
   /// Reject malformed persisted operations before any network request. Such
   /// entries are quarantined locally so one poison record cannot retry forever.
+  /// Normalize queued timestamps to UTC before sending them to PostgreSQL.
+  /// Older local files may contain a local timestamp without an explicit zone;
+  /// sending that raw string would make its meaning depend on the DB session TZ.
+  static String normalizedOutboxTimestamp(
+    dynamic queuedAt, {
+    required DateTime fallbackNow,
+  }) {
+    final parsed = queuedAt is String ? DateTime.tryParse(queuedAt) : null;
+    return (parsed ?? fallbackNow).toUtc().toIso8601String();
+  }
+
   static bool isValidOutboxOperation(Map<String, dynamic> operation) {
     final key = operation['key'];
     final queuedAt = operation['queuedAt'];
@@ -345,7 +356,10 @@ class SyncService {
   Future<_PushResult> _push(Map<String, dynamic> operation, String userId) async {
     if (!_isCurrentAccount(userId)) throw StateError('Account changed before sync push');
     final key = operation['key'] as String;
-    final updatedAt = (operation['queuedAt'] as String?) ?? DateTime.now().toUtc().toIso8601String();
+    final updatedAt = normalizedOutboxTimestamp(
+      operation['queuedAt'],
+      fallbackNow: DateTime.now().toUtc(),
+    );
     final value = operation['operation'] == 'delete' ? null : operation['value'];
 
     final response = await client!.rpc('upsert_user_state_if_newer', params: {
