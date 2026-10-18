@@ -59,6 +59,8 @@ class LocalStore extends ChangeNotifier {
     if (match == null || DateTime.tryParse(value) == null) return false;
 
     final year = int.parse(match.group(1)!);
+    // PostgreSQL/ISO calendar timestamps have no year zero.
+    if (year < 1) return false;
     final month = int.parse(match.group(2)!);
     final day = int.parse(match.group(3)!);
     final hour = int.parse(match.group(4)!);
@@ -79,7 +81,11 @@ class LocalStore extends ChangeNotifier {
     if (match.group(8) != null && match.group(8) != 'Z') {
       final offsetHours = int.parse(match.group(10)!);
       final offsetMinutes = int.parse(match.group(11)!);
-      if (offsetHours > 23 || offsetMinutes > 59) return false;
+      if (offsetHours > 14 ||
+          offsetMinutes > 59 ||
+          (offsetHours == 14 && offsetMinutes != 0)) {
+        return false;
+      }
     }
     return true;
   }
