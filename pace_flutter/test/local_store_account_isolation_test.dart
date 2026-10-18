@@ -483,7 +483,7 @@ void main() {
         <String, dynamic>{
           ...original,
           'attempts': 'invalid',
-          'nextAttemptAt': null,
+          'nextAttemptAt': '${DateTime.now().toUtc().year}-13-01T10:00:00Z',
         },
       ],
       enqueueSync: false,
