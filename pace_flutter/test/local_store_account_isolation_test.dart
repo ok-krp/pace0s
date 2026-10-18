@@ -267,6 +267,38 @@ void main() {
     expect(store.hasPendingOperationForKey('pace.profile.name'), isFalse);
   });
 
+  test('malformed retry metadata is normalized instead of crashing', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'account A');
+    final original = store.pendingOperations().single;
+    await store.write(
+      '__outbox',
+      <Map<String, dynamic>>[
+        <String, dynamic>{
+          ...original,
+          'attempts': 'invalid',
+          'nextAttemptAt': null,
+        },
+      ],
+      enqueueSync: false,
+    );
+
+    final malformed = store.pendingOperations().single;
+    final now = DateTime.utc(2026, 10, 18, 10);
+    await store.deferOperation(malformed, expectedUserId: 'user-a', now: now);
+
+    final deferred = store.pendingOperations(now: now.add(const Duration(seconds: 4)));
+    expect(deferred, isEmpty);
+    final due = store.pendingOperations(now: now.add(const Duration(seconds: 5)));
+    expect(due, hasLength(1));
+    expect(due.single['attempts'], 1);
+    expect(
+      DateTime.parse(due.single['nextAttemptAt'] as String),
+      now.add(const Duration(seconds: 5)),
+    );
+  });
+
   test('retry backoff is capped at fifteen minutes', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
