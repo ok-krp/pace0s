@@ -166,15 +166,33 @@ class LocalStore extends ChangeNotifier {
   /// Ordinary UUID-like IDs retain the existing filename for compatibility.
   static String _accountFileName(String userId) {
     final safeUserId = userId.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+    final encodedUserId = base64Url.encode(utf8.encode(userId)).replaceAll('=', '');
     // Keep ordinary UUID-like IDs compatible with existing account files.
-    if (safeUserId == userId) return 'pace_local_$safeUserId.json';
+    if (safeUserId == userId && !_isAmbiguousLegacyEscapedId(userId)) {
+      return 'pace_local_$safeUserId.json';
+    }
 
     // The separator is deliberately outside the safe-ID alphabet. Appending
     // base64 to an underscore-only name is not injective: an escaped ID such
-    // as "user/a" could collide with a different literal ID such as
-    // "user_a__dXNlci9h". A tilde makes escaped and unescaped names disjoint.
-    final encodedUserId = base64Url.encode(utf8.encode(userId)).replaceAll('=', '');
+    // as "user/a" could collide with the literal ID "user_a__dXNlci9h".
+    // Also escape literal IDs that resemble the old suffix, so neither side
+    // can continue reading an ambiguous legacy file after this fix.
     return 'pace_local_$safeUserId~$encodedUserId.json';
+  }
+
+  static bool _isAmbiguousLegacyEscapedId(String userId) {
+    final match = RegExp(r'^([A-Za-z0-9_-]+)__([A-Za-z0-9_-]+)$')
+        .firstMatch(userId);
+    if (match == null) return false;
+    try {
+      final decoded = utf8.decode(
+        base64Url.decode(base64Url.normalize(match.group(2)!)),
+      );
+      final decodedSafeId = decoded.replaceAll(RegExp(r'[^A-Za-z0-9_-]'), '_');
+      return decoded != userId && decodedSafeId == match.group(1);
+    } on FormatException {
+      return false;
+    }
   }
 
   Future<void> _loadFile(File file) async {
