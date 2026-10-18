@@ -116,7 +116,8 @@ class PaceAiService {
       }).toList();
       final merged = <String, AiConversation>{for (final item in local) item.id: item};
       for (final item in remote) {
-        merged[item.id] = (merged[item.id] ?? item).copyWith(title: item.title, updatedAt: item.updatedAt);
+        final existing = merged[item.id];
+        merged[item.id] = existing == null ? item : existing.mergeRemoteMetadata(item);
       }
       final result = merged.values.where((item) => item.agent == agent).toList()..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       await _saveLocalConversations(result);
