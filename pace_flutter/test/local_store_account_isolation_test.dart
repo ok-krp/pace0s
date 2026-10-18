@@ -100,8 +100,14 @@ void main() {
     expect(queuedAt.isAfter(before.subtract(const Duration(minutes: 1))), isTrue);
     expect(queuedAt.isBefore(before.add(const Duration(days: 1))), isTrue);
     final quarantine = store.read('__outbox_quarantine') as List;
-    expect(quarantine, hasLength(1));
-    expect(quarantine.single['reason'], 'malformed-outbox-operation-replaced');
+    expect(quarantine, hasLength(2));
+    expect(
+      quarantine.map((entry) => entry['reason']),
+      containsAll([
+        'malformed-sync-meta-entry',
+        'malformed-outbox-operation-replaced',
+      ]),
+    );
   });
 
   test('acknowledging an accepted write records its server timestamp', () async {
