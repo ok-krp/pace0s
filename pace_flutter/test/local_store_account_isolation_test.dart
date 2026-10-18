@@ -186,6 +186,23 @@ void main() {
     expect(store.pendingOperations().single['key'], 'pace.profile.weight');
   });
 
+  test('a normal durable mutation persists outbox repairs without a sync pass', () async {
+    var store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('__outbox', <dynamic>['keep this payload'], enqueueSync: false);
+
+    expect(store.pendingOperations(), isEmpty);
+    await store.write('pace.profile.name', 'durable repair', enqueueSync: false);
+
+    store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    expect(store.read('pace.profile.name'), 'durable repair');
+    expect(store.read('__outbox'), isEmpty);
+    final quarantine = store.read('__outbox_quarantine') as List;
+    expect(quarantine, hasLength(1));
+    expect(quarantine.single['operation'], 'keep this payload');
+  });
+
   test('malformed outbox container quarantine survives restart', () async {
     var store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
