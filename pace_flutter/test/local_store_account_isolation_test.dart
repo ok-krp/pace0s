@@ -174,11 +174,32 @@ void main() {
     expect(store.read('pace.profile.name'), 'recoverable value');
     expect(store.pendingOperations(), isEmpty);
     expect(store.hasPendingOperationForKey('pace.profile.name'), isFalse);
+    final quarantine = store.read('__outbox_quarantine') as List;
+    expect(quarantine, hasLength(1));
+    expect(quarantine.single['reason'], 'malformed-outbox-container');
+    expect(quarantine.single['operation'], 'not-a-list');
 
-    // The next normal mutation repairs the reserved field into a valid list.
+    // The next normal mutation repairs the reserved field while preserving the
+    // malformed original value in the local quarantine.
     await store.write('pace.profile.weight', 53);
     expect(store.pendingOperations(), hasLength(1));
     expect(store.pendingOperations().single['key'], 'pace.profile.weight');
+  });
+
+  test('non-map outbox entries are quarantined rather than silently dropped', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write(
+      '__outbox',
+      <dynamic>['preserve-this-entry'],
+      enqueueSync: false,
+    );
+
+    expect(store.pendingOperations(), isEmpty);
+    final quarantine = store.read('__outbox_quarantine') as List;
+    expect(quarantine, hasLength(1));
+    expect(quarantine.single['reason'], 'malformed-outbox-entry');
+    expect(quarantine.single['operation'], 'preserve-this-entry');
   });
 
   test('notifies listeners for durable state changes but can batch remote pulls', () async {
