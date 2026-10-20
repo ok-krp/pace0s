@@ -243,6 +243,14 @@ class SyncService {
     };
   }
 
+  static bool shouldApplyRemoteAiPreference({
+    required String key,
+    required dynamic rawPending,
+    required bool hasPendingMutation,
+  }) =>
+      !hasPendingMutation &&
+      !isAiPreferenceProtectedByRetryMarker(key, rawPending);
+
   static bool isAiPreferenceProtectedByRetryMarker(
     String key,
     dynamic rawPending,
@@ -616,17 +624,34 @@ class SyncService {
       final remoteConfirm = row['confirm_actions'];
       final remoteMemory = row['memory_level'];
       if (!_isCurrentAccount(expectedUserId)) return;
+      const confirmKey = 'pace.settings.ai.confirm_actions';
       if (remoteConfirm is bool &&
-          localStore.read('pace.settings.ai.confirm_actions') != remoteConfirm) {
-        await localStore.writeForAccount(expectedUserId, 'pace.settings.ai.confirm_actions', remoteConfirm, enqueueSync: false);
+          localStore.read(confirmKey) != remoteConfirm &&
+          shouldApplyRemoteAiPreference(
+            key: confirmKey,
+            rawPending: localStore.read(aiPreferencesPendingKey),
+            hasPendingMutation: localStore.hasPendingOperationForKey(confirmKey),
+          )) {
+        await localStore.writeForAccount(
+          expectedUserId,
+          confirmKey,
+          remoteConfirm,
+          enqueueSync: false,
+        );
       }
       if (!_isCurrentAccount(expectedUserId)) return;
       final memoryEnabled = aiMemoryEnabledFromLevel(remoteMemory);
+      const memoryKey = 'pace.settings.ai.memory';
       if (memoryEnabled != null &&
-          localStore.read('pace.settings.ai.memory') != memoryEnabled) {
+          localStore.read(memoryKey) != memoryEnabled &&
+          shouldApplyRemoteAiPreference(
+            key: memoryKey,
+            rawPending: localStore.read(aiPreferencesPendingKey),
+            hasPendingMutation: localStore.hasPendingOperationForKey(memoryKey),
+          )) {
         await localStore.writeForAccount(
           expectedUserId,
-          'pace.settings.ai.memory',
+          memoryKey,
           memoryEnabled,
           enqueueSync: false,
         );
