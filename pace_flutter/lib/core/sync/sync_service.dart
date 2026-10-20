@@ -673,7 +673,7 @@ class SyncService {
               .select('key,value,updated_at')
               .eq('user_id', userId)
               .order('updated_at', ascending: true)
-              .order('key', ascending: true)
+              .order('key', ascending: false)
               .range(offset, offset + pageSize - 1)
           : await client!
               .from('user_state')
@@ -681,7 +681,7 @@ class SyncService {
               .eq('user_id', userId)
               .gte('updated_at', cursorAt!.toIso8601String())
               .order('updated_at', ascending: true)
-              .order('key', ascending: true)
+              .order('key', ascending: false)
               .range(offset, offset + pageSize - 1);
       if (!_isCurrentAccount(userId)) return;
 
