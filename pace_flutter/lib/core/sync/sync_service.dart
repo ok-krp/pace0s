@@ -276,13 +276,12 @@ class SyncService {
   }
 
   static bool shouldPropagateAiPreferences({
-    required bool hadLocalMutation,
+    required bool hasRetryMarker,
     required bool hasPendingMutation,
   }) {
-    // Do not bypass outbox retry backoff by mirroring a still-pending local
-    // value into the dedicated preferences table. Propagate only after every
-    // local AI preference mutation has been acknowledged.
-    return hadLocalMutation && !hasPendingMutation;
+    // The durable marker survives after user_state acknowledges the outbox.
+    // Wait until that key is no longer pending before writing ai_preferences.
+    return hasRetryMarker && !hasPendingMutation;
   }
 
   Future<void> syncNow() async {
@@ -343,12 +342,12 @@ class SyncService {
       // after the dedicated-table write succeeds. Each preference is independent.
       final pushConfirm = aiPending['confirm_actions'] == true &&
           shouldPropagateAiPreferences(
-            hadLocalMutation: true,
+            hasRetryMarker: true,
             hasPendingMutation: confirmStillPending,
           );
       final pushMemory = aiPending['memory'] == true &&
           shouldPropagateAiPreferences(
-            hadLocalMutation: true,
+            hasRetryMarker: true,
             hasPendingMutation: memoryStillPending,
           );
       await _syncAiPreferences(
