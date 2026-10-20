@@ -238,6 +238,20 @@ class SyncService {
     };
   }
 
+  static bool isAiPreferenceProtectedByRetryMarker(
+    String key,
+    dynamic rawPending,
+  ) {
+    final pending = aiPreferencesPendingFrom(rawPending);
+    if (key == 'pace.settings.ai.confirm_actions') {
+      return pending['confirm_actions'] == true;
+    }
+    if (key == 'pace.settings.ai.memory') {
+      return pending['memory'] == true;
+    }
+    return false;
+  }
+
   static Map<String, bool> updateAiPreferencesPending(
     dynamic raw, {
     bool? confirmActions,
@@ -652,7 +666,11 @@ class SyncService {
         if (!isSyncableKey(key) ||
             remoteUpdatedAt == null ||
             remoteTime == null ||
-            localStore.hasPendingOperationForKey(key)) {
+            localStore.hasPendingOperationForKey(key) ||
+            isAiPreferenceProtectedByRetryMarker(
+              key,
+              localStore.read(aiPreferencesPendingKey),
+            )) {
           continue;
         }
 
