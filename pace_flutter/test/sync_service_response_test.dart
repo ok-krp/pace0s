@@ -294,6 +294,16 @@ void main() {
       );
     });
 
+    test('rejects zone-less remote timestamps', () {
+      expect(
+        SyncService.isUserStateWriteAccepted({
+          'accepted': true,
+          'updated_at': '2026-10-16T10:00:00',
+        }),
+        isFalse,
+      );
+    });
+
     test('fails closed for malformed or incomplete responses', () {
       expect(SyncService.isUserStateWriteAccepted(null), isFalse);
       expect(SyncService.isUserStateWriteAccepted({'updated_at': 'now'}), isFalse);
