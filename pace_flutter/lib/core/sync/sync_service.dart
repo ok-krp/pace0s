@@ -13,6 +13,9 @@ class SyncService {
   final SupabaseClient? client;
   bool _running = false;
   bool _rerunRequested = false;
+  // LocalStore mutates memory before disk flush; remember failed marker flushes
+  // so a later pass cannot mistake an in-memory marker for durable state.
+  bool _aiPreferenceMarkerPersistenceUncertain = false;
 
   bool _isCurrentAccount(String expectedUserId) =>
       client?.auth.currentUser?.id == expectedUserId &&
@@ -309,13 +312,20 @@ class SyncService {
       // operations. The dedicated ai_preferences upsert can fail independently;
       // without this marker, the next pass would pull the old cloud value and
       // overwrite the local preference after the outbox entry was acknowledged.
+      final existingAiPending = aiPreferencesPendingFrom(
+        localStore.read(aiPreferencesPendingKey),
+      );
       final pendingBeforePush = updateAiPreferencesPending(
         localStore.read(aiPreferencesPendingKey),
         confirmActions: hadConfirmMutation ? true : null,
         memory: hadMemoryMutation ? true : null,
       );
-      if (pendingBeforePush.length !=
-          aiPreferencesPendingFrom(localStore.read(aiPreferencesPendingKey)).length) {
+      final markerNeedsPersistence =
+          _aiPreferenceMarkerPersistenceUncertain ||
+          pendingBeforePush.length != existingAiPending.length ||
+          (hadConfirmMutation && existingAiPending['confirm_actions'] != true) ||
+          (hadMemoryMutation && existingAiPending['memory'] != true);
+      if (markerNeedsPersistence) {
         try {
           await localStore.writeForAccount(
             userId,
@@ -324,8 +334,10 @@ class SyncService {
             enqueueSync: false,
             notify: false,
           );
+          _aiPreferenceMarkerPersistenceUncertain = false;
         } catch (_) {
           // Do not acknowledge the source outbox until its retry marker is durable.
+          _aiPreferenceMarkerPersistenceUncertain = true;
           return;
         }
       }
@@ -540,7 +552,9 @@ class SyncService {
             enqueueSync: false,
             notify: false,
           );
+          _aiPreferenceMarkerPersistenceUncertain = false;
         } catch (_) {
+          _aiPreferenceMarkerPersistenceUncertain = true;
           // LocalStore mutates its in-memory snapshot before flushing. Restore
           // the retry marker in memory if clearing it could not be persisted.
           try {
