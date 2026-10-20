@@ -631,6 +631,33 @@ void main() {
       expect(SyncService.aiPreferencesPendingFrom('invalid'), isEmpty);
     });
 
+    test('does not apply a remote preference over a newly pending local edit', () {
+      expect(
+        SyncService.shouldApplyRemoteAiPreference(
+          key: 'pace.settings.ai.confirm_actions',
+          rawPending: <String, bool>{},
+          hasPendingMutation: true,
+        ),
+        isFalse,
+      );
+      expect(
+        SyncService.shouldApplyRemoteAiPreference(
+          key: 'pace.settings.ai.memory',
+          rawPending: {'memory': true},
+          hasPendingMutation: false,
+        ),
+        isFalse,
+      );
+      expect(
+        SyncService.shouldApplyRemoteAiPreference(
+          key: 'pace.settings.ai.memory',
+          rawPending: <String, bool>{},
+          hasPendingMutation: false,
+        ),
+        isTrue,
+      );
+    });
+
     test('protects a preference from pulls while its dedicated write retries', () {
       expect(
         SyncService.isAiPreferenceProtectedByRetryMarker(
