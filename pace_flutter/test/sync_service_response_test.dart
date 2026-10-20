@@ -19,6 +19,32 @@ void main() {
       );
     });
 
+    test('keeps canonical cloud values ahead of equal-time legacy aliases', () {
+      final timestamp = DateTime.utc(2026, 10, 17, 10);
+      // The pull query sorts keys descending after updated_at, so pace.* is
+      // applied before lt.* when both aliases have the same server timestamp.
+      expect(
+        SyncService.shouldApplyRemoteValue(
+          isLegacy: false,
+          localValue: null,
+          remoteValue: 'canonical value',
+          localUpdatedAt: null,
+          remoteUpdatedAt: timestamp,
+        ),
+        isTrue,
+      );
+      expect(
+        SyncService.shouldApplyRemoteValue(
+          isLegacy: true,
+          localValue: 'canonical value',
+          remoteValue: 'legacy value',
+          localUpdatedAt: timestamp,
+          remoteUpdatedAt: timestamp,
+        ),
+        isFalse,
+      );
+    });
+
     test('does not overwrite non-empty local state with older legacy data', () {
       expect(
         SyncService.shouldApplyRemoteValue(
