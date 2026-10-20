@@ -766,6 +766,30 @@ void main() {
       );
     });
 
+    test('clears only the conflicted preference retry after remote wins', () {
+      expect(
+        SyncService.clearAiPreferenceRetryAfterRemoteWinner(
+          'pace.settings.ai.memory',
+          {'confirm_actions': true, 'memory': true},
+        ),
+        {'confirm_actions': true},
+      );
+      expect(
+        SyncService.clearAiPreferenceRetryAfterRemoteWinner(
+          'pace.settings.ai.confirm_actions',
+          {'confirm_actions': true, 'memory': true},
+        ),
+        {'memory': true},
+      );
+      expect(
+        SyncService.clearAiPreferenceRetryAfterRemoteWinner(
+          'pace.settings.theme',
+          {'confirm_actions': true, 'memory': true},
+        ),
+        {'confirm_actions': true, 'memory': true},
+      );
+    });
+
     test('adds a retry marker while preserving an existing pending preference', () {
       expect(
         SyncService.updateAiPreferencesPending(
