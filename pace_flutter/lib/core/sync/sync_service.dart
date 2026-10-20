@@ -288,6 +288,13 @@ class SyncService {
     return pending;
   }
 
+  static bool shouldClearUnpushableAiPreferenceMarker({
+    required bool pushRequested,
+    required bool localValueValid,
+    required bool hasPendingMutation,
+  }) =>
+      pushRequested && !localValueValid && !hasPendingMutation;
+
   static bool shouldClearAiPreferenceRetryMarker({
     required bool hasPendingMutation,
   }) =>
@@ -566,20 +573,20 @@ class SyncService {
           final currentPending = aiPreferencesPendingFrom(
             localStore.read(aiPreferencesPendingKey),
           );
-          final confirmCanClear = pushConfirm &&
-              localConfirm is! bool &&
-              shouldClearAiPreferenceRetryMarker(
-                hasPendingMutation: localStore.hasPendingOperationForKey(
-                  'pace.settings.ai.confirm_actions',
-                ),
-              );
-          final memoryCanClear = pushMemory &&
-              localMemory is! bool &&
-              shouldClearAiPreferenceRetryMarker(
-                hasPendingMutation: localStore.hasPendingOperationForKey(
-                  'pace.settings.ai.memory',
-                ),
-              );
+          final confirmCanClear = shouldClearUnpushableAiPreferenceMarker(
+            pushRequested: pushConfirm,
+            localValueValid: localConfirm is bool,
+            hasPendingMutation: localStore.hasPendingOperationForKey(
+              'pace.settings.ai.confirm_actions',
+            ),
+          );
+          final memoryCanClear = shouldClearUnpushableAiPreferenceMarker(
+            pushRequested: pushMemory,
+            localValueValid: localMemory is bool,
+            hasPendingMutation: localStore.hasPendingOperationForKey(
+              'pace.settings.ai.memory',
+            ),
+          );
           final remainingPending = updateAiPreferencesPending(
             currentPending,
             confirmActions: confirmCanClear ? false : null,
