@@ -668,7 +668,7 @@ void main() {
     test('does not bypass backoff while any local preference mutation remains', () {
       expect(
         SyncService.shouldPropagateAiPreferences(
-          hadLocalMutation: true,
+          hasRetryMarker: true,
           hasPendingMutation: true,
         ),
         isFalse,
@@ -678,7 +678,7 @@ void main() {
     test('propagates local preferences after the outbox is acknowledged', () {
       expect(
         SyncService.shouldPropagateAiPreferences(
-          hadLocalMutation: true,
+          hasRetryMarker: true,
           hasPendingMutation: false,
         ),
         isTrue,
@@ -688,7 +688,7 @@ void main() {
     test('does not push preferences when there was no local mutation', () {
       expect(
         SyncService.shouldPropagateAiPreferences(
-          hadLocalMutation: false,
+          hasRetryMarker: false,
           hasPendingMutation: false,
         ),
         isFalse,
