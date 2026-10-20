@@ -57,6 +57,11 @@ class LocalStore extends ChangeNotifier {
       r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|([+-])(\d{2}):(\d{2}))?$',
     ).firstMatch(value);
     if (match == null || DateTime.tryParse(value) == null) return false;
+    // PostgreSQL and Dart DateTime preserve microsecond precision. Reject
+    // longer fractions instead of accepting a value that parsing will truncate
+    // and then comparing as a different instant during conflict resolution.
+    final fraction = match.group(7);
+    if (fraction != null && fraction.length > 6) return false;
 
     final year = int.parse(match.group(1)!);
     // PostgreSQL/ISO calendar timestamps have no year zero.
