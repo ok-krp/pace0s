@@ -511,18 +511,39 @@ class SyncService {
         if (patch.length <= 1) return;
         await client!.from('ai_preferences').upsert(patch);
         if (!_isCurrentAccount(expectedUserId)) return;
-        final remainingPending = updateAiPreferencesPending(
+        final currentPending = aiPreferencesPendingFrom(
           localStore.read(aiPreferencesPendingKey),
+        );
+        final remainingPending = updateAiPreferencesPending(
+          currentPending,
           confirmActions: pushConfirm ? false : null,
           memory: pushMemory ? false : null,
         );
-        await localStore.writeForAccount(
-          expectedUserId,
-          aiPreferencesPendingKey,
-          remainingPending,
-          enqueueSync: false,
-          notify: false,
-        );
+        try {
+          await localStore.writeForAccount(
+            expectedUserId,
+            aiPreferencesPendingKey,
+            remainingPending,
+            enqueueSync: false,
+            notify: false,
+          );
+        } catch (_) {
+          // LocalStore mutates its in-memory snapshot before flushing. Restore
+          // the retry marker in memory if clearing it could not be persisted.
+          try {
+            await localStore.writeForAccount(
+              expectedUserId,
+              aiPreferencesPendingKey,
+              currentPending,
+              enqueueSync: false,
+              notify: false,
+            );
+          } catch (_) {
+            // The marker is restored in memory before the second flush attempt;
+            // the next sync/restart can retry persistence when storage recovers.
+          }
+          rethrow;
+        }
         return;
       }
 
