@@ -265,6 +265,25 @@ class SyncService {
     return false;
   }
 
+  /// A rejected user_state write means the newer remote row won. Stop
+  /// retrying that local preference mutation so the dedicated ai_preferences
+  /// row can be pulled instead of downgrading values such as memory_level=complete.
+  static Map<String, bool> clearAiPreferenceRetryAfterRemoteWinner(
+    String userStateKey,
+    dynamic rawPending,
+  ) {
+    if (userStateKey == 'pace.settings.ai.confirm_actions') {
+      return updateAiPreferencesPending(
+        rawPending,
+        confirmActions: false,
+      );
+    }
+    if (userStateKey == 'pace.settings.ai.memory') {
+      return updateAiPreferencesPending(rawPending, memory: false);
+    }
+    return aiPreferencesPendingFrom(rawPending);
+  }
+
   static Map<String, bool> updateAiPreferencesPending(
     dynamic raw, {
     bool? confirmActions,
@@ -480,6 +499,32 @@ class SyncService {
           expectedUserId: expectedUserId,
         );
         if (!_isCurrentAccount(expectedUserId)) return;
+        if (key == 'pace.settings.ai.confirm_actions' ||
+            key == 'pace.settings.ai.memory') {
+          // The newer user_state row won. Persist the marker removal before
+          // acknowledging the outbox operation: if either flush fails, the
+          // source mutation remains pending and the next pass recreates its
+          // marker before retrying, rather than pushing a stale bool into the
+          // dedicated table (which could downgrade memory_level=complete).
+          final clearedMarker = clearAiPreferenceRetryAfterRemoteWinner(
+            key,
+            localStore.read(aiPreferencesPendingKey),
+          );
+          try {
+            await localStore.writeForAccount(
+              expectedUserId,
+              aiPreferencesPendingKey,
+              clearedMarker,
+              enqueueSync: false,
+              notify: false,
+            );
+            _aiPreferenceMarkerPersistenceUncertainUsers.remove(expectedUserId);
+          } catch (_) {
+            _aiPreferenceMarkerPersistenceUncertainUsers.add(expectedUserId);
+            rethrow;
+          }
+          if (!_isCurrentAccount(expectedUserId)) return;
+        }
         await localStore.acknowledgeOperation(operation, expectedUserId: expectedUserId);
       } catch (_) {
         try {
