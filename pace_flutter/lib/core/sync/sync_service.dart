@@ -225,6 +225,42 @@ class SyncService {
     }
   }
 
+  static const String aiPreferencesPendingKey =
+      'pace.__sync_ai_preferences_pending';
+
+  /// Parse the durable retry marker for the separate ai_preferences table.
+  /// Only known, explicitly-true flags are retained from local JSON.
+  static Map<String, bool> aiPreferencesPendingFrom(dynamic raw) {
+    if (raw is! Map) return <String, bool>{};
+    return <String, bool>{
+      if (raw['confirm_actions'] == true) 'confirm_actions': true,
+      if (raw['memory'] == true) 'memory': true,
+    };
+  }
+
+  static Map<String, bool> updateAiPreferencesPending(
+    dynamic raw, {
+    bool? confirmActions,
+    bool? memory,
+  }) {
+    final pending = aiPreferencesPendingFrom(raw);
+    if (confirmActions != null) {
+      if (confirmActions) {
+        pending['confirm_actions'] = true;
+      } else {
+        pending.remove('confirm_actions');
+      }
+    }
+    if (memory != null) {
+      if (memory) {
+        pending['memory'] = true;
+      } else {
+        pending.remove('memory');
+      }
+    }
+    return pending;
+  }
+
   static bool shouldPropagateAiPreferences({
     required bool hadLocalMutation,
     required bool hasPendingMutation,
@@ -256,27 +292,57 @@ class SyncService {
       const memoryKey = 'pace.settings.ai.memory';
       final hadConfirmMutation = localStore.hasPendingOperationForKey(confirmKey);
       final hadMemoryMutation = localStore.hasPendingOperationForKey(memoryKey);
+      // Persist a second retry marker before acknowledging user_state outbox
+      // operations. The dedicated ai_preferences upsert can fail independently;
+      // without this marker, the next pass would pull the old cloud value and
+      // overwrite the local preference after the outbox entry was acknowledged.
+      final pendingBeforePush = updateAiPreferencesPending(
+        localStore.read(aiPreferencesPendingKey),
+        confirmActions: hadConfirmMutation ? true : null,
+        memory: hadMemoryMutation ? true : null,
+      );
+      if (pendingBeforePush.length !=
+          aiPreferencesPendingFrom(localStore.read(aiPreferencesPendingKey)).length) {
+        try {
+          await localStore.writeForAccount(
+            userId,
+            aiPreferencesPendingKey,
+            pendingBeforePush,
+            enqueueSync: false,
+            notify: false,
+          );
+        } catch (_) {
+          // Do not acknowledge the source outbox until its retry marker is durable.
+          return;
+        }
+      }
+      if (!_isCurrentAccount(userId)) return;
       await _pushPending(userId);
       if (!_isCurrentAccount(userId)) return;
 
       final confirmStillPending = localStore.hasPendingOperationForKey(confirmKey);
       final memoryStillPending = localStore.hasPendingOperationForKey(memoryKey);
-      // Propagate each preference only if its own outbox mutation was
-      // acknowledged. Updating confirm_actions must not rewrite an unrelated
-      // memory_level, including the web client's distinct complete setting.
-      final pushConfirm = shouldPropagateAiPreferences(
-        hadLocalMutation: hadConfirmMutation,
-        hasPendingMutation: confirmStillPending,
+      final aiPending = aiPreferencesPendingFrom(
+        localStore.read(aiPreferencesPendingKey),
       );
-      final pushMemory = shouldPropagateAiPreferences(
-        hadLocalMutation: hadMemoryMutation,
-        hasPendingMutation: memoryStillPending,
-      );
+      // A marker survives transient ai_preferences failures and is cleared only
+      // after the dedicated-table write succeeds. Each preference is independent.
+      final pushConfirm = aiPending['confirm_actions'] == true &&
+          shouldPropagateAiPreferences(
+            hadLocalMutation: true,
+            hasPendingMutation: confirmStillPending,
+          );
+      final pushMemory = aiPending['memory'] == true &&
+          shouldPropagateAiPreferences(
+            hadLocalMutation: true,
+            hasPendingMutation: memoryStillPending,
+          );
       await _syncAiPreferences(
         expectedUserId: userId,
         pushConfirm: pushConfirm,
         pushMemory: pushMemory,
-        preserveLocal: confirmStillPending || memoryStillPending,
+        preserveLocal: confirmStillPending || memoryStillPending ||
+            aiPending.isNotEmpty && (!pushConfirm || !pushMemory),
       );
       if (!_isCurrentAccount(userId)) return;
       try {
@@ -442,7 +508,21 @@ class SyncService {
           pushConfirm: pushConfirm,
           pushMemory: pushMemory,
         );
-        if (patch.length > 1) await client!.from('ai_preferences').upsert(patch);
+        if (patch.length <= 1) return;
+        await client!.from('ai_preferences').upsert(patch);
+        if (!_isCurrentAccount(expectedUserId)) return;
+        final remainingPending = updateAiPreferencesPending(
+          localStore.read(aiPreferencesPendingKey),
+          confirmActions: pushConfirm ? false : null,
+          memory: pushMemory ? false : null,
+        );
+        await localStore.writeForAccount(
+          expectedUserId,
+          aiPreferencesPendingKey,
+          remainingPending,
+          enqueueSync: false,
+          notify: false,
+        );
         return;
       }
 
