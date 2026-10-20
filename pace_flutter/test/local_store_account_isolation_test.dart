@@ -112,6 +112,29 @@ void main() {
     );
   });
 
+  test('AI preference retry markers persist locally without entering the cloud outbox', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write(
+      SyncService.aiPreferencesPendingKey,
+      {'confirm_actions': true, 'memory': true},
+      enqueueSync: false,
+      notify: false,
+    );
+
+    final reopened = await LocalStore.open(directory: directory);
+    await reopened.activateAccount('user-a');
+    expect(
+      reopened.read(SyncService.aiPreferencesPendingKey),
+      {'confirm_actions': true, 'memory': true},
+    );
+    expect(reopened.pendingOperations(), isEmpty);
+    expect(
+      SyncService.isSyncableKey(SyncService.aiPreferencesPendingKey),
+      isFalse,
+    );
+  });
+
   test('acknowledging an accepted write records its server timestamp', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
