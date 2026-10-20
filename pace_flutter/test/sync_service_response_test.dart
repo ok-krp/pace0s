@@ -591,6 +591,48 @@ void main() {
     });
   });
 
+  group('SyncService AI preference retry markers', () {
+    test('keeps only supported pending flags from local JSON', () {
+      expect(
+        SyncService.aiPreferencesPendingFrom({
+          'confirm_actions': true,
+          'memory': false,
+          'unknown': true,
+        }),
+        {'confirm_actions': true},
+      );
+      expect(SyncService.aiPreferencesPendingFrom(null), isEmpty);
+      expect(SyncService.aiPreferencesPendingFrom('invalid'), isEmpty);
+    });
+
+    test('clears one successful preference without losing the other retry', () {
+      expect(
+        SyncService.updateAiPreferencesPending(
+          {'confirm_actions': true, 'memory': true},
+          confirmActions: false,
+        ),
+        {'memory': true},
+      );
+      expect(
+        SyncService.updateAiPreferencesPending(
+          {'confirm_actions': true, 'memory': true},
+          memory: false,
+        ),
+        {'confirm_actions': true},
+      );
+    });
+
+    test('adds a retry marker while preserving an existing pending preference', () {
+      expect(
+        SyncService.updateAiPreferencesPending(
+          {'memory': true},
+          confirmActions: true,
+        ),
+        {'confirm_actions': true, 'memory': true},
+      );
+    });
+  });
+
   group('SyncService.shouldPropagateAiPreferences', () {
     test('does not bypass backoff while any local preference mutation remains', () {
       expect(
