@@ -15,7 +15,9 @@ class SyncService {
   bool _rerunRequested = false;
   // LocalStore mutates memory before disk flush; remember failed marker flushes
   // so a later pass cannot mistake an in-memory marker for durable state.
-  bool _aiPreferenceMarkerPersistenceUncertain = false;
+  // A failed local flush belongs to the active account's file, not to the
+  // service globally. Keep uncertainty scoped across account switches.
+  final Set<String> _aiPreferenceMarkerPersistenceUncertainUsers = <String>{};
 
   bool _isCurrentAccount(String expectedUserId) =>
       client?.auth.currentUser?.id == expectedUserId &&
@@ -326,7 +328,7 @@ class SyncService {
         memory: hadMemoryMutation ? true : null,
       );
       final markerNeedsPersistence =
-          _aiPreferenceMarkerPersistenceUncertain ||
+          _aiPreferenceMarkerPersistenceUncertainUsers.contains(userId) ||
           pendingBeforePush.length != existingAiPending.length ||
           (hadConfirmMutation && existingAiPending['confirm_actions'] != true) ||
           (hadMemoryMutation && existingAiPending['memory'] != true);
@@ -339,10 +341,10 @@ class SyncService {
             enqueueSync: false,
             notify: false,
           );
-          _aiPreferenceMarkerPersistenceUncertain = false;
+          _aiPreferenceMarkerPersistenceUncertainUsers.remove(userId);
         } catch (_) {
           // Do not acknowledge the source outbox until its retry marker is durable.
-          _aiPreferenceMarkerPersistenceUncertain = true;
+          _aiPreferenceMarkerPersistenceUncertainUsers.add(userId);
           return;
         }
       }
@@ -579,9 +581,9 @@ class SyncService {
             enqueueSync: false,
             notify: false,
           );
-          _aiPreferenceMarkerPersistenceUncertain = false;
+          _aiPreferenceMarkerPersistenceUncertainUsers.remove(expectedUserId);
         } catch (_) {
-          _aiPreferenceMarkerPersistenceUncertain = true;
+          _aiPreferenceMarkerPersistenceUncertainUsers.add(expectedUserId);
           // LocalStore mutates its in-memory snapshot before flushing. Restore
           // the retry marker in memory if clearing it could not be persisted.
           try {
