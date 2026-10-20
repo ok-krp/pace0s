@@ -706,6 +706,41 @@ void main() {
       );
     });
 
+    test('clears an unpushable marker only when no newer edit is pending', () {
+      expect(
+        SyncService.shouldClearUnpushableAiPreferenceMarker(
+          pushRequested: true,
+          localValueValid: false,
+          hasPendingMutation: false,
+        ),
+        isTrue,
+      );
+      expect(
+        SyncService.shouldClearUnpushableAiPreferenceMarker(
+          pushRequested: true,
+          localValueValid: false,
+          hasPendingMutation: true,
+        ),
+        isFalse,
+      );
+      expect(
+        SyncService.shouldClearUnpushableAiPreferenceMarker(
+          pushRequested: true,
+          localValueValid: true,
+          hasPendingMutation: false,
+        ),
+        isFalse,
+      );
+      expect(
+        SyncService.shouldClearUnpushableAiPreferenceMarker(
+          pushRequested: false,
+          localValueValid: false,
+          hasPendingMutation: false,
+        ),
+        isFalse,
+      );
+    });
+
     test('does not clear a retry marker while a newer local edit is pending', () {
       expect(
         SyncService.shouldClearAiPreferenceRetryMarker(
