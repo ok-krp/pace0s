@@ -653,6 +653,21 @@ void main() {
       );
     });
 
+    test('does not clear a retry marker while a newer local edit is pending', () {
+      expect(
+        SyncService.shouldClearAiPreferenceRetryMarker(
+          hasPendingMutation: true,
+        ),
+        isFalse,
+      );
+      expect(
+        SyncService.shouldClearAiPreferenceRetryMarker(
+          hasPendingMutation: false,
+        ),
+        isTrue,
+      );
+    });
+
     test('adds a retry marker while preserving an existing pending preference', () {
       expect(
         SyncService.updateAiPreferencesPending(
