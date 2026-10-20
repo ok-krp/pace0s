@@ -558,57 +558,100 @@ class SyncService {
           pushConfirm: pushConfirm,
           pushMemory: pushMemory,
         );
-        if (patch.length <= 1) return;
-        await client!.from('ai_preferences').upsert(patch);
-        if (!_isCurrentAccount(expectedUserId)) return;
-        final currentPending = aiPreferencesPendingFrom(
-          localStore.read(aiPreferencesPendingKey),
-        );
-        final confirmCanClear = pushConfirm &&
-            shouldClearAiPreferenceRetryMarker(
-              hasPendingMutation: localStore.hasPendingOperationForKey(
-                'pace.settings.ai.confirm_actions',
-              ),
-            );
-        final memoryCanClear = pushMemory &&
-            shouldClearAiPreferenceRetryMarker(
-              hasPendingMutation: localStore.hasPendingOperationForKey(
-                'pace.settings.ai.memory',
-              ),
-            );
-        final remainingPending = updateAiPreferencesPending(
-          currentPending,
-          confirmActions: confirmCanClear ? false : null,
-          memory: memoryCanClear ? false : null,
-        );
-        try {
-          await localStore.writeForAccount(
-            expectedUserId,
-            aiPreferencesPendingKey,
-            remainingPending,
-            enqueueSync: false,
-            notify: false,
+        if (patch.length <= 1) {
+          // Corrupt local JSON can contain a non-boolean value for a boolean
+          // preference. It cannot be sent to ai_preferences; release only that
+          // unpushable retry marker so the authoritative cloud preference can
+          // repair the local value instead of retrying forever.
+          final currentPending = aiPreferencesPendingFrom(
+            localStore.read(aiPreferencesPendingKey),
           );
-          _aiPreferenceMarkerPersistenceUncertainUsers.remove(expectedUserId);
-        } catch (_) {
-          _aiPreferenceMarkerPersistenceUncertainUsers.add(expectedUserId);
-          // LocalStore mutates its in-memory snapshot before flushing. Restore
-          // the retry marker in memory if clearing it could not be persisted.
+          final confirmCanClear = pushConfirm &&
+              localConfirm is! bool &&
+              shouldClearAiPreferenceRetryMarker(
+                hasPendingMutation: localStore.hasPendingOperationForKey(
+                  'pace.settings.ai.confirm_actions',
+                ),
+              );
+          final memoryCanClear = pushMemory &&
+              localMemory is! bool &&
+              shouldClearAiPreferenceRetryMarker(
+                hasPendingMutation: localStore.hasPendingOperationForKey(
+                  'pace.settings.ai.memory',
+                ),
+              );
+          final remainingPending = updateAiPreferencesPending(
+            currentPending,
+            confirmActions: confirmCanClear ? false : null,
+            memory: memoryCanClear ? false : null,
+          );
           try {
             await localStore.writeForAccount(
               expectedUserId,
               aiPreferencesPendingKey,
-              currentPending,
+              remainingPending,
               enqueueSync: false,
               notify: false,
             );
+            if (!_isCurrentAccount(expectedUserId)) return;
+            _aiPreferenceMarkerPersistenceUncertainUsers.remove(expectedUserId);
           } catch (_) {
-            // The marker is restored in memory before the second flush attempt;
-            // the next sync/restart can retry persistence when storage recovers.
+            _aiPreferenceMarkerPersistenceUncertainUsers.add(expectedUserId);
+            return;
           }
-          rethrow;
+          // Continue to the read path below. It can repair invalid local values
+          // from the cloud, while the guards below protect any concurrent edit.
+        } else {
+          await client!.from('ai_preferences').upsert(patch);
+          if (!_isCurrentAccount(expectedUserId)) return;
+          final currentPending = aiPreferencesPendingFrom(
+            localStore.read(aiPreferencesPendingKey),
+          );
+          final confirmCanClear = pushConfirm &&
+              shouldClearAiPreferenceRetryMarker(
+                hasPendingMutation: localStore.hasPendingOperationForKey(
+                  'pace.settings.ai.confirm_actions',
+                ),
+              );
+          final memoryCanClear = pushMemory &&
+              shouldClearAiPreferenceRetryMarker(
+                hasPendingMutation: localStore.hasPendingOperationForKey(
+                  'pace.settings.ai.memory',
+                ),
+              );
+          final remainingPending = updateAiPreferencesPending(
+            currentPending,
+            confirmActions: confirmCanClear ? false : null,
+            memory: memoryCanClear ? false : null,
+          );
+          try {
+            await localStore.writeForAccount(
+              expectedUserId,
+              aiPreferencesPendingKey,
+              remainingPending,
+              enqueueSync: false,
+              notify: false,
+            );
+            _aiPreferenceMarkerPersistenceUncertainUsers.remove(expectedUserId);
+          } catch (_) {
+            _aiPreferenceMarkerPersistenceUncertainUsers.add(expectedUserId);
+            // LocalStore mutates memory before flushing. Restore the retry marker
+            // in memory if clearing it could not be persisted.
+            try {
+              await localStore.writeForAccount(
+                expectedUserId,
+                aiPreferencesPendingKey,
+                currentPending,
+                enqueueSync: false,
+                notify: false,
+              );
+            } catch (_) {
+              // The next pass/restart can retry persistence when storage recovers.
+            }
+            rethrow;
+          }
+          return;
         }
-        return;
       }
 
       // Do not pull cloud preferences over a local mutation waiting for retry.
