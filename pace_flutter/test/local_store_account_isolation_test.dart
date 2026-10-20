@@ -78,6 +78,11 @@ void main() {
       isTrue,
     );
     expect(
+      LocalStore.isValidIsoTimestamp('2026-10-18T10:00:00'),
+      isTrue,
+      reason: 'legacy local timestamps may be zone-less',
+    );
+    expect(
       LocalStore.isValidRemoteTimestamp('2026-10-18T10:00:00'),
       isFalse,
     );
