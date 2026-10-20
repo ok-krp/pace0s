@@ -31,7 +31,7 @@ class SyncService {
     if (response == true) return true;
     if (response is! Map || response['accepted'] != true) return false;
     final updatedAt = response['updated_at'];
-    return updatedAt is String && LocalStore.isValidIsoTimestamp(updatedAt);
+    return updatedAt is String && LocalStore.isValidRemoteTimestamp(updatedAt);
   }
 
   /// Prefer a database-authoritative updated_at when a structured RPC
@@ -43,7 +43,7 @@ class SyncService {
   }) {
     if (response is Map) {
       final raw = response['updated_at'];
-      if (raw is String && LocalStore.isValidIsoTimestamp(raw)) {
+      if (raw is String && LocalStore.isValidRemoteTimestamp(raw)) {
         final parsed = DateTime.parse(raw);
         return parsed.toUtc().toIso8601String();
       }
@@ -770,7 +770,7 @@ class SyncService {
         final key = normalizeRemoteKey(rawKey);
         final remoteUpdatedAt = row['updated_at'] as String?;
         final remoteTime = remoteUpdatedAt == null ||
-                !LocalStore.isValidIsoTimestamp(remoteUpdatedAt)
+                !LocalStore.isValidRemoteTimestamp(remoteUpdatedAt)
             ? null
             : DateTime.tryParse(remoteUpdatedAt)?.toUtc();
         // Device-local rows must not advance the cloud-sync cursor; otherwise
