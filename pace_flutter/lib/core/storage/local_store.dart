@@ -49,11 +49,13 @@ class LocalStore extends ChangeNotifier {
   }
 
   /// Validates a timestamp returned by the remote database. PostgreSQL
-  /// `timestamptz` values must carry an explicit zone; accepting a zone-less
+  /// \`timestamptz\` values must carry an explicit zone; accepting a zone-less
   /// remote value would make conflict resolution depend on the device timezone.
   static bool isValidRemoteTimestamp(String value) =>
       isValidIsoTimestamp(value) &&
-      RegExp(r'(?:Z|[+-]\\d{2}:\\d{2})  /// DateTime.parse normalizes some overflowing components (for example, an
+      RegExp(r'(?:Z|[+-][0-9]{2}:[0-9]{2})$').hasMatch(value);
+
+  /// DateTime.parse normalizes some overflowing components (for example, an
   /// invalid day can roll into the next month), so those values must be rejected
   /// rather than silently reinterpreted as a different instant.
   static bool isValidIsoTimestamp(String value) {
