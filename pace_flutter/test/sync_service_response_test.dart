@@ -605,6 +605,37 @@ void main() {
       expect(SyncService.aiPreferencesPendingFrom('invalid'), isEmpty);
     });
 
+    test('protects a preference from pulls while its dedicated write retries', () {
+      expect(
+        SyncService.isAiPreferenceProtectedByRetryMarker(
+          'pace.settings.ai.confirm_actions',
+          {'confirm_actions': true},
+        ),
+        isTrue,
+      );
+      expect(
+        SyncService.isAiPreferenceProtectedByRetryMarker(
+          'pace.settings.ai.memory',
+          {'memory': true},
+        ),
+        isTrue,
+      );
+      expect(
+        SyncService.isAiPreferenceProtectedByRetryMarker(
+          'pace.settings.ai.memory',
+          {'confirm_actions': true},
+        ),
+        isFalse,
+      );
+      expect(
+        SyncService.isAiPreferenceProtectedByRetryMarker(
+          'pace.settings.theme',
+          {'confirm_actions': true, 'memory': true},
+        ),
+        isFalse,
+      );
+    });
+
     test('clears one successful preference without losing the other retry', () {
       expect(
         SyncService.updateAiPreferencesPending(
