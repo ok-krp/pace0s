@@ -68,6 +68,25 @@ void main() {
     }
   });
 
+  test('remote timestamps require an explicit timezone', () {
+    expect(
+      LocalStore.isValidRemoteTimestamp('2026-10-18T10:00:00Z'),
+      isTrue,
+    );
+    expect(
+      LocalStore.isValidRemoteTimestamp('2026-10-18T10:00:00+02:00'),
+      isTrue,
+    );
+    expect(
+      LocalStore.isValidRemoteTimestamp('2026-10-18T10:00:00'),
+      isFalse,
+    );
+    expect(
+      LocalStore.isValidRemoteTimestamp('2026-10-18T10:00:00.1234567Z'),
+      isFalse,
+    );
+  });
+
   test('invalid timestamps cannot poison the next queued write', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
