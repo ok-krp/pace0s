@@ -278,6 +278,11 @@ class SyncService {
     return pending;
   }
 
+  static bool shouldClearAiPreferenceRetryMarker({
+    required bool hasPendingMutation,
+  }) =>
+      !hasPendingMutation;
+
   static bool shouldPropagateAiPreferences({
     required bool hasRetryMarker,
     required bool hasPendingMutation,
@@ -524,6 +529,16 @@ class SyncService {
 
     try {
       if (pushConfirm || pushMemory) {
+        // A new edit may arrive after syncNow computed the push flags. Do not
+        // publish it to ai_preferences before its user_state mutation is accepted.
+        if ((pushConfirm &&
+                localStore.hasPendingOperationForKey(
+                  'pace.settings.ai.confirm_actions',
+                )) ||
+            (pushMemory &&
+                localStore.hasPendingOperationForKey('pace.settings.ai.memory'))) {
+          return;
+        }
         final localConfirm = localStore.read('pace.settings.ai.confirm_actions');
         final localMemory = localStore.read('pace.settings.ai.memory');
         final patch = buildAiPreferencesPatch(
@@ -539,10 +554,22 @@ class SyncService {
         final currentPending = aiPreferencesPendingFrom(
           localStore.read(aiPreferencesPendingKey),
         );
+        final confirmCanClear = pushConfirm &&
+            shouldClearAiPreferenceRetryMarker(
+              hasPendingMutation: localStore.hasPendingOperationForKey(
+                'pace.settings.ai.confirm_actions',
+              ),
+            );
+        final memoryCanClear = pushMemory &&
+            shouldClearAiPreferenceRetryMarker(
+              hasPendingMutation: localStore.hasPendingOperationForKey(
+                'pace.settings.ai.memory',
+              ),
+            );
         final remainingPending = updateAiPreferencesPending(
           currentPending,
-          confirmActions: pushConfirm ? false : null,
-          memory: pushMemory ? false : null,
+          confirmActions: confirmCanClear ? false : null,
+          memory: memoryCanClear ? false : null,
         );
         try {
           await localStore.writeForAccount(
