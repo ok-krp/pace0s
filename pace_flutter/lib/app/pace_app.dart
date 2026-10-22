@@ -106,6 +106,7 @@ class _AuthGateState extends State<_AuthGate> {
   StreamSubscription<AuthState>? _subscription;
   bool _configured = false;
   bool _signedIn = false;
+  bool _offlineMode = false;
 
   int _accountGeneration = 0;
 
@@ -160,8 +161,33 @@ class _AuthGateState extends State<_AuthGate> {
       _ => ThemeMode.system,
     };
     widget.onThemeLoaded(storedTheme);
-    setState(() => _signedIn = userId != null);
+    setState(() {
+      _signedIn = userId != null;
+      _offlineMode = false;
+    });
     if (userId != null) await widget.sync.syncNow();
+  }
+
+  Future<void> _continueOffline() async {
+    final generation = ++_accountGeneration;
+    try {
+      // Switch to the guest/local file before showing the shell. Never leave
+      // a previously authenticated account's local state active in offline mode.
+      await widget.localStore.activateAccount(null);
+    } catch (_) {
+      return;
+    }
+    if (!mounted || generation != _accountGeneration) return;
+    final storedTheme = switch (widget.localStore.read('pace.settings.theme')) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
+    widget.onThemeLoaded(storedTheme);
+    setState(() {
+      _signedIn = false;
+      _offlineMode = true;
+    });
   }
 
   @override
@@ -175,7 +201,7 @@ class _AuthGateState extends State<_AuthGate> {
     // Capture the account that owns this shell. A delayed callback from a
     // disposed shell must not apply its theme choice to the next account.
     final shellUserId = widget.localStore.activeUserId;
-    if (!_configured || _signedIn) {
+    if (!_configured || _signedIn || _offlineMode) {
       return PaceShell(
         localStore: widget.localStore,
         sync: widget.sync,
