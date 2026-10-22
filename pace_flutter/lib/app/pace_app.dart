@@ -189,7 +189,8 @@ class _AuthGateState extends State<_AuthGate> {
       // a previously authenticated account's local state active in offline mode.
       await widget.localStore.activateAccount(null);
     } catch (_) {
-      _offlineRequested = false;
+      // A stale failed attempt must not cancel a newer offline request.
+      if (generation == _accountGeneration) _offlineRequested = false;
       return;
     }
     if (!mounted || generation != _accountGeneration) return;
