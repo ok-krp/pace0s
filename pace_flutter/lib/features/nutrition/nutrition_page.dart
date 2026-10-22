@@ -77,6 +77,8 @@ class _NutritionPageState extends State<NutritionPage> {
   }
 
   Future<void> _addFood() async {
+    // Capture the initiating account before the dialog can outlive a switch.
+    final expectedUserId = _accountUserId;
     final name = TextEditingController();
     final kcal = TextEditingController();
     final protein = TextEditingController();
@@ -115,7 +117,8 @@ class _NutritionPageState extends State<NutritionPage> {
     protein.dispose();
     carbs.dispose();
     fat.dispose();
-    if (result == null || itemName.isEmpty) return;
+    if (result == null || itemName.isEmpty ||
+        widget.localStore.activeUserId != expectedUserId) return;
 
     final raw = widget.localStore.read('pace.nutrition.items');
     final data = Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
@@ -129,12 +132,15 @@ class _NutritionPageState extends State<NutritionPage> {
       ...result,
     });
     data[day] = list;
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.nutrition.items', data);
-    await _recalculateTotals(data);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.nutrition.items', data);
+    await _recalculateTotals(data, expectedUserId: expectedUserId);
     if (mounted) setState(() {});
   }
 
-  Future<void> _recalculateTotals(Map<String, dynamic> data) async {
+  Future<void> _recalculateTotals(
+    Map<String, dynamic> data, {
+    required String? expectedUserId,
+  }) async {
     final totals = <String, dynamic>{};
     for (final entry in data.entries) {
       final rawItems = entry.value;
@@ -159,10 +165,11 @@ class _NutritionPageState extends State<NutritionPage> {
         'f': hasF ? dayF : null,
       };
     }
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.nutrition.totals', totals);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.nutrition.totals', totals);
   }
 
   Future<void> _deleteItem(Map<String, dynamic> item) async {
+    final expectedUserId = _accountUserId;
     final raw = widget.localStore.read('pace.nutrition.items');
     if (raw is! Map) return;
     final data = Map<String, dynamic>.from(raw);
@@ -172,8 +179,8 @@ class _NutritionPageState extends State<NutritionPage> {
     list.removeWhere((entry) => entry is Map && entry['id']?.toString() == item['id']?.toString());
     if (list.length == before) return;
     data[day] = list;
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.nutrition.items', data);
-    await _recalculateTotals(data);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.nutrition.items', data);
+    await _recalculateTotals(data, expectedUserId: expectedUserId);
     if (mounted) setState(() {});
   }
 
