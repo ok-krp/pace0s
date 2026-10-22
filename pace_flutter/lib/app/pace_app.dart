@@ -123,6 +123,7 @@ class _AuthGateState extends State<_AuthGate> {
       final currentUser = widget.auth.currentUser;
       if (currentUser != null) unawaited(_activateAccount(currentUser.id));
       _subscription = widget.auth.authStateChanges.listen((state) {
+        if (!mounted) return;
         final userId = state.session?.user.id;
         // An explicit offline choice wins over token-refresh/session events.
         // A real sign-out exits offline mode so the auth screen can be shown.
