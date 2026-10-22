@@ -16,7 +16,75 @@ permissions:
   contents: read
 
 jobs:
+  supabase-preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.endpoint.outputs.configured }}
+    steps:
+      - name: Check Supabase endpoint DNS before labelling artifacts as cloud
+        id: endpoint
+        shell: bash
+        env:
+          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import socket
+          import sys
+          import time
+          from urllib.parse import urlparse
+
+          url = os.environ.get("SUPABASE_URL", "").strip()
+          key = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "").strip()
+          output_path = os.environ["GITHUB_OUTPUT"]
+
+          def set_output(value):
+              with open(output_path, "a", encoding="utf-8") as output:
+                  output.write(f"configured={value}\\n")
+
+          if not url or not key:
+              print("::warning::Supabase URL/key missing; builds will be explicitly offline/local-only.")
+              set_output("false")
+              sys.exit(0)
+
+          parsed = urlparse(url)
+          host = parsed.hostname
+          if parsed.scheme != "https" or not host or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+              print("::warning::SUPABASE_URL is not a clean HTTPS project URL; builds will be offline/local-only.")
+              set_output("false")
+              sys.exit(0)
+
+          if host.endswith(".supabase.co"):
+              project_ref = host[:-len(".supabase.co")]
+              if not re.fullmatch(r"[a-z0-9]{20}", project_ref):
+                  print("::warning::Supabase project reference must be 20 lowercase alphanumeric characters; builds will be offline/local-only.")
+                  set_output("false")
+                  sys.exit(0)
+
+          last_error = None
+          for attempt in range(3):
+              try:
+                  socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
+                  last_error = None
+                  break
+              except socket.gaierror as error:
+                  last_error = error
+                  if attempt < 2:
+                      time.sleep(2)
+
+          if last_error is not None:
+              print(f"::warning::Supabase hostname {host} does not resolve from GitHub Actions ({last_error}); cloud configuration will not be embedded in release artifacts.")
+              set_output("false")
+              sys.exit(0)
+
+          print(f"Supabase hostname {host} resolves; cloud configuration can be embedded.")
+          set_output("true")
+          PY
+
   android:
+    needs: supabase-preflight
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -107,20 +175,20 @@ jobs:
         id: supabase_config
         shell: bash
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Supabase build configuration is missing. Native builds will run in offline/local-only mode and artifacts will be labelled offline. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables to enable cloud authentication and sync."
+            echo "::warning::Supabase configuration is missing, malformed, or DNS-unreachable. Native artifacts will be labelled offline and built without the cloud endpoint/key."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Build APK
         working-directory: pace_flutter
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
         run: flutter build apk --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish APK
         uses: actions/upload-artifact@v4
@@ -131,8 +199,8 @@ jobs:
       - name: Build AAB
         working-directory: pace_flutter
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
         run: flutter build appbundle --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish AAB
         uses: actions/upload-artifact@v4
@@ -142,6 +210,7 @@ jobs:
           if-no-files-found: error
 
   linux:
+    needs: supabase-preflight
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -170,20 +239,20 @@ jobs:
         id: supabase_config
         shell: bash
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Supabase build configuration is missing. Native builds will run in offline/local-only mode and artifacts will be labelled offline. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables to enable cloud authentication and sync."
+            echo "::warning::Supabase configuration is missing, malformed, or DNS-unreachable. Native artifacts will be labelled offline and built without the cloud endpoint/key."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Build Linux
         working-directory: pace_flutter
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
         run: flutter build linux --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish Linux build
         uses: actions/upload-artifact@v4
@@ -193,6 +262,7 @@ jobs:
           if-no-files-found: error
 
   windows:
+    needs: supabase-preflight
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -219,20 +289,20 @@ jobs:
         id: supabase_config
         shell: bash
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Supabase build configuration is missing. Native builds will run in offline/local-only mode and artifacts will be labelled offline. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables to enable cloud authentication and sync."
+            echo "::warning::Supabase configuration is missing, malformed, or DNS-unreachable. Native artifacts will be labelled offline and built without the cloud endpoint/key."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Build Windows
         working-directory: pace_flutter
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
         run: flutter build windows --release "--dart-define=SUPABASE_URL=$env:SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY"
       - name: Publish Windows build
         uses: actions/upload-artifact@v4
@@ -242,6 +312,7 @@ jobs:
           if-no-files-found: error
 
   apple:
+    needs: supabase-preflight
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -278,20 +349,20 @@ jobs:
         id: supabase_config
         shell: bash
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Supabase build configuration is missing. Native builds will run in offline/local-only mode and artifacts will be labelled offline. Configure SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Actions secrets or repository variables to enable cloud authentication and sync."
+            echo "::warning::Supabase configuration is missing, malformed, or DNS-unreachable. Native artifacts will be labelled offline and built without the cloud endpoint/key."
           else
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
       - name: Build iOS
         working-directory: pace_flutter
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
         run: flutter build ios --release --no-codesign "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish iOS build
         uses: actions/upload-artifact@v4
@@ -302,8 +373,8 @@ jobs:
       - name: Build macOS
         working-directory: pace_flutter
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
         run: flutter build macos --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish macOS build
         uses: actions/upload-artifact@v4
