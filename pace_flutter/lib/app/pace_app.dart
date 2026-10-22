@@ -151,10 +151,10 @@ class _AuthGateState extends State<_AuthGate> {
     }
 
     final generation = ++_accountGeneration;
-    if (_signedIn && widget.localStore.activeUserId != userId) {
+    if (widget.localStore.activeUserId != userId) {
       // Feature routes are pushed onto MaterialApp's root navigator. Remove
-      // them before changing account scope so a signed-out account cannot leave
-      // a cached page visible above the authentication screen.
+      // them before every account-scope transition, including guest/offline
+      // mode, so cached routes cannot survive a later sign-in or sign-out.
       Navigator.maybeOf(context, rootNavigator: true)
           ?.popUntil((route) => route.isFirst);
     }
