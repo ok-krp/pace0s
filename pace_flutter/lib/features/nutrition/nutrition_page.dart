@@ -14,6 +14,7 @@ class NutritionPage extends StatefulWidget {
 
 class _NutritionPageState extends State<NutritionPage> {
   late String? _accountUserId;
+
   @override
   void initState() {
     super.initState();
@@ -22,7 +23,15 @@ class _NutritionPageState extends State<NutritionPage> {
   }
 
   void _onLocalStoreChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    // LocalStore is reused across sign-in/sign-out. Refresh the write scope
+    // when its account-switch notification arrives; otherwise the page keeps
+    // the previous account ID and all future scoped nutrition writes are
+    // safely discarded by LocalStore.
+    final activeUserId = widget.localStore.activeUserId;
+    setState(() {
+      _accountUserId = activeUserId;
+    });
   }
 
   @override
@@ -30,6 +39,7 @@ class _NutritionPageState extends State<NutritionPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.localStore != widget.localStore) {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      _accountUserId = widget.localStore.activeUserId;
       widget.localStore.addListener(_onLocalStoreChanged);
     }
   }
