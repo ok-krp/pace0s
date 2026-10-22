@@ -94,7 +94,7 @@ class PaceAiService {
   }
 
   Future<List<AiConversation>> loadConversations({PaceAiAgent agent = PaceAiAgent.coach}) async {
-    final local = loadLocalConversations().where((item) => item.agent == agent).toList();
+    var local = loadLocalConversations().where((item) => item.agent == agent).toList();
     final client = _client;
     final user = _scopedUser;
     if (client == null || user == null) return local;
@@ -102,6 +102,10 @@ class PaceAiService {
     try {
       await _retryPendingConversationDeletes(client, user.id);
       if (!_isAccountScopeCurrent) return const <AiConversation>[];
+      // Even if a delete remains blocked by an offline/network/RLS error,
+      // its tombstone suppresses both local and remote copies until retry.
+      final pendingDeleteIds = _pendingDeletedConversationIds().toSet();
+      local = local.where((item) => !pendingDeleteIds.contains(item.id)).toList();
       final rows = await client
           .from('ai_conversations')
           .select('id,agent_type,title,is_starred,is_archived,is_ephemeral,updated_at')
@@ -118,7 +122,7 @@ class PaceAiService {
           title: value['title']?.toString() ?? 'Nouvelle conversation',
           updatedAt: DateTime.tryParse(value['updated_at']?.toString() ?? '')?.toLocal() ?? DateTime.fromMillisecondsSinceEpoch(0),
         );
-      }).toList();
+      }).where((item) => !pendingDeleteIds.contains(item.id)).toList();
       // A rename can be committed locally while offline and its cloud update
       // can fail. Retry local versions newer than the fetched row. Only title
       // and updated_at are changed; unrelated remote metadata remains intact.
