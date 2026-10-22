@@ -37,6 +37,7 @@ class PaceAiService {
   }
 
   static const _conversationKey = 'pace.ai.conversations';
+  static const _deletedConversationKey = 'pace.ai.deleted_conversations';
   static const _memoryKey = 'pace.ai.memory';
   static const _memoryEnabledKey = 'pace.settings.ai.memory';
   static const _confirmKey = 'pace.settings.ai.confirm_actions';
@@ -97,6 +98,8 @@ class PaceAiService {
     if (client == null || user == null) return local;
 
     try {
+      await _retryPendingConversationDeletes(client, user.id);
+      if (!_isAccountScopeCurrent) return const <AiConversation>[];
       final rows = await client
           .from('ai_conversations')
           .select('id,agent_type,title,is_starred,is_archived,is_ephemeral,updated_at')
@@ -219,13 +222,63 @@ class PaceAiService {
   }
 
   Future<void> deleteConversation(String id) async {
-    final conversations = loadLocalConversations()..removeWhere((item) => item.id == id);
-    await _saveLocalConversations(conversations);
+    if (!_isAccountScopeCurrent) return;
     final client = _client;
     final user = _scopedUser;
     if (client != null && user != null) {
-      await client.from('ai_conversations').delete().eq('id', id).eq('user_id', user.id);
+      // Persist a local tombstone before removing the conversation. If the
+      // remote delete fails offline, loadConversations retries it before
+      // reading the remote list so the deleted item cannot reappear.
+      final pending = _pendingDeletedConversationIds();
+      if (!pending.contains(id)) pending.add(id);
+      await localStore.writeForAccount(
+        _accountUserId,
+        _deletedConversationKey,
+        pending,
+        enqueueSync: false,
+      );
+      if (!_isAccountScopeCurrent) return;
     }
+    final conversations = loadLocalConversations()..removeWhere((item) => item.id == id);
+    await _saveLocalConversations(conversations);
+    if (client != null && user != null) {
+      await _retryPendingConversationDeletes(client, user.id);
+    }
+  }
+
+  List<String> _pendingDeletedConversationIds() {
+    final raw = localStore.read(_deletedConversationKey);
+    if (raw is! List) return <String>[];
+    return raw.whereType<String>().where((id) => id.isNotEmpty).toSet().toList();
+  }
+
+  Future<void> _retryPendingConversationDeletes(
+    SupabaseClient client,
+    String userId,
+  ) async {
+    final pending = _pendingDeletedConversationIds();
+    if (pending.isEmpty) return;
+    final remaining = List<String>.from(pending);
+    for (final id in pending) {
+      if (!_isAccountScopeCurrent || userId != _accountUserId) return;
+      try {
+        await client
+            .from('ai_conversations')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', userId);
+        remaining.remove(id);
+      } catch (_) {
+        // Retain failed deletes durably for the next online conversation load.
+      }
+    }
+    if (!_isAccountScopeCurrent || remaining.length == pending.length) return;
+    await localStore.writeForAccount(
+      _accountUserId,
+      _deletedConversationKey,
+      remaining,
+      enqueueSync: false,
+    );
   }
 
   Future<List<AiMessage>> loadMessages(String id) async {
