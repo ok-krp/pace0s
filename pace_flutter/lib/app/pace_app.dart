@@ -213,7 +213,10 @@ class _AuthGateState extends State<_AuthGate> {
         themeMode: widget.themeMode,
       );
     }
-    return AuthPage(auth: widget.auth);
+    return AuthPage(
+      auth: widget.auth,
+      onContinueOffline: _continueOffline,
+    );
   }
 }
 
