@@ -11,6 +11,10 @@ on:
     paths:
       - 'pace_flutter/**'
       - '.github/workflows/flutter-native.yml'
+  pull_request:
+    paths:
+      - 'pace_flutter/**'
+      - '.github/workflows/flutter-native.yml'
 
 permissions:
   contents: read
