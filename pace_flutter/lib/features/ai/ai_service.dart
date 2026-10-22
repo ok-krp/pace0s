@@ -61,22 +61,24 @@ class PaceAiService {
   }
 
   Future<void> setMemoryEnabled(bool enabled) async {
+    if (!_isAccountScopeCurrent) return;
     await localStore.writeForAccount(_accountUserId, _memoryEnabledKey, enabled);
-    if (!enabled) await localStore.writeForAccount(_accountUserId, _memoryKey, <dynamic>[]);
+    if (!_isAccountScopeCurrent) return;
+    if (!enabled) {
+      await localStore.writeForAccount(_accountUserId, _memoryKey, <dynamic>[]);
+      if (!_isAccountScopeCurrent) return;
+    }
     unawaited(sync.syncNow());
   }
 
   Future<void> setConfirmActions(bool enabled) async {
+    if (!_isAccountScopeCurrent) return;
     await localStore.writeForAccount(_accountUserId, _confirmKey, enabled);
+    if (!_isAccountScopeCurrent) return;
+    // SyncService owns the guarded user_state -> ai_preferences propagation.
+    // A direct upsert here bypasses its retry marker and conflict checks, so a
+    // stale local boolean could overwrite a newer remote preference.
     unawaited(sync.syncNow());
-    final client = _client;
-    final user = _scopedUser;
-    if (client != null && user != null) {
-      await client.from('ai_preferences').upsert({
-        'user_id': user.id,
-        'confirm_actions': enabled,
-      });
-    }
   }
 
   List<AiConversation> loadLocalConversations() {
