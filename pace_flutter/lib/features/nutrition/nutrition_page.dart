@@ -93,7 +93,7 @@ class _NutritionPageState extends State<NutritionPage> {
               'c': _parseOptional(carbs),
               'f': _parseOptional(fat),
             };
-            if (values.values.any((value) => value is double && value.isNaN)) return;
+            if (values.values.any((value) => value is double && (!value.isFinite || value < 0))) return;
             Navigator.pop(context, values);
           }, child: const Text('Ajouter')),
         ],
