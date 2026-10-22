@@ -19,7 +19,9 @@ class AiMessage {
         id: json['id']?.toString() ?? '',
         role: json['role']?.toString() ?? 'assistant',
         text: json['text']?.toString() ?? '',
-        createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
+        // Invalid local metadata must not look newer than valid cloud data.
+        createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ??
+            DateTime.fromMillisecondsSinceEpoch(0),
       );
 }
 
@@ -72,7 +74,10 @@ class AiConversation {
           orElse: () => PaceAiAgent.coach,
         ),
         title: json['title']?.toString() ?? 'Nouvelle conversation',
-        updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
+        // DateTime.now() here would make a corrupt/missing timestamp win
+        // newest-wins reconciliation and could push a stale title to cloud.
+        updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toLocal() ??
+            DateTime.fromMillisecondsSinceEpoch(0),
         messages: json['messages'] is List
             ? (json['messages'] as List)
                 .whereType<Map>()
@@ -101,7 +106,8 @@ class AiMemoryItem {
   factory AiMemoryItem.fromJson(Map<String, dynamic> json) => AiMemoryItem(
         id: json['id']?.toString() ?? '',
         text: json['text']?.toString() ?? '',
-        createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
+        createdAt: DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ??
+            DateTime.fromMillisecondsSinceEpoch(0),
         updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toLocal(),
       );
 }
