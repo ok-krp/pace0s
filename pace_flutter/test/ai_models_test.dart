@@ -88,6 +88,45 @@ void main() {
     expect(conversation.messages, isEmpty);
   });
 
+  test('invalid conversation timestamp uses epoch and cannot beat valid remote metadata', () {
+    final local = AiConversation.fromJson(<String, dynamic>{
+      'id': 'conversation-1',
+      'agent': 'coach',
+      'title': 'Possibly stale local title',
+      'updatedAt': '2026-13-45T99:99:99Z',
+    });
+    final remote = AiConversation(
+      id: 'conversation-1',
+      agent: PaceAiAgent.coach,
+      title: 'Valid remote title',
+      updatedAt: DateTime.utc(2026, 10, 18),
+    );
+
+    expect(local.updatedAt.millisecondsSinceEpoch, 0);
+    final merged = local.mergeRemoteMetadata(remote);
+    expect(merged.title, 'Valid remote title');
+    expect(merged.updatedAt, remote.updatedAt);
+  });
+
+  test('invalid message and memory timestamps use safe fallbacks', () {
+    final message = AiMessage.fromJson(<String, dynamic>{
+      'id': 'message-1',
+      'role': 'user',
+      'text': 'hello',
+      'createdAt': 'not-a-timestamp',
+    });
+    final memory = AiMemoryItem.fromJson(<String, dynamic>{
+      'id': 'memory-1',
+      'text': 'memory',
+      'createdAt': 'not-a-timestamp',
+      'updatedAt': 'also-invalid',
+    });
+
+    expect(message.createdAt.millisecondsSinceEpoch, 0);
+    expect(memory.createdAt.millisecondsSinceEpoch, 0);
+    expect(memory.updatedAt, isNull);
+  });
+
   test('ephemeral conversation is explicitly marked and serializable', () {
     final conversation = AiConversation(
       id: 'ephemeral-1',
