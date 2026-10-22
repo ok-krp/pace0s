@@ -120,7 +120,9 @@ class PaceAiService {
           id: value['id']?.toString() ?? '',
           agent: agent,
           title: value['title']?.toString() ?? 'Nouvelle conversation',
-          updatedAt: DateTime.tryParse(value['updated_at']?.toString() ?? '')?.toLocal() ?? DateTime.fromMillisecondsSinceEpoch(0),
+          updatedAt: LocalStore.isValidRemoteTimestamp(value['updated_at']?.toString() ?? '')
+              ? DateTime.parse(value['updated_at'] as String).toLocal()
+              : DateTime.fromMillisecondsSinceEpoch(0),
         );
       }).where((item) => !pendingDeleteIds.contains(item.id)).toList();
       // A rename can be committed locally while offline and its cloud update
@@ -309,7 +311,9 @@ class PaceAiService {
             id: row['id']?.toString() ?? _uuid(),
             role: row['role']?.toString() ?? 'assistant',
             text: row['plain_text']?.toString() ?? '',
-            createdAt: DateTime.tryParse(row['created_at']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
+            createdAt: LocalStore.isValidRemoteTimestamp(row['created_at']?.toString() ?? '')
+                ? DateTime.parse(row['created_at'] as String).toLocal()
+                : DateTime.fromMillisecondsSinceEpoch(0),
           )).toList();
       await _replaceMessages(id, messages);
       return _isAccountScopeCurrent ? messages : const <AiMessage>[];
