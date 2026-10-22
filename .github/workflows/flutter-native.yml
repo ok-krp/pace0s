@@ -56,6 +56,10 @@ jobs:
 
           parsed = urlparse(url)
           host = parsed.hostname
+          try:
+              port = parsed.port
+          except ValueError:
+              port = -1
           if (
               parsed.scheme != "https"
               or not host
@@ -64,7 +68,7 @@ jobs:
               or parsed.fragment
               or parsed.username is not None
               or parsed.password is not None
-              or parsed.port is not None
+              or port is not None
           ):
               print("::warning::SUPABASE_URL is not a clean HTTPS project URL; builds will be offline/local-only.")
               set_output("false")
