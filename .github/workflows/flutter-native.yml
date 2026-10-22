@@ -54,12 +54,15 @@ jobs:
               set_output("false")
               sys.exit(0)
 
-          parsed = urlparse(url)
-          host = parsed.hostname
           try:
+              parsed = urlparse(url)
+              host = parsed.hostname
               port = parsed.port
           except ValueError:
-              port = -1
+              print("::warning::SUPABASE_URL is malformed; builds will be offline/local-only.")
+              set_output("false")
+              sys.exit(0)
+
           if (
               parsed.scheme != "https"
               or not host
