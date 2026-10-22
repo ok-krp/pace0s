@@ -235,11 +235,15 @@ class _AuthGateState extends State<_AuthGate> {
     // Capture the account that owns this shell. A delayed callback from a
     // disposed shell must not apply its theme choice to the next account.
     final shellUserId = widget.localStore.activeUserId;
+    // Explicit offline mode must not expose a still-cached Supabase session to
+    // guest-scoped feature services. In particular, AI local storage rejects
+    // guest operations if its auth service still reports a signed-in user.
+    final shellAuth = _offlineMode ? const PaceAuthService(null) : widget.auth;
     if (!_configured || _signedIn || _offlineMode) {
       return PaceShell(
         localStore: widget.localStore,
         sync: widget.sync,
-        auth: widget.auth,
+        auth: shellAuth,
         offlineMode: _offlineMode,
         onExitOffline: _exitOffline,
         onThemeChanged: (mode) {
