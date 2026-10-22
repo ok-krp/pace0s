@@ -114,6 +114,28 @@ class PaceAiService {
           updatedAt: DateTime.tryParse(value['updated_at']?.toString() ?? '')?.toLocal() ?? DateTime.fromMillisecondsSinceEpoch(0),
         );
       }).toList();
+      // A conversation can be saved locally while offline and its initial
+      // cloud insert can fail. Retry only IDs absent from the fetched remote
+      // set; ignoreDuplicates protects a row created concurrently by another
+      // device without overwriting its title or metadata.
+      final remoteIds = remote.map((item) => item.id).toSet();
+      final missingRemote = local.where((item) => !remoteIds.contains(item.id));
+      for (final item in missingRemote) {
+        if (!_isAccountScopeCurrent) return const <AiConversation>[];
+        try {
+          await client.from('ai_conversations').upsert({
+            'id': item.id,
+            'user_id': user.id,
+            'agent_type': item.agent.name,
+            'title': item.title,
+            'is_ephemeral': false,
+          }, onConflict: 'id', ignoreDuplicates: true);
+        } catch (_) {
+          // Keep the durable local conversation; the next load retries it.
+        }
+      }
+      if (!_isAccountScopeCurrent) return const <AiConversation>[];
+
       final merged = <String, AiConversation>{for (final item in local) item.id: item};
       for (final item in remote) {
         final existing = merged[item.id];
