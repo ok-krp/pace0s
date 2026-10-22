@@ -270,12 +270,27 @@ class PaceAiService {
     for (final id in pending) {
       if (!_isAccountScopeCurrent || userId != _accountUserId) return;
       try {
-        await client
+        final deletedRows = await client
             .from('ai_conversations')
             .delete()
             .eq('id', id)
-            .eq('user_id', userId);
-        deletedRemotely.add(id);
+            .eq('user_id', userId)
+            .select('id');
+        if (deletedRows.any((row) => row['id']?.toString() == id)) {
+          deletedRemotely.add(id);
+          continue;
+        }
+
+        // PostgREST can return a successful empty DELETE when RLS filters the
+        // row. Do not clear the tombstone unless the row is actually absent;
+        // otherwise a denied delete would make the conversation reappear.
+        final remainingRows = await client
+            .from('ai_conversations')
+            .select('id')
+            .eq('id', id)
+            .eq('user_id', userId)
+            .limit(1);
+        if (remainingRows.isEmpty) deletedRemotely.add(id);
       } catch (_) {
         // Retain failed deletes durably for the next online conversation load.
       }
