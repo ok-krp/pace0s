@@ -114,6 +114,28 @@ class PaceAiService {
           updatedAt: DateTime.tryParse(value['updated_at']?.toString() ?? '')?.toLocal() ?? DateTime.fromMillisecondsSinceEpoch(0),
         );
       }).toList();
+      // A rename can be committed locally while offline and its cloud update
+      // can fail. Retry local versions newer than the fetched row. Only title
+      // and updated_at are changed; unrelated remote metadata remains intact.
+      final remoteById = <String, AiConversation>{
+        for (final item in remote) item.id: item,
+      };
+      for (final item in local) {
+        final remoteItem = remoteById[item.id];
+        if (remoteItem == null || !item.updatedAt.isAfter(remoteItem.updatedAt)) {
+          continue;
+        }
+        if (!_isAccountScopeCurrent) return const <AiConversation>[];
+        try {
+          await client.from('ai_conversations').update({
+            'title': item.title,
+            'updated_at': item.updatedAt.toUtc().toIso8601String(),
+          }).eq('id', item.id).eq('user_id', user.id);
+        } catch (_) {
+          // Keep the local title; the next load retries the update.
+        }
+      }
+
       // A conversation can be saved locally while offline and its initial
       // cloud insert can fail. Retry only IDs absent from the fetched remote
       // set; ignoreDuplicates protects a row created concurrently by another
