@@ -25,8 +25,8 @@ jobs:
         id: endpoint
         shell: bash
         env:
-          SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
         run: |
           python3 - <<'PY'
           import os
@@ -42,7 +42,7 @@ jobs:
 
           def set_output(value):
               with open(output_path, "a", encoding="utf-8") as output:
-                  output.write(f"configured={value}\\n")
+                  output.write(f"configured={value}\n")
 
           if not url or not key:
               print("::warning::Supabase URL/key missing; builds will be explicitly offline/local-only.")
