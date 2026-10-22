@@ -18,6 +18,7 @@ class MorePage extends StatelessWidget {
     required this.localStore,
     required this.auth,
     required this.sync,
+    required this.offlineMode,
     required this.onExitOffline,
     required this.themeMode,
     required this.onThemeChanged,
@@ -25,6 +26,7 @@ class MorePage extends StatelessWidget {
   final LocalStore localStore;
   final PaceAuthService auth;
   final SyncService sync;
+  final bool offlineMode;
   final VoidCallback onExitOffline;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeChanged;
@@ -47,7 +49,7 @@ class MorePage extends StatelessWidget {
         Text('Pace', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
         const Text('Fonctionnalités natives Pace'),
-        if (auth.client != null && auth.currentUser == null) ...[
+        if (offlineMode && auth.currentUser == null) ...[
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: onExitOffline,
