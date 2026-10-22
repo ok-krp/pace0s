@@ -108,6 +108,17 @@ void main() {
     expect(merged.updatedAt, remote.updatedAt);
   });
 
+  test('rejects local timestamps with precision beyond microseconds', () {
+    final conversation = AiConversation.fromJson(<String, dynamic>{
+      'id': 'conversation-precision',
+      'agent': 'coach',
+      'title': 'Invalid precision',
+      'updatedAt': '2026-10-18T10:00:00.1234567Z',
+    });
+
+    expect(conversation.updatedAt.millisecondsSinceEpoch, 0);
+  });
+
   test('invalid message and memory timestamps use safe fallbacks', () {
     final message = AiMessage.fromJson(<String, dynamic>{
       'id': 'message-1',
