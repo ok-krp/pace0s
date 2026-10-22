@@ -187,6 +187,12 @@ class _AuthGateState extends State<_AuthGate> {
     if (userId != null) await widget.sync.syncNow();
   }
 
+  void _exitOffline() {
+    if (!mounted) return;
+    _offlineRequested = false;
+    setState(() => _offlineMode = false);
+  }
+
   Future<void> _continueOffline() async {
     // Set synchronously before the first await so auth events cannot race this
     // choice and reactivate the previously authenticated account's file.
@@ -230,6 +236,7 @@ class _AuthGateState extends State<_AuthGate> {
         localStore: widget.localStore,
         sync: widget.sync,
         auth: widget.auth,
+        onExitOffline: _exitOffline,
         onThemeChanged: (mode) {
           if (widget.localStore.activeUserId != shellUserId) return;
           widget.onThemeChanged(mode);
@@ -250,12 +257,14 @@ class PaceShell extends StatefulWidget {
     required this.localStore,
     required this.sync,
     required this.auth,
+    required this.onExitOffline,
     required this.onThemeChanged,
     required this.themeMode,
   });
   final LocalStore localStore;
   final SyncService sync;
   final PaceAuthService auth;
+  final VoidCallback onExitOffline;
   final ValueChanged<ThemeMode> onThemeChanged;
   final ThemeMode themeMode;
 
@@ -292,6 +301,7 @@ class _PaceShellState extends State<PaceShell> {
         localStore: widget.localStore,
         sync: widget.sync,
         auth: widget.auth,
+        onExitOffline: widget.onExitOffline,
         themeMode: widget.themeMode,
         onThemeChanged: widget.onThemeChanged,
       ),
