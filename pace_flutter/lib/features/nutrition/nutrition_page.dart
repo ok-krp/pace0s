@@ -117,8 +117,11 @@ class _NutritionPageState extends State<NutritionPage> {
     protein.dispose();
     carbs.dispose();
     fat.dispose();
-    if (result == null || itemName.isEmpty ||
-        widget.localStore.activeUserId != expectedUserId) return;
+    if (result == null ||
+        itemName.isEmpty ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
 
     final raw = widget.localStore.read('pace.nutrition.items');
     final data = Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
