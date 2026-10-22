@@ -40,7 +40,7 @@ void main() {
         await tester.tap(exitButton);
         expect(exitedOffline, isTrue);
       } finally {
-        await client.dispose();
+        client.dispose();
         await directory.delete(recursive: true);
       }
     },
