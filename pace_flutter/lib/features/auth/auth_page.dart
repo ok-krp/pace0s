@@ -75,7 +75,9 @@ class _AuthPageState extends State<AuthPage> {
                     TextButton(onPressed: _busy ? null : () => setState(() => _createAccount = !_createAccount), child: Text(_createAccount ? 'J’ai déjà un compte' : 'Créer un compte')),
                     const SizedBox(height: 8),
                     OutlinedButton.icon(
-                      onPressed: _busy ? null : widget.onContinueOffline,
+                      // Keep offline escape available even if a cloud auth
+                      // request is stalled by DNS/network failure.
+                      onPressed: widget.onContinueOffline,
                       icon: const Icon(Icons.cloud_off_outlined),
                       label: const Text('Continuer hors connexion'),
                     ),
