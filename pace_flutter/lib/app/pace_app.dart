@@ -107,6 +107,7 @@ class _AuthGateState extends State<_AuthGate> {
   bool _configured = false;
   bool _signedIn = false;
   bool _offlineMode = false;
+  bool _offlineRequested = false;
 
   int _accountGeneration = 0;
 
@@ -122,7 +123,17 @@ class _AuthGateState extends State<_AuthGate> {
       final currentUser = widget.auth.currentUser;
       if (currentUser != null) unawaited(_activateAccount(currentUser.id));
       _subscription = widget.auth.authStateChanges.listen((state) {
-        unawaited(_activateAccount(state.session?.user.id));
+        final userId = state.session?.user.id;
+        // An explicit offline choice wins over token-refresh/session events.
+        // A real sign-out exits offline mode so the auth screen can be shown.
+        if (_offlineRequested && userId != null) return;
+        if (_offlineRequested && userId == null) {
+          _offlineRequested = false;
+          if (_offlineMode && mounted) {
+            setState(() => _offlineMode = false);
+          }
+        }
+        unawaited(_activateAccount(userId));
       });
     }
   }
@@ -169,12 +180,16 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   Future<void> _continueOffline() async {
+    // Set synchronously before the first await so auth events cannot race this
+    // choice and reactivate the previously authenticated account's file.
+    _offlineRequested = true;
     final generation = ++_accountGeneration;
     try {
       // Switch to the guest/local file before showing the shell. Never leave
       // a previously authenticated account's local state active in offline mode.
       await widget.localStore.activateAccount(null);
     } catch (_) {
+      _offlineRequested = false;
       return;
     }
     if (!mounted || generation != _accountGeneration) return;
