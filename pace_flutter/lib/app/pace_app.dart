@@ -126,8 +126,11 @@ class _AuthGateState extends State<_AuthGate> {
         final userId = state.session?.user.id;
         // An explicit offline choice wins over token-refresh/session events.
         // A real sign-out exits offline mode so the auth screen can be shown.
-        if (_offlineRequested && userId != null) return;
-        if (_offlineRequested && userId == null) {
+        if (_offlineRequested) {
+          if (userId != null) return;
+          // Ignore initial-session/other null-user events while offline. Only
+          // a real sign-out should leave the explicitly selected local mode.
+          if (state.event != AuthChangeEvent.signedOut) return;
           _offlineRequested = false;
           if (_offlineMode && mounted) {
             setState(() => _offlineMode = false);
