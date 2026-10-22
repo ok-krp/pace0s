@@ -258,7 +258,7 @@ class PaceAiService {
   ) async {
     final pending = _pendingDeletedConversationIds();
     if (pending.isEmpty) return;
-    final remaining = List<String>.from(pending);
+    final deletedRemotely = <String>{};
     for (final id in pending) {
       if (!_isAccountScopeCurrent || userId != _accountUserId) return;
       try {
@@ -267,12 +267,18 @@ class PaceAiService {
             .delete()
             .eq('id', id)
             .eq('user_id', userId);
-        remaining.remove(id);
+        deletedRemotely.add(id);
       } catch (_) {
         // Retain failed deletes durably for the next online conversation load.
       }
     }
-    if (!_isAccountScopeCurrent || remaining.length == pending.length) return;
+    if (!_isAccountScopeCurrent || deletedRemotely.isEmpty) return;
+    // Re-read after network awaits: a concurrent delete can add another
+    // tombstone while this pass is in flight. Never overwrite that new work
+    // with a stale copy of the queue captured before the requests.
+    final remaining = _pendingDeletedConversationIds()
+        .where((id) => !deletedRemotely.contains(id))
+        .toList();
     await localStore.writeForAccount(
       _accountUserId,
       _deletedConversationKey,
