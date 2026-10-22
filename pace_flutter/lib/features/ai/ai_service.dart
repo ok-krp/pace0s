@@ -284,6 +284,7 @@ class PaceAiService {
         // PostgREST can return a successful empty DELETE when RLS filters the
         // row. Do not clear the tombstone unless the row is actually absent;
         // otherwise a denied delete would make the conversation reappear.
+        if (!_isAccountScopeCurrent || userId != _accountUserId) return;
         final remainingRows = await client
             .from('ai_conversations')
             .select('id')
