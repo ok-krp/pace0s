@@ -1,7 +1,8 @@
 name: Pace Native Flutter
 
 concurrency:
-  group: pace-native-${{ github.ref }}
+  # Share a group between push and pull_request runs for the same head branch.
+  group: pace-native-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 
