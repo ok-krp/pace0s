@@ -49,7 +49,7 @@ class MorePage extends StatelessWidget {
         Text('Pace', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
         const Text('Fonctionnalités natives Pace'),
-        if (offlineMode && auth.currentUser == null) ...[
+        if (offlineMode) ...[
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: onExitOffline,
