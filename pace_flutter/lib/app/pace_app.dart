@@ -132,6 +132,10 @@ class _AuthGateState extends State<_AuthGate> {
           // Ignore initial-session/other null-user events while offline. Only
           // a real sign-out should leave the explicitly selected local mode.
           if (state.event != AuthChangeEvent.signedOut) return;
+          // A sign-out event can race the await in _continueOffline(). While
+          // that request is still switching LocalStore to the guest file, do
+          // not invalidate it; only leave offline mode after it has been shown.
+          if (!_offlineMode) return;
           _offlineRequested = false;
           if (_offlineMode) {
             // Offline shell routes use the root navigator. Clear them even
