@@ -132,8 +132,12 @@ class _AuthGateState extends State<_AuthGate> {
           // a real sign-out should leave the explicitly selected local mode.
           if (state.event != AuthChangeEvent.signedOut) return;
           _offlineRequested = false;
-          if (_offlineMode && mounted) {
-            setState(() => _offlineMode = false);
+          if (_offlineMode) {
+            // Offline shell routes use the root navigator. Clear them even
+            // when the LocalStore scope remains guest/null after sign-out.
+            Navigator.maybeOf(context, rootNavigator: true)
+                ?.popUntil((route) => route.isFirst);
+            if (mounted) setState(() => _offlineMode = false);
           }
         }
         unawaited(_activateAccount(userId));
