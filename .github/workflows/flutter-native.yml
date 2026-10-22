@@ -56,17 +56,33 @@ jobs:
 
           parsed = urlparse(url)
           host = parsed.hostname
-          if parsed.scheme != "https" or not host or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+          if (
+              parsed.scheme != "https"
+              or not host
+              or parsed.path not in ("", "/")
+              or parsed.query
+              or parsed.fragment
+              or parsed.username is not None
+              or parsed.password is not None
+              or parsed.port is not None
+          ):
               print("::warning::SUPABASE_URL is not a clean HTTPS project URL; builds will be offline/local-only.")
               set_output("false")
               sys.exit(0)
 
-          if host.endswith(".supabase.co"):
-              project_ref = host[:-len(".supabase.co")]
-              if not re.fullmatch(r"[a-z0-9]{20}", project_ref):
-                  print("::warning::Supabase project reference must be 20 lowercase alphanumeric characters; builds will be offline/local-only.")
-                  set_output("false")
-                  sys.exit(0)
+          # This app is configured with a Supabase project URL, not an arbitrary
+          # HTTPS host. Never label a typo or unrelated host as a cloud build
+          # merely because its DNS happens to resolve.
+          if not host.endswith(".supabase.co"):
+              print("::warning::SUPABASE_URL must use the standard *.supabase.co project hostname; builds will be offline/local-only.")
+              set_output("false")
+              sys.exit(0)
+
+          project_ref = host[:-len(".supabase.co")]
+          if not re.fullmatch(r"[a-z0-9]{20}", project_ref):
+              print("::warning::Supabase project reference must be 20 lowercase alphanumeric characters; builds will be offline/local-only.")
+              set_output("false")
+              sys.exit(0)
 
           last_error = None
           for attempt in range(3):
