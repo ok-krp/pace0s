@@ -61,7 +61,11 @@ void main() {
     await store.activateAccount('user-b');
     final restored = store.read('pace.nutrition.items') as Map;
       expect(
-        restored.values.whereType<List>().expand((items) => items).whereType<Map>().single['name'],
+        restored.values
+            .whereType<List>()
+            .expand((items) => items)
+            .whereType<Map>()
+            .single['name'],
         'B food',
       );
     },
