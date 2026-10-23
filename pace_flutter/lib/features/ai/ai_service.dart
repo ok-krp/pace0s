@@ -438,24 +438,28 @@ class PaceAiService {
     final item = AiMemoryItem(id: _uuid(), text: text.trim(), createdAt: DateTime.now());
     final values = loadMemory().map((value) => value.toJson()).toList()..add(item.toJson());
     await localStore.writeForAccount(_accountUserId, _memoryKey, values);
+    if (!_isAccountScopeCurrent) return;
     unawaited(sync.syncNow());
   }
 
   Future<void> updateMemory(String id, String text) async {
     final values = loadMemory().map((item) => item.id == id ? AiMemoryItem(id: item.id, text: text.trim(), createdAt: item.createdAt, updatedAt: DateTime.now()).toJson() : item.toJson()).toList();
     await localStore.writeForAccount(_accountUserId, _memoryKey, values);
+    if (!_isAccountScopeCurrent) return;
     unawaited(sync.syncNow());
   }
 
   Future<void> deleteMemory(String id) async {
     final values = loadMemory().where((item) => item.id != id).map((item) => item.toJson()).toList();
     await localStore.writeForAccount(_accountUserId, _memoryKey, values);
+    if (!_isAccountScopeCurrent) return;
     unawaited(sync.syncNow());
   }
 
   Future<void> _saveLocalConversations(List<AiConversation> conversations) async {
     if (!_isAccountScopeCurrent) return;
     await localStore.writeForAccount(_accountUserId, _conversationKey, conversations.map((item) => item.toJson()).toList());
+    if (!_isAccountScopeCurrent) return;
     unawaited(sync.syncNow());
   }
 
