@@ -108,7 +108,6 @@ class _AuthGateState extends State<_AuthGate> {
   bool _signedIn = false;
   bool _offlineMode = false;
   bool _offlineRequested = false;
-  bool _forceAuthScreen = false;
 
   int _accountGeneration = 0;
 
@@ -188,7 +187,6 @@ class _AuthGateState extends State<_AuthGate> {
     setState(() {
       _signedIn = userId != null;
       _offlineMode = false;
-      if (userId != null) _forceAuthScreen = false;
     });
     if (userId != null) await widget.sync.syncNow();
   }
@@ -196,17 +194,13 @@ class _AuthGateState extends State<_AuthGate> {
   void _exitOffline() {
     if (!mounted) return;
     _offlineRequested = false;
-    setState(() {
-      _offlineMode = false;
-      _forceAuthScreen = true;
-    });
+    setState(() => _offlineMode = false);
   }
 
   Future<void> _continueOffline() async {
     // Set synchronously before the first await so auth events cannot race this
     // choice and reactivate the previously authenticated account's file.
     _offlineRequested = true;
-    _forceAuthScreen = false;
     final generation = ++_accountGeneration;
     try {
       // Switch to the guest/local file before showing the shell. Never leave
@@ -245,7 +239,7 @@ class _AuthGateState extends State<_AuthGate> {
     // guest-scoped feature services. In particular, AI local storage rejects
     // guest operations if its auth service still reports a signed-in user.
     final shellAuth = _offlineMode ? const PaceAuthService(null) : widget.auth;
-    if (!_forceAuthScreen && (!_configured || _signedIn || _offlineMode)) {
+    if (!_configured || _signedIn || _offlineMode) {
       return PaceShell(
         localStore: widget.localStore,
         sync: widget.sync,
