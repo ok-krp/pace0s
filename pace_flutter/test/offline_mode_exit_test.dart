@@ -39,18 +39,24 @@ void main() {
       expect(offlineButton, findsOneWidget);
       debugPrint('offline-stage: auth screen shown');
       await tester.tap(offlineButton);
-      // _continueOffline performs file I/O before publishing the shell. Let
-      // that real asynchronous work finish outside the fake-async test zone.
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(seconds: 1)),
-      );
-      await tester.pump();
+      // _continueOffline activates the guest scope asynchronously. Poll for
+      // the actual shell instead of assuming a fixed delay is sufficient on
+      // slower CI runners; runAsync lets file I/O finish outside fake-async.
+      final navigationBar = find.byType(NavigationBar);
+      for (var attempt = 0;
+          attempt < 20 && navigationBar.evaluate().isEmpty;
+          attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(navigationBar, findsOneWidget);
       await tester.pump(const Duration(milliseconds: 300));
       debugPrint('offline-stage: local shell shown');
 
       // The shell's exit action is in the Plus section, not on the initial tab.
-      final navigationBar = find.byType(NavigationBar);
-      expect(navigationBar, findsOneWidget);
       final navTopLeft = tester.getTopLeft(navigationBar);
       final navSize = tester.getSize(navigationBar);
       await tester.tapAt(
