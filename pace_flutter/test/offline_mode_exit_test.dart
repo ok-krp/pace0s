@@ -12,10 +12,13 @@ void main() {
   testWidgets(
     'offline mode can return to the auth screen without a session',
     (tester) async {
-      final directory =
-          await Directory.systemTemp.createTemp('pace-offline-exit-');
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('pace-offline-exit-'),
+      );
+      if (directory == null) throw StateError('Could not create test directory');
       debugPrint('offline-stage: temp directory created');
-      final store = await LocalStore.open(directory: directory);
+      final store = await tester.runAsync(() => LocalStore.open(directory: directory));
+      if (store == null) throw StateError('Could not open test local store');
       debugPrint('offline-stage: store opened');
       debugPrint('offline-stage: before client');
       final client = SupabaseClient(
@@ -25,7 +28,7 @@ void main() {
       addTearDown(() async {
         store.dispose();
         client.dispose();
-        await directory.delete(recursive: true);
+        await tester.runAsync(() => directory.delete(recursive: true));
       });
 
       debugPrint('offline-stage: before pumpWidget');
