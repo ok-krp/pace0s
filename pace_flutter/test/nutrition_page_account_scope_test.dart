@@ -9,16 +9,20 @@ void main() {
   testWidgets(
     'nutrition edits stay with the account that opened the dialog',
     (tester) async {
-    final directory = await Directory.systemTemp.createTemp('pace-nutrition-account-');
+    final directory = await tester.runAsync(
+      () => Directory.systemTemp.createTemp('pace-nutrition-account-'),
+    );
+    if (directory == null) throw StateError('Could not create test directory');
     debugPrint('nutrition-stage: temp directory created');
-    final store = await LocalStore.open(directory: directory);
+    final store = await tester.runAsync(() => LocalStore.open(directory: directory));
+    if (store == null) throw StateError('Could not open test local store');
     debugPrint('nutrition-stage: store opened');
     addTearDown(() async {
       store.dispose();
-      await directory.delete(recursive: true);
+      await tester.runAsync(() => directory.delete(recursive: true));
     });
 
-    await store.activateAccount('user-a');
+    await tester.runAsync(() => store.activateAccount('user-a'));
     debugPrint('nutrition-stage: switched back to A');
     debugPrint('nutrition-stage: account A activated');
     await tester.pumpWidget(MaterialApp(home: NutritionPage(localStore: store)));
@@ -33,7 +37,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(1), '80');
     debugPrint('nutrition-stage: dialog A filled');
 
-    await store.activateAccount('user-b');
+    await tester.runAsync(() => store.activateAccount('user-b'));
     debugPrint('nutrition-stage: switched back to B');
     debugPrint('nutrition-stage: account B activated');
     await tester.pump();
