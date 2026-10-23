@@ -239,7 +239,7 @@ class _AuthGateState extends State<_AuthGate> {
     // guest-scoped feature services. In particular, AI local storage rejects
     // guest operations if its auth service still reports a signed-in user.
     final shellAuth = _offlineMode ? const PaceAuthService(null) : widget.auth;
-    if (!_configured || _signedIn || _offlineMode) {
+    if (_signedIn || _offlineMode) {
       return PaceShell(
         localStore: widget.localStore,
         sync: widget.sync,
