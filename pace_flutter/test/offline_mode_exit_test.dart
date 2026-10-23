@@ -44,7 +44,7 @@ void main() {
       debugPrint('offline-stage: local shell shown');
 
       // The shell's exit action is in the Plus section, not on the initial tab.
-      await tester.tap(find.text('Plus'));
+      await tester.tap(find.byIcon(Icons.apps_outlined));
       await tester.pump();
       expect(find.text('Revenir à la connexion'), findsOneWidget);
       debugPrint('offline-stage: exit button shown');
