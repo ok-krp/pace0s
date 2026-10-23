@@ -14,12 +14,35 @@ class DashboardPage extends StatefulWidget {
 }
 
 class _DashboardPageState extends State<DashboardPage> {
+  late String? _accountUserId;
   DashboardSnapshot? _snapshot;
 
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    widget.localStore.addListener(_onLocalStoreChanged);
     _load();
+  }
+
+  void _onLocalStoreChanged() {
+    _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant DashboardPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+      _load();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -140,7 +163,7 @@ class _DashboardPageState extends State<DashboardPage> {
     } else {
       data[_snapshot!.today] = value;
     }
-    await widget.localStore.write(key, data);
+    await widget.localStore.writeForAccount(_accountUserId, key, data);
     await _load();
   }
 
@@ -154,8 +177,8 @@ class _DashboardPageState extends State<DashboardPage> {
     final dayLogs = logs[day] is List ? List<dynamic>.from(logs[day] as List) : <dynamic>[];
     dayLogs.add(DateTime.now().millisecondsSinceEpoch);
     logs[day] = dayLogs;
-    await widget.localStore.write('pace.water', current);
-    await widget.localStore.write('pace.water.log', logs);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.water', current);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.water.log', logs);
     await _load();
   }
 

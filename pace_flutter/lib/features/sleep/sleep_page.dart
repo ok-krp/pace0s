@@ -12,6 +12,33 @@ class SleepPage extends StatefulWidget {
 }
 
 class _SleepPageState extends State<SleepPage> {
+  late String? _accountUserId;
+  @override
+  void initState() {
+    super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant SleepPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
+  }
+
   String _day(DateTime date) => '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   Map<String, dynamic> _data() {
@@ -42,7 +69,7 @@ class _SleepPageState extends State<SleepPage> {
     controller.dispose();
     if (value == null) return;
     data[day] = {'hours': value};
-    await widget.localStore.write('pace.sleep', data);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.sleep', data);
     if (mounted) setState(() {});
   }
 

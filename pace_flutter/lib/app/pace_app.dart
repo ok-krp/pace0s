@@ -45,13 +45,23 @@ class _PaceAppState extends State<PaceApp> {
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
+    final expectedUserId = widget.localStore.activeUserId;
     setState(() => _themeMode = mode);
-    await widget.localStore.write('pace.settings.theme', switch (mode) {
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.settings.theme', switch (mode) {
       ThemeMode.light => 'light',
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     });
-    unawaited(widget.sync.syncNow());
+    if (widget.localStore.activeUserId == expectedUserId) {
+      unawaited(widget.sync.syncNow());
+    }
+  }
+
+  // Account switching loads a different local settings file. Apply its theme
+  // without writing it back or creating an unnecessary sync mutation.
+  void _applyStoredThemeMode(ThemeMode mode) {
+    if (!mounted) return;
+    setState(() => _themeMode = mode);
   }
 
   @override
@@ -66,6 +76,7 @@ class _PaceAppState extends State<PaceApp> {
           auth: widget.auth,
           sync: widget.sync,
           onThemeChanged: setThemeMode,
+          onThemeLoaded: _applyStoredThemeMode,
           themeMode: _themeMode,
         ),
       );
@@ -77,12 +88,14 @@ class _AuthGate extends StatefulWidget {
     required this.auth,
     required this.sync,
     required this.onThemeChanged,
+    required this.onThemeLoaded,
     required this.themeMode,
   });
   final LocalStore localStore;
   final PaceAuthService auth;
   final SyncService sync;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<ThemeMode> onThemeLoaded;
   final ThemeMode themeMode;
 
   @override
@@ -93,20 +106,122 @@ class _AuthGateState extends State<_AuthGate> {
   StreamSubscription<AuthState>? _subscription;
   bool _configured = false;
   bool _signedIn = false;
+  bool _offlineMode = false;
+  bool _offlineRequested = false;
+
+  int _accountGeneration = 0;
 
   @override
   void initState() {
     super.initState();
     _configured = widget.auth.client != null;
-    _signedIn = widget.auth.currentUser != null;
+    // Do not render a signed-in shell until its account-specific local store
+    // has been loaded. This prevents a previous account's data flashing on
+    // screen during app startup or account switching.
+    _signedIn = false;
     if (_configured) {
+      final currentUser = widget.auth.currentUser;
+      if (currentUser != null) unawaited(_activateAccount(currentUser.id));
       _subscription = widget.auth.authStateChanges.listen((state) {
         if (!mounted) return;
-        setState(() => _signedIn = state.session != null);
-        if (state.session != null) unawaited(widget.sync.syncNow());
+        final userId = state.session?.user.id;
+        // An explicit offline choice wins over token-refresh/session events.
+        // A real sign-out exits offline mode so the auth screen can be shown.
+        if (_offlineRequested) {
+          if (userId != null) return;
+          // Ignore initial-session/other null-user events while offline. Only
+          // a real sign-out should leave the explicitly selected local mode.
+          if (state.event != AuthChangeEvent.signedOut) return;
+          // A sign-out event can race the await in _continueOffline(). While
+          // that request is still switching LocalStore to the guest file, do
+          // not invalidate it; only leave offline mode after it has been shown.
+          if (!_offlineMode) return;
+          _offlineRequested = false;
+          if (_offlineMode) {
+            // Offline shell routes use the root navigator. Clear them even
+            // when the LocalStore scope remains guest/null after sign-out.
+            Navigator.maybeOf(context, rootNavigator: true)
+                ?.popUntil((route) => route.isFirst);
+            if (mounted) setState(() => _offlineMode = false);
+          }
+        }
+        unawaited(_activateAccount(userId));
       });
-      if (_signedIn) unawaited(widget.sync.syncNow());
     }
+  }
+
+  Future<void> _activateAccount(String? userId) async {
+    // Supabase emits token-refresh and other same-session auth events. Do not
+    // hide and recreate the signed-in shell unless the account actually changes
+    // or a previous account activation failed and needs another attempt.
+    if (widget.localStore.activeUserId == userId &&
+        ((userId == null && !_signedIn) || (userId != null && _signedIn))) {
+      return;
+    }
+
+    final generation = ++_accountGeneration;
+    if (widget.localStore.activeUserId != userId) {
+      // Feature routes are pushed onto MaterialApp's root navigator. Remove
+      // them before every account-scope transition, including guest/offline
+      // mode, so cached routes cannot survive a later sign-in or sign-out.
+      Navigator.maybeOf(context, rootNavigator: true)
+          ?.popUntil((route) => route.isFirst);
+    }
+    if (mounted) setState(() => _signedIn = false);
+
+    try {
+      await widget.localStore.activateAccount(userId);
+    } catch (_) {
+      // Fail closed: keep the authenticated shell hidden if account-local
+      // storage cannot be switched safely.
+      return;
+    }
+
+    if (!mounted || generation != _accountGeneration) return;
+    final storedTheme = switch (widget.localStore.read('pace.settings.theme')) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
+    widget.onThemeLoaded(storedTheme);
+    setState(() {
+      _signedIn = userId != null;
+      _offlineMode = false;
+    });
+    if (userId != null) await widget.sync.syncNow();
+  }
+
+  void _exitOffline() {
+    if (!mounted) return;
+    _offlineRequested = false;
+    setState(() => _offlineMode = false);
+  }
+
+  Future<void> _continueOffline() async {
+    // Set synchronously before the first await so auth events cannot race this
+    // choice and reactivate the previously authenticated account's file.
+    _offlineRequested = true;
+    final generation = ++_accountGeneration;
+    try {
+      // Switch to the guest/local file before showing the shell. Never leave
+      // a previously authenticated account's local state active in offline mode.
+      await widget.localStore.activateAccount(null);
+    } catch (_) {
+      // A stale failed attempt must not cancel a newer offline request.
+      if (generation == _accountGeneration) _offlineRequested = false;
+      return;
+    }
+    if (!mounted || generation != _accountGeneration) return;
+    final storedTheme = switch (widget.localStore.read('pace.settings.theme')) {
+      'light' => ThemeMode.light,
+      'dark' => ThemeMode.dark,
+      _ => ThemeMode.system,
+    };
+    widget.onThemeLoaded(storedTheme);
+    setState(() {
+      _signedIn = false;
+      _offlineMode = true;
+    });
   }
 
   @override
@@ -116,15 +231,33 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   @override
-  Widget build(BuildContext context) => !_configured || _signedIn
-      ? PaceShell(
-          localStore: widget.localStore,
-          sync: widget.sync,
-          auth: widget.auth,
-          onThemeChanged: widget.onThemeChanged,
-          themeMode: widget.themeMode,
-        )
-      : AuthPage(auth: widget.auth);
+  Widget build(BuildContext context) {
+    // Capture the account that owns this shell. A delayed callback from a
+    // disposed shell must not apply its theme choice to the next account.
+    final shellUserId = widget.localStore.activeUserId;
+    // Explicit offline mode must not expose a still-cached Supabase session to
+    // guest-scoped feature services. In particular, AI local storage rejects
+    // guest operations if its auth service still reports a signed-in user.
+    final shellAuth = _offlineMode ? const PaceAuthService(null) : widget.auth;
+    if (_signedIn || _offlineMode) {
+      return PaceShell(
+        localStore: widget.localStore,
+        sync: widget.sync,
+        auth: shellAuth,
+        offlineMode: _offlineMode,
+        onExitOffline: _exitOffline,
+        onThemeChanged: (mode) {
+          if (widget.localStore.activeUserId != shellUserId) return;
+          widget.onThemeChanged(mode);
+        },
+        themeMode: widget.themeMode,
+      );
+    }
+    return AuthPage(
+      auth: widget.auth,
+      onContinueOffline: _continueOffline,
+    );
+  }
 }
 
 class PaceShell extends StatefulWidget {
@@ -133,12 +266,16 @@ class PaceShell extends StatefulWidget {
     required this.localStore,
     required this.sync,
     required this.auth,
+    required this.offlineMode,
+    required this.onExitOffline,
     required this.onThemeChanged,
     required this.themeMode,
   });
   final LocalStore localStore;
   final SyncService sync;
   final PaceAuthService auth;
+  final bool offlineMode;
+  final VoidCallback onExitOffline;
   final ValueChanged<ThemeMode> onThemeChanged;
   final ThemeMode themeMode;
 
@@ -153,7 +290,9 @@ class _PaceShellState extends State<PaceShell> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 15), (_) => unawaited(widget.sync.syncNow()));
+    // Bound background polling to reduce repeated full user_state reads.
+    // Cross-device updates may take up to one minute between polling cycles.
+    _timer = Timer.periodic(const Duration(seconds: 60), (_) => unawaited(widget.sync.syncNow()));
   }
 
   @override
@@ -173,6 +312,8 @@ class _PaceShellState extends State<PaceShell> {
         localStore: widget.localStore,
         sync: widget.sync,
         auth: widget.auth,
+        offlineMode: widget.offlineMode,
+        onExitOffline: widget.onExitOffline,
         themeMode: widget.themeMode,
         onThemeChanged: widget.onThemeChanged,
       ),

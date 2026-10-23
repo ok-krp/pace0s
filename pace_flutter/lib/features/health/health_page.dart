@@ -15,10 +15,62 @@ class HealthPage extends StatefulWidget {
 }
 
 class _HealthPageState extends State<HealthPage> {
+  late String? _accountUserId;
   final NativeHealthAdapter _adapter = NativeHealthAdapter();
   bool? _available;
   bool _busy = false;
   List<PaceHealthSample> _samples = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    widget.localStore.addListener(_onLocalStoreChanged);
+    _samples = _readStoredSamples();
+  }
+
+  List<PaceHealthSample> _readStoredSamples() {
+    final raw = widget.localStore.read('pace.health.samples');
+    if (raw is! List) return const <PaceHealthSample>[];
+    return raw.whereType<Map>().map((entry) {
+      final value = Map<String, dynamic>.from(entry);
+      final timestamp = DateTime.tryParse(value['timestamp']?.toString() ?? '');
+      final amount = value['value'];
+      final type = value['type']?.toString();
+      if (timestamp == null || amount is! num || type == null || type.isEmpty) {
+        return null;
+      }
+      return PaceHealthSample(
+        type: type,
+        value: amount.toDouble(),
+        timestamp: timestamp.toLocal(),
+        unit: value['unit']?.toString(),
+        source: value['source']?.toString(),
+      );
+    }).whereType<PaceHealthSample>().toList();
+  }
+
+  void _onLocalStoreChanged() {
+    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+    final samples = _readStoredSamples();
+    setState(() => _samples = samples);
+  }
+
+  @override
+  void didUpdateWidget(covariant HealthPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+      _samples = _readStoredSamples();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
+  }
 
   Future<void> _checkAndRead({bool request = false}) async {
     setState(() => _busy = true);
@@ -31,7 +83,7 @@ class _HealthPageState extends State<HealthPage> {
         final payload = samples
             .map((sample) => {'type': sample.type, 'value': sample.value, 'timestamp': sample.timestamp.toUtc().toIso8601String(), 'unit': sample.unit, 'source': sample.source})
             .toList();
-        await widget.localStore.write('pace.health.samples', payload);
+        await widget.localStore.writeForAccount(_accountUserId, 'pace.health.samples', payload);
         await widget.sync.syncNow();
       }
       if (!mounted) return;

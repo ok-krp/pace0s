@@ -12,6 +12,33 @@ class RoutinePage extends StatefulWidget {
 }
 
 class _RoutinePageState extends State<RoutinePage> {
+  late String? _accountUserId;
+  @override
+  void initState() {
+    super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant RoutinePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
+  }
+
   String get _today {
     final d = DateTime.now();
     return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -41,7 +68,7 @@ class _RoutinePageState extends State<RoutinePage> {
       done.add(id);
     }
     data[_today] = done;
-    await widget.localStore.write('pace.routine.done', data);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.routine.done', data);
     if (mounted) setState(() {});
   }
 
@@ -59,7 +86,7 @@ class _RoutinePageState extends State<RoutinePage> {
     if (name == null || name.isEmpty) return;
     final habits = _habits();
     habits.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'name': name});
-    await widget.localStore.write('pace.routine.list', habits);
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.routine.list', habits);
     if (mounted) setState(() {});
   }
 

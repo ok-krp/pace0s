@@ -18,12 +18,16 @@ class MorePage extends StatelessWidget {
     required this.localStore,
     required this.auth,
     required this.sync,
+    required this.offlineMode,
+    required this.onExitOffline,
     required this.themeMode,
     required this.onThemeChanged,
   });
   final LocalStore localStore;
   final PaceAuthService auth;
   final SyncService sync;
+  final bool offlineMode;
+  final VoidCallback onExitOffline;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeChanged;
 
@@ -45,6 +49,14 @@ class MorePage extends StatelessWidget {
         Text('Pace', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
         const Text('Fonctionnalités natives Pace'),
+        if (offlineMode) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onExitOffline,
+            icon: const Icon(Icons.login_outlined),
+            label: const Text('Revenir à la connexion'),
+          ),
+        ],
         const SizedBox(height: 18),
         for (final entry in entries)
           Padding(
@@ -107,6 +119,7 @@ class SettingsPageBridge extends StatefulWidget {
 }
 
 class _SettingsPageBridgeState extends State<SettingsPageBridge> {
+  late String? _accountUserId;
   late final PaceAiService _ai = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
   late bool _aiConfirmations;
   late bool _notifications;
@@ -115,9 +128,46 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
     _aiConfirmations = _ai.confirmActions;
-    _notifications = widget.localStore.read('pace.settings.notifications') as bool? ?? true;
+    final storedNotifications = widget.localStore.read('pace.settings.notifications');
+    _notifications = storedNotifications is bool ? storedNotifications : true;
     _memory = _ai.memoryEnabled;
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+    final confirmations = _ai.confirmActions;
+    final storedNotifications = widget.localStore.read('pace.settings.notifications');
+    final notifications = storedNotifications is bool ? storedNotifications : true;
+    final memory = _ai.memoryEnabled;
+    if (confirmations == _aiConfirmations &&
+        notifications == _notifications &&
+        memory == _memory) {
+      return;
+    }
+    setState(() {
+      _aiConfirmations = confirmations;
+      _notifications = notifications;
+      _memory = memory;
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingsPageBridge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+      _onLocalStoreChanged();
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
   }
 
   Future<void> _setNotification(bool value) async {
@@ -130,9 +180,12 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     } else {
       await PaceNotificationService.instance.cancelAll();
     }
+    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
     setState(() => _notifications = value);
-    await widget.localStore.write('pace.settings.notifications', value);
-    await widget.sync.syncNow();
+    await widget.localStore.writeForAccount(_accountUserId, 'pace.settings.notifications', value);
+    if (widget.localStore.activeUserId == _accountUserId) {
+      await widget.sync.syncNow();
+    }
   }
 
   String _themeLabel(ThemeMode mode) {
@@ -168,7 +221,10 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 trailing: DropdownButton<ThemeMode>(
                   value: widget.themeMode,
                   onChanged: (mode) {
-                    if (mode != null) widget.onThemeChanged(mode);
+                    if (mode != null &&
+                        widget.localStore.activeUserId == _accountUserId) {
+                      widget.onThemeChanged(mode);
+                    }
                   },
                   items: const [
                     DropdownMenuItem(value: ThemeMode.system, child: Text('Système')),
@@ -194,6 +250,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 value: _memory,
                 onChanged: (value) async {
                   await _ai.setMemoryEnabled(value);
+                  if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
                   setState(() => _memory = value);
                 },
               ),

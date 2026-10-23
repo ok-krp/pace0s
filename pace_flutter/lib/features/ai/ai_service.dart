@@ -14,13 +14,30 @@ import 'ai_models.dart';
 /// first; the existing Pace AI HTTP endpoint is used only for model inference.
 /// It is never used to render the Pace UI.
 class PaceAiService {
-  PaceAiService({required this.localStore, required this.sync, required this.auth});
+  PaceAiService({required this.localStore, required this.sync, required this.auth})
+      : _accountUserId = localStore.activeUserId;
 
   final LocalStore localStore;
   final SyncService sync;
   final PaceAuthService auth;
+  final String? _accountUserId;
+
+  bool get _isAccountScopeCurrent {
+    if (localStore.activeUserId != _accountUserId) return false;
+    // Read the auth state directly here. Calling _scopedUser from this getter
+    // would recurse through _scopedUser's own scope guard indefinitely.
+    final user = auth.currentUser;
+    return _accountUserId == null ? user == null : user?.id == _accountUserId;
+  }
+
+  User? get _scopedUser {
+    if (!_isAccountScopeCurrent || _accountUserId == null) return null;
+    final user = auth.currentUser;
+    return user?.id == _accountUserId ? user : null;
+  }
 
   static const _conversationKey = 'pace.ai.conversations';
+  static const _deletedConversationKey = 'pace.ai.deleted_conversations';
   static const _memoryKey = 'pace.ai.memory';
   static const _memoryEnabledKey = 'pace.settings.ai.memory';
   static const _confirmKey = 'pace.settings.ai.confirm_actions';
@@ -31,29 +48,41 @@ class PaceAiService {
 
   SupabaseClient? get _client => auth.client;
 
-  bool get memoryEnabled => localStore.read(_memoryEnabledKey) as bool? ?? true;
-  bool get confirmActions => localStore.read(_confirmKey) as bool? ?? true;
+  bool get memoryEnabled {
+    if (!_isAccountScopeCurrent) return true;
+    final value = localStore.read(_memoryEnabledKey);
+    return value is bool ? value : true;
+  }
+
+  bool get confirmActions {
+    if (!_isAccountScopeCurrent) return true;
+    final value = localStore.read(_confirmKey);
+    return value is bool ? value : true;
+  }
 
   Future<void> setMemoryEnabled(bool enabled) async {
-    await localStore.write(_memoryEnabledKey, enabled);
-    if (!enabled) await localStore.write(_memoryKey, <dynamic>[]);
+    if (!_isAccountScopeCurrent) return;
+    await localStore.writeForAccount(_accountUserId, _memoryEnabledKey, enabled);
+    if (!_isAccountScopeCurrent) return;
+    if (!enabled) {
+      await localStore.writeForAccount(_accountUserId, _memoryKey, <dynamic>[]);
+      if (!_isAccountScopeCurrent) return;
+    }
     unawaited(sync.syncNow());
   }
 
   Future<void> setConfirmActions(bool enabled) async {
-    await localStore.write(_confirmKey, enabled);
+    if (!_isAccountScopeCurrent) return;
+    await localStore.writeForAccount(_accountUserId, _confirmKey, enabled);
+    if (!_isAccountScopeCurrent) return;
+    // SyncService owns the guarded user_state -> ai_preferences propagation.
+    // A direct upsert here bypasses its retry marker and conflict checks, so a
+    // stale local boolean could overwrite a newer remote preference.
     unawaited(sync.syncNow());
-    final client = _client;
-    final user = auth.currentUser;
-    if (client != null && user != null) {
-      await client.from('ai_preferences').upsert({
-        'user_id': user.id,
-        'confirm_actions': enabled,
-      });
-    }
   }
 
   List<AiConversation> loadLocalConversations() {
+    if (!_isAccountScopeCurrent) return const <AiConversation>[];
     final raw = localStore.read(_conversationKey);
     if (raw is! List) return const <AiConversation>[];
     return raw
@@ -65,12 +94,18 @@ class PaceAiService {
   }
 
   Future<List<AiConversation>> loadConversations({PaceAiAgent agent = PaceAiAgent.coach}) async {
-    final local = loadLocalConversations().where((item) => item.agent == agent).toList();
+    var local = loadLocalConversations().where((item) => item.agent == agent).toList();
     final client = _client;
-    final user = auth.currentUser;
+    final user = _scopedUser;
     if (client == null || user == null) return local;
 
     try {
+      await _retryPendingConversationDeletes(client, user.id);
+      if (!_isAccountScopeCurrent) return const <AiConversation>[];
+      // Even if a delete remains blocked by an offline/network/RLS error,
+      // its tombstone suppresses both local and remote copies until retry.
+      final pendingDeleteIds = _pendingDeletedConversationIds().toSet();
+      local = local.where((item) => !pendingDeleteIds.contains(item.id)).toList();
       final rows = await client
           .from('ai_conversations')
           .select('id,agent_type,title,is_starred,is_archived,is_ephemeral,updated_at')
@@ -78,24 +113,72 @@ class PaceAiService {
           .eq('agent_type', agent.name)
           .eq('is_ephemeral', false)
           .order('updated_at', ascending: false);
+      if (!_isAccountScopeCurrent) return const <AiConversation>[];
       final remote = rows.whereType<Map>().map((row) {
         final value = Map<String, dynamic>.from(row);
         return AiConversation(
           id: value['id']?.toString() ?? '',
           agent: agent,
           title: value['title']?.toString() ?? 'Nouvelle conversation',
-          updatedAt: DateTime.tryParse(value['updated_at']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
+          updatedAt: LocalStore.isValidRemoteTimestamp(value['updated_at']?.toString() ?? '')
+              ? DateTime.parse(value['updated_at'] as String).toLocal()
+              : DateTime.fromMillisecondsSinceEpoch(0),
         );
-      }).toList();
+      }).where((item) => !pendingDeleteIds.contains(item.id)).toList();
+      // A rename can be committed locally while offline and its cloud update
+      // can fail. Retry local versions newer than the fetched row. Only title
+      // and updated_at are changed; unrelated remote metadata remains intact.
+      final remoteById = <String, AiConversation>{
+        for (final item in remote) item.id: item,
+      };
+      for (final item in local) {
+        final remoteItem = remoteById[item.id];
+        if (remoteItem == null || !item.updatedAt.isAfter(remoteItem.updatedAt)) {
+          continue;
+        }
+        if (!_isAccountScopeCurrent) return const <AiConversation>[];
+        try {
+          await client.from('ai_conversations').update({
+            'title': item.title,
+            'updated_at': item.updatedAt.toUtc().toIso8601String(),
+          }).eq('id', item.id).eq('user_id', user.id);
+        } catch (_) {
+          // Keep the local title; the next load retries the update.
+        }
+      }
+
+      // A conversation can be saved locally while offline and its initial
+      // cloud insert can fail. Retry only IDs absent from the fetched remote
+      // set; ignoreDuplicates protects a row created concurrently by another
+      // device without overwriting its title or metadata.
+      final remoteIds = remote.map((item) => item.id).toSet();
+      final missingRemote = local.where((item) => !remoteIds.contains(item.id));
+      for (final item in missingRemote) {
+        if (!_isAccountScopeCurrent) return const <AiConversation>[];
+        try {
+          await client.from('ai_conversations').upsert({
+            'id': item.id,
+            'user_id': user.id,
+            'agent_type': item.agent.name,
+            'title': item.title,
+            'is_ephemeral': false,
+          }, onConflict: 'id', ignoreDuplicates: true);
+        } catch (_) {
+          // Keep the durable local conversation; the next load retries it.
+        }
+      }
+      if (!_isAccountScopeCurrent) return const <AiConversation>[];
+
       final merged = <String, AiConversation>{for (final item in local) item.id: item};
       for (final item in remote) {
-        merged[item.id] = (merged[item.id] ?? item).copyWith(title: item.title, updatedAt: item.updatedAt);
+        final existing = merged[item.id];
+        merged[item.id] = existing == null ? item : existing.mergeRemoteMetadata(item);
       }
       final result = merged.values.where((item) => item.agent == agent).toList()..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       await _saveLocalConversations(result);
-      return result;
+      return _isAccountScopeCurrent ? result : const <AiConversation>[];
     } catch (_) {
-      return local;
+      return _isAccountScopeCurrent ? local : const <AiConversation>[];
     }
   }
 
@@ -112,7 +195,7 @@ class PaceAiService {
       final conversations = loadLocalConversations()..insert(0, conversation);
       await _saveLocalConversations(conversations);
       final client = _client;
-      final user = auth.currentUser;
+      final user = _scopedUser;
       if (client != null && user != null) {
         try {
           await client.from('ai_conversations').insert({
@@ -140,20 +223,92 @@ class PaceAiService {
       await _saveLocalConversations(conversations);
     }
     final client = _client;
-    final user = auth.currentUser;
+    final user = _scopedUser;
     if (client != null && user != null) {
       await client.from('ai_conversations').update({'title': clean}).eq('id', id).eq('user_id', user.id);
     }
   }
 
   Future<void> deleteConversation(String id) async {
+    if (!_isAccountScopeCurrent) return;
+    final client = _client;
+    final user = _scopedUser;
+    if (client != null && user != null) {
+      // Persist a local tombstone before removing the conversation. If the
+      // remote delete fails offline, loadConversations retries it before
+      // reading the remote list so the deleted item cannot reappear.
+      final pending = _pendingDeletedConversationIds();
+      if (!pending.contains(id)) pending.add(id);
+      await localStore.writeForAccount(
+        _accountUserId,
+        _deletedConversationKey,
+        pending,
+        enqueueSync: false,
+      );
+      if (!_isAccountScopeCurrent) return;
+    }
     final conversations = loadLocalConversations()..removeWhere((item) => item.id == id);
     await _saveLocalConversations(conversations);
-    final client = _client;
-    final user = auth.currentUser;
     if (client != null && user != null) {
-      await client.from('ai_conversations').delete().eq('id', id).eq('user_id', user.id);
+      await _retryPendingConversationDeletes(client, user.id);
     }
+  }
+
+  List<String> _pendingDeletedConversationIds() {
+    final raw = localStore.read(_deletedConversationKey);
+    if (raw is! List) return <String>[];
+    return raw.whereType<String>().where((id) => id.isNotEmpty).toSet().toList();
+  }
+
+  Future<void> _retryPendingConversationDeletes(
+    SupabaseClient client,
+    String userId,
+  ) async {
+    final pending = _pendingDeletedConversationIds();
+    if (pending.isEmpty) return;
+    final deletedRemotely = <String>{};
+    for (final id in pending) {
+      if (!_isAccountScopeCurrent || userId != _accountUserId) return;
+      try {
+        final deletedRows = await client
+            .from('ai_conversations')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', userId)
+            .select('id');
+        if (deletedRows.any((row) => row['id']?.toString() == id)) {
+          deletedRemotely.add(id);
+          continue;
+        }
+
+        // PostgREST can return a successful empty DELETE when RLS filters the
+        // row. Do not clear the tombstone unless the row is actually absent;
+        // otherwise a denied delete would make the conversation reappear.
+        if (!_isAccountScopeCurrent || userId != _accountUserId) return;
+        final remainingRows = await client
+            .from('ai_conversations')
+            .select('id')
+            .eq('id', id)
+            .eq('user_id', userId)
+            .limit(1);
+        if (remainingRows.isEmpty) deletedRemotely.add(id);
+      } catch (_) {
+        // Retain failed deletes durably for the next online conversation load.
+      }
+    }
+    if (!_isAccountScopeCurrent || deletedRemotely.isEmpty) return;
+    // Re-read after network awaits: a concurrent delete can add another
+    // tombstone while this pass is in flight. Never overwrite that new work
+    // with a stale copy of the queue captured before the requests.
+    final remaining = _pendingDeletedConversationIds()
+        .where((id) => !deletedRemotely.contains(id))
+        .toList();
+    await localStore.writeForAccount(
+      _accountUserId,
+      _deletedConversationKey,
+      remaining,
+      enqueueSync: false,
+    );
   }
 
   Future<List<AiMessage>> loadMessages(String id) async {
@@ -163,20 +318,23 @@ class PaceAiService {
     );
     if (local.id.isNotEmpty && local.messages.isNotEmpty) return local.messages;
     final client = _client;
-    final user = auth.currentUser;
+    final user = _scopedUser;
     if (client == null || user == null) return local.messages;
     try {
       final rows = await client.from('ai_messages').select('id,role,plain_text,created_at').eq('conversation_id', id).eq('user_id', user.id).order('created_at');
+      if (!_isAccountScopeCurrent) return const <AiMessage>[];
       final messages = rows.whereType<Map>().map((row) => AiMessage(
             id: row['id']?.toString() ?? _uuid(),
             role: row['role']?.toString() ?? 'assistant',
             text: row['plain_text']?.toString() ?? '',
-            createdAt: DateTime.tryParse(row['created_at']?.toString() ?? '')?.toLocal() ?? DateTime.now(),
+            createdAt: LocalStore.isValidRemoteTimestamp(row['created_at']?.toString() ?? '')
+                ? DateTime.parse(row['created_at'] as String).toLocal()
+                : DateTime.fromMillisecondsSinceEpoch(0),
           )).toList();
       await _replaceMessages(id, messages);
-      return messages;
+      return _isAccountScopeCurrent ? messages : const <AiMessage>[];
     } catch (_) {
-      return local.messages;
+      return _isAccountScopeCurrent ? local.messages : const <AiMessage>[];
     }
   }
 
@@ -203,6 +361,9 @@ class PaceAiService {
   }
 
   Future<String> _requestModel({required AiConversation conversation, required List<AiMessage> messages}) async {
+    if (!_isAccountScopeCurrent || _accountUserId == null) {
+      throw StateError('Le compte Pace a changé pendant la requête IA.');
+    }
     final token = _client?.auth.currentSession?.accessToken;
     if (token == null || token.isEmpty) {
       throw StateError('Connectez-vous à Pace pour utiliser l’IA.');
@@ -226,6 +387,9 @@ class PaceAiService {
       headers: {'Authorization': 'Bearer $token', 'Content-Type': 'application/json', 'Accept': 'text/plain'},
       body: jsonEncode(payload),
     ).timeout(const Duration(minutes: 2));
+    if (!_isAccountScopeCurrent) {
+      throw StateError('Le compte Pace a changé pendant la requête IA.');
+    }
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(response.body.isEmpty ? 'Le service IA a refusé la requête (${response.statusCode}).' : response.body);
     }
@@ -263,6 +427,7 @@ class PaceAiService {
   }
 
   List<AiMemoryItem> loadMemory() {
+    if (!_isAccountScopeCurrent) return const <AiMemoryItem>[];
     final raw = localStore.read(_memoryKey);
     if (!memoryEnabled || raw is! List) return const <AiMemoryItem>[];
     return raw.whereType<Map>().map((item) => AiMemoryItem.fromJson(Map<String, dynamic>.from(item))).toList();
@@ -272,24 +437,29 @@ class PaceAiService {
     if (!memoryEnabled || text.trim().isEmpty) return;
     final item = AiMemoryItem(id: _uuid(), text: text.trim(), createdAt: DateTime.now());
     final values = loadMemory().map((value) => value.toJson()).toList()..add(item.toJson());
-    await localStore.write(_memoryKey, values);
+    await localStore.writeForAccount(_accountUserId, _memoryKey, values);
+    if (!_isAccountScopeCurrent) return;
     unawaited(sync.syncNow());
   }
 
   Future<void> updateMemory(String id, String text) async {
     final values = loadMemory().map((item) => item.id == id ? AiMemoryItem(id: item.id, text: text.trim(), createdAt: item.createdAt, updatedAt: DateTime.now()).toJson() : item.toJson()).toList();
-    await localStore.write(_memoryKey, values);
+    await localStore.writeForAccount(_accountUserId, _memoryKey, values);
+    if (!_isAccountScopeCurrent) return;
     unawaited(sync.syncNow());
   }
 
   Future<void> deleteMemory(String id) async {
     final values = loadMemory().where((item) => item.id != id).map((item) => item.toJson()).toList();
-    await localStore.write(_memoryKey, values);
+    await localStore.writeForAccount(_accountUserId, _memoryKey, values);
+    if (!_isAccountScopeCurrent) return;
     unawaited(sync.syncNow());
   }
 
   Future<void> _saveLocalConversations(List<AiConversation> conversations) async {
-    await localStore.write(_conversationKey, conversations.map((item) => item.toJson()).toList());
+    if (!_isAccountScopeCurrent) return;
+    await localStore.writeForAccount(_accountUserId, _conversationKey, conversations.map((item) => item.toJson()).toList());
+    if (!_isAccountScopeCurrent) return;
     unawaited(sync.syncNow());
   }
 
@@ -304,7 +474,7 @@ class PaceAiService {
   Future<void> _insertCloudMessage(AiConversation conversation, AiMessage message) async {
     if (conversation.ephemeral) return;
     final client = _client;
-    final user = auth.currentUser;
+    final user = _scopedUser;
     if (client == null || user == null) return;
     try {
       await client.from('ai_messages').upsert({

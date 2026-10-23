@@ -13,6 +13,47 @@ class NutritionPage extends StatefulWidget {
 }
 
 class _NutritionPageState extends State<NutritionPage> {
+  late String? _accountUserId;
+  bool _foodDialogOpen = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (!mounted) return;
+    // LocalStore is reused across sign-in/sign-out. Refresh the write scope
+    // when its account-switch notification arrives; otherwise the page keeps
+    // the previous account ID and all future scoped nutrition writes are
+    // safely discarded by LocalStore.
+    final activeUserId = widget.localStore.activeUserId;
+    _accountUserId = activeUserId;
+    // A modal food form may be open above this page. Avoid rebuilding the
+    // page underneath its route during an account-scope switch; refresh once
+    // the dialog closes. The dialog still validates its captured account ID.
+    if (_foodDialogOpen) return;
+    setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant NutritionPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      _accountUserId = widget.localStore.activeUserId;
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
+  }
+
   String _todayKey() {
     final now = DateTime.now();
     return '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
@@ -40,12 +81,17 @@ class _NutritionPageState extends State<NutritionPage> {
   }
 
   Future<void> _addFood() async {
+    // Capture the initiating account before the dialog can outlive a switch.
+    final expectedUserId = _accountUserId;
     final name = TextEditingController();
     final kcal = TextEditingController();
     final protein = TextEditingController();
     final carbs = TextEditingController();
     final fat = TextEditingController();
-    final result = await showDialog<Map<String, dynamic>>(
+    _foodDialogOpen = true;
+    Map<String, dynamic>? result;
+    try {
+      result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Ajouter un aliment'),
@@ -66,19 +112,33 @@ class _NutritionPageState extends State<NutritionPage> {
               'c': _parseOptional(carbs),
               'f': _parseOptional(fat),
             };
-            if (values.values.any((value) => value is double && value.isNaN)) return;
+            if (values.values.any((value) => value is double && (!value.isFinite || value < 0))) return;
             Navigator.pop(context, values);
           }, child: const Text('Ajouter')),
         ],
       ),
-    );
+      );
+    } finally {
+      // showDialog's result future can complete before the reverse transition
+      // has finished removing the route from the root Overlay. Keep the page
+      // stable through that transition: rebuilding it (or disposing the
+      // controllers) too early can leave TextFields referencing disposed
+      // controllers and trigger Overlay deactivation assertions.
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      _foodDialogOpen = false;
+      if (mounted) setState(() {});
+    }
     final itemName = name.text.trim();
     name.dispose();
     kcal.dispose();
     protein.dispose();
     carbs.dispose();
     fat.dispose();
-    if (result == null || itemName.isEmpty) return;
+    if (result == null ||
+        itemName.isEmpty ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
 
     final raw = widget.localStore.read('pace.nutrition.items');
     final data = Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
@@ -92,18 +152,22 @@ class _NutritionPageState extends State<NutritionPage> {
       ...result,
     });
     data[day] = list;
-    await widget.localStore.write('pace.nutrition.items', data);
-    await _recalculateTotals(data);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.nutrition.items', data);
+    await _recalculateTotals(data, expectedUserId: expectedUserId);
     if (mounted) setState(() {});
   }
 
-  Future<void> _recalculateTotals(Map<String, dynamic> data) async {
+  Future<void> _recalculateTotals(
+    Map<String, dynamic> data, {
+    required String? expectedUserId,
+  }) async {
     final totals = <String, dynamic>{};
     for (final entry in data.entries) {
-      if (entry.value is! List) continue;
+      final rawItems = entry.value;
+      if (rawItems is! List) continue;
       var dayKcal = 0.0, dayP = 0.0, dayC = 0.0, dayF = 0.0;
       var hasKcal = false, hasP = false, hasC = false, hasF = false;
-      for (final item in entry.value as List) {
+      for (final item in rawItems) {
         if (item is! Map) continue;
         final kcal = item['kcal'];
         final p = item['p'];
@@ -121,10 +185,11 @@ class _NutritionPageState extends State<NutritionPage> {
         'f': hasF ? dayF : null,
       };
     }
-    await widget.localStore.write('pace.nutrition.totals', totals);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.nutrition.totals', totals);
   }
 
   Future<void> _deleteItem(Map<String, dynamic> item) async {
+    final expectedUserId = _accountUserId;
     final raw = widget.localStore.read('pace.nutrition.items');
     if (raw is! Map) return;
     final data = Map<String, dynamic>.from(raw);
@@ -134,8 +199,8 @@ class _NutritionPageState extends State<NutritionPage> {
     list.removeWhere((entry) => entry is Map && entry['id']?.toString() == item['id']?.toString());
     if (list.length == before) return;
     data[day] = list;
-    await widget.localStore.write('pace.nutrition.items', data);
-    await _recalculateTotals(data);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.nutrition.items', data);
+    await _recalculateTotals(data, expectedUserId: expectedUserId);
     if (mounted) setState(() {});
   }
 
