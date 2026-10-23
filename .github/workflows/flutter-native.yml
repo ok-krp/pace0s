@@ -1,7 +1,8 @@
 name: Pace Native Flutter
 
 concurrency:
-  # Share a group between push and pull_request runs for the same head branch.
+  # Cancel obsolete runs for the same branch, without push/PR events cancelling
+  # each other. PR branches are tested by pull_request; pushes are tested on main.
   group: pace-native-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
@@ -9,6 +10,7 @@ concurrency:
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
       - 'pace_flutter/**'
       - '.github/workflows/flutter-native.yml'
