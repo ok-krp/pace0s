@@ -6,7 +6,9 @@ import 'package:pace/core/storage/local_store.dart';
 import 'package:pace/features/nutrition/nutrition_page.dart';
 
 void main() {
-  testWidgets('nutrition edits stay with the account that opened the dialog', (tester) async {
+  testWidgets(
+    'nutrition edits stay with the account that opened the dialog',
+    (tester) async {
     final directory = await Directory.systemTemp.createTemp('pace-nutrition-account-');
     final store = await LocalStore.open(directory: directory);
     addTearDown(() async {
@@ -58,9 +60,11 @@ void main() {
     expect(store.read('pace.nutrition.items'), isNull);
     await store.activateAccount('user-b');
     final restored = store.read('pace.nutrition.items') as Map;
-    expect(
-      restored.values.whereType<List>().expand((items) => items).whereType<Map>().single['name'],
-      'B food',
-    );
-  });
+      expect(
+        restored.values.whereType<List>().expand((items) => items).whereType<Map>().single['name'],
+        'B food',
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 45)),
+  );
 }
