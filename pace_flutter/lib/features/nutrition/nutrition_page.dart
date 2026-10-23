@@ -119,14 +119,14 @@ class _NutritionPageState extends State<NutritionPage> {
       ),
       );
     } finally {
+      // showDialog's result future can complete before the reverse transition
+      // has finished removing the route from the root Overlay. Keep the page
+      // stable through that transition: rebuilding it (or disposing the
+      // controllers) too early can leave TextFields referencing disposed
+      // controllers and trigger Overlay deactivation assertions.
+      await Future<void>.delayed(const Duration(milliseconds: 350));
       _foodDialogOpen = false;
-      // showDialog completes while its route is still being removed from the
-      // root Overlay. Rebuilding the page synchronously here can deactivate
-      // inherited elements still referenced by that route. Refresh on the
-      // next frame, after the modal transition has left the overlay.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() {});
-      });
+      if (mounted) setState(() {});
     }
     final itemName = name.text.trim();
     name.dispose();
