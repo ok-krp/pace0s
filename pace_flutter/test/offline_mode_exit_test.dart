@@ -39,6 +39,11 @@ void main() {
       expect(offlineButton, findsOneWidget);
       debugPrint('offline-stage: auth screen shown');
       await tester.tap(offlineButton);
+      // _continueOffline performs file I/O before publishing the shell. Let
+      // that real asynchronous work finish outside the fake-async test zone.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       debugPrint('offline-stage: local shell shown');
