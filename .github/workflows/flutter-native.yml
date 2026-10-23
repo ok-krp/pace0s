@@ -169,7 +169,7 @@ jobs:
         run: flutter analyze
       - name: Test
         working-directory: pace_flutter
-        run: flutter test --reporter expanded --timeout 2m
+        run: flutter test --reporter expanded --concurrency=1 --timeout 2m
       - name: Install Android NDK with bounded retries
         shell: bash
         run: |
@@ -265,7 +265,7 @@ jobs:
         run: flutter analyze
       - name: Test
         working-directory: pace_flutter
-        run: flutter test --reporter expanded --timeout 2m
+        run: flutter test --reporter expanded --concurrency=1 --timeout 2m
       - name: Validate Supabase build configuration
         id: supabase_config
         shell: bash
@@ -316,7 +316,7 @@ jobs:
         run: flutter analyze
       - name: Test
         working-directory: pace_flutter
-        run: flutter test --reporter expanded --timeout 2m
+        run: flutter test --reporter expanded --concurrency=1 --timeout 2m
       - name: Validate Supabase build configuration
         id: supabase_config
         shell: bash
@@ -377,7 +377,7 @@ jobs:
         run: flutter analyze
       - name: Test
         working-directory: pace_flutter
-        run: flutter test --reporter expanded --timeout 2m
+        run: flutter test --reporter expanded --concurrency=1 --timeout 2m
       - name: Validate Supabase build configuration
         id: supabase_config
         shell: bash
