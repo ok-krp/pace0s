@@ -45,7 +45,7 @@ void main() {
     // dialog closes and then exposes the B form.
     await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 400));
     expect(store.read('pace.nutrition.items'), isNull);
     debugPrint('nutrition-stage: stale account write rejected');
 
@@ -58,7 +58,7 @@ void main() {
     debugPrint('nutrition-stage: dialog B filled');
     await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 400));
 
     final raw = store.read('pace.nutrition.items');
     expect(raw, isA<Map>());
