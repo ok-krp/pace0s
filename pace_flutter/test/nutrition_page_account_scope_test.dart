@@ -20,23 +20,28 @@ void main() {
     // A dialog opened for account A must not write its contents into account B
     // if sign-out/sign-in happens before the user submits it.
     await tester.tap(find.byTooltip('Ajouter un aliment'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.enterText(find.byType(TextField).at(0), 'A-private food');
     await tester.enterText(find.byType(TextField).at(1), '80');
 
     await store.activateAccount('user-b');
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     expect(store.read('pace.nutrition.items'), isNull);
 
     // A fresh dialog for account B remains writable after the account change.
     await tester.tap(find.byTooltip('Ajouter un aliment'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.enterText(find.byType(TextField).at(0), 'B food');
     await tester.enterText(find.byType(TextField).at(1), '120');
     await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     final raw = store.read('pace.nutrition.items');
     expect(raw, isA<Map>());
