@@ -10,14 +10,19 @@ void main() {
     'nutrition edits stay with the account that opened the dialog',
     (tester) async {
     final directory = await Directory.systemTemp.createTemp('pace-nutrition-account-');
+    print('nutrition-stage: temp directory created');
     final store = await LocalStore.open(directory: directory);
+    print('nutrition-stage: store opened');
     addTearDown(() async {
       store.dispose();
       await directory.delete(recursive: true);
     });
 
     await store.activateAccount('user-a');
+    print('nutrition-stage: switched back to A');
+    print('nutrition-stage: account A activated');
     await tester.pumpWidget(MaterialApp(home: NutritionPage(localStore: store)));
+    print('nutrition-stage: widget pumped');
 
     // A dialog opened for account A must not write its contents into account B
     // if sign-out/sign-in happens before the user submits it.
@@ -26,14 +31,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.enterText(find.byType(TextField).at(0), 'A-private food');
     await tester.enterText(find.byType(TextField).at(1), '80');
+    print('nutrition-stage: dialog A filled');
 
     await store.activateAccount('user-b');
+    print('nutrition-stage: switched back to B');
+    print('nutrition-stage: account B activated');
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     expect(store.read('pace.nutrition.items'), isNull);
+    print('nutrition-stage: stale account write rejected');
 
     // A fresh dialog for account B remains writable after the account change.
     await tester.tap(find.byTooltip('Ajouter un aliment'));
@@ -41,6 +50,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     await tester.enterText(find.byType(TextField).at(0), 'B food');
     await tester.enterText(find.byType(TextField).at(1), '120');
+    print('nutrition-stage: dialog B filled');
     await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -54,6 +64,7 @@ void main() {
         .toList();
     expect(entries, hasLength(1));
     expect(entries.single['name'], 'B food');
+    print('nutrition-stage: account B food persisted');
     expect(store.activeUserId, 'user-b');
 
     await store.activateAccount('user-a');
