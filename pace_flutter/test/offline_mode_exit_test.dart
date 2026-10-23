@@ -16,7 +16,6 @@ void main() {
       final store = await LocalStore.open(directory: directory);
       addTearDown(store.dispose);
       var exitedOffline = false;
-      print('offline-exit: store opened');
 
       await tester.pumpWidget(
         MaterialApp(
@@ -34,13 +33,10 @@ void main() {
         ),
       );
 
-      print('offline-exit: widget pumped');
       final exitButton = find.text('Revenir à la connexion');
       expect(exitButton, findsOneWidget);
-      print('offline-exit: button found');
       await tester.tap(exitButton);
       await tester.pump();
-      print('offline-exit: button tapped');
       expect(exitedOffline, isTrue);
     },
     timeout: const Timeout(Duration(seconds: 45)),
