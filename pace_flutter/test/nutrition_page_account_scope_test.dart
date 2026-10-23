@@ -40,8 +40,9 @@ void main() {
     await tester.runAsync(() => store.activateAccount('user-b'));
     debugPrint('nutrition-stage: switched back to B');
     debugPrint('nutrition-stage: account B activated');
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    // Do not pump the underlying page while its modal route is still active.
+    // Submit against the captured A scope first; the page refreshes after the
+    // dialog closes and then exposes the B form.
     await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
