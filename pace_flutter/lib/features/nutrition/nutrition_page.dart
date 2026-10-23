@@ -14,6 +14,7 @@ class NutritionPage extends StatefulWidget {
 
 class _NutritionPageState extends State<NutritionPage> {
   late String? _accountUserId;
+  bool _foodDialogOpen = false;
 
   @override
   void initState() {
@@ -29,9 +30,12 @@ class _NutritionPageState extends State<NutritionPage> {
     // the previous account ID and all future scoped nutrition writes are
     // safely discarded by LocalStore.
     final activeUserId = widget.localStore.activeUserId;
-    setState(() {
-      _accountUserId = activeUserId;
-    });
+    _accountUserId = activeUserId;
+    // A modal food form may be open above this page. Avoid rebuilding the
+    // page underneath its route during an account-scope switch; refresh once
+    // the dialog closes. The dialog still validates its captured account ID.
+    if (_foodDialogOpen) return;
+    setState(() {});
   }
 
   @override
@@ -84,6 +88,7 @@ class _NutritionPageState extends State<NutritionPage> {
     final protein = TextEditingController();
     final carbs = TextEditingController();
     final fat = TextEditingController();
+    _foodDialogOpen = true;
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => AlertDialog(
@@ -111,6 +116,8 @@ class _NutritionPageState extends State<NutritionPage> {
         ],
       ),
     );
+    _foodDialogOpen = false;
+    if (mounted) setState(() {});
     final itemName = name.text.trim();
     name.dispose();
     kcal.dispose();
