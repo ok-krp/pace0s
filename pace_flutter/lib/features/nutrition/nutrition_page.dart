@@ -120,7 +120,13 @@ class _NutritionPageState extends State<NutritionPage> {
       );
     } finally {
       _foodDialogOpen = false;
-      if (mounted) setState(() {});
+      // showDialog completes while its route is still being removed from the
+      // root Overlay. Rebuilding the page synchronously here can deactivate
+      // inherited elements still referenced by that route. Refresh on the
+      // next frame, after the modal transition has left the overlay.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
+      });
     }
     final itemName = name.text.trim();
     name.dispose();
