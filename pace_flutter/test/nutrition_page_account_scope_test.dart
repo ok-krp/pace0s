@@ -72,9 +72,12 @@ void main() {
     debugPrint('nutrition-stage: account B food persisted');
     expect(store.activeUserId, 'user-b');
 
-    await store.activateAccount('user-a');
+    // Account activation performs real filesystem I/O. Keep it outside the
+    // widget test's fake-async zone, as in the setup above, or the test hangs
+    // after the assertions have already passed.
+    await tester.runAsync(() => store.activateAccount('user-a'));
     expect(store.read('pace.nutrition.items'), isNull);
-    await store.activateAccount('user-b');
+    await tester.runAsync(() => store.activateAccount('user-b'));
     final restored = store.read('pace.nutrition.items') as Map;
       expect(
         restored.values
