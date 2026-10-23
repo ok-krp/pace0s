@@ -42,7 +42,7 @@ void main() {
       // _continueOffline performs file I/O before publishing the shell. Let
       // that real asynchronous work finish outside the fake-async test zone.
       await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        () => Future<void>.delayed(const Duration(seconds: 1)),
       );
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
