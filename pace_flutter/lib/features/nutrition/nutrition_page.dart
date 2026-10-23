@@ -89,7 +89,9 @@ class _NutritionPageState extends State<NutritionPage> {
     final carbs = TextEditingController();
     final fat = TextEditingController();
     _foodDialogOpen = true;
-    final result = await showDialog<Map<String, dynamic>>(
+    Map<String, dynamic>? result;
+    try {
+      result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Ajouter un aliment'),
@@ -115,9 +117,11 @@ class _NutritionPageState extends State<NutritionPage> {
           }, child: const Text('Ajouter')),
         ],
       ),
-    );
-    _foodDialogOpen = false;
-    if (mounted) setState(() {});
+      );
+    } finally {
+      _foodDialogOpen = false;
+      if (mounted) setState(() {});
+    }
     final itemName = name.text.trim();
     name.dispose();
     kcal.dispose();
