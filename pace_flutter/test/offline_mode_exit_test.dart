@@ -21,7 +21,7 @@ void main() {
       );
       addTearDown(() async {
         store.dispose();
-        await client.dispose();
+        client.dispose();
         await directory.delete(recursive: true);
       });
 
