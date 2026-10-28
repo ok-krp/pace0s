@@ -176,8 +176,8 @@ class PaceAiService {
         merged[item.id] = existing == null ? item : existing.mergeRemoteMetadata(item);
       }
       final result = merged.values.where((item) => item.agent == agent).toList()..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      await _saveAgentConversationSnapshot(agent, result);
-      return _isAccountScopeCurrent ? result : const <AiConversation>[];
+      final saved = await _saveAgentConversationSnapshot(agent, result);
+      return _isAccountScopeCurrent ? saved : const <AiConversation>[];
     } catch (_) {
       return _isAccountScopeCurrent ? local : const <AiConversation>[];
     }
@@ -493,11 +493,11 @@ class PaceAiService {
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
 
-  Future<void> _saveAgentConversationSnapshot(
+  Future<List<AiConversation>> _saveAgentConversationSnapshot(
     PaceAiAgent agent,
     List<AiConversation> refreshed,
   ) async {
-    if (!_isAccountScopeCurrent) return;
+    if (!_isAccountScopeCurrent) return const <AiConversation>[];
     final merged = mergeAgentSnapshot(
       agent: agent,
       latestLocal: loadLocalConversations(),
@@ -509,8 +509,10 @@ class PaceAiService {
       _conversationKey,
       merged.map((item) => item.toJson()).toList(),
     );
-    if (!_isAccountScopeCurrent) return;
+    if (!_isAccountScopeCurrent) return const <AiConversation>[];
     unawaited(sync.syncNow());
+    return merged.where((item) => item.agent == agent).toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
 
   Future<void> _saveLocalConversations(List<AiConversation> conversations) async {
