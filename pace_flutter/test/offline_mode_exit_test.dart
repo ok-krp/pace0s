@@ -31,6 +31,9 @@ void main() {
       })!;
 
       addTearDown(() async {
+        // SupabaseClient owns an HTTP client and auth resources that keep
+        // timers alive in widget tests unless explicitly disposed.
+        await auth.client!.dispose();
         store.dispose();
         await tester.runAsync(() => directory.delete(recursive: true));
       });
