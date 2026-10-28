@@ -21,7 +21,10 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   void _onLocalStoreChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    setState(() {});
   }
 
   @override
@@ -29,6 +32,7 @@ class _CalendarPageState extends State<CalendarPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.localStore != widget.localStore) {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      _accountUserId = widget.localStore.activeUserId;
       widget.localStore.addListener(_onLocalStoreChanged);
     }
   }
@@ -46,6 +50,7 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Future<void> _add() async {
+    final expectedUserId = _accountUserId;
     final title = TextEditingController();
     final date = TextEditingController(text: DateTime.now().toIso8601String().substring(0, 10));
     final result = await showDialog<Map<String, String>>(
@@ -58,14 +63,19 @@ class _CalendarPageState extends State<CalendarPage> {
     );
     title.dispose();
     date.dispose();
-    if (result == null || result['title']!.isEmpty) return;
+    if (result == null ||
+        result['title']!.isEmpty ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
     final events = _events();
     events.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), ...result});
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.calendar.events', events);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.calendar.events', events);
     if (mounted) setState(() {});
   }
 
   Future<void> _delete(Map<String, dynamic> event) async {
+    final expectedUserId = _accountUserId;
     final events = _events()..removeWhere((e) => e['id']?.toString() == event['id']?.toString());
     await widget.localStore.writeForAccount(_accountUserId, 'pace.calendar.events', events);
     if (mounted) setState(() {});
