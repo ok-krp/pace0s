@@ -94,7 +94,8 @@ class PaceAiService {
   }
 
   Future<List<AiConversation>> loadConversations({PaceAiAgent agent = PaceAiAgent.coach}) async {
-    var local = loadLocalConversations().where((item) => item.agent == agent).toList();
+    final initialLocal = loadLocalConversations();
+    var local = initialLocal.where((item) => item.agent == agent).toList();
     final client = _client;
     final user = _scopedUser;
     if (client == null || user == null) return local;
@@ -175,7 +176,7 @@ class PaceAiService {
         merged[item.id] = existing == null ? item : existing.mergeRemoteMetadata(item);
       }
       final result = merged.values.where((item) => item.agent == agent).toList()..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-      await _saveLocalConversations(result);
+      await _saveAgentConversationSnapshot(agent, result);
       return _isAccountScopeCurrent ? result : const <AiConversation>[];
     } catch (_) {
       return _isAccountScopeCurrent ? local : const <AiConversation>[];
@@ -452,6 +453,62 @@ class PaceAiService {
   Future<void> deleteMemory(String id) async {
     final values = loadMemory().where((item) => item.id != id).map((item) => item.toJson()).toList();
     await localStore.writeForAccount(_accountUserId, _memoryKey, values);
+    if (!_isAccountScopeCurrent) return;
+    unawaited(sync.syncNow());
+  }
+
+  /// Merge a remote refresh for one agent into the latest local snapshot.
+  ///
+  /// The conversation key stores every non-ephemeral agent together. Replacing
+  /// that key with a single agent's remote result can erase the other agent's
+  /// offline conversations, or a conversation created while this refresh was
+  /// awaiting the network. Latest local edits win ties; a strictly newer
+  /// refreshed item wins over an older local copy.
+  static List<AiConversation> mergeAgentSnapshot({
+    required PaceAiAgent agent,
+    required List<AiConversation> latestLocal,
+    required List<AiConversation> refreshed,
+    Set<String> pendingDeleteIds = const <String>{},
+  }) {
+    final merged = <String, AiConversation>{};
+
+    for (final conversation in refreshed) {
+      if (conversation.agent != agent ||
+          pendingDeleteIds.contains(conversation.id)) {
+        continue;
+      }
+      merged[conversation.id] = conversation;
+    }
+
+    for (final conversation in latestLocal) {
+      if (pendingDeleteIds.contains(conversation.id)) continue;
+      final current = merged[conversation.id];
+      if (current == null ||
+          !conversation.updatedAt.isBefore(current.updatedAt)) {
+        merged[conversation.id] = conversation;
+      }
+    }
+
+    return merged.values.toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  }
+
+  Future<void> _saveAgentConversationSnapshot(
+    PaceAiAgent agent,
+    List<AiConversation> refreshed,
+  ) async {
+    if (!_isAccountScopeCurrent) return;
+    final merged = mergeAgentSnapshot(
+      agent: agent,
+      latestLocal: loadLocalConversations(),
+      refreshed: refreshed,
+      pendingDeleteIds: _pendingDeletedConversationIds().toSet(),
+    );
+    await localStore.writeForAccount(
+      _accountUserId,
+      _conversationKey,
+      merged.map((item) => item.toJson()).toList(),
+    );
     if (!_isAccountScopeCurrent) return;
     unawaited(sync.syncNow());
   }
