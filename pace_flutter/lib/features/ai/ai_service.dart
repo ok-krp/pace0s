@@ -422,12 +422,32 @@ class PaceAiService {
     return indexed.map((entry) => entry.message).toList();
   }
 
-  Future<String> send({required AiConversation conversation, required String text}) async {
+  static List<AiMessage> historyForSend({
+    required bool ephemeral,
+    required List<AiMessage> ephemeralHistory,
+    required List<AiMessage> persistedHistory,
+  }) =>
+      List<AiMessage>.unmodifiable(
+        ephemeral ? ephemeralHistory : persistedHistory,
+      );
+
+  Future<String> send({
+    required AiConversation conversation,
+    required String text,
+    List<AiMessage> ephemeralHistory = const <AiMessage>[],
+  }) async {
     final clean = text.trim();
     if (clean.isEmpty) return '';
     final now = DateTime.now();
     final userMessage = AiMessage(id: _uuid(), role: 'user', text: clean, createdAt: now);
-    final previous = await loadMessages(conversation.id);
+    final persistedHistory = conversation.ephemeral
+        ? const <AiMessage>[]
+        : await loadMessages(conversation.id);
+    final previous = historyForSend(
+      ephemeral: conversation.ephemeral,
+      ephemeralHistory: ephemeralHistory,
+      persistedHistory: persistedHistory,
+    );
     final next = [...previous, userMessage];
     if (!conversation.ephemeral) await _replaceMessages(conversation.id, next);
     await _insertCloudMessage(conversation, userMessage);
