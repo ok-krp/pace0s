@@ -369,15 +369,7 @@ class LocalStore extends ChangeNotifier {
     _data[key] = value;
     if (enqueueSync) {
       final outbox = _outbox;
-      final queuedAt = _nextQueuedAt(key, outbox);
-      _quarantineMalformedReplacedOperations(outbox, key);
-      outbox.removeWhere((entry) => entry['key'] == key);
-      outbox.add({
-        'key': key,
-        'value': value,
-        'operation': 'upsert',
-        'queuedAt': queuedAt,
-      });
+      _queueOperation(outbox, key, operation: 'upsert', value: value);
       _data['__outbox'] = outbox;
     }
     await _flush();
@@ -393,14 +385,7 @@ class LocalStore extends ChangeNotifier {
     _data.remove(key);
     if (enqueueSync) {
       final outbox = _outbox;
-      final queuedAt = _nextQueuedAt(key, outbox);
-      _quarantineMalformedReplacedOperations(outbox, key);
-      outbox.removeWhere((entry) => entry['key'] == key);
-      outbox.add({
-        'key': key,
-        'operation': 'delete',
-        'queuedAt': queuedAt,
-      });
+      _queueOperation(outbox, key, operation: 'delete');
       _data['__outbox'] = outbox;
     }
     await _flush();
