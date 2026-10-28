@@ -28,7 +28,7 @@ void main() {
         'user_metadata': <String, dynamic>{},
         'aud': 'authenticated',
         'created_at': '2026-10-28T10:00:00Z',
-      });
+      })!;
 
       addTearDown(() async {
         store.dispose();
