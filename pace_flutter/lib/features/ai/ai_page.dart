@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/storage/local_store.dart';
@@ -114,6 +116,7 @@ class _AiPageState extends State<AiPage> {
       _messages = const [];
       _loading = false;
       _ephemeral = false;
+      unawaited(_openInitialConversation());
     }
   }
 
