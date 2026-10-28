@@ -120,7 +120,7 @@ class SettingsPageBridge extends StatefulWidget {
 
 class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   late String? _accountUserId;
-  late final PaceAiService _ai = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
+  late PaceAiService _ai;
   late bool _aiConfirmations;
   late bool _notifications;
   late bool _memory;
@@ -129,6 +129,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   void initState() {
     super.initState();
     _accountUserId = widget.localStore.activeUserId;
+    _ai = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
     _aiConfirmations = _ai.confirmActions;
     final storedNotifications = widget.localStore.read('pace.settings.notifications');
     _notifications = storedNotifications is bool ? storedNotifications : true;
@@ -137,7 +138,27 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   }
 
   void _onLocalStoreChanged() {
-    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) {
+      // Recreate the AI facade for the newly active account. Each facade is
+      // deliberately bound to the account it was created for.
+      _accountUserId = activeUserId;
+      _ai = PaceAiService(
+        localStore: widget.localStore,
+        sync: widget.sync,
+        auth: widget.auth,
+      );
+      final storedNotifications =
+          widget.localStore.read('pace.settings.notifications');
+      setState(() {
+        _aiConfirmations = _ai.confirmActions;
+        _notifications =
+            storedNotifications is bool ? storedNotifications : true;
+        _memory = _ai.memoryEnabled;
+      });
+      return;
+    }
     final confirmations = _ai.confirmActions;
     final storedNotifications = widget.localStore.read('pace.settings.notifications');
     final notifications = storedNotifications is bool ? storedNotifications : true;
@@ -159,6 +180,8 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.localStore != widget.localStore) {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      _accountUserId = widget.localStore.activeUserId;
+      _ai = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
       widget.localStore.addListener(_onLocalStoreChanged);
       _onLocalStoreChanged();
     }
@@ -171,6 +194,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   }
 
   Future<void> _setNotification(bool value) async {
+    final expectedUserId = _accountUserId;
     if (value) {
       final granted = await PaceNotificationService.instance.requestPermissions();
       if (!granted) {
@@ -180,10 +204,10 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     } else {
       await PaceNotificationService.instance.cancelAll();
     }
-    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+    if (!mounted || widget.localStore.activeUserId != expectedUserId) return;
     setState(() => _notifications = value);
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.settings.notifications', value);
-    if (widget.localStore.activeUserId == _accountUserId) {
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.settings.notifications', value);
+    if (widget.localStore.activeUserId == expectedUserId) {
       await widget.sync.syncNow();
     }
   }
@@ -240,8 +264,14 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 subtitle: const Text('Demander une confirmation avant une action importante ou destructive.'),
                 value: _aiConfirmations,
                 onChanged: (value) async {
+                  final expectedUserId = _accountUserId;
                   setState(() => _aiConfirmations = value);
                   await _ai.setConfirmActions(value);
+                  if (!mounted ||
+                      widget.localStore.activeUserId != expectedUserId) {
+                    return;
+                  }
+                  setState(() => _aiConfirmations = _ai.confirmActions);
                 },
               ),
               SwitchListTile.adaptive(
@@ -249,9 +279,13 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 subtitle: const Text('Autoriser la mémoire persistante contrôlable par l’utilisateur.'),
                 value: _memory,
                 onChanged: (value) async {
+                  final expectedUserId = _accountUserId;
                   await _ai.setMemoryEnabled(value);
-                  if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
-                  setState(() => _memory = value);
+                  if (!mounted ||
+                      widget.localStore.activeUserId != expectedUserId) {
+                    return;
+                  }
+                  setState(() => _memory = _ai.memoryEnabled);
                 },
               ),
             ]),
