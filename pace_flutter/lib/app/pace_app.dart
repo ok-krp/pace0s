@@ -4,6 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/storage/local_store.dart';
+import '../core/supabase/pace_supabase.dart';
+import '../core/sync/sync_service.dart';
+import '../features/auth/auth_page.dart';
+import '../features/dashboard/dashboard_page.dart';
+import '../features/more/more_page.dart';
+import '../features/nutrition/nutrition_page.dart';
+import '../features/sleep/sleep_page.dart';
+import '../features/sport/sport_page.dart';
+import '../ui/pace_theme.dart';
 
 /// Returns true only for a duplicate session notification when no switch is
 /// pending. A null-user event must still supersede an in-flight sign-in even
@@ -18,15 +27,7 @@ bool shouldSkipAccountActivation({
     activeUserId == requestedUserId &&
     ((requestedUserId == null && !signedIn) ||
         (requestedUserId != null && signedIn));
-import '../core/supabase/pace_supabase.dart';
-import '../core/sync/sync_service.dart';
-import '../features/auth/auth_page.dart';
-import '../features/dashboard/dashboard_page.dart';
-import '../features/more/more_page.dart';
-import '../features/nutrition/nutrition_page.dart';
-import '../features/sleep/sleep_page.dart';
-import '../features/sport/sport_page.dart';
-import '../ui/pace_theme.dart';
+
 
 class PaceApp extends StatefulWidget {
   const PaceApp({super.key, required this.localStore, required this.auth, required this.sync});
