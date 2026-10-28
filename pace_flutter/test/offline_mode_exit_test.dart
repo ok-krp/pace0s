@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:pace/app/pace_app.dart';
 import 'package:pace/core/storage/local_store.dart';
 import 'package:pace/core/supabase/pace_supabase.dart';
