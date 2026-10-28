@@ -21,7 +21,10 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   void _onLocalStoreChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    setState(() {});
   }
 
   @override
@@ -29,6 +32,7 @@ class _NotesPageState extends State<NotesPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.localStore != widget.localStore) {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      _accountUserId = widget.localStore.activeUserId;
       widget.localStore.addListener(_onLocalStoreChanged);
     }
   }
@@ -46,6 +50,7 @@ class _NotesPageState extends State<NotesPage> {
   }
 
   Future<void> _edit([Map<String, dynamic>? existing]) async {
+    final expectedUserId = _accountUserId;
     final title = TextEditingController(text: existing?['title']?.toString() ?? '');
     final body = TextEditingController(text: existing?['body']?.toString() ?? '');
     final result = await showDialog<Map<String, String>>(
@@ -62,7 +67,11 @@ class _NotesPageState extends State<NotesPage> {
     );
     title.dispose();
     body.dispose();
-    if (result == null || (result['title'] ?? '').isEmpty) return;
+    if (result == null ||
+        (result['title'] ?? '').isEmpty ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
     final notes = _notes();
     final id = existing?['id']?.toString();
     final next = {'id': id ?? DateTime.now().microsecondsSinceEpoch.toString(), 'title': result['title'], 'body': result['body'], 'updatedAt': DateTime.now().toIso8601String()};
@@ -72,11 +81,12 @@ class _NotesPageState extends State<NotesPage> {
       final index = notes.indexWhere((note) => note['id']?.toString() == id);
       if (index >= 0) notes[index] = next;
     }
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.notes', notes);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.notes', notes);
     if (mounted) setState(() {});
   }
 
   Future<void> _delete(Map<String, dynamic> note) async {
+    final expectedUserId = _accountUserId;
     final notes = _notes()..removeWhere((n) => n['id']?.toString() == note['id']?.toString());
     await widget.localStore.writeForAccount(_accountUserId, 'pace.notes', notes);
     if (mounted) setState(() {});
