@@ -92,8 +92,11 @@ class _SportPageState extends State<SportPage> {
     session['durationMin'] = (elapsedMs / 60000).round();
     final sessions = _sessions();
     sessions.insert(0, session);
-    await widget.localStore.writeForAccount(expectedUserId, 'pace.sport.sessions', sessions);
-    await widget.localStore.removeForAccount(expectedUserId, 'pace.sport.active');
+    await widget.localStore.writeBatchForAccount(
+      expectedUserId,
+      writes: {'pace.sport.sessions': sessions},
+      removes: {'pace.sport.active'},
+    );
     if (mounted) setState(() {});
   }
 
