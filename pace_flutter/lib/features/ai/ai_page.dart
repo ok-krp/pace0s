@@ -26,6 +26,8 @@ class _AiPageState extends State<AiPage> {
   List<AiMessage> _messages = const [];
   bool _loading = false;
   bool _ephemeral = false;
+  int _openGeneration = 0;
+  int _sendGeneration = 0;
   String _search = '';
 
   @override
@@ -68,8 +70,9 @@ class _AiPageState extends State<AiPage> {
   }
 
   Future<void> _openInitialConversation() async {
+    final generation = ++_openGeneration;
     final history = await _service.loadConversations();
-    if (!mounted) return;
+    if (!mounted || generation != _openGeneration) return;
     setState(() => _history = history);
     if (history.isNotEmpty) {
       await _openConversation(history.first);
@@ -79,22 +82,28 @@ class _AiPageState extends State<AiPage> {
   }
 
   Future<void> _newConversation() async {
+    final generation = ++_openGeneration;
+    ++_sendGeneration;
     final conversation = await _service.createConversation(ephemeral: _ephemeral);
-    if (!mounted) return;
+    if (!mounted || generation != _openGeneration) return;
     setState(() {
       _conversation = conversation;
       _messages = const [];
+      _loading = false;
     });
     if (!_ephemeral) setState(() => _history = _service.loadLocalConversations());
   }
 
   Future<void> _openConversation(AiConversation conversation) async {
+    final generation = ++_openGeneration;
+    ++_sendGeneration;
     final messages = await _service.loadMessages(conversation.id);
-    if (!mounted) return;
+    if (!mounted || generation != _openGeneration) return;
     setState(() {
       _ephemeral = false;
       _conversation = conversation;
       _messages = messages;
+      _loading = false;
     });
     _jumpToEnd();
   }
@@ -104,6 +113,12 @@ class _AiPageState extends State<AiPage> {
     final conversation = _conversation;
     if (text.isEmpty || conversation == null || _loading) return;
     _input.clear();
+    final conversationId = conversation.id;
+    final sendGeneration = ++_sendGeneration;
+    // Ephemeral chats keep their history only in this widget's memory. Capture
+    // it before adding the optimistic message so the service can send context
+    // without persisting any ephemeral message.
+    final ephemeralHistory = List<AiMessage>.unmodifiable(_messages);
     final optimistic = AiMessage(id: 'local-${DateTime.now().microsecondsSinceEpoch}', role: 'user', text: text, createdAt: DateTime.now());
     setState(() {
       _messages = [..._messages, optimistic];
@@ -111,8 +126,16 @@ class _AiPageState extends State<AiPage> {
     });
     _jumpToEnd();
     try {
-      final response = await _service.send(conversation: conversation, text: text);
-      if (!mounted) return;
+      final response = await _service.send(
+        conversation: conversation,
+        text: text,
+        ephemeralHistory: ephemeralHistory,
+      );
+      if (!mounted ||
+          sendGeneration != _sendGeneration ||
+          _conversation?.id != conversationId) {
+        return;
+      }
       setState(() {
         _messages = [..._messages, AiMessage(id: 'assistant-${DateTime.now().microsecondsSinceEpoch}', role: 'assistant', text: response, createdAt: DateTime.now())];
         _loading = false;
@@ -120,7 +143,11 @@ class _AiPageState extends State<AiPage> {
       });
       _jumpToEnd();
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted ||
+          sendGeneration != _sendGeneration ||
+          _conversation?.id != conversationId) {
+        return;
+      }
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Bad state: ', ''))));
     }
