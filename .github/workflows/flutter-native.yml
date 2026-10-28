@@ -37,6 +37,9 @@ jobs:
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
         run: |
           python3 - <<'PY'
+          import base64
+          import binascii
+          import json
           import os
           import re
           import socket
@@ -54,6 +57,32 @@ jobs:
 
           if not url or not key:
               print("::warning::Supabase URL/key missing; builds will be explicitly offline/local-only.")
+              set_output("false")
+              sys.exit(0)
+
+          def is_public_client_key(value):
+              # New Supabase publishable keys are explicitly marked public.
+              # Secret keys must never be embedded in an app distributed to
+              # users, regardless of which GitHub variable name contains them.
+              if value.startswith("sb_publishable_"):
+                  return len(value) > len("sb_publishable_")
+              if value.startswith("sb_secret_"):
+                  return False
+
+              # The legacy anon/service_role keys are JWTs. Only accept the
+              # low-privilege anon role; reject service_role and unknown roles.
+              parts = value.split(".")
+              if len(parts) != 3 or not parts[1]:
+                  return False
+              try:
+                  payload = parts[1] + ("=" * (-len(parts[1]) % 4))
+                  claims = json.loads(base64.urlsafe_b64decode(payload.encode("ascii")))
+              except (ValueError, UnicodeError, binascii.Error):
+                  return False
+              return isinstance(claims, dict) and claims.get("role") == "anon"
+
+          if not is_public_client_key(key):
+              print("::warning::The configured Supabase key is not a recognized public client key. Only sb_publishable_... or a legacy JWT with role=anon may be embedded; secret/service_role keys are blocked. Builds will be explicitly offline/local-only.")
               set_output("false")
               sys.exit(0)
 
