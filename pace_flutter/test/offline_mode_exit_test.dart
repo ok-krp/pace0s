@@ -9,6 +9,91 @@ import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
   testWidgets(
+    'exiting offline mode restores a still-valid authenticated account',
+    (tester) async {
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('pace-offline-restore-'),
+      );
+      if (directory == null) throw StateError('Could not create test directory');
+      final store = await tester.runAsync(
+        () => LocalStore.open(directory: directory),
+      );
+      if (store == null) throw StateError('Could not open test local store');
+
+      final auth = _MutableSessionAuthService();
+      final user = User.fromJson({
+        'id': 'restored-account',
+        'app_metadata': <String, dynamic>{},
+        'user_metadata': <String, dynamic>{},
+        'aud': 'authenticated',
+        'created_at': '2026-10-28T10:00:00Z',
+      });
+
+      addTearDown(() async {
+        store.dispose();
+        await tester.runAsync(() => directory.delete(recursive: true));
+      });
+
+      await tester.runAsync(() async {
+        await store.activateAccount('restored-account');
+        await store.write(
+          'pace.profile.name',
+          'restored account data',
+          enqueueSync: false,
+        );
+        await store.activateAccount(null);
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PaceApp(
+            localStore: store,
+            auth: auth,
+            sync: SyncService(localStore: store, client: null),
+          ),
+        ),
+      );
+      expect(find.text('Continuer hors connexion'), findsOneWidget);
+      await tester.tap(find.text('Continuer hors connexion'));
+      final navigationBar = find.byType(NavigationBar);
+      for (var attempt = 0;
+          attempt < 20 && navigationBar.evaluate().isEmpty;
+          attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      expect(navigationBar, findsOneWidget);
+
+      await tester.tap(find.text('Plus'));
+      await tester.pump();
+      expect(find.text('Revenir à la connexion'), findsOneWidget);
+
+      // The client still has a valid session, even though the app was
+      // deliberately using the isolated guest file.
+      auth.activeUser = user;
+      await tester.tap(find.text('Revenir à la connexion'));
+
+      for (var attempt = 0;
+          attempt < 20 && store.activeUserId != user.id;
+          attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(store.activeUserId, user.id);
+      expect(store.read('pace.profile.name'), 'restored account data');
+      expect(navigationBar, findsOneWidget);
+    },
+    timeout: const Timeout(Duration(seconds: 45)),
+  );
+
+  testWidgets(
     'offline mode can return to the auth screen without a session',
     (tester) async {
       final directory = await tester.runAsync(
@@ -76,4 +161,17 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 45)),
   );
+}
+
+class _MutableSessionAuthService extends PaceAuthService {
+  _MutableSessionAuthService()
+      : super(SupabaseClient('https://test-project.supabase.co', 'test-public-key'));
+
+  User? activeUser;
+
+  @override
+  User? get currentUser => activeUser;
+
+  @override
+  Stream<AuthState> get authStateChanges => const Stream<AuthState>.empty();
 }
