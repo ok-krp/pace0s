@@ -31,9 +31,6 @@ void main() {
       })!;
 
       addTearDown(() async {
-        // SupabaseClient owns an HTTP client and auth resources that keep
-        // timers alive in widget tests unless explicitly disposed.
-        await auth.client!.dispose();
         store.dispose();
         await tester.runAsync(() => directory.delete(recursive: true));
       });
@@ -75,8 +72,8 @@ void main() {
       await tester.pump();
       expect(find.text('Revenir à la connexion'), findsOneWidget);
 
-      // The client still has a valid session, even though the app was
-      // deliberately using the isolated guest file.
+      // The auth facade still reports a valid user identity while the app
+      // deliberately uses the isolated guest file in offline mode.
       auth.activeUser = user;
       await tester.tap(find.text('Revenir à la connexion'));
 
@@ -168,8 +165,7 @@ void main() {
 }
 
 class _MutableSessionAuthService extends PaceAuthService {
-  _MutableSessionAuthService()
-      : super(SupabaseClient('https://test-project.supabase.co', 'test-public-key'));
+  _MutableSessionAuthService() : super(null);
 
   User? activeUser;
 
