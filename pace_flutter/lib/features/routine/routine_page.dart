@@ -21,7 +21,10 @@ class _RoutinePageState extends State<RoutinePage> {
   }
 
   void _onLocalStoreChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    setState(() {});
   }
 
   @override
@@ -29,6 +32,7 @@ class _RoutinePageState extends State<RoutinePage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.localStore != widget.localStore) {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      _accountUserId = widget.localStore.activeUserId;
       widget.localStore.addListener(_onLocalStoreChanged);
     }
   }
@@ -57,6 +61,7 @@ class _RoutinePageState extends State<RoutinePage> {
   }
 
   Future<void> _toggle(Map<String, dynamic> habit) async {
+    final expectedUserId = _accountUserId;
     final raw = widget.localStore.read('pace.routine.done');
     final data = Map<String, dynamic>.from(raw is Map ? raw : {});
     final done = data[_today] is List ? List<dynamic>.from(data[_today] as List) : <dynamic>[];
@@ -68,11 +73,12 @@ class _RoutinePageState extends State<RoutinePage> {
       done.add(id);
     }
     data[_today] = done;
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.routine.done', data);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.routine.done', data);
     if (mounted) setState(() {});
   }
 
   Future<void> _add() async {
+    final expectedUserId = _accountUserId;
     final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
@@ -83,10 +89,14 @@ class _RoutinePageState extends State<RoutinePage> {
       ),
     );
     controller.dispose();
-    if (name == null || name.isEmpty) return;
+    if (name == null ||
+        name.isEmpty ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
     final habits = _habits();
     habits.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'name': name});
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.routine.list', habits);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.routine.list', habits);
     if (mounted) setState(() {});
   }
 
