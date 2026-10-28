@@ -757,6 +757,57 @@ void main() {
     expect(store.pendingOperations().single['nextAttemptAt'], isNull);
   });
 
+  test('account-scoped batch writes update related keys with one notification', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    var notifications = 0;
+    store.addListener(() => notifications++);
+
+    await store.writeBatchForAccount(
+      'user-a',
+      writes: {
+        'pace.water': {'2026-10-28': 500},
+        'pace.water.log': {'2026-10-28': [1, 2]},
+      },
+    );
+
+    expect(notifications, 1);
+    expect(store.read('pace.water'), {'2026-10-28': 500});
+    expect(store.read('pace.water.log'), {'2026-10-28': [1, 2]});
+    expect(store.pendingOperations(), hasLength(2));
+
+    await store.activateAccount('user-b');
+    expect(store.read('pace.water'), isNull);
+    expect(store.read('pace.water.log'), isNull);
+    expect(store.pendingOperations(), isEmpty);
+
+    await store.writeBatchForAccount(
+      'user-a',
+      writes: {'pace.water': {'2026-10-28': 900}},
+    );
+    expect(store.activeUserId, 'user-b');
+    expect(store.read('pace.water'), isNull);
+    expect(store.pendingOperations(), isEmpty);
+  });
+
+  test('account-scoped batch rejects conflicting write and remove keys', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'before');
+
+    await expectLater(
+      store.writeBatchForAccount(
+        'user-a',
+        writes: {'pace.profile.name': 'after'},
+        removes: {'pace.profile.name'},
+      ),
+      throwsArgumentError,
+    );
+
+    expect(store.read('pace.profile.name'), 'before');
+    expect(store.pendingOperations().single['value'], 'before');
+  });
+
   test('scoped writes and removes cannot cross an account switch', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
