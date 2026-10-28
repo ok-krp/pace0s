@@ -926,6 +926,54 @@ void main() {
     );
   });
 
+  test('AI history retry selects only local messages missing remotely', () {
+    final t1 = DateTime.utc(2026, 10, 28, 10);
+    final local = [
+      AiMessage(
+        id: 'remote-already-has',
+        role: 'user',
+        text: 'already uploaded',
+        createdAt: t1,
+      ),
+      AiMessage(
+        id: 'retry-user',
+        role: 'user',
+        text: 'upload failed during offline period',
+        createdAt: t1.add(const Duration(minutes: 1)),
+      ),
+      AiMessage(
+        id: 'retry-assistant',
+        role: 'assistant',
+        text: 'answer saved locally',
+        createdAt: t1.add(const Duration(minutes: 2)),
+      ),
+      AiMessage(
+        id: '',
+        role: 'assistant',
+        text: 'legacy malformed ID',
+        createdAt: t1.add(const Duration(minutes: 3)),
+      ),
+    ];
+    final remote = [
+      AiMessage(
+        id: 'remote-already-has',
+        role: 'user',
+        text: 'already uploaded',
+        createdAt: t1,
+      ),
+    ];
+
+    final retry = PaceAiService.messagesMissingFromRemote(
+      local: local,
+      remote: remote,
+    );
+
+    expect(retry.map((message) => message.id), [
+      'retry-user',
+      'retry-assistant',
+    ]);
+  });
+
   test('AI message refresh merges other-device history and retains local edits', () {
     final t1 = DateTime.utc(2026, 10, 28, 10);
     final t2 = DateTime.utc(2026, 10, 28, 11);
