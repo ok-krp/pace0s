@@ -349,8 +349,25 @@ class PaceAiService {
               : DateTime.fromMillisecondsSinceEpoch(0),
         );
       }).toList();
+      if (!_isAccountScopeCurrent) return const <AiMessage>[];
+      final latestLocal = loadLocalConversations().firstWhere(
+        (item) => item.id == id,
+        orElse: () => AiConversation(
+          id: '',
+          agent: PaceAiAgent.coach,
+          title: '',
+          updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+        ),
+      );
+      // A local send may have completed while the remote request was in
+      // flight. Merge against the latest cache, not the stale snapshot captured
+      // before the network await. If the conversation was deleted meanwhile,
+      // do not resurrect its messages from the response.
+      if (local.id.isNotEmpty && latestLocal.id.isEmpty) {
+        return const <AiMessage>[];
+      }
       final messages = mergeMessages(
-        local: local.messages,
+        local: latestLocal.id.isNotEmpty ? latestLocal.messages : local.messages,
         remote: remoteMessages,
       );
       // Hydrating history is not a conversation edit: keep updatedAt unchanged
