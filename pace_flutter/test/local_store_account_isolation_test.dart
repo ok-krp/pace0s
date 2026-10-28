@@ -839,10 +839,37 @@ void main() {
     final byId = {for (final item in merged) item.id: item};
 
     expect(byId.keys, containsAll(['coach-1', 'coach-2', 'build-1']));
-    expect(byId, isNot(contains('build-deleted')));
+    expect(byId.containsKey('build-deleted'), isFalse);
     expect(byId['coach-1']?.title, 'Newer remote coach title');
     expect(byId['coach-2']?.title, 'Created while refreshing');
     expect(byId['build-1']?.title, 'Build remains local');
+  });
+
+  test('a local AI rename wins over a stale agent refresh', () {
+    final t1 = DateTime.utc(2026, 10, 27, 10);
+    final t2 = DateTime.utc(2026, 10, 27, 11);
+    final local = AiConversation(
+      id: 'coach-1',
+      agent: PaceAiAgent.coach,
+      title: 'Latest local rename',
+      updatedAt: t2,
+    );
+    final staleRemote = AiConversation(
+      id: 'coach-1',
+      agent: PaceAiAgent.coach,
+      title: 'Stale remote title',
+      updatedAt: t1,
+    );
+
+    final merged = PaceAiService.mergeAgentSnapshot(
+      agent: PaceAiAgent.coach,
+      latestLocal: [local],
+      refreshed: [staleRemote],
+    );
+
+    expect(merged, hasLength(1));
+    expect(merged.single.title, 'Latest local rename');
+    expect(merged.single.updatedAt, t2);
   });
 
   test('stale AI service cannot read or write the next account state', () async {
