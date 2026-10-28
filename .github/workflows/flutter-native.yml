@@ -55,11 +55,6 @@ jobs:
               with open(output_path, "a", encoding="utf-8") as output:
                   output.write(f"configured={value}\n")
 
-          if not url or not key:
-              print("::warning::Supabase URL/key missing; builds will be explicitly offline/local-only.")
-              set_output("false")
-              sys.exit(0)
-
           def is_public_client_key(value):
               # New Supabase publishable keys are explicitly marked public.
               # Secret keys must never be embedded in an app distributed to
@@ -80,6 +75,35 @@ jobs:
               except (ValueError, UnicodeError, binascii.Error):
                   return False
               return isinstance(claims, dict) and claims.get("role") == "anon"
+
+          # Exercise the key classifier even when repository secrets are not
+          # configured. Otherwise the offline early-exit path could allow a
+          # broken security check to go unnoticed by every PR CI run.
+          def legacy_test_key(role):
+              encoded = json.dumps({"role": role}, separators=(",", ":")).encode("utf-8")
+              payload = base64.urlsafe_b64encode(encoded).decode("ascii").rstrip("=")
+              return f"header.{payload}.signature"
+
+          key_policy_cases = [
+              ("publishable prefix", "sb_publishable_test", True),
+              ("secret prefix", "sb_secret_test", False),
+              ("legacy anon JWT", legacy_test_key("anon"), True),
+              ("legacy service_role JWT", legacy_test_key("service_role"), False),
+              ("unknown key format", "not-a-supabase-client-key", False),
+              ("malformed JWT", "header.not_base64!.signature", False),
+          ]
+          for label, candidate, expected in key_policy_cases:
+              actual = is_public_client_key(candidate)
+              if actual != expected:
+                  print(f"::error::Supabase key policy regression: {label}: expected {expected}, got {actual}")
+                  set_output("false")
+                  sys.exit(1)
+          print("Supabase client-key policy self-tests passed.")
+
+          if not url or not key:
+              print("::warning::Supabase URL/key missing; builds will be explicitly offline/local-only.")
+              set_output("false")
+              sys.exit(0)
 
           if not is_public_client_key(key):
               print("::warning::The configured Supabase key is not a recognized public client key. Only sb_publishable_... or a legacy JWT with role=anon may be embedded; secret/service_role keys are blocked. Builds will be explicitly offline/local-only.")
