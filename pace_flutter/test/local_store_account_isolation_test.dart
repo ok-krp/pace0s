@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/storage/local_store.dart';
 import 'package:pace/core/supabase/pace_supabase.dart';
 import 'package:pace/core/sync/sync_service.dart';
+import 'package:pace/features/ai/ai_models.dart';
 import 'package:pace/features/ai/ai_service.dart';
 
 void main() {
@@ -793,6 +794,55 @@ void main() {
 
     expect(ai.loadMemory(), hasLength(1));
     expect(ai.loadMemory().single.text, 'guest memory remains readable');
+  });
+
+  test('refreshing one AI agent preserves other and newly-created conversations', () {
+    final t1 = DateTime.utc(2026, 10, 27, 10);
+    final t2 = DateTime.utc(2026, 10, 27, 11);
+    final coach = AiConversation(
+      id: 'coach-1',
+      agent: PaceAiAgent.coach,
+      title: 'Local coach title',
+      updatedAt: t1,
+    );
+    final build = AiConversation(
+      id: 'build-1',
+      agent: PaceAiAgent.build,
+      title: 'Build remains local',
+      updatedAt: t1,
+    );
+    final createdDuringRefresh = AiConversation(
+      id: 'coach-2',
+      agent: PaceAiAgent.coach,
+      title: 'Created while refreshing',
+      updatedAt: t2,
+    );
+    final pendingDelete = AiConversation(
+      id: 'build-deleted',
+      agent: PaceAiAgent.build,
+      title: 'Pending delete',
+      updatedAt: t1,
+    );
+    final remoteCoach = AiConversation(
+      id: 'coach-1',
+      agent: PaceAiAgent.coach,
+      title: 'Newer remote coach title',
+      updatedAt: t2,
+    );
+
+    final merged = PaceAiService.mergeAgentSnapshot(
+      agent: PaceAiAgent.coach,
+      latestLocal: [coach, build, createdDuringRefresh, pendingDelete],
+      refreshed: [remoteCoach],
+      pendingDeleteIds: {'build-deleted'},
+    );
+    final byId = {for (final item in merged) item.id: item};
+
+    expect(byId.keys, containsAll(['coach-1', 'coach-2', 'build-1']));
+    expect(byId, isNot(contains('build-deleted')));
+    expect(byId['coach-1']?.title, 'Newer remote coach title');
+    expect(byId['coach-2']?.title, 'Created while refreshing');
+    expect(byId['build-1']?.title, 'Build remains local');
   });
 
   test('stale AI service cannot read or write the next account state', () async {
