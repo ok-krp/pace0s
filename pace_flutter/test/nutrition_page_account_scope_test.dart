@@ -72,7 +72,7 @@ void main() {
         .toList();
     expect(entries, hasLength(1));
     expect(entries.single['name'], 'B food');
-    debugPrint('nutrition-stage: account B food persisted');
+    debugPrint('nutrition-stage: account B food visible in active scope');
     expect(store.activeUserId, 'user-b');
 
     // Durable file-level isolation is covered separately by LocalStore tests.
