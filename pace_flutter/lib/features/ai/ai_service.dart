@@ -62,14 +62,17 @@ class PaceAiService {
 
   Future<void> setMemoryEnabled(bool enabled) async {
     if (!_isAccountScopeCurrent) return;
-    if (!enabled) {
-      // Clear the sensitive payload first. If an account switch interrupts
-      // the operation between durable writes, the old memory must not remain
-      // stored merely because the preference write won the race.
-      await localStore.writeForAccount(_accountUserId, _memoryKey, <dynamic>[]);
-      if (!_isAccountScopeCurrent) return;
-    }
-    await localStore.writeForAccount(_accountUserId, _memoryEnabledKey, enabled);
+    await localStore.writeBatchForAccount(
+      _accountUserId,
+      writes: enabled
+          ? {_memoryEnabledKey: true}
+          : {
+              // Clear the sensitive payload in the same durable snapshot as
+              // the preference, so an account switch cannot split the change.
+              _memoryKey: <dynamic>[],
+              _memoryEnabledKey: false,
+            },
+    );
     if (!_isAccountScopeCurrent) return;
     unawaited(sync.syncNow());
   }
