@@ -13,6 +13,7 @@ class SportPage extends StatefulWidget {
 
 class _SportPageState extends State<SportPage> {
   late String? _accountUserId;
+  bool _dialogOpen = false;
   @override
   void initState() {
     super.initState();
@@ -24,6 +25,7 @@ class _SportPageState extends State<SportPage> {
     if (!mounted) return;
     final activeUserId = widget.localStore.activeUserId;
     if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    if (_dialogOpen) return;
     setState(() {});
   }
 
@@ -104,12 +106,16 @@ class _SportPageState extends State<SportPage> {
     final expectedUserId = _accountUserId;
     final name = TextEditingController();
     final muscle = TextEditingController();
+    _dialogOpen = true;
     final result = await showDialog<Map<String, String>>(
       context: context,
       builder: (context) => AlertDialog(title: const Text('Nouvel exercice'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: 'Nom')), TextField(controller: muscle, decoration: const InputDecoration(labelText: 'Muscle'))]), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, {'name': name.text.trim(), 'muscle': muscle.text.trim()}), child: const Text('Ajouter'))]),
     );
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+    _dialogOpen = false;
     name.dispose();
     muscle.dispose();
+    if (mounted) setState(() {});
     if (result == null ||
         result['name']!.isEmpty ||
         widget.localStore.activeUserId != expectedUserId) {
