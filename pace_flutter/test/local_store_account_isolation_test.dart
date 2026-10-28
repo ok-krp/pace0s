@@ -796,6 +796,50 @@ void main() {
     expect(ai.loadMemory().single.text, 'guest memory remains readable');
   });
 
+  test('AI message refresh merges other-device history and retains local edits', () {
+    final t1 = DateTime.utc(2026, 10, 28, 10);
+    final t2 = DateTime.utc(2026, 10, 28, 11);
+    final t3 = DateTime.utc(2026, 10, 28, 12);
+    final local = [
+      AiMessage(
+        id: 'message-1',
+        role: 'user',
+        text: 'local payload waiting for upload',
+        createdAt: t1,
+      ),
+      AiMessage(
+        id: 'message-3',
+        role: 'assistant',
+        text: 'local-only reply',
+        createdAt: t3,
+      ),
+    ];
+    final remote = [
+      AiMessage(
+        id: 'message-1',
+        role: 'user',
+        text: 'older cloud payload',
+        createdAt: t1,
+      ),
+      AiMessage(
+        id: 'message-2',
+        role: 'assistant',
+        text: 'reply from another device',
+        createdAt: t2,
+      ),
+    ];
+
+    final merged = PaceAiService.mergeMessages(local: local, remote: remote);
+
+    expect(
+      merged.map((message) => message.id),
+      ['message-1', 'message-2', 'message-3'],
+    );
+    expect(merged.first.text, 'local payload waiting for upload');
+    expect(merged[1].text, 'reply from another device');
+    expect(merged.last.text, 'local-only reply');
+  });
+
   test('refreshing one AI agent preserves other and newly-created conversations', () {
     final t1 = DateTime.utc(2026, 10, 27, 10);
     final t2 = DateTime.utc(2026, 10, 27, 11);
