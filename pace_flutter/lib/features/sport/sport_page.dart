@@ -106,24 +106,65 @@ class _SportPageState extends State<SportPage> {
     final expectedUserId = _accountUserId;
     final name = TextEditingController();
     final muscle = TextEditingController();
+    Map<String, String>? result;
     _dialogOpen = true;
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) => AlertDialog(title: const Text('Nouvel exercice'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: 'Nom')), TextField(controller: muscle, decoration: const InputDecoration(labelText: 'Muscle'))]), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, {'name': name.text.trim(), 'muscle': muscle.text.trim()}), child: const Text('Ajouter'))]),
-    );
-    await Future<void>.delayed(const Duration(milliseconds: 350));
-    _dialogOpen = false;
-    name.dispose();
-    muscle.dispose();
-    if (mounted) setState(() {});
+    try {
+      result = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Nouvel exercice'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: name,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Nom'),
+              ),
+              TextField(
+                controller: muscle,
+                decoration: const InputDecoration(labelText: 'Muscle'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, {
+                'name': name.text.trim(),
+                'muscle': muscle.text.trim(),
+              }),
+              child: const Text('Ajouter'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      _dialogOpen = false;
+      name.dispose();
+      muscle.dispose();
+      if (mounted) setState(() {});
+    }
     if (result == null ||
         result['name']!.isEmpty ||
         widget.localStore.activeUserId != expectedUserId) {
       return;
     }
     final exercises = _exercises();
-    exercises.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'name': result['name'], 'muscle': result['muscle'] ?? ''});
-    await widget.localStore.writeForAccount(expectedUserId, 'pace.sport.exercises', exercises);
+    exercises.add({
+      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'name': result['name'],
+      'muscle': result['muscle'] ?? '',
+    });
+    await widget.localStore.writeForAccount(
+      expectedUserId,
+      'pace.sport.exercises',
+      exercises,
+    );
     if (mounted) setState(() {});
   }
 
