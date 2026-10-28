@@ -617,6 +617,13 @@ class PaceAiService {
     unawaited(sync.syncNow());
   }
 
+  static bool hasMessageListChanged({
+    required List<AiMessage> current,
+    required List<AiMessage> next,
+  }) =>
+      jsonEncode(current.map((message) => message.toJson()).toList()) !=
+      jsonEncode(next.map((message) => message.toJson()).toList());
+
   Future<void> _replaceMessages(
     String id,
     List<AiMessage> messages, {
@@ -625,11 +632,15 @@ class PaceAiService {
     final conversations = loadLocalConversations();
     final index = conversations.indexWhere((item) => item.id == id);
     if (index < 0) return;
-    conversations[index] = conversations[index].copyWith(
+    final existing = conversations[index];
+    final messagesChanged = hasMessageListChanged(
+      current: existing.messages,
+      next: messages,
+    );
+    if (!touchUpdatedAt && !messagesChanged) return;
+    conversations[index] = existing.copyWith(
       messages: messages,
-      updatedAt: touchUpdatedAt
-          ? DateTime.now()
-          : conversations[index].updatedAt,
+      updatedAt: touchUpdatedAt ? DateTime.now() : existing.updatedAt,
     );
     await _saveLocalConversations(conversations);
   }
