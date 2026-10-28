@@ -13,6 +13,7 @@ class CalendarPage extends StatefulWidget {
 
 class _CalendarPageState extends State<CalendarPage> {
   late String? _accountUserId;
+  bool _dialogOpen = false;
   @override
   void initState() {
     super.initState();
@@ -24,6 +25,7 @@ class _CalendarPageState extends State<CalendarPage> {
     if (!mounted) return;
     final activeUserId = widget.localStore.activeUserId;
     if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    if (_dialogOpen) return;
     setState(() {});
   }
 
@@ -52,25 +54,67 @@ class _CalendarPageState extends State<CalendarPage> {
   Future<void> _add() async {
     final expectedUserId = _accountUserId;
     final title = TextEditingController();
-    final date = TextEditingController(text: DateTime.now().toIso8601String().substring(0, 10));
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Nouvel évènement'),
-        content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: title, autofocus: true, decoration: const InputDecoration(labelText: 'Titre')), TextField(controller: date, decoration: const InputDecoration(labelText: 'Date (AAAA-MM-JJ)'))]),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, {'title': title.text.trim(), 'date': date.text.trim()}), child: const Text('Créer'))],
-      ),
+    final date = TextEditingController(
+      text: DateTime.now().toIso8601String().substring(0, 10),
     );
-    title.dispose();
-    date.dispose();
+    Map<String, String>? result;
+    _dialogOpen = true;
+    try {
+      result = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Nouvel évènement'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: title,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Titre'),
+              ),
+              TextField(
+                controller: date,
+                decoration: const InputDecoration(labelText: 'Date (AAAA-MM-JJ)'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, {
+                'title': title.text.trim(),
+                'date': date.text.trim(),
+              }),
+              child: const Text('Créer'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      _dialogOpen = false;
+      title.dispose();
+      date.dispose();
+      if (mounted) setState(() {});
+    }
     if (result == null ||
         result['title']!.isEmpty ||
         widget.localStore.activeUserId != expectedUserId) {
       return;
     }
     final events = _events();
-    events.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), ...result});
-    await widget.localStore.writeForAccount(expectedUserId, 'pace.calendar.events', events);
+    events.add({
+      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      ...result,
+    });
+    await widget.localStore.writeForAccount(
+      expectedUserId,
+      'pace.calendar.events',
+      events,
+    );
     if (mounted) setState(() {});
   }
 
