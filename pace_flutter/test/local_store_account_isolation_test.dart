@@ -796,6 +796,43 @@ void main() {
     expect(ai.loadMemory().single.text, 'guest memory remains readable');
   });
 
+  test('loading unchanged AI messages does not require local persistence', () {
+    final timestamp = DateTime.utc(2026, 10, 28, 10);
+    final message = AiMessage(
+      id: 'message-1',
+      role: 'assistant',
+      text: 'same remote message',
+      createdAt: timestamp,
+    );
+    final identical = AiMessage(
+      id: 'message-1',
+      role: 'assistant',
+      text: 'same remote message',
+      createdAt: timestamp,
+    );
+    final changed = AiMessage(
+      id: 'message-1',
+      role: 'assistant',
+      text: 'updated remote message',
+      createdAt: timestamp,
+    );
+
+    expect(
+      PaceAiService.hasMessageListChanged(
+        current: [message],
+        next: [identical],
+      ),
+      isFalse,
+    );
+    expect(
+      PaceAiService.hasMessageListChanged(
+        current: [message],
+        next: [changed],
+      ),
+      isTrue,
+    );
+  });
+
   test('AI message refresh merges other-device history and retains local edits', () {
     final t1 = DateTime.utc(2026, 10, 28, 10);
     final t2 = DateTime.utc(2026, 10, 28, 11);
