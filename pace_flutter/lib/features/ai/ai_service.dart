@@ -375,7 +375,13 @@ class PaceAiService {
       await _replaceMessages(id, messages, touchUpdatedAt: false);
       return _isAccountScopeCurrent ? messages : const <AiMessage>[];
     } catch (_) {
-      return _isAccountScopeCurrent ? local.messages : const <AiMessage>[];
+      if (!_isAccountScopeCurrent) return const <AiMessage>[];
+      // The local conversation may have been deleted while the cloud read was
+      // pending. Never return the stale pre-request snapshot on an error path.
+      final latestLocal = loadLocalConversations().where((item) => item.id == id);
+      return latestLocal.isEmpty
+          ? const <AiMessage>[]
+          : latestLocal.first.messages;
     }
   }
 
