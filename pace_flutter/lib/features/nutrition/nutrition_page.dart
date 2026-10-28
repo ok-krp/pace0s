@@ -92,38 +92,42 @@ class _NutritionPageState extends State<NutritionPage> {
     Map<String, dynamic>? result;
     try {
       result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Ajouter un aliment'),
-        content: SingleChildScrollView(child: Column(children: [
-          TextField(controller: name, decoration: const InputDecoration(labelText: 'Aliment')),
-          TextField(controller: kcal, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Calories (kcal)')),
-          TextField(controller: protein, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Protéines (g)')),
-          TextField(controller: carbs, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Glucides (g)')),
-          TextField(controller: fat, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Lipides (g)')),
-        ])),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-          FilledButton(onPressed: () {
-            if (name.text.trim().isEmpty) return;
-            final values = <String, dynamic>{
-              'kcal': _parseOptional(kcal),
-              'p': _parseOptional(protein),
-              'c': _parseOptional(carbs),
-              'f': _parseOptional(fat),
-            };
-            if (values.values.any((value) => value is double && (!value.isFinite || value < 0))) return;
-            Navigator.pop(context, values);
-          }, child: const Text('Ajouter')),
-        ],
-      ),
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Ajouter un aliment'),
+          content: SingleChildScrollView(
+            child: Column(
+              children: [
+                TextField(controller: name, decoration: const InputDecoration(labelText: 'Aliment')),
+                TextField(controller: kcal, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Calories (kcal)')),
+                TextField(controller: protein, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Protéines (g)')),
+                TextField(controller: carbs, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Glucides (g)')),
+                TextField(controller: fat, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Lipides (g)')),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
+            FilledButton(
+              onPressed: () {
+                if (name.text.trim().isEmpty) return;
+                final values = <String, dynamic>{
+                  'kcal': _parseOptional(kcal),
+                  'p': _parseOptional(protein),
+                  'c': _parseOptional(carbs),
+                  'f': _parseOptional(fat),
+                };
+                if (values.values.any((value) => value is double && (!value.isFinite || value < 0))) return;
+                Navigator.pop(context, values);
+              },
+              child: const Text('Ajouter'),
+            ),
+          ],
+        ),
       );
     } finally {
-      // showDialog's result future can complete before the reverse transition
-      // has finished removing the route from the root Overlay. Keep the page
-      // stable through that transition: rebuilding it (or disposing the
-      // controllers) too early can leave TextFields referencing disposed
-      // controllers and trigger Overlay deactivation assertions.
+      // Keep the page stable through the reverse transition. Rebuilding the
+      // parent or disposing controllers too early can break the root Overlay.
       await Future<void>.delayed(const Duration(milliseconds: 350));
       _foodDialogOpen = false;
       if (mounted) setState(() {});
@@ -152,15 +156,17 @@ class _NutritionPageState extends State<NutritionPage> {
       ...result,
     });
     data[day] = list;
-    await widget.localStore.writeForAccount(expectedUserId, 'pace.nutrition.items', data);
-    await _recalculateTotals(data, expectedUserId: expectedUserId);
+    await widget.localStore.writeBatchForAccount(
+      expectedUserId,
+      writes: {
+        'pace.nutrition.items': data,
+        'pace.nutrition.totals': _calculateTotals(data),
+      },
+    );
     if (mounted) setState(() {});
   }
 
-  Future<void> _recalculateTotals(
-    Map<String, dynamic> data, {
-    required String? expectedUserId,
-  }) async {
+  Map<String, dynamic> _calculateTotals(Map<String, dynamic> data) {
     final totals = <String, dynamic>{};
     for (final entry in data.entries) {
       final rawItems = entry.value;
@@ -185,7 +191,7 @@ class _NutritionPageState extends State<NutritionPage> {
         'f': hasF ? dayF : null,
       };
     }
-    await widget.localStore.writeForAccount(expectedUserId, 'pace.nutrition.totals', totals);
+    return totals;
   }
 
   Future<void> _deleteItem(Map<String, dynamic> item) async {
@@ -199,8 +205,13 @@ class _NutritionPageState extends State<NutritionPage> {
     list.removeWhere((entry) => entry is Map && entry['id']?.toString() == item['id']?.toString());
     if (list.length == before) return;
     data[day] = list;
-    await widget.localStore.writeForAccount(expectedUserId, 'pace.nutrition.items', data);
-    await _recalculateTotals(data, expectedUserId: expectedUserId);
+    await widget.localStore.writeBatchForAccount(
+      expectedUserId,
+      writes: {
+        'pace.nutrition.items': data,
+        'pace.nutrition.totals': _calculateTotals(data),
+      },
+    );
     if (mounted) setState(() {});
   }
 
