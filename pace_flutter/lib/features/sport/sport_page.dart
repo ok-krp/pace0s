@@ -21,7 +21,10 @@ class _SportPageState extends State<SportPage> {
   }
 
   void _onLocalStoreChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    setState(() {});
   }
 
   @override
@@ -29,6 +32,7 @@ class _SportPageState extends State<SportPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.localStore != widget.localStore) {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      _accountUserId = widget.localStore.activeUserId;
       widget.localStore.addListener(_onLocalStoreChanged);
     }
   }
@@ -63,6 +67,7 @@ class _SportPageState extends State<SportPage> {
   }
 
   Future<void> _startFree() async {
+    final expectedUserId = _accountUserId;
     final session = {
       'id': DateTime.now().microsecondsSinceEpoch.toString(),
       'date': _today(),
@@ -70,11 +75,12 @@ class _SportPageState extends State<SportPage> {
       'startedAt': DateTime.now().millisecondsSinceEpoch,
       'exercises': <dynamic>[],
     };
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.sport.active', session);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.sport.active', session);
     if (mounted) setState(() {});
   }
 
   Future<void> _finish() async {
+    final expectedUserId = _accountUserId;
     final raw = widget.localStore.read('pace.sport.active');
     if (raw is! Map) return;
     final session = Map<String, dynamic>.from(raw);
@@ -86,12 +92,13 @@ class _SportPageState extends State<SportPage> {
     session['durationMin'] = (elapsedMs / 60000).round();
     final sessions = _sessions();
     sessions.insert(0, session);
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.sport.sessions', sessions);
-    await widget.localStore.removeForAccount(_accountUserId, 'pace.sport.active');
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.sport.sessions', sessions);
+    await widget.localStore.removeForAccount(expectedUserId, 'pace.sport.active');
     if (mounted) setState(() {});
   }
 
   Future<void> _addExercise() async {
+    final expectedUserId = _accountUserId;
     final name = TextEditingController();
     final muscle = TextEditingController();
     final result = await showDialog<Map<String, String>>(
@@ -100,10 +107,14 @@ class _SportPageState extends State<SportPage> {
     );
     name.dispose();
     muscle.dispose();
-    if (result == null || result['name']!.isEmpty) return;
+    if (result == null ||
+        result['name']!.isEmpty ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
     final exercises = _exercises();
     exercises.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'name': result['name'], 'muscle': result['muscle'] ?? ''});
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.sport.exercises', exercises);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.sport.exercises', exercises);
     if (mounted) setState(() {});
   }
 
