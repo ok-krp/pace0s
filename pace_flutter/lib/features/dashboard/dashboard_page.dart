@@ -15,6 +15,7 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   late String? _accountUserId;
+  bool _dialogOpen = false;
   DashboardSnapshot? _snapshot;
 
   @override
@@ -32,6 +33,7 @@ class _DashboardPageState extends State<DashboardPage> {
       _accountUserId = activeUserId;
       _snapshot = null;
     }
+    if (_dialogOpen) return;
     _load();
   }
 
@@ -137,29 +139,46 @@ class _DashboardPageState extends State<DashboardPage> {
   Future<void> _writeNumber(String key, String field, double min, double max) async {
     final expectedUserId = _accountUserId;
     final controller = TextEditingController();
-    final value = await showDialog<double>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(field),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: InputDecoration(labelText: field),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-          FilledButton(
-            onPressed: () {
-              final parsed = double.tryParse(controller.text.replaceAll(',', '.'));
-              if (parsed != null && parsed >= min && parsed <= max) Navigator.pop(context, parsed);
-            },
-            child: const Text('Enregistrer'),
+    double? value;
+    _dialogOpen = true;
+    try {
+      value = await showDialog<double>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(field),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(labelText: field),
           ),
-        ],
-      ),
-    );
-    controller.dispose();
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final parsed =
+                    double.tryParse(controller.text.replaceAll(',', '.'));
+                if (parsed != null && parsed >= min && parsed <= max) {
+                  Navigator.pop(context, parsed);
+                }
+              },
+              child: const Text('Enregistrer'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      _dialogOpen = false;
+      controller.dispose();
+      if (mounted) {
+        setState(() {});
+        _load();
+      }
+    }
     if (value == null ||
         _snapshot == null ||
         widget.localStore.activeUserId != expectedUserId) {
