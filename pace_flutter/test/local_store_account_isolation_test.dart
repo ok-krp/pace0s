@@ -833,6 +833,48 @@ void main() {
     );
   });
 
+  test('ephemeral AI requests use in-memory context without using persisted history', () {
+    final ephemeralHistory = [
+      AiMessage(
+        id: 'ephemeral-1',
+        role: 'user',
+        text: 'first private prompt',
+        createdAt: DateTime.utc(2026, 10, 28, 10),
+      ),
+      AiMessage(
+        id: 'ephemeral-2',
+        role: 'assistant',
+        text: 'first private answer',
+        createdAt: DateTime.utc(2026, 10, 28, 10, 1),
+      ),
+    ];
+    final persistedHistory = [
+      AiMessage(
+        id: 'saved-1',
+        role: 'user',
+        text: 'saved conversation only',
+        createdAt: DateTime.utc(2026, 10, 28, 9),
+      ),
+    ];
+
+    expect(
+      PaceAiService.historyForSend(
+        ephemeral: true,
+        ephemeralHistory: ephemeralHistory,
+        persistedHistory: persistedHistory,
+      ).map((message) => message.text),
+      ['first private prompt', 'first private answer'],
+    );
+    expect(
+      PaceAiService.historyForSend(
+        ephemeral: false,
+        ephemeralHistory: ephemeralHistory,
+        persistedHistory: persistedHistory,
+      ).map((message) => message.text),
+      ['saved conversation only'],
+    );
+  });
+
   test('AI message refresh merges other-device history and retains local edits', () {
     final t1 = DateTime.utc(2026, 10, 28, 10);
     final t2 = DateTime.utc(2026, 10, 28, 11);
