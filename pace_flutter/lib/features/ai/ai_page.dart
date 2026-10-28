@@ -18,7 +18,8 @@ class AiPage extends StatefulWidget {
 }
 
 class _AiPageState extends State<AiPage> {
-  late final PaceAiService _service = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
+  late PaceAiService _service;
+  late String? _accountUserId;
   final _input = TextEditingController();
   final _scroll = ScrollController();
   List<AiConversation> _history = const [];
@@ -33,12 +34,41 @@ class _AiPageState extends State<AiPage> {
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    _service = PaceAiService(
+      localStore: widget.localStore,
+      sync: widget.sync,
+      auth: widget.auth,
+    );
     widget.localStore.addListener(_onLocalStoreChanged);
     _openInitialConversation();
   }
 
   void _onLocalStoreChanged() {
-    if (!mounted || _loading || _ephemeral) return;
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) {
+      // Account notifications must take precedence over the normal loading
+      // guard: otherwise a slow model response can leave the prior account's
+      // chat visible in this still-mounted widget.
+      _accountUserId = activeUserId;
+      _service = PaceAiService(
+        localStore: widget.localStore,
+        sync: widget.sync,
+        auth: widget.auth,
+      );
+      ++_openGeneration;
+      ++_sendGeneration;
+      setState(() {
+        _history = const [];
+        _conversation = null;
+        _messages = const [];
+        _loading = false;
+        _ephemeral = false;
+      });
+      return;
+    }
+    if (_loading || _ephemeral) return;
     final history = _service.loadLocalConversations();
     final currentId = _conversation?.id;
     AiConversation? updatedCurrent;
@@ -59,6 +89,32 @@ class _AiPageState extends State<AiPage> {
         }
       }
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant AiPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+    if (oldWidget.localStore != widget.localStore ||
+        oldWidget.auth != widget.auth ||
+        oldWidget.sync != widget.sync) {
+      _accountUserId = widget.localStore.activeUserId;
+      _service = PaceAiService(
+        localStore: widget.localStore,
+        sync: widget.sync,
+        auth: widget.auth,
+      );
+      ++_openGeneration;
+      ++_sendGeneration;
+      _history = const [];
+      _conversation = null;
+      _messages = const [];
+      _loading = false;
+      _ephemeral = false;
+    }
   }
 
   @override
