@@ -67,9 +67,9 @@ void main() {
       // if an auth/navigation transition has not removed the route yet.
       await tester.runAsync(() => store.activateAccount('user-b'));
       await tester.pump();
-      await tester.pumpAndSettle();
 
       expect(find.text('A secret transcript for guest'), findsNothing);
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
     },
     timeout: const Timeout(Duration(seconds: 45)),
   );
