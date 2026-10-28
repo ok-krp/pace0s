@@ -4,6 +4,20 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/storage/local_store.dart';
+
+/// Returns true only for a duplicate session notification when no switch is
+/// pending. A null-user event must still supersede an in-flight sign-in even
+/// while the previous guest store remains active on disk.
+bool shouldSkipAccountActivation({
+  required bool activationInProgress,
+  required String? activeUserId,
+  required String? requestedUserId,
+  required bool signedIn,
+}) =>
+    !activationInProgress &&
+    activeUserId == requestedUserId &&
+    ((requestedUserId == null && !signedIn) ||
+        (requestedUserId != null && signedIn));
 import '../core/supabase/pace_supabase.dart';
 import '../core/sync/sync_service.dart';
 import '../features/auth/auth_page.dart';
@@ -110,6 +124,7 @@ class _AuthGateState extends State<_AuthGate> {
   bool _offlineRequested = false;
 
   int _accountGeneration = 0;
+  bool _accountActivationInProgress = false;
 
   @override
   void initState() {
@@ -154,12 +169,17 @@ class _AuthGateState extends State<_AuthGate> {
     // Supabase emits token-refresh and other same-session auth events. Do not
     // hide and recreate the signed-in shell unless the account actually changes
     // or a previous account activation failed and needs another attempt.
-    if (widget.localStore.activeUserId == userId &&
-        ((userId == null && !_signedIn) || (userId != null && _signedIn))) {
+    if (shouldSkipAccountActivation(
+      activationInProgress: _accountActivationInProgress,
+      activeUserId: widget.localStore.activeUserId,
+      requestedUserId: userId,
+      signedIn: _signedIn,
+    )) {
       return;
     }
 
     final generation = ++_accountGeneration;
+    _accountActivationInProgress = true;
     if (widget.localStore.activeUserId != userId) {
       // Feature routes are pushed onto MaterialApp's root navigator. Remove
       // them before every account-scope transition, including guest/offline
@@ -174,6 +194,9 @@ class _AuthGateState extends State<_AuthGate> {
     } catch (_) {
       // Fail closed: keep the authenticated shell hidden if account-local
       // storage cannot be switched safely.
+      if (generation == _accountGeneration) {
+        _accountActivationInProgress = false;
+      }
       return;
     }
 
@@ -188,6 +211,7 @@ class _AuthGateState extends State<_AuthGate> {
       _signedIn = userId != null;
       _offlineMode = false;
     });
+    _accountActivationInProgress = false;
     if (userId != null) await widget.sync.syncNow();
   }
 
@@ -212,13 +236,17 @@ class _AuthGateState extends State<_AuthGate> {
     // choice and reactivate the previously authenticated account's file.
     _offlineRequested = true;
     final generation = ++_accountGeneration;
+    _accountActivationInProgress = true;
     try {
       // Switch to the guest/local file before showing the shell. Never leave
       // a previously authenticated account's local state active in offline mode.
       await widget.localStore.activateAccount(null);
     } catch (_) {
       // A stale failed attempt must not cancel a newer offline request.
-      if (generation == _accountGeneration) _offlineRequested = false;
+      if (generation == _accountGeneration) {
+        _offlineRequested = false;
+        _accountActivationInProgress = false;
+      }
       return;
     }
     if (!mounted || generation != _accountGeneration) return;
@@ -232,6 +260,7 @@ class _AuthGateState extends State<_AuthGate> {
       _signedIn = false;
       _offlineMode = true;
     });
+    _accountActivationInProgress = false;
   }
 
   @override
