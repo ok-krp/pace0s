@@ -13,6 +13,7 @@ class ShoppingPage extends StatefulWidget {
 
 class _ShoppingPageState extends State<ShoppingPage> {
   late String? _accountUserId;
+  bool _addDialogOpen = false;
   @override
   void initState() {
     super.initState();
@@ -24,6 +25,9 @@ class _ShoppingPageState extends State<ShoppingPage> {
     if (!mounted) return;
     final activeUserId = widget.localStore.activeUserId;
     if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    // Keep the underlying page stable while its add dialog is being removed.
+    // The form's captured account ID still rejects stale submissions.
+    if (_addDialogOpen) return;
     setState(() {});
   }
 
@@ -53,7 +57,50 @@ class _ShoppingPageState extends State<ShoppingPage> {
     final expectedUserId = _accountUserId;
     final name = TextEditingController();
     final quantity = TextEditingController(text: '1');
-    final result = await showDialog<Map<String, String>>(context: context, builder: (context) => AlertDialog(title: const Text('Ajouter à la liste'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: 'Produit')), TextField(controller: quantity, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'Quantité'))]), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, {'name': name.text.trim(), 'quantity': quantity.text.trim()}), child: const Text('Ajouter'))]));
+    _addDialogOpen = true;
+    Map<String, String>? result;
+    try {
+      result = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Ajouter à la liste'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: name,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Produit'),
+              ),
+              TextField(
+                controller: quantity,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(labelText: 'Quantité'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, {
+                'name': name.text.trim(),
+                'quantity': quantity.text.trim(),
+              }),
+              child: const Text('Ajouter'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      // showDialog's future can complete before the reverse transition has
+      // removed its TextFields from the root overlay.
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      _addDialogOpen = false;
+      if (mounted) setState(() {});
+    }
     name.dispose();
     quantity.dispose();
     if (result == null ||
@@ -62,7 +109,12 @@ class _ShoppingPageState extends State<ShoppingPage> {
       return;
     }
     final items = _items();
-    items.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'name': result['name'], 'quantity': result['quantity'], 'checked': false});
+    items.add({
+      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'name': result['name'],
+      'quantity': result['quantity'],
+      'checked': false,
+    });
     await widget.localStore.writeForAccount(expectedUserId, 'pace.shopping', items);
     if (mounted) setState(() {});
   }
