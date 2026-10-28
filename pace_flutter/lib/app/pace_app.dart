@@ -194,6 +194,16 @@ class _AuthGateState extends State<_AuthGate> {
   void _exitOffline() {
     if (!mounted) return;
     _offlineRequested = false;
+
+    // Choosing local mode does not sign out of Supabase. If a valid session
+    // still exists, restore its account-scoped store instead of leaving the
+    // user on the login form with an already-authenticated client.
+    final currentUser = widget.auth.currentUser;
+    if (currentUser != null) {
+      unawaited(_activateAccount(currentUser.id));
+      return;
+    }
+
     setState(() => _offlineMode = false);
   }
 
