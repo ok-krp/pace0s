@@ -29,6 +29,7 @@ class _AiPageState extends State<AiPage> {
   List<AiMessage> _messages = const [];
   bool _loading = false;
   bool _ephemeral = false;
+  bool _modalOpen = false;
   int _openGeneration = 0;
   int _sendGeneration = 0;
   String _search = '';
@@ -61,6 +62,16 @@ class _AiPageState extends State<AiPage> {
       );
       ++_openGeneration;
       ++_sendGeneration;
+      if (_modalOpen) {
+        // The root navigator is already dismissing this route. Clear in-memory
+        // data now, but defer the rebuild until the modal overlay has detached.
+        _history = const [];
+        _conversation = null;
+        _messages = const [];
+        _loading = false;
+        _ephemeral = false;
+        return;
+      }
       setState(() {
         _history = const [];
         _conversation = null;
@@ -70,7 +81,7 @@ class _AiPageState extends State<AiPage> {
       });
       return;
     }
-    if (_loading || _ephemeral) return;
+    if (_loading || _ephemeral || _modalOpen) return;
     final history = _service.loadLocalConversations();
     final currentId = _conversation?.id;
     AiConversation? updatedCurrent;
@@ -323,20 +334,86 @@ class _AiPageState extends State<AiPage> {
   }
 
   Future<void> _conversationMenu(AiConversation conversation) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [ListTile(leading: const Icon(Icons.edit), title: const Text('Renommer'), onTap: () => Navigator.pop(context, 'rename')), ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Supprimer'), onTap: () => Navigator.pop(context, 'delete'))])),
-    );
-    if (action == 'rename' && mounted) {
-      final controller = TextEditingController(text: conversation.title);
-      final title = await showDialog<String>(context: context, builder: (_) => AlertDialog(title: const Text('Renommer'), content: TextField(controller: controller, autofocus: true), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Enregistrer'))]));
-      controller.dispose();
-      if (title != null && title.trim().isNotEmpty) await _service.renameConversation(conversation.id, title);
-    } else if (action == 'delete') {
-      await _service.deleteConversation(conversation.id);
-      if (conversation.id == _conversation?.id) await _newConversation();
+    final expectedUserId = _accountUserId;
+    var controllerTransitionFinished = false;
+    _modalOpen = true;
+    try {
+      final action = await showModalBottomSheet<String>(
+        context: context,
+        builder: (_) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('Renommer'),
+                onTap: () => Navigator.pop(context, 'rename'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Supprimer'),
+                onTap: () => Navigator.pop(context, 'delete'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted || widget.localStore.activeUserId != expectedUserId) return;
+
+      if (action == 'rename') {
+        final controller = TextEditingController(text: conversation.title);
+        String? title;
+        try {
+          title = await showDialog<String>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('Renommer'),
+              content: TextField(controller: controller, autofocus: true),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Annuler'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, controller.text),
+                  child: const Text('Enregistrer'),
+                ),
+              ],
+            ),
+          );
+        } finally {
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+          controller.dispose();
+          controllerTransitionFinished = true;
+        }
+        if (!mounted ||
+            widget.localStore.activeUserId != expectedUserId ||
+            title == null ||
+            title.trim().isEmpty) {
+          return;
+        }
+        await _service.renameConversation(conversation.id, title);
+      } else if (action == 'delete') {
+        if (!mounted || widget.localStore.activeUserId != expectedUserId) {
+          return;
+        }
+        await _service.deleteConversation(conversation.id);
+        if (!mounted || widget.localStore.activeUserId != expectedUserId) return;
+        if (conversation.id == _conversation?.id) await _newConversation();
+      }
+
+      if (mounted && widget.localStore.activeUserId == expectedUserId) {
+        setState(() => _history = _service.loadLocalConversations());
+      }
+    } finally {
+      if (!controllerTransitionFinished) {
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+      }
+      _modalOpen = false;
+      if (mounted) {
+        setState(() => _history = _service.loadLocalConversations());
+      }
     }
-    if (mounted) setState(() => _history = _service.loadLocalConversations());
   }
 
   Future<void> _openMemory() async {
@@ -358,6 +435,7 @@ class AiMemoryPage extends StatefulWidget {
 class _AiMemoryPageState extends State<AiMemoryPage> {
   late bool _enabled = widget.service.memoryEnabled;
   List<AiMemoryItem> _items = const [];
+  bool _dialogOpen = false;
 
   @override
   void initState() {
@@ -370,6 +448,11 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
     if (!mounted) return;
     final enabled = widget.service.memoryEnabled;
     final items = widget.service.loadMemory();
+    if (_dialogOpen) {
+      _enabled = enabled;
+      _items = items;
+      return;
+    }
     setState(() {
       _enabled = enabled;
       _items = items;
@@ -383,15 +466,52 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
   }
 
   Future<void> _add() async {
+    final expectedUserId = widget.service.localStore.activeUserId;
     final controller = TextEditingController();
-    final text = await showDialog<String>(context: context, builder: (_) => AlertDialog(title: const Text('Ajouter une mémoire'), content: TextField(controller: controller, autofocus: true, maxLines: 4), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Ajouter'))]));
-    controller.dispose();
-    if (text != null && text.trim().isNotEmpty) {
-      await widget.service.addMemory(text);
-      if (!mounted) return;
-      setState(() => _items = widget.service.loadMemory());
+    String? text;
+    _dialogOpen = true;
+    try {
+      text = await showDialog<String>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Ajouter une mémoire'),
+          content: TextField(controller: controller, autofocus: true, maxLines: 4),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: const Text('Ajouter'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      _dialogOpen = false;
+      controller.dispose();
+      if (mounted) {
+        setState(() {
+          _enabled = widget.service.memoryEnabled;
+          _items = widget.service.loadMemory();
+        });
+      }
     }
+    if (text == null ||
+        text.trim().isEmpty ||
+        widget.service.localStore.activeUserId != expectedUserId) {
+      return;
+    }
+    await widget.service.addMemory(text);
+    if (!mounted ||
+        widget.service.localStore.activeUserId != expectedUserId) {
+      return;
+    }
+    setState(() => _items = widget.service.loadMemory());
   }
+
 
   @override
   Widget build(BuildContext context) => Scaffold(
