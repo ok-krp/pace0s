@@ -73,14 +73,14 @@ class _ShoppingPageState extends State<ShoppingPage> {
     final index = items.indexWhere((e) => e['id']?.toString() == item['id']?.toString());
     if (index < 0) return;
     items[index]['checked'] = !(items[index]['checked'] == true);
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.shopping', items);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.shopping', items);
     if (mounted) setState(() {});
   }
 
   Future<void> _delete(Map<String, dynamic> item) async {
     final expectedUserId = _accountUserId;
     final items = _items()..removeWhere((e) => e['id']?.toString() == item['id']?.toString());
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.shopping', items);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.shopping', items);
     if (mounted) setState(() {});
   }
 
