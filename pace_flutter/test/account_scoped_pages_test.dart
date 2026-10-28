@@ -6,23 +6,27 @@ import 'package:pace/core/storage/local_store.dart';
 import 'package:pace/features/shopping/shopping_page.dart';
 
 void main() {
-  late Directory directory;
-  late LocalStore store;
-
-  setUp(() async {
-    directory = await Directory.systemTemp.createTemp('pace-shopping-account-');
-    store = await LocalStore.open(directory: directory);
-  });
-
-  tearDown(() async {
-    store.dispose();
-    if (await directory.exists()) await directory.delete(recursive: true);
-  });
-
   testWidgets(
     'shopping form opened by account A cannot write into account B',
     (tester) async {
-      await store.activateAccount('user-a');
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('pace-shopping-account-'),
+      );
+      if (directory == null) {
+        throw StateError('Could not create test directory');
+      }
+
+      final store = await tester.runAsync(
+        () => LocalStore.open(directory: directory),
+      );
+      if (store == null) throw StateError('Could not open local store');
+
+      addTearDown(() async {
+        store.dispose();
+        await tester.runAsync(() => directory.delete(recursive: true));
+      });
+
+      await tester.runAsync(() => store.activateAccount('user-a'));
       await tester.pumpWidget(
         MaterialApp(home: ShoppingPage(localStore: store)),
       );
@@ -32,8 +36,8 @@ void main() {
       await tester.enterText(find.byType(TextField).at(0), 'A-private item');
       await tester.enterText(find.byType(TextField).at(1), '2');
 
-      // The page remains mounted as a direct account-scope regression test.
-      // Real auth navigation also removes routes before changing the store.
+      // Keep the route mounted to simulate a delayed async form completing
+      // after the LocalStore account scope has changed.
       await tester.runAsync(() => store.activateAccount('user-b'));
       await tester.pump();
 
@@ -43,7 +47,7 @@ void main() {
       expect(store.activeUserId, 'user-b');
       expect(store.read('pace.shopping'), isNull);
 
-      // A new operation after the scope notification should use account B.
+      // A fresh operation started after the scope notification uses B.
       await tester.tap(find.byIcon(Icons.add));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField).at(0), 'B-only item');
