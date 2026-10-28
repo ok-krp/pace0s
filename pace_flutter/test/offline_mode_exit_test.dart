@@ -9,6 +9,45 @@ import 'package:pace/core/supabase/pace_supabase.dart';
 import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
+  test('account activation guard never skips while a scope switch is pending', () {
+    expect(
+      shouldSkipAccountActivation(
+        activationInProgress: true,
+        activeUserId: null,
+        requestedUserId: 'account-a',
+        signedIn: false,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldSkipAccountActivation(
+        activationInProgress: false,
+        activeUserId: 'account-a',
+        requestedUserId: null,
+        signedIn: true,
+      ),
+      isFalse,
+    );
+    expect(
+      shouldSkipAccountActivation(
+        activationInProgress: false,
+        activeUserId: 'account-a',
+        requestedUserId: 'account-a',
+        signedIn: true,
+      ),
+      isTrue,
+    );
+    expect(
+      shouldSkipAccountActivation(
+        activationInProgress: false,
+        activeUserId: null,
+        requestedUserId: null,
+        signedIn: false,
+      ),
+      isTrue,
+    );
+  });
+
   testWidgets(
     'exiting offline mode restores a still-valid authenticated account',
     (tester) async {
