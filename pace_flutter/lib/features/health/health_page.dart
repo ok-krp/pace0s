@@ -26,6 +26,7 @@ class _HealthPageState extends State<HealthPage> {
   late final HealthAdapter _adapter = widget.adapter ?? NativeHealthAdapter();
   bool? _available;
   bool _busy = false;
+  int _readGeneration = 0;
   List<PaceHealthSample> _samples = const [];
 
   @override
@@ -58,7 +59,20 @@ class _HealthPageState extends State<HealthPage> {
   }
 
   void _onLocalStoreChanged() {
-    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) {
+      // This widget can outlive the old account while the store switches.
+      // Drop the previous account's health view and invalidate in-flight reads.
+      _accountUserId = activeUserId;
+      _readGeneration++;
+      setState(() {
+        _samples = _readStoredSamples();
+        _available = null;
+        _busy = false;
+      });
+      return;
+    }
     final samples = _readStoredSamples();
     setState(() => _samples = samples);
   }
@@ -68,8 +82,12 @@ class _HealthPageState extends State<HealthPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.localStore != widget.localStore) {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      _accountUserId = widget.localStore.activeUserId;
+      _readGeneration++;
       widget.localStore.addListener(_onLocalStoreChanged);
       _samples = _readStoredSamples();
+      _available = null;
+      _busy = false;
     }
   }
 
@@ -79,22 +97,30 @@ class _HealthPageState extends State<HealthPage> {
     super.dispose();
   }
 
+  bool _ownsRead(String? expectedUserId, int generation) =>
+      mounted &&
+      _readGeneration == generation &&
+      _accountUserId == expectedUserId &&
+      widget.localStore.activeUserId == expectedUserId;
+
   Future<void> _checkAndRead({bool request = false}) async {
-    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+    final expectedUserId = _accountUserId;
+    if (!mounted || widget.localStore.activeUserId != expectedUserId) return;
+    final generation = ++_readGeneration;
     setState(() => _busy = true);
     try {
       final available = await _adapter.isAvailable();
-      if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+      if (!_ownsRead(expectedUserId, generation)) return;
 
       var permitted = available;
       if (available && request) {
         permitted = await _adapter.requestPermissions();
-        if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+        if (!_ownsRead(expectedUserId, generation)) return;
       }
       final samples = permitted
           ? await _adapter.readRecent()
           : const <PaceHealthSample>[];
-      if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+      if (!_ownsRead(expectedUserId, generation)) return;
 
       if (permitted && samples.isNotEmpty) {
         final payload = samples
@@ -107,13 +133,13 @@ class _HealthPageState extends State<HealthPage> {
                 })
             .toList();
         await widget.localStore.writeForAccount(
-          _accountUserId,
+          expectedUserId,
           'pace.health.samples',
           payload,
         );
-        if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+        if (!_ownsRead(expectedUserId, generation)) return;
         await widget.sync.syncNow();
-        if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+        if (!_ownsRead(expectedUserId, generation)) return;
       }
 
       setState(() {
@@ -122,7 +148,7 @@ class _HealthPageState extends State<HealthPage> {
         _busy = false;
       });
     } catch (_) {
-      if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+      if (!_ownsRead(expectedUserId, generation)) return;
       setState(() {
         _busy = false;
         _available = false;
