@@ -10,6 +10,66 @@ import 'package:pace/features/health/health_page.dart';
 
 void main() {
   testWidgets(
+    'health page clears prior account samples when the store switches accounts',
+    (tester) async {
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('pace-health-view-scope-'),
+      );
+      if (directory == null) {
+        throw StateError('Could not create test directory');
+      }
+
+      final store = await tester.runAsync(
+        () => LocalStore.open(directory: directory),
+      );
+      if (store == null) throw StateError('Could not open local store');
+
+      addTearDown(() async {
+        store.dispose();
+        await tester.runAsync(() => directory.delete(recursive: true));
+      });
+
+      await tester.runAsync(() async {
+        await store.activateAccount('user-a');
+        await store.write(
+          'pace.health.samples',
+          [
+            {
+              'type': 'steps',
+              'value': 1234,
+              'timestamp': '2026-10-28T10:00:00Z',
+              'unit': 'count',
+              'source': 'private-source-a',
+            },
+          ],
+          enqueueSync: false,
+        );
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: HealthPage(
+            localStore: store,
+            sync: SyncService(localStore: store, client: null),
+          ),
+        ),
+      );
+      expect(find.textContaining('private-source-a'), findsOneWidget);
+
+      // Simulate the store being switched while this route is still mounted.
+      await tester.runAsync(() => store.activateAccount('user-b'));
+      await tester.pump();
+
+      expect(find.textContaining('private-source-a'), findsNothing);
+      expect(
+        find.text('Aucune donnée accessible sur cette période, ou les permissions n’ont pas été accordées.'),
+        findsOneWidget,
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 45)),
+  );
+
+  testWidgets(
     'health permission completion from an old account is discarded',
     (tester) async {
       final directory = await tester.runAsync(
