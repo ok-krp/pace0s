@@ -19,9 +19,25 @@ class SyncService {
   // service globally. Keep uncertainty scoped across account switches.
   final Set<String> _aiPreferenceMarkerPersistenceUncertainUsers = <String>{};
 
-  bool _isCurrentAccount(String expectedUserId) =>
-      client?.auth.currentUser?.id == expectedUserId &&
-      localStore.activeUserId == expectedUserId;
+  /// True only while the active session and durable store are settled on
+  /// the expected account. The store closes its switch gate synchronously,
+  /// before [activeUserId] changes, so checking the ID alone is insufficient.
+  static bool isSyncScopeCurrent({
+    required bool accountSwitching,
+    required String? authenticatedUserId,
+    required String? activeUserId,
+    required String expectedUserId,
+  }) =>
+      !accountSwitching &&
+      authenticatedUserId == expectedUserId &&
+      activeUserId == expectedUserId;
+
+  bool _isCurrentAccount(String expectedUserId) => isSyncScopeCurrent(
+        accountSwitching: localStore.isSwitchingAccount,
+        authenticatedUserId: client?.auth.currentUser?.id,
+        activeUserId: localStore.activeUserId,
+        expectedUserId: expectedUserId,
+      );
 
   /// Supports the boolean return type in the checked-in SQL migration and
   /// structured responses from compatible deployments that include metadata.
@@ -333,8 +349,9 @@ class SyncService {
     final userId = activeClient?.auth.currentUser?.id;
     if (activeClient == null || userId == null) return;
     // Guest/offline mutations must never be replayed under whichever account
-    // happens to be signed in later.
-    if (localStore.activeUserId != userId) return;
+    // happens to be signed in later. The switch gate closes synchronously before
+    // activeUserId changes, so also reject sync starts during that transition.
+    if (!_isCurrentAccount(userId)) return;
     if (_running) {
       // Account activation can request a sync while an older account's network
       // request is still unwinding. Queue one follow-up so the new account is
@@ -375,6 +392,7 @@ class SyncService {
             enqueueSync: false,
             notify: false,
           );
+          if (!_isCurrentAccount(userId)) return;
           _aiPreferenceMarkerPersistenceUncertainUsers.remove(userId);
         } catch (_) {
           // Do not acknowledge the source outbox until its retry marker is durable.
@@ -684,6 +702,7 @@ class SyncService {
               enqueueSync: false,
               notify: false,
             );
+            if (!_isCurrentAccount(expectedUserId)) return;
             _aiPreferenceMarkerPersistenceUncertainUsers.remove(expectedUserId);
           } catch (_) {
             _aiPreferenceMarkerPersistenceUncertainUsers.add(expectedUserId);
