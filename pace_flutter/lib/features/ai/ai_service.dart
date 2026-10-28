@@ -372,8 +372,23 @@ class PaceAiService {
       if (local.id.isNotEmpty && latestLocal.id.isEmpty) {
         return const <AiMessage>[];
       }
+      final localHistory =
+          latestLocal.id.isNotEmpty ? latestLocal.messages : local.messages;
+      // Message uploads are best-effort. Retry local IDs missing from the
+      // remote snapshot whenever history is loaded again, so a temporary
+      // network error cannot strand a message on this device indefinitely.
+      if (latestLocal.id.isNotEmpty) {
+        for (final message in messagesMissingFromRemote(
+          local: latestLocal.messages,
+          remote: remoteMessages,
+        )) {
+          if (!_isAccountScopeCurrent) return const <AiMessage>[];
+          await _insertCloudMessage(latestLocal, message);
+        }
+      }
+      if (!_isAccountScopeCurrent) return const <AiMessage>[];
       final messages = mergeMessages(
-        local: latestLocal.id.isNotEmpty ? latestLocal.messages : local.messages,
+        local: localHistory,
         remote: remoteMessages,
       );
       // Hydrating history is not a conversation edit: keep updatedAt unchanged
@@ -393,6 +408,25 @@ class PaceAiService {
 
   /// Combines the cloud history with local-only messages and local versions of
   /// duplicate IDs. A failed earlier upload must not be lost on refresh.
+  /// Local messages that have not reached the fetched cloud history yet.
+  /// IDs are stable upsert keys, so retrying these uploads is idempotent.
+  static List<AiMessage> messagesMissingFromRemote({
+    required List<AiMessage> local,
+    required List<AiMessage> remote,
+  }) {
+    final remoteIds = remote
+        .map((message) => message.id)
+        .where((id) => id.isNotEmpty)
+        .toSet();
+    final seen = <String>{};
+    return local
+        .where((message) =>
+            message.id.isNotEmpty &&
+            !remoteIds.contains(message.id) &&
+            seen.add(message.id))
+        .toList();
+  }
+
   static List<AiMessage> mergeMessages({
     required List<AiMessage> local,
     required List<AiMessage> remote,
