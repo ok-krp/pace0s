@@ -2,6 +2,45 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
+  test('sync scope closes immediately when an account switch is requested', () {
+    expect(
+      SyncService.isSyncScopeCurrent(
+        accountSwitching: true,
+        authenticatedUserId: 'user-a',
+        activeUserId: 'user-a',
+        expectedUserId: 'user-a',
+      ),
+      isFalse,
+    );
+    expect(
+      SyncService.isSyncScopeCurrent(
+        accountSwitching: false,
+        authenticatedUserId: 'user-a',
+        activeUserId: 'user-a',
+        expectedUserId: 'user-a',
+      ),
+      isTrue,
+    );
+    expect(
+      SyncService.isSyncScopeCurrent(
+        accountSwitching: false,
+        authenticatedUserId: 'user-b',
+        activeUserId: 'user-a',
+        expectedUserId: 'user-a',
+      ),
+      isFalse,
+    );
+    expect(
+      SyncService.isSyncScopeCurrent(
+        accountSwitching: false,
+        authenticatedUserId: 'user-a',
+        activeUserId: 'user-b',
+        expectedUserId: 'user-a',
+      ),
+      isFalse,
+    );
+  });
+
   group('SyncService.shouldApplyRemoteValue', () {
     final older = DateTime.utc(2026, 10, 16, 10);
     final newer = DateTime.utc(2026, 10, 17, 10);
