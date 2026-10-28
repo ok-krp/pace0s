@@ -26,6 +26,12 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void _onLocalStoreChanged() {
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) {
+      _accountUserId = activeUserId;
+      _snapshot = null;
+    }
     _load();
   }
 
@@ -34,6 +40,7 @@ class _DashboardPageState extends State<DashboardPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.localStore != widget.localStore) {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      _accountUserId = widget.localStore.activeUserId;
       widget.localStore.addListener(_onLocalStoreChanged);
       _load();
     }
@@ -128,6 +135,7 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> _writeNumber(String key, String field, double min, double max) async {
+    final expectedUserId = _accountUserId;
     final controller = TextEditingController();
     final value = await showDialog<double>(
       context: context,
@@ -152,7 +160,11 @@ class _DashboardPageState extends State<DashboardPage> {
       ),
     );
     controller.dispose();
-    if (value == null || _snapshot == null) return;
+    if (value == null ||
+        _snapshot == null ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
 
     final raw = widget.localStore.read(key);
     final data = Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
@@ -163,11 +175,12 @@ class _DashboardPageState extends State<DashboardPage> {
     } else {
       data[_snapshot!.today] = value;
     }
-    await widget.localStore.writeForAccount(_accountUserId, key, data);
+    await widget.localStore.writeForAccount(expectedUserId, key, data);
     await _load();
   }
 
   Future<void> _addWater() async {
+    final expectedUserId = _accountUserId;
     final current = numberDayMap(widget.localStore.read('pace.water'));
     final logsRaw = widget.localStore.read('pace.water.log');
     final logs = logsRaw is Map ? Map<String, dynamic>.from(logsRaw) : <String, dynamic>{};
@@ -177,8 +190,8 @@ class _DashboardPageState extends State<DashboardPage> {
     final dayLogs = logs[day] is List ? List<dynamic>.from(logs[day] as List) : <dynamic>[];
     dayLogs.add(DateTime.now().millisecondsSinceEpoch);
     logs[day] = dayLogs;
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.water', current);
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.water.log', logs);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.water', current);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.water.log', logs);
     await _load();
   }
 
