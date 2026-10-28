@@ -6,9 +6,16 @@ import '../../core/storage/local_store.dart';
 import '../../core/sync/sync_service.dart';
 
 class HealthPage extends StatefulWidget {
-  const HealthPage({super.key, required this.localStore, required this.sync});
+  const HealthPage({
+    super.key,
+    required this.localStore,
+    required this.sync,
+    this.adapter,
+  });
+
   final LocalStore localStore;
   final SyncService sync;
+  final HealthAdapter? adapter;
 
   @override
   State<HealthPage> createState() => _HealthPageState();
@@ -16,7 +23,7 @@ class HealthPage extends StatefulWidget {
 
 class _HealthPageState extends State<HealthPage> {
   late String? _accountUserId;
-  final NativeHealthAdapter _adapter = NativeHealthAdapter();
+  late final HealthAdapter _adapter = widget.adapter ?? NativeHealthAdapter();
   bool? _available;
   bool _busy = false;
   List<PaceHealthSample> _samples = const [];
