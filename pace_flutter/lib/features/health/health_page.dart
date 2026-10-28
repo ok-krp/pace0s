@@ -73,27 +73,53 @@ class _HealthPageState extends State<HealthPage> {
   }
 
   Future<void> _checkAndRead({bool request = false}) async {
+    if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
     setState(() => _busy = true);
     try {
       final available = await _adapter.isAvailable();
+      if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+
       var permitted = available;
-      if (available && request) permitted = await _adapter.requestPermissions();
-      final samples = permitted ? await _adapter.readRecent() : const <PaceHealthSample>[];
+      if (available && request) {
+        permitted = await _adapter.requestPermissions();
+        if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+      }
+      final samples = permitted
+          ? await _adapter.readRecent()
+          : const <PaceHealthSample>[];
+      if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+
       if (permitted && samples.isNotEmpty) {
         final payload = samples
-            .map((sample) => {'type': sample.type, 'value': sample.value, 'timestamp': sample.timestamp.toUtc().toIso8601String(), 'unit': sample.unit, 'source': sample.source})
+            .map((sample) => {
+                  'type': sample.type,
+                  'value': sample.value,
+                  'timestamp': sample.timestamp.toUtc().toIso8601String(),
+                  'unit': sample.unit,
+                  'source': sample.source,
+                })
             .toList();
-        await widget.localStore.writeForAccount(_accountUserId, 'pace.health.samples', payload);
+        await widget.localStore.writeForAccount(
+          _accountUserId,
+          'pace.health.samples',
+          payload,
+        );
+        if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
         await widget.sync.syncNow();
+        if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
       }
-      if (!mounted) return;
+
       setState(() {
         _available = available && permitted;
         _samples = samples;
         _busy = false;
       });
     } catch (_) {
-      if (mounted) setState(() { _busy = false; _available = false; });
+      if (!mounted || widget.localStore.activeUserId != _accountUserId) return;
+      setState(() {
+        _busy = false;
+        _available = false;
+      });
     }
   }
 
