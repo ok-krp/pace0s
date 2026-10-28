@@ -604,6 +604,10 @@ void main() {
     await store.write('pace.profile.name', 'account A');
 
     final switching = store.activateAccount('user-b');
+    // The sync gate closes synchronously, before the queued file switch has
+    // replaced activeUserId and before any disk I/O completes.
+    expect(store.isSwitchingAccount, isTrue);
+    expect(store.activeUserId, 'user-a');
     await expectLater(
       store.write('pace.profile.name', 'late write'),
       throwsA(isA<StateError>()),
@@ -614,6 +618,7 @@ void main() {
     await store.removeForAccount('user-a', 'pace.profile.name');
     await switching;
 
+    expect(store.isSwitchingAccount, isFalse);
     expect(store.activeUserId, 'user-b');
     expect(store.read('pace.profile.name'), isNull);
     expect(store.pendingOperations(), isEmpty);
