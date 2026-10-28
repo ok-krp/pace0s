@@ -126,6 +126,11 @@ class LocalStore extends ChangeNotifier {
   /// newly signed-in account implicitly.
   String? get activeUserId => _activeUserId;
 
+  /// True from the instant a scope transition is requested until its queued
+  /// file switch is complete. Sync must stop during this window even while the
+  /// active ID still names the previous account.
+  bool get isSwitchingAccount => _switchingAccount;
+
   static Future<LocalStore> open({Directory? directory}) async {
     final root = directory ?? await getApplicationSupportDirectory();
     final file = File(p.join(root.path, 'pace_local.json'));
