@@ -190,8 +190,13 @@ class _DashboardPageState extends State<DashboardPage> {
     final dayLogs = logs[day] is List ? List<dynamic>.from(logs[day] as List) : <dynamic>[];
     dayLogs.add(DateTime.now().millisecondsSinceEpoch);
     logs[day] = dayLogs;
-    await widget.localStore.writeForAccount(expectedUserId, 'pace.water', current);
-    await widget.localStore.writeForAccount(expectedUserId, 'pace.water.log', logs);
+    await widget.localStore.writeBatchForAccount(
+      expectedUserId,
+      writes: {
+        'pace.water': current,
+        'pace.water.log': logs,
+      },
+    );
     await _load();
   }
 
