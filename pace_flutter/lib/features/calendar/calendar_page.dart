@@ -77,7 +77,7 @@ class _CalendarPageState extends State<CalendarPage> {
   Future<void> _delete(Map<String, dynamic> event) async {
     final expectedUserId = _accountUserId;
     final events = _events()..removeWhere((e) => e['id']?.toString() == event['id']?.toString());
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.calendar.events', events);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.calendar.events', events);
     if (mounted) setState(() {});
   }
 
