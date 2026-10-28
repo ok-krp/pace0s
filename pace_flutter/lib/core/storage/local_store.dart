@@ -295,6 +295,70 @@ class LocalStore extends ChangeNotifier {
     }
   }
 
+  /// Persists related keys as one scoped local snapshot. This is useful for
+  /// records whose invariants span multiple keys (for example food items and
+  /// their totals). The account is checked once before any mutation; all values,
+  /// outbox operations, and the durable snapshot are then updated together.
+  Future<void> writeBatchForAccount(
+    String? expectedUserId, {
+    Map<String, dynamic> writes = const <String, dynamic>{},
+    Set<String> removes = const <String>{},
+    bool enqueueSync = true,
+    bool notify = true,
+  }) async {
+    if (writes.isEmpty && removes.isEmpty) return;
+    final conflictingKeys = writes.keys.toSet().intersection(removes);
+    if (conflictingKeys.isNotEmpty) {
+      throw ArgumentError.value(
+        conflictingKeys,
+        'removes',
+        'A key cannot be written and removed in the same batch',
+      );
+    }
+    if (_switchingAccount || _activeUserId != expectedUserId) return;
+
+    final outbox = enqueueSync ? _outbox : <Map<String, dynamic>>[];
+    for (final entry in writes.entries) {
+      _data[entry.key] = entry.value;
+      if (enqueueSync) {
+        _queueOperation(
+          outbox,
+          entry.key,
+          operation: 'upsert',
+          value: entry.value,
+        );
+      }
+    }
+    for (final key in removes) {
+      _data.remove(key);
+      if (enqueueSync) {
+        _queueOperation(outbox, key, operation: 'delete');
+      }
+    }
+    if (enqueueSync) _data['__outbox'] = outbox;
+
+    await _flush();
+    if (notify) notifyListeners();
+  }
+
+  void _queueOperation(
+    List<Map<String, dynamic>> outbox,
+    String key, {
+    required String operation,
+    dynamic value,
+  }) {
+    final queuedAt = _nextQueuedAt(key, outbox);
+    _quarantineMalformedReplacedOperations(outbox, key);
+    outbox.removeWhere((entry) => entry['key'] == key);
+    final entry = <String, dynamic>{
+      'key': key,
+      'operation': operation,
+      'queuedAt': queuedAt,
+    };
+    if (operation == 'upsert') entry['value'] = value;
+    outbox.add(entry);
+  }
+
   Future<void> write(
     String key,
     dynamic value, {
