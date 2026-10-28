@@ -13,6 +13,7 @@ class NotesPage extends StatefulWidget {
 
 class _NotesPageState extends State<NotesPage> {
   late String? _accountUserId;
+  bool _dialogOpen = false;
   @override
   void initState() {
     super.initState();
@@ -24,6 +25,7 @@ class _NotesPageState extends State<NotesPage> {
     if (!mounted) return;
     final activeUserId = widget.localStore.activeUserId;
     if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    if (_dialogOpen) return;
     setState(() {});
   }
 
@@ -53,20 +55,54 @@ class _NotesPageState extends State<NotesPage> {
     final expectedUserId = _accountUserId;
     final title = TextEditingController(text: existing?['title']?.toString() ?? '');
     final body = TextEditingController(text: existing?['body']?.toString() ?? '');
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(existing == null ? 'Nouvelle note' : 'Modifier la note'),
-        content: SizedBox(width: 520, child: Column(mainAxisSize: MainAxisSize.min, children: [
-          TextField(controller: title, decoration: const InputDecoration(labelText: 'Titre')),
-          const SizedBox(height: 8),
-          TextField(controller: body, minLines: 5, maxLines: 10, decoration: const InputDecoration(labelText: 'Texte')),
-        ])),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, {'title': title.text.trim(), 'body': body.text}), child: const Text('Enregistrer'))],
-      ),
-    );
-    title.dispose();
-    body.dispose();
+    Map<String, String>? result;
+    _dialogOpen = true;
+    try {
+      result = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(existing == null ? 'Nouvelle note' : 'Modifier la note'),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: title,
+                  decoration: const InputDecoration(labelText: 'Titre'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: body,
+                  minLines: 5,
+                  maxLines: 10,
+                  decoration: const InputDecoration(labelText: 'Texte'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, {
+                'title': title.text.trim(),
+                'body': body.text,
+              }),
+              child: const Text('Enregistrer'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      _dialogOpen = false;
+      title.dispose();
+      body.dispose();
+      if (mounted) setState(() {});
+    }
     if (result == null ||
         (result['title'] ?? '').isEmpty ||
         widget.localStore.activeUserId != expectedUserId) {
@@ -74,7 +110,12 @@ class _NotesPageState extends State<NotesPage> {
     }
     final notes = _notes();
     final id = existing?['id']?.toString();
-    final next = {'id': id ?? DateTime.now().microsecondsSinceEpoch.toString(), 'title': result['title'], 'body': result['body'], 'updatedAt': DateTime.now().toIso8601String()};
+    final next = {
+      'id': id ?? DateTime.now().microsecondsSinceEpoch.toString(),
+      'title': result['title'],
+      'body': result['body'],
+      'updatedAt': DateTime.now().toIso8601String(),
+    };
     if (id == null) {
       notes.insert(0, next);
     } else {
