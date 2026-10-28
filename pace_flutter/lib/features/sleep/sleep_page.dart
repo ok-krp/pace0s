@@ -21,7 +21,10 @@ class _SleepPageState extends State<SleepPage> {
   }
 
   void _onLocalStoreChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    setState(() {});
   }
 
   @override
@@ -29,6 +32,7 @@ class _SleepPageState extends State<SleepPage> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.localStore != widget.localStore) {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      _accountUserId = widget.localStore.activeUserId;
       widget.localStore.addListener(_onLocalStoreChanged);
     }
   }
@@ -53,6 +57,7 @@ class _SleepPageState extends State<SleepPage> {
   }
 
   Future<void> _edit(String day) async {
+    final expectedUserId = _accountUserId;
     final data = _data();
     final controller = TextEditingController(text: _hours(data[day]).toStringAsFixed(2));
     final value = await showDialog<double>(
@@ -67,9 +72,9 @@ class _SleepPageState extends State<SleepPage> {
       ),
     );
     controller.dispose();
-    if (value == null) return;
+    if (value == null || widget.localStore.activeUserId != expectedUserId) return;
     data[day] = {'hours': value};
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.sleep', data);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.sleep', data);
     if (mounted) setState(() {});
   }
 
