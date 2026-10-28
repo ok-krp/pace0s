@@ -180,10 +180,26 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.localStore != widget.localStore) {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
-      _accountUserId = widget.localStore.activeUserId;
-      _ai = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
       widget.localStore.addListener(_onLocalStoreChanged);
-      _onLocalStoreChanged();
+    }
+    if (oldWidget.localStore != widget.localStore ||
+        oldWidget.auth != widget.auth ||
+        oldWidget.sync != widget.sync) {
+      // PaceShell can switch between authenticated and explicit offline mode
+      // while reusing this page's element. Do not retain a service that was
+      // bound to the previous auth facade or synchronizer.
+      _accountUserId = widget.localStore.activeUserId;
+      _ai = PaceAiService(
+        localStore: widget.localStore,
+        sync: widget.sync,
+        auth: widget.auth,
+      );
+      final storedNotifications =
+          widget.localStore.read('pace.settings.notifications');
+      _aiConfirmations = _ai.confirmActions;
+      _notifications =
+          storedNotifications is bool ? storedNotifications : true;
+      _memory = _ai.memoryEnabled;
     }
   }
 
