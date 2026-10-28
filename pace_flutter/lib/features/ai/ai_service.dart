@@ -559,26 +559,55 @@ class PaceAiService {
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
 
+  /// Compares snapshots by conversation ID and payload, ignoring list ordering.
+  /// Equal reads must not create a new outbox timestamp or schedule a sync.
+  static bool hasConversationSnapshotChanged({
+    required List<AiConversation> current,
+    required List<AiConversation> next,
+  }) {
+    if (current.length != next.length) return true;
+    final currentById = <String, String>{};
+    final nextById = <String, String>{};
+    for (final conversation in current) {
+      if (currentById.containsKey(conversation.id)) return true;
+      currentById[conversation.id] = jsonEncode(conversation.toJson());
+    }
+    for (final conversation in next) {
+      if (nextById.containsKey(conversation.id)) return true;
+      nextById[conversation.id] = jsonEncode(conversation.toJson());
+    }
+    if (currentById.length != nextById.length) return true;
+    for (final entry in currentById.entries) {
+      if (nextById[entry.key] != entry.value) return true;
+    }
+    return false;
+  }
+
   Future<List<AiConversation>> _saveAgentConversationSnapshot(
     PaceAiAgent agent,
     List<AiConversation> refreshed,
   ) async {
     if (!_isAccountScopeCurrent) return const <AiConversation>[];
+    final latestLocal = loadLocalConversations();
     final merged = mergeAgentSnapshot(
       agent: agent,
-      latestLocal: loadLocalConversations(),
+      latestLocal: latestLocal,
       refreshed: refreshed,
       pendingDeleteIds: _pendingDeletedConversationIds().toSet(),
     );
-    await localStore.writeForAccount(
-      _accountUserId,
-      _conversationKey,
-      merged.map((item) => item.toJson()).toList(),
-    );
-    if (!_isAccountScopeCurrent) return const <AiConversation>[];
-    unawaited(sync.syncNow());
-    return merged.where((item) => item.agent == agent).toList()
-      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    if (hasConversationSnapshotChanged(current: latestLocal, next: merged)) {
+      await localStore.writeForAccount(
+        _accountUserId,
+        _conversationKey,
+        merged.map((item) => item.toJson()).toList(),
+      );
+      if (!_isAccountScopeCurrent) return const <AiConversation>[];
+      unawaited(sync.syncNow());
+    }
+    return _isAccountScopeCurrent
+        ? (merged.where((item) => item.agent == agent).toList()
+          ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt)))
+        : const <AiConversation>[];
   }
 
   Future<void> _saveLocalConversations(List<AiConversation> conversations) async {
