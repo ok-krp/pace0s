@@ -13,6 +13,7 @@ class RoutinePage extends StatefulWidget {
 
 class _RoutinePageState extends State<RoutinePage> {
   late String? _accountUserId;
+  bool _dialogOpen = false;
   @override
   void initState() {
     super.initState();
@@ -24,6 +25,7 @@ class _RoutinePageState extends State<RoutinePage> {
     if (!mounted) return;
     final activeUserId = widget.localStore.activeUserId;
     if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    if (_dialogOpen) return;
     setState(() {});
   }
 
@@ -80,23 +82,51 @@ class _RoutinePageState extends State<RoutinePage> {
   Future<void> _add() async {
     final expectedUserId = _accountUserId;
     final controller = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Nouvelle habitude'),
-        content: TextField(controller: controller, autofocus: true, decoration: const InputDecoration(labelText: 'Nom')),
-        actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Ajouter'))],
-      ),
-    );
-    controller.dispose();
+    String? name;
+    _dialogOpen = true;
+    try {
+      name = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Nouvelle habitude'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(labelText: 'Nom'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
+              child: const Text('Ajouter'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      _dialogOpen = false;
+      controller.dispose();
+      if (mounted) setState(() {});
+    }
     if (name == null ||
         name.isEmpty ||
         widget.localStore.activeUserId != expectedUserId) {
       return;
     }
     final habits = _habits();
-    habits.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'name': name});
-    await widget.localStore.writeForAccount(expectedUserId, 'pace.routine.list', habits);
+    habits.add({
+      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'name': name,
+    });
+    await widget.localStore.writeForAccount(
+      expectedUserId,
+      'pace.routine.list',
+      habits,
+    );
     if (mounted) setState(() {});
   }
 
