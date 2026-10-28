@@ -907,6 +907,42 @@ void main() {
     expect(store.read('pace.profile.name'), 'underscore account');
   });
 
+  test('nutrition entries persist independently across account file reopen', () async {
+    var store = await LocalStore.open(directory: directory);
+    final day = '2026-10-28';
+
+    await store.activateAccount('user-a');
+    await store.write('pace.nutrition.items', {
+      day: [
+        {'id': 'a-food', 'name': 'A private food'},
+      ],
+    });
+
+    await store.activateAccount('user-b');
+    expect(store.read('pace.nutrition.items'), isNull);
+    await store.write('pace.nutrition.items', {
+      day: [
+        {'id': 'b-food', 'name': 'B food'},
+      ],
+    });
+
+    // A fresh instance must recover both files without mixing their payloads.
+    store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    final accountA = store.read('pace.nutrition.items') as Map;
+    expect(
+      (accountA[day] as List).single['name'],
+      'A private food',
+    );
+
+    await store.activateAccount('user-b');
+    final accountB = store.read('pace.nutrition.items') as Map;
+    expect(
+      (accountB[day] as List).single['name'],
+      'B food',
+    );
+  });
+
   test('account data persists independently across store reopen', () async {
     var store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
