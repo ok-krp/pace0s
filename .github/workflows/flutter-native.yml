@@ -34,7 +34,7 @@ jobs:
         shell: bash
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY }}
         run: |
           python3 - <<'PY'
           import os
@@ -208,7 +208,7 @@ jobs:
         shell: bash
         env:
           SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY) || '' }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -220,7 +220,7 @@ jobs:
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY) || '' }}
         run: flutter build apk --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish APK
         uses: actions/upload-artifact@v4
@@ -232,7 +232,7 @@ jobs:
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY) || '' }}
         run: flutter build appbundle --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish AAB
         uses: actions/upload-artifact@v4
@@ -273,7 +273,7 @@ jobs:
         shell: bash
         env:
           SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY) || '' }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -285,7 +285,7 @@ jobs:
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY) || '' }}
         run: flutter build linux --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish Linux build
         uses: actions/upload-artifact@v4
@@ -324,7 +324,7 @@ jobs:
         shell: bash
         env:
           SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY) || '' }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -336,7 +336,7 @@ jobs:
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY) || '' }}
         run: flutter build windows --release "--dart-define=SUPABASE_URL=$env:SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY"
       - name: Publish Windows build
         uses: actions/upload-artifact@v4
@@ -385,7 +385,7 @@ jobs:
         shell: bash
         env:
           SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY) || '' }}
         run: |
           if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_PUBLISHABLE_KEY}" ]]; then
             echo "configured=false" >> "$GITHUB_OUTPUT"
@@ -397,7 +397,7 @@ jobs:
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY) || '' }}
         run: flutter build ios --release --no-codesign "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish iOS build
         uses: actions/upload-artifact@v4
@@ -409,7 +409,7 @@ jobs:
         working-directory: pace_flutter
         env:
           SUPABASE_URL: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_URL || vars.SUPABASE_URL) || '' }}
-          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY) || '' }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ needs.supabase-preflight.outputs.configured == 'true' && (secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY || secrets.SUPABASE_ANON_KEY || vars.SUPABASE_ANON_KEY) || '' }}
         run: flutter build macos --release "--dart-define=SUPABASE_URL=$SUPABASE_URL" "--dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
       - name: Publish macOS build
         uses: actions/upload-artifact@v4
