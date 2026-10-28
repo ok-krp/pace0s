@@ -63,6 +63,13 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
+    // The button callback is intentionally fire-and-forget from the widget
+    // tree. Let its real filesystem flush finish outside fake-async, then pump
+    // once so the async callback can resume before reopening the account file.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 150)),
+    );
+    await tester.pump();
 
     final raw = store.read('pace.nutrition.items');
     expect(raw, isA<Map>());
