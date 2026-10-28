@@ -315,28 +315,94 @@ class PaceAiService {
   Future<List<AiMessage>> loadMessages(String id) async {
     final local = loadLocalConversations().firstWhere(
       (item) => item.id == id,
-      orElse: () => AiConversation(id: '', agent: PaceAiAgent.coach, title: '', updatedAt: DateTime.fromMillisecondsSinceEpoch(0)),
+      orElse: () => AiConversation(
+        id: '',
+        agent: PaceAiAgent.coach,
+        title: '',
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+      ),
     );
-    if (local.id.isNotEmpty && local.messages.isNotEmpty) return local.messages;
     final client = _client;
     final user = _scopedUser;
     if (client == null || user == null) return local.messages;
+
     try {
-      final rows = await client.from('ai_messages').select('id,role,plain_text,created_at').eq('conversation_id', id).eq('user_id', user.id).order('created_at');
+      // Always refresh the remote message list when authenticated. Returning
+      // the local cache merely because it is non-empty prevents messages sent
+      // from another device from ever appearing on this device.
+      final rows = await client
+          .from('ai_messages')
+          .select('id,role,plain_text,created_at')
+          .eq('conversation_id', id)
+          .eq('user_id', user.id)
+          .order('created_at');
       if (!_isAccountScopeCurrent) return const <AiMessage>[];
-      final messages = rows.whereType<Map>().map((row) => AiMessage(
-            id: row['id']?.toString() ?? _uuid(),
-            role: row['role']?.toString() ?? 'assistant',
-            text: row['plain_text']?.toString() ?? '',
-            createdAt: LocalStore.isValidRemoteTimestamp(row['created_at']?.toString() ?? '')
-                ? DateTime.parse(row['created_at'] as String).toLocal()
-                : DateTime.fromMillisecondsSinceEpoch(0),
-          )).toList();
-      await _replaceMessages(id, messages);
+
+      final remoteMessages = rows.whereType<Map>().map((row) {
+        final rawTimestamp = row['created_at']?.toString() ?? '';
+        return AiMessage(
+          id: row['id']?.toString() ?? '',
+          role: row['role']?.toString() ?? 'assistant',
+          text: row['plain_text']?.toString() ?? '',
+          createdAt: LocalStore.isValidRemoteTimestamp(rawTimestamp)
+              ? DateTime.parse(rawTimestamp).toLocal()
+              : DateTime.fromMillisecondsSinceEpoch(0),
+        );
+      }).toList();
+      final messages = mergeMessages(
+        local: local.messages,
+        remote: remoteMessages,
+      );
+      // Hydrating history is not a conversation edit: keep updatedAt unchanged
+      // or an ordinary read can make stale local metadata beat the server.
+      await _replaceMessages(id, messages, touchUpdatedAt: false);
       return _isAccountScopeCurrent ? messages : const <AiMessage>[];
     } catch (_) {
       return _isAccountScopeCurrent ? local.messages : const <AiMessage>[];
     }
+  }
+
+  /// Combines the cloud history with local-only messages and local versions of
+  /// duplicate IDs. A failed earlier upload must not be lost on refresh.
+  static List<AiMessage> mergeMessages({
+    required List<AiMessage> local,
+    required List<AiMessage> remote,
+  }) {
+    final indexed = <({int order, AiMessage message})>[];
+    final indexById = <String, int>{};
+    var nextOrder = 0;
+
+    void addAll(List<AiMessage> source) {
+      for (final message in source) {
+        final id = message.id;
+        if (id.isEmpty) {
+          // Preserve malformed legacy messages rather than collapsing several
+          // empty IDs into one entry.
+          indexed.add((order: nextOrder++, message: message));
+          continue;
+        }
+        final existingIndex = indexById[id];
+        if (existingIndex == null) {
+          indexById[id] = indexed.length;
+          indexed.add((order: nextOrder++, message: message));
+        } else {
+          // Prefer the local payload for an ID whose upload may have failed,
+          // without changing the original tie-order of the message.
+          indexed[existingIndex] = (
+            order: indexed[existingIndex].order,
+            message: message,
+          );
+        }
+      }
+    }
+
+    addAll(remote);
+    addAll(local);
+    indexed.sort((a, b) {
+      final byTimestamp = a.message.createdAt.compareTo(b.message.createdAt);
+      return byTimestamp != 0 ? byTimestamp : a.order.compareTo(b.order);
+    });
+    return indexed.map((entry) => entry.message).toList();
   }
 
   Future<String> send({required AiConversation conversation, required String text}) async {
@@ -522,11 +588,20 @@ class PaceAiService {
     unawaited(sync.syncNow());
   }
 
-  Future<void> _replaceMessages(String id, List<AiMessage> messages) async {
+  Future<void> _replaceMessages(
+    String id,
+    List<AiMessage> messages, {
+    bool touchUpdatedAt = true,
+  }) async {
     final conversations = loadLocalConversations();
     final index = conversations.indexWhere((item) => item.id == id);
     if (index < 0) return;
-    conversations[index] = conversations[index].copyWith(messages: messages, updatedAt: DateTime.now());
+    conversations[index] = conversations[index].copyWith(
+      messages: messages,
+      updatedAt: touchUpdatedAt
+          ? DateTime.now()
+          : conversations[index].updatedAt,
+    );
     await _saveLocalConversations(conversations);
   }
 
