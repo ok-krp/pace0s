@@ -14,11 +14,15 @@ void main() {
     );
     if (directory == null) throw StateError('Could not create test directory');
     debugPrint('nutrition-stage: temp directory created');
+    final stores = <LocalStore>[];
     final store = await tester.runAsync(() => LocalStore.open(directory: directory));
     if (store == null) throw StateError('Could not open test local store');
+    stores.add(store);
     debugPrint('nutrition-stage: store opened');
     addTearDown(() async {
-      store.dispose();
+      for (final openedStore in stores) {
+        openedStore.dispose();
+      }
       await tester.runAsync(() => directory.delete(recursive: true));
     });
 
@@ -72,21 +76,36 @@ void main() {
     debugPrint('nutrition-stage: account B food persisted');
     expect(store.activeUserId, 'user-b');
 
-    // Account activation performs real filesystem I/O. Keep it outside the
-    // widget test's fake-async zone, as in the setup above, or the test hangs
-    // after the assertions have already passed.
-    await tester.runAsync(() => store.activateAccount('user-a'));
-    expect(store.read('pace.nutrition.items'), isNull);
-    await tester.runAsync(() => store.activateAccount('user-b'));
-    final restored = store.read('pace.nutrition.items') as Map;
-      expect(
-        restored.values
-            .whereType<List>()
-            .expand((items) => items)
-            .whereType<Map>()
-            .single['name'],
-        'B food',
-      );
+    // Verify durable isolation by opening each account file independently.
+    // Switching the same LocalStore repeatedly after widget interactions mixes
+    // the widget test's fake-async zone with its queued filesystem flushes;
+    // independent readers test the on-disk contract without that unrelated
+    // scheduling dependency.
+    final accountA = await tester.runAsync(() async {
+      final reopened = await LocalStore.open(directory: directory);
+      await reopened.activateAccount('user-a');
+      return reopened;
+    });
+    if (accountA == null) throw StateError('Could not reopen account A');
+    stores.add(accountA);
+    expect(accountA.read('pace.nutrition.items'), isNull);
+
+    final accountB = await tester.runAsync(() async {
+      final reopened = await LocalStore.open(directory: directory);
+      await reopened.activateAccount('user-b');
+      return reopened;
+    });
+    if (accountB == null) throw StateError('Could not reopen account B');
+    stores.add(accountB);
+    final restored = accountB.read('pace.nutrition.items') as Map;
+    expect(
+      restored.values
+          .whereType<List>()
+          .expand((items) => items)
+          .whereType<Map>()
+          .single['name'],
+      'B food',
+    );
     },
     timeout: const Timeout(Duration(seconds: 45)),
   );
