@@ -840,6 +840,40 @@ void main() {
     expect(merged.last.text, 'local-only reply');
   });
 
+  test('unchanged AI conversation snapshots do not require a persistence write', () {
+    final t1 = DateTime.utc(2026, 10, 27, 10);
+    final coach = AiConversation(
+      id: 'coach-1',
+      agent: PaceAiAgent.coach,
+      title: 'Coach',
+      updatedAt: t1,
+    );
+    final build = AiConversation(
+      id: 'build-1',
+      agent: PaceAiAgent.build,
+      title: 'Build',
+      updatedAt: t1.add(const Duration(minutes: 1)),
+    );
+
+    expect(
+      PaceAiService.hasConversationSnapshotChanged(
+        current: [coach, build],
+        next: [build, coach],
+      ),
+      isFalse,
+    );
+    expect(
+      PaceAiService.hasConversationSnapshotChanged(
+        current: [coach, build],
+        next: [
+          coach,
+          build.copyWith(title: 'Build renamed', updatedAt: build.updatedAt),
+        ],
+      ),
+      isTrue,
+    );
+  });
+
   test('refreshing one AI agent preserves other and newly-created conversations', () {
     final t1 = DateTime.utc(2026, 10, 27, 10);
     final t2 = DateTime.utc(2026, 10, 27, 11);
