@@ -88,7 +88,7 @@ class _NotesPageState extends State<NotesPage> {
   Future<void> _delete(Map<String, dynamic> note) async {
     final expectedUserId = _accountUserId;
     final notes = _notes()..removeWhere((n) => n['id']?.toString() == note['id']?.toString());
-    await widget.localStore.writeForAccount(_accountUserId, 'pace.notes', notes);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.notes', notes);
     if (mounted) setState(() {});
   }
 
