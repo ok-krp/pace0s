@@ -13,6 +13,7 @@ class SleepPage extends StatefulWidget {
 
 class _SleepPageState extends State<SleepPage> {
   late String? _accountUserId;
+  bool _dialogOpen = false;
   @override
   void initState() {
     super.initState();
@@ -24,6 +25,7 @@ class _SleepPageState extends State<SleepPage> {
     if (!mounted) return;
     final activeUserId = widget.localStore.activeUserId;
     if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    if (_dialogOpen) return;
     setState(() {});
   }
 
@@ -58,21 +60,56 @@ class _SleepPageState extends State<SleepPage> {
 
   Future<void> _edit(String day) async {
     final expectedUserId = _accountUserId;
-    final data = _data();
-    final controller = TextEditingController(text: _hours(data[day]).toStringAsFixed(2));
-    final value = await showDialog<double>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(day == _day(DateTime.now()) ? 'Sommeil aujourd’hui' : 'Sommeil du $day'),
-        content: TextField(controller: controller, autofocus: true, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Durée en heures')),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
-          FilledButton(onPressed: () { final v = double.tryParse(controller.text.replaceAll(',', '.')); if (v != null && v >= 0 && v <= 24) Navigator.pop(context, v); }, child: const Text('Enregistrer')),
-        ],
-      ),
+    final initialData = _data();
+    final controller = TextEditingController(
+      text: _hours(initialData[day]).toStringAsFixed(2),
     );
-    controller.dispose();
-    if (value == null || widget.localStore.activeUserId != expectedUserId) return;
+    double? value;
+    _dialogOpen = true;
+    try {
+      value = await showDialog<double>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(day == _day(DateTime.now())
+              ? 'Sommeil aujourd’hui'
+              : 'Sommeil du $day'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'Durée en heures'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () {
+                final parsed =
+                    double.tryParse(controller.text.replaceAll(',', '.'));
+                if (parsed != null && parsed >= 0 && parsed <= 24) {
+                  Navigator.pop(context, parsed);
+                }
+              },
+              child: const Text('Enregistrer'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      _dialogOpen = false;
+      controller.dispose();
+      if (mounted) setState(() {});
+    }
+    if (value == null ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
+    // Read current state after the modal closes so an intervening same-account
+    // update is not overwritten by a snapshot captured before the dialog.
+    final data = _data();
     data[day] = {'hours': value};
     await widget.localStore.writeForAccount(expectedUserId, 'pace.sleep', data);
     if (mounted) setState(() {});
