@@ -129,40 +129,30 @@ void main() {
         reason: 'A valid guest food submission must update local state',
       );
 
-      // Verify the durable snapshot rather than relying on a fixed sleep alone.
-      await tester.runAsync(() async {
+      // Await the actual queued disk flush. The UI event handler is
+      // fire-and-forget from the widget tester's perspective, but LocalStore
+      // exposes the already-enqueued flush so the test need not guess a delay.
+      final persisted = await tester.runAsync(() async {
+        await store.waitForPendingWrites();
         final snapshot = File(
           '${directory.path}${Platform.pathSeparator}pace_local.json',
         );
-        final deadline = DateTime.now().add(const Duration(seconds: 3));
-        while (DateTime.now().isBefore(deadline)) {
-          if (await snapshot.exists()) {
-            try {
-              final decoded = jsonDecode(await snapshot.readAsString());
-              final rawItems = decoded is Map
-                  ? decoded['pace.nutrition.items']
-                  : null;
-              final savedNames = rawItems is Map
-                  ? rawItems.values
-                      .whereType<List>()
-                      .expand((items) => items)
-                      .whereType<Map>()
-                      .map((item) => item['name']?.toString())
-                      .toSet()
-                  : <String?>{};
-              if (savedNames.contains('Offline oats')) return;
-            } on FormatException {
-              // A snapshot replacement may be in progress; retry until valid.
-            } on FileSystemException {
-              // _flush briefly replaces the primary file; retry that window.
-            }
-          }
-          await Future<void>.delayed(const Duration(milliseconds: 20));
-        }
-        throw TestFailure(
-          'Offline oats was not persisted to the guest snapshot within 3 seconds',
-        );
+        if (!await snapshot.exists()) return false;
+        final decoded = jsonDecode(await snapshot.readAsString());
+        final rawItems = decoded is Map
+            ? decoded['pace.nutrition.items']
+            : null;
+        final savedNames = rawItems is Map
+            ? rawItems.values
+                .whereType<List>()
+                .expand((items) => items)
+                .whereType<Map>()
+                .map((item) => item['name']?.toString())
+                .toSet()
+            : <String?>{};
+        return savedNames.contains('Offline oats');
       });
+      expect(persisted, isTrue, reason: 'Offline nutrition must reach the guest snapshot');
 
       expect(find.text('Offline oats'), findsOneWidget);
       expect(find.text('80.0 kcal'), findsOneWidget);
