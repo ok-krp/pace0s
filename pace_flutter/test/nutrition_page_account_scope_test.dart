@@ -124,9 +124,14 @@ void main() {
       expect(find.text('80.0 kcal'), findsOneWidget);
       expect(store.activeUserId, isNull);
 
+      // Close the first store before reopening the same file. Two live
+      // instances writing the same snapshot could hide persistence races.
+      await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+      store.dispose();
+      stores.remove(store);
+
       // Reopen the same guest file to prove the journal was flushed to disk,
       // not merely kept in the widget's in-memory state.
-      await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
       final reopenedStore = await tester.runAsync(
         () => LocalStore.open(directory: directory),
       );
