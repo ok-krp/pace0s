@@ -1057,6 +1057,48 @@ void main() {
     );
   });
 
+  test('legacy AI import keeps newer local edits and respects delete tombstones', () {
+    final newerLocal = AiConversation(
+      id: 'conversation-a',
+      agent: PaceAiAgent.coach,
+      title: 'new local title',
+      updatedAt: DateTime.utc(2026, 10, 20),
+    );
+    final olderLegacy = AiConversation(
+      id: 'conversation-a',
+      agent: PaceAiAgent.coach,
+      title: 'older legacy title',
+      updatedAt: DateTime.utc(2026, 10, 19),
+    );
+    final deletedLegacy = AiConversation(
+      id: 'conversation-deleted',
+      agent: PaceAiAgent.build,
+      title: 'must not be restored',
+      updatedAt: DateTime.utc(2026, 10, 18),
+    );
+    final importedOnly = AiConversation(
+      id: 'conversation-legacy-only',
+      agent: PaceAiAgent.build,
+      title: 'legacy conversation',
+      updatedAt: DateTime.utc(2026, 10, 17),
+    );
+
+    final merged = PaceAiService.mergeLegacyConversationSnapshots(
+      current: [newerLocal],
+      imported: [olderLegacy, deletedLegacy, importedOnly],
+      pendingDeleteIds: {'conversation-deleted'},
+    );
+
+    expect(merged.map((item) => item.id).toSet(), {
+      'conversation-a',
+      'conversation-legacy-only',
+    });
+    expect(
+      merged.singleWhere((item) => item.id == 'conversation-a').title,
+      'new local title',
+    );
+  });
+
   test('AI service reads memory while its guest account scope is current', () async {
     final store = await LocalStore.open(directory: directory);
     await store.write('pace.ai.memory', <Map<String, dynamic>>[

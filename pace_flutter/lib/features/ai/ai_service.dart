@@ -43,6 +43,8 @@ class PaceAiService {
 
   static const _conversationKey = 'pace.ai.conversations';
   static const _deletedConversationKey = 'pace.ai.deleted_conversations';
+  static const _legacyConversationImportKey =
+      'pace.__sync_ai_conversations_imported';
   static const _memoryKey = 'pace.ai.memory';
   static const _memoryEnabledKey = 'pace.settings.ai.memory';
   static const _confirmKey = 'pace.settings.ai.confirm_actions';
@@ -117,7 +119,16 @@ class PaceAiService {
       // Even if a delete remains blocked by an offline/network/RLS error,
       // its tombstone suppresses both local and remote copies until retry.
       final pendingDeleteIds = _pendingDeletedConversationIds().toSet();
-      local = local.where((item) => !pendingDeleteIds.contains(item.id)).toList();
+      await _importLegacyConversationSnapshotIfNeeded(
+        client,
+        user,
+        pendingDeleteIds,
+      );
+      if (!_isAccountScopeCurrent) return const <AiConversation>[];
+      local = loadLocalConversations()
+          .where((item) => item.agent == agent)
+          .where((item) => !pendingDeleteIds.contains(item.id))
+          .toList();
       final rows = await client
           .from('ai_conversations')
           .select('id,agent_type,title,is_starred,is_archived,is_ephemeral,updated_at')
@@ -699,6 +710,99 @@ class PaceAiService {
       if (nextById[entry.key] != entry.value) return true;
     }
     return false;
+  }
+
+  /// One-time, targeted compatibility import for installations whose old AI
+  /// history exists only in user_state. Normal sync queries exclude this large
+  /// duplicate cache; after importing it locally, dedicated AI tables are the
+  /// cloud source of truth and retries migrate any missing rows/messages.
+  Future<void> _importLegacyConversationSnapshotIfNeeded(
+    SupabaseClient client,
+    User user,
+    Set<String> pendingDeleteIds,
+  ) async {
+    if (!_isAccountScopeCurrent ||
+        localStore.read(_legacyConversationImportKey) == true) {
+      return;
+    }
+
+    final rows = await client
+        .from('user_state')
+        .select('key,value,updated_at')
+        .eq('user_id', user.id)
+        .inFilter('key', const [
+          'pace.ai.conversations',
+          'lt.ai.conversations',
+        ])
+        .order('updated_at', ascending: false);
+    if (!_isAccountScopeCurrent) return;
+
+    final imported = <AiConversation>[];
+    for (final row in rows.whereType<Map>()) {
+      final rawValue = row['value'];
+      final value = rawValue is Map && rawValue['value'] is List
+          ? rawValue['value']
+          : rawValue;
+      if (value is! List) continue;
+      for (final rawConversation in value.whereType<Map>()) {
+        try {
+          final conversation = AiConversation.fromJson(
+            Map<String, dynamic>.from(rawConversation),
+          );
+          if (conversation.id.isNotEmpty &&
+              !conversation.ephemeral &&
+              !pendingDeleteIds.contains(conversation.id)) {
+            imported.add(conversation);
+          }
+        } catch (_) {
+          // Ignore one malformed legacy item without losing valid siblings.
+        }
+      }
+    }
+
+    final current = loadLocalConversations();
+    final merged = mergeLegacyConversationSnapshots(
+      current: current,
+      imported: imported,
+      pendingDeleteIds: pendingDeleteIds,
+    );
+    if (hasConversationSnapshotChanged(current: current, next: merged)) {
+      await _saveLocalConversations(merged);
+    }
+    if (!_isAccountScopeCurrent) return;
+    await localStore.writeForAccount(
+      _accountUserId,
+      _legacyConversationImportKey,
+      true,
+      enqueueSync: false,
+    );
+  }
+
+  /// Merge legacy rows without replacing newer local edits or resurrecting
+  /// conversations that already have a local deletion tombstone.
+  static List<AiConversation> mergeLegacyConversationSnapshots({
+    required List<AiConversation> current,
+    required List<AiConversation> imported,
+    required Set<String> pendingDeleteIds,
+  }) {
+    final byId = <String, AiConversation>{
+      for (final item in current)
+        if (item.id.isNotEmpty && !pendingDeleteIds.contains(item.id))
+          item.id: item,
+    };
+    for (final incoming in imported) {
+      if (incoming.id.isEmpty ||
+          incoming.ephemeral ||
+          pendingDeleteIds.contains(incoming.id)) {
+        continue;
+      }
+      final existing = byId[incoming.id];
+      if (existing == null || incoming.updatedAt.isAfter(existing.updatedAt)) {
+        byId[incoming.id] = incoming;
+      }
+    }
+    return byId.values.toList()
+      ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   }
 
   Future<List<AiConversation>> _saveAgentConversationSnapshot(
