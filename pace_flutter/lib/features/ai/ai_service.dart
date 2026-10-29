@@ -693,7 +693,7 @@ class PaceAiService {
   }
 
   Future<void> addMemory(String text) async {
-    if (!memoryEnabled || text.trim().isEmpty) return;
+    if (!_isAccountScopeCurrent || !memoryEnabled || text.trim().isEmpty) return;
     final item = AiMemoryItem(id: _uuid(), text: text.trim(), createdAt: DateTime.now());
     final values = loadMemory().map((value) => value.toJson()).toList()..add(item.toJson());
     await localStore.writeForAccount(_accountUserId, _memoryKey, values);
