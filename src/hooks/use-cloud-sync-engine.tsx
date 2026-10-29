@@ -209,10 +209,9 @@ export function useCloudSyncEngineInternal() {
     };
 
     const syncNow = async () => {
-      if (cancelled || !allowed() || !navigator.onLine) {
-        if (!cancelled) setStatus("offline");
-        return;
-      }
+      if (cancelled) return;
+      if (!allowed()) { setStatus("idle"); return; }
+      if (!navigator.onLine) { setStatus("offline"); return; }
       await flushQueue();
       await pull();
     };
