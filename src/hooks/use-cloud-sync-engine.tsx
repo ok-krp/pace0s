@@ -5,6 +5,8 @@ import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 
 const PACE_PREFIX = "pace.";
+const INTERNAL_PREFIX = "pace.__";
+const DOMAIN_OUTBOX_KEY = "pace.domain.outbox";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
@@ -26,19 +28,22 @@ function getDeviceId() {
   } catch { return `${Date.now()}-${Math.random()}`; }
 }
 
+function isSyncableKey(key: string): boolean {
+  return key.startsWith(PACE_PREFIX) &&
+    !key.startsWith(INTERNAL_PREFIX) &&
+    key !== DOMAIN_OUTBOX_KEY &&
+    !EXCLUDED.has(key);
+}
+
 function readQueue(): string[] {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]");
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter((key): key is string =>
-      typeof key === "string" &&
-      key.startsWith(PACE_PREFIX) &&
-      !EXCLUDED.has(key),
-    );
+    return [...new Set(parsed.filter((key): key is string => isSyncableKey(key)))];
   } catch { return []; }
 }
 function writeQueue(keys: string[]) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify([...new Set(keys)])); } catch {} }
-function queueKey(key: string) { if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return; writeQueue([...readQueue(), key]); }
+function queueKey(key: string) { if (!isSyncableKey(key)) return; writeQueue([...readQueue(), key]); }
 function unqueueKey(key: string) { writeQueue(readQueue().filter((k) => k !== key)); }
 function readMeta(): SyncMeta {
   try {
@@ -93,7 +98,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const pushKeyNow = async (key: string) => {
-      if (cancelled || !allowed() || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
+      if (cancelled || !allowed() || !isSyncableKey(key)) return;
       queueKey(key);
 
       const previous = keyWrites.current[key] ?? Promise.resolve();
@@ -174,7 +179,7 @@ export function useCloudSyncEngineInternal() {
           const rawKey = row.key;
           const isLegacy = rawKey.startsWith("lt.");
           const key = isLegacy ? `${PACE_PREFIX}${rawKey.slice(3)}` : rawKey;
-          if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key) || queue.has(key)) continue;
+          if (!isSyncableKey(key) || queue.has(key)) continue;
 
           const remoteTime = Date.parse(row.updated_at);
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
@@ -222,7 +227,7 @@ export function useCloudSyncEngineInternal() {
       if (row.updated_by === DEVICE_ID) return;
       const isLegacy = row.key.startsWith("lt.");
       const key = isLegacy ? `${PACE_PREFIX}${row.key.slice(3)}` : row.key;
-      if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return;
+      if (!isSyncableKey(key)) return;
 
       // Local edits win until the queued write has been acknowledged. Realtime
       // must never race a local mutation and silently replace its value.
@@ -275,7 +280,7 @@ export function useCloudSyncEngineInternal() {
     });
 
     const offLocal = onLocalWrite((key) => {
-      if (!allowed() || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
+      if (!allowed() || !isSyncableKey(key)) return;
       queueKey(key);
       void pushKeyNow(key);
     });
