@@ -373,17 +373,12 @@ class PaceAiService {
           continue;
         }
 
-        // PostgREST can return a successful empty DELETE when RLS filters the
-        // row. Do not clear the tombstone unless the row is actually absent;
-        // otherwise a denied delete would make the conversation reappear.
-        if (!_isAccountScopeCurrent || userId != _accountUserId) return;
-        final remainingRows = await client
-            .from('ai_conversations')
-            .select('id')
-            .eq('id', id)
-            .eq('user_id', userId)
-            .limit(1);
-        if (remainingRows.isEmpty) deletedRemotely.add(id);
+        // An empty DELETE response is ambiguous: PostgREST can return no rows
+        // when RLS filters the mutation, and the follow-up SELECT can also be
+        // empty when RLS hides the row. That is not proof that the tombstone
+        // reached the server. Retain it and retry on a later load rather than
+        // accidentally allowing a hidden conversation to reappear if policy
+        // visibility changes. Only a returned deleted ID confirms success.
       } catch (_) {
         // Retain failed deletes durably for the next online conversation load.
       }
