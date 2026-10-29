@@ -77,13 +77,17 @@ export function useCloudSyncEngineInternal() {
   // opt-in would never restart sync because the guarded effect had returned.
   useEffect(() => {
     if (typeof window === "undefined") return;
+    let previousAllowed = false;
+    try { previousAllowed = isLegalCategoryAllowed("sync_cloud"); } catch {}
     const onLegalChanged = () => {
+      let nextAllowed = false;
+      try { nextAllowed = isLegalCategoryAllowed("sync_cloud"); } catch {}
+      // Other consent categories must not restart the cloud channel or trigger
+      // an unnecessary full reconciliation.
+      if (nextAllowed === previousAllowed) return;
+      previousAllowed = nextAllowed;
       setLegalRevision((revision) => revision + 1);
-      try {
-        if (!isLegalCategoryAllowed("sync_cloud")) setStatus("idle");
-      } catch {
-        setStatus("idle");
-      }
+      if (!nextAllowed) setStatus("idle");
     };
     window.addEventListener("pace.legal.changed", onLegalChanged);
     return () => window.removeEventListener("pace.legal.changed", onLegalChanged);
