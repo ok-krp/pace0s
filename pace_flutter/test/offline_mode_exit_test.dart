@@ -151,6 +151,16 @@ void main() {
         await auth.closeEvents();
         await tester.runAsync(() => directory.delete(recursive: true));
       });
+      // Start from an authenticated account file so the transition includes
+      // real durable I/O rather than the no-op guest-to-guest fast path.
+      await tester.runAsync(() async {
+        await store.activateAccount('previous-account');
+        await store.write(
+          'pace.profile.name',
+          'previous account only',
+          enqueueSync: false,
+        );
+      });
 
       await tester.pumpWidget(
         MaterialApp(
@@ -181,6 +191,7 @@ void main() {
       expect(find.text('Se connecter'), findsOneWidget);
       expect(find.byType(NavigationBar), findsNothing);
       expect(store.activeUserId, isNull);
+      expect(store.read('pace.profile.name'), isNull);
     },
     timeout: const Timeout(Duration(seconds: 45)),
   );
