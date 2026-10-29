@@ -148,6 +148,8 @@ void main() {
               if (savedNames.contains('Offline oats')) return;
             } on FormatException {
               // A snapshot replacement may be in progress; retry until valid.
+            } on FileSystemException {
+              // _flush briefly replaces the primary file; retry that window.
             }
           }
           await Future<void>.delayed(const Duration(milliseconds: 20));
