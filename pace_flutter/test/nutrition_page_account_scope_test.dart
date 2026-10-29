@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -115,10 +116,39 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      // Allow the real filesystem flush to finish before reopening the file.
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)),
-      );
+      // Wait for the actual durable snapshot rather than relying on a fixed
+      // sleep that can pass on a fast runner and race on a slower CI machine.
+      await tester.runAsync(() async {
+        final snapshot = File(
+          '${directory.path}${Platform.pathSeparator}pace_local.json',
+        );
+        final deadline = DateTime.now().add(const Duration(seconds: 3));
+        while (DateTime.now().isBefore(deadline)) {
+          if (await snapshot.exists()) {
+            try {
+              final decoded = jsonDecode(await snapshot.readAsString());
+              final rawItems = decoded is Map
+                  ? decoded['pace.nutrition.items']
+                  : null;
+              final savedNames = rawItems is Map
+                  ? rawItems.values
+                      .whereType<List>()
+                      .expand((items) => items)
+                      .whereType<Map>()
+                      .map((item) => item['name']?.toString())
+                      .toSet()
+                  : <String?>{};
+              if (savedNames.contains('Offline oats')) return;
+            } on FormatException {
+              // A snapshot replacement may be in progress; retry until valid.
+            }
+          }
+          await Future<void>.delayed(const Duration(milliseconds: 20));
+        }
+        throw TestFailure(
+          'Offline oats was not persisted to the guest snapshot within 3 seconds',
+        );
+      });
 
       expect(find.text('Offline oats'), findsOneWidget);
       expect(find.text('80.0 kcal'), findsOneWidget);
