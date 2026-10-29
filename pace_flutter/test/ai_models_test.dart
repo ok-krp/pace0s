@@ -1,7 +1,36 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/features/ai/ai_models.dart';
+import 'package:pace/features/ai/ai_service.dart';
 
 void main() {
+  test('an empty RLS-filtered delete response never confirms tombstone removal', () {
+    expect(
+      PaceAiService.deleteResponseConfirmsRemoval(
+        rows: const <Map<String, dynamic>>[],
+        conversationId: 'conversation-a',
+      ),
+      isFalse,
+    );
+    expect(
+      PaceAiService.deleteResponseConfirmsRemoval(
+        rows: const <Map<String, dynamic>>[
+          {'id': 'conversation-b'},
+        ],
+        conversationId: 'conversation-a',
+      ),
+      isFalse,
+    );
+    expect(
+      PaceAiService.deleteResponseConfirmsRemoval(
+        rows: const <Map<String, dynamic>>[
+          {'id': 'conversation-a'},
+        ],
+        conversationId: 'conversation-a',
+      ),
+      isTrue,
+    );
+  });
+
   test('conversation round-trips locally', () {
     final now = DateTime.utc(2026, 8, 15, 12);
     final conversation = AiConversation(
