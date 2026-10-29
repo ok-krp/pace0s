@@ -123,8 +123,14 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      // Wait for the actual durable snapshot rather than relying on a fixed
-      // sleep that can pass on a fast runner and race on a slower CI machine.
+      // The widget callback is fire-and-forget. Let its real filesystem work
+      // settle, then pump the fake-async zone before inspecting the snapshot.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump();
+
+      // Verify the durable snapshot rather than relying on a fixed sleep alone.
       await tester.runAsync(() async {
         final snapshot = File(
           '${directory.path}${Platform.pathSeparator}pace_local.json',
