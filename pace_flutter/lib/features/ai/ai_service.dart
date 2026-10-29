@@ -119,11 +119,17 @@ class PaceAiService {
       // Even if a delete remains blocked by an offline/network/RLS error,
       // its tombstone suppresses both local and remote copies until retry.
       final pendingDeleteIds = _pendingDeletedConversationIds().toSet();
-      await _importLegacyConversationSnapshotIfNeeded(
-        client,
-        user,
-        pendingDeleteIds,
-      );
+      try {
+        await _importLegacyConversationSnapshotIfNeeded(
+          client,
+          user,
+          pendingDeleteIds,
+        );
+      } catch (_) {
+        // Legacy compatibility import is best-effort. A missing/temporarily
+        // unavailable user_state row must not block the dedicated AI tables.
+        if (!_isAccountScopeCurrent) return const <AiConversation>[];
+      }
       if (!_isAccountScopeCurrent) return const <AiConversation>[];
       local = loadLocalConversations()
           .where((item) => item.agent == agent)
