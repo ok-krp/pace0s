@@ -110,8 +110,9 @@ export function useCloudSyncEngineInternal() {
         if (cancelled) return;
         if (!navigator.onLine) { setStatus("offline"); return; }
 
+        const rawValue = localStorage.getItem(key);
         let value: unknown;
-        try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { return; }
+        try { value = JSON.parse(rawValue ?? "null"); } catch { setStatus("error"); return; }
         const updatedAt = new Date().toISOString();
         setStatus("syncing");
 
@@ -149,12 +150,26 @@ export function useCloudSyncEngineInternal() {
                 !Object.prototype.hasOwnProperty.call(row, "value")) {
               throw new Error("authoritative cloud sync row missing or invalid");
             }
+            // Do not let a conflict read overwrite a local edit made while
+            // the RPC/SELECT was in flight. Keep the queued mutation and retry it.
+            if (localStorage.getItem(key) !== rawValue) {
+              queueKey(key);
+              window.setTimeout(() => void pushKeyNow(key), 0);
+              return;
+            }
             applyRemoteWrite(key, row.value);
             markLocal(key, row.updated_at);
             localStorage.setItem("pace.__last_sync_at", row.updated_at);
           } else {
             markLocal(key, updatedAt);
             localStorage.setItem("pace.__last_sync_at", updatedAt);
+            if (localStorage.getItem(key) !== rawValue) {
+              // The accepted value was already superseded locally. The newer
+              // value must stay queued and be sent after this request finishes.
+              queueKey(key);
+              window.setTimeout(() => void pushKeyNow(key), 0);
+              return;
+            }
           }
 
           unqueueKey(key);
