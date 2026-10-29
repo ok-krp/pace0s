@@ -124,7 +124,7 @@ class SyncService {
         remoteUpdatedAt.isAfter(localUpdatedAt);
   }
 
-  static const Duration fullReconciliationInterval = Duration(minutes: 10);
+  static const Duration fullReconciliationInterval = Duration(hours: 24);
   // Keep a small overlap because the client and database clocks may differ.
   static const Duration cursorOverlapWindow = Duration(minutes: 2);
 
