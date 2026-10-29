@@ -572,6 +572,34 @@ void main() {
     expect(store.read('pace.profile.other'), isNull);
   });
 
+  test('remote batches are rejected as soon as an account switch is requested', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await store.write('pace.profile.name', 'account A', enqueueSync: false);
+
+    final switching = store.activateAccount('user-b');
+    expect(store.isSwitchingAccount, isTrue);
+
+    await expectLater(
+      store.applyRemoteBatch(
+        [
+          {
+            'key': 'pace.profile.name',
+            'value': 'late remote A value',
+            'updatedAt': '2026-10-17T10:00:00Z',
+          },
+        ],
+        expectedUserId: 'user-a',
+      ),
+      throwsStateError,
+    );
+
+    await switching;
+    expect(store.activeUserId, 'user-b');
+    expect(store.read('pace.profile.name'), isNull);
+    expect(store.pendingOperations(), isEmpty);
+  });
+
   test('legacy recovery cannot move synced metadata backwards', () async {
     final store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
