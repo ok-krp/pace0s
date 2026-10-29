@@ -176,7 +176,6 @@ export function useCloudSyncEngineInternal() {
           const key = isLegacy ? `${PACE_PREFIX}${rawKey.slice(3)}` : rawKey;
           if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key) || queue.has(key)) continue;
 
-          const localRaw = localStorage.getItem(key);
           const remoteTime = Date.parse(row.updated_at);
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           // Legacy aliases must not resurrect a value after a newer canonical
