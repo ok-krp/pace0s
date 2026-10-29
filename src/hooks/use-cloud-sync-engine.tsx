@@ -56,13 +56,6 @@ function readMeta(): SyncMeta {
 function writeMeta(meta: SyncMeta) { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch {} }
 function markLocal(key: string, timestamp: string) { const meta = readMeta(); meta[key] = timestamp; writeMeta(meta); }
 
-function isEmptyValue(value: unknown) {
-  if (value == null || value === "") return true;
-  if (Array.isArray(value)) return value.length === 0;
-  if (typeof value === "object") return Object.keys(value as Record<string, unknown>).length === 0;
-  return false;
-}
-
 /**
  * Cross-device sync with a durable key queue and server-side last-write-wins.
  * The queue is populated synchronously before network I/O. Server writes use
@@ -184,16 +177,11 @@ export function useCloudSyncEngineInternal() {
           if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key) || queue.has(key)) continue;
 
           const localRaw = localStorage.getItem(key);
-          let localValue: unknown = null;
-          try { if (localRaw !== null) localValue = JSON.parse(localRaw); } catch {}
-          const shouldRecoverLegacy = isLegacy && isEmptyValue(localValue) && !isEmptyValue(row.value);
-
           const remoteTime = Date.parse(row.updated_at);
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
-          // Legacy recovery may bypass the timestamp comparison, never timestamp
-          // validation: malformed remote metadata must not be persisted locally.
-          if (!Number.isFinite(remoteTime)) continue;
-          if (!shouldRecoverLegacy && remoteTime <= localTime) continue;
+          // Legacy aliases must not resurrect a value after a newer canonical
+          // empty value was synced (for example, an intentionally cleared list).
+          if (!Number.isFinite(remoteTime) || remoteTime <= localTime) continue;
 
           applyRemoteWrite(key, row.value);
           meta[key] = row.updated_at;
@@ -245,13 +233,9 @@ export function useCloudSyncEngineInternal() {
 
       const meta = readMeta();
       const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
-      let localValue: unknown = null;
-      try {
-        const localRaw = localStorage.getItem(key);
-        if (localRaw !== null) localValue = JSON.parse(localRaw);
-      } catch {}
-      const recoverLegacy = isLegacy && isEmptyValue(localValue) && !isEmptyValue(row.value);
-      if (!recoverLegacy && remoteTime <= localTime) return;
+      // A stale legacy alias must never replace a newer canonical value,
+      // including an intentionally empty list or object.
+      if (remoteTime <= localTime) return;
 
       applyRemoteWrite(key, row.value);
       meta[key] = row.updated_at;
