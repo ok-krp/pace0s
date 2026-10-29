@@ -179,7 +179,7 @@ void main() {
       auth.emitSignedOut();
 
       for (var attempt = 0;
-          attempt < 20 && find.text('Se connecter').evaluate().isEmpty;
+          attempt < 20 && store.activeUserId != null;
           attempt++) {
         await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 100)),
@@ -188,9 +188,9 @@ void main() {
         await tester.pump(const Duration(milliseconds: 50));
       }
 
+      expect(store.activeUserId, isNull);
       expect(find.text('Se connecter'), findsOneWidget);
       expect(find.byType(NavigationBar), findsNothing);
-      expect(store.activeUserId, isNull);
       expect(store.read('pace.profile.name'), isNull);
     },
     timeout: const Timeout(Duration(seconds: 45)),
