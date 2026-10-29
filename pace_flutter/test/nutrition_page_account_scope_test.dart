@@ -132,6 +132,16 @@ void main() {
       stores.add(reopenedStore);
       expect(reopenedStore.activeUserId, isNull);
 
+      // Signing in must select an independent file, not import the guest
+      // nutrition journal into the authenticated account.
+      await tester.runAsync(() async {
+        await reopenedStore.activateAccount('user-a');
+        expect(reopenedStore.activeUserId, 'user-a');
+        expect(reopenedStore.read('pace.nutrition.items'), isNull);
+        await reopenedStore.activateAccount(null);
+      });
+      expect(reopenedStore.read('pace.nutrition.items'), isA<Map>());
+
       await tester.pumpWidget(
         MaterialApp(home: NutritionPage(localStore: reopenedStore)),
       );
