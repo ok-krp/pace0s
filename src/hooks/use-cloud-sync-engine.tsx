@@ -227,12 +227,14 @@ export function useCloudSyncEngineInternal() {
 
           applyRemoteWrite(key, row.value);
           meta[key] = row.updated_at;
-          newest = row.updated_at;
+          if (!newest || remoteTime > Date.parse(newest)) newest = row.updated_at;
           applied++;
         }
 
         writeMeta(meta);
-        if (newest) localStorage.setItem("pace.__last_sync_at", newest);
+        if (newest) {
+          try { localStorage.setItem("pace.__last_sync_at", newest); } catch {}
+        }
         if (applied > 0) setStatus("ok");
       } catch {
         if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
