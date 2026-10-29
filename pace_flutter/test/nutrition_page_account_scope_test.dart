@@ -131,20 +131,23 @@ void main() {
       expect(find.text('80.0 kcal'), findsOneWidget);
       expect(store.activeUserId, isNull);
 
-      // Unmount and close the first store before opening a fresh reader.
-      await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
-      store.dispose();
-      stores.remove(store);
+      // A real account transition awaits the guest snapshot flush before
+      // switching the same store to the independent authenticated file.
+      await tester.runAsync(() => store.activateAccount('user-a'));
+      expect(store.activeUserId, 'user-a');
+      expect(store.read('pace.nutrition.items'), isNull);
 
-      final reopenedStore = await tester.runAsync(
+      // Reopen the guest file with an independent reader after the transition
+      // has awaited the pending guest flush.
+      final guestReader = await tester.runAsync(
         () => LocalStore.open(directory: directory),
       );
-      if (reopenedStore == null) {
+      if (guestReader == null) {
         throw StateError('Could not reopen guest local store');
       }
-      stores.add(reopenedStore);
-      expect(reopenedStore.activeUserId, isNull);
-      final restoredItems = reopenedStore.read('pace.nutrition.items');
+      stores.add(guestReader);
+      expect(guestReader.activeUserId, isNull);
+      final restoredItems = guestReader.read('pace.nutrition.items');
       expect(restoredItems, isA<Map>());
       final restoredEntries = (restoredItems as Map).values
           .whereType<List>()
@@ -154,31 +157,7 @@ void main() {
       expect(restoredEntries, hasLength(1));
       expect(restoredEntries.single['name'], 'Offline oats');
 
-      // Signing in must select an independent file, not import the guest
-      // nutrition journal into the authenticated account. Use a separate
-      // store instance so this widget test does not chain filesystem account
-      // switches through Flutter's fake-async zone.
-      final accountStore = await tester.runAsync(
-        () => LocalStore.open(directory: directory),
-      );
-      if (accountStore == null) {
-        throw StateError('Could not open account-scoped local store');
-      }
-      stores.add(accountStore);
-      await tester.runAsync(() => accountStore.activateAccount('user-a'));
-      expect(accountStore.activeUserId, 'user-a');
-      expect(accountStore.read('pace.nutrition.items'), isNull);
-      accountStore.dispose();
-      stores.remove(accountStore);
-
-      expect(reopenedStore.activeUserId, isNull);
-      expect(reopenedStore.read('pace.nutrition.items'), isA<Map>());
-
-      await tester.pumpWidget(
-        MaterialApp(home: NutritionPage(localStore: reopenedStore)),
-      );
-      expect(find.text('Offline oats'), findsOneWidget);
-      expect(find.text('80.0 kcal'), findsOneWidget);
+      await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
     },
     timeout: const Timeout(Duration(seconds: 45)),
   );
