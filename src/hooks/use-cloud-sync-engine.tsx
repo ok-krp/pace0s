@@ -297,6 +297,9 @@ export function useCloudSyncEngineInternal() {
       if (!navigator.onLine) { setStatus("offline"); return; }
       await flushQueue();
       await pull();
+      if (!cancelled && allowed() && navigator.onLine && readQueue().length > 0) {
+        setStatus(queueRetryTimer !== null ? "error" : "syncing");
+      }
     };
 
     // Realtime is the low-egress fast path. Keep the existing full pull as an
