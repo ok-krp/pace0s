@@ -1372,6 +1372,29 @@ void main() {
     expect(byId['build-1']?.title, 'Build remains local');
   });
 
+  test('offline AI rename retry compares against fetched remote version', () {
+    final remoteUpdatedAt = DateTime.utc(2026, 10, 29, 12, 30);
+    final remote = AiConversation(
+      id: 'conversation-1',
+      agent: PaceAiAgent.coach,
+      title: 'Remote title',
+      updatedAt: remoteUpdatedAt,
+    );
+    final localRename = remote.copyWith(
+      title: 'Local offline rename',
+      updatedAt: DateTime.utc(2026, 10, 29, 13, 45),
+    );
+
+    expect(
+      PaceAiService.renameRetryExpectedRemoteVersion(remote),
+      remoteUpdatedAt.toIso8601String(),
+    );
+    expect(
+      PaceAiService.renameRetryExpectedRemoteVersion(localRename),
+      isNot(remoteUpdatedAt.toIso8601String()),
+    );
+  });
+
   test('a local AI rename wins over a stale agent refresh', () {
     final t1 = DateTime.utc(2026, 10, 27, 10);
     final t2 = DateTime.utc(2026, 10, 27, 11);
