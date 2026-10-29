@@ -320,7 +320,13 @@ class LocalStore extends ChangeNotifier {
         'A key cannot be written and removed in the same batch',
       );
     }
-    if (_switchingAccount || _activeUserId != expectedUserId) return;
+    debugPrint(
+      'local-batch: active=$_activeUserId expected=$expectedUserId switching=$_switchingAccount keys=${writes.keys.join(',')}',
+    );
+    if (_switchingAccount || _activeUserId != expectedUserId) {
+      debugPrint('local-batch: rejected by account scope');
+      return;
+    }
 
     final outbox = enqueueSync ? _outbox : <Map<String, dynamic>>[];
     for (final entry in writes.entries) {
@@ -341,8 +347,10 @@ class LocalStore extends ChangeNotifier {
       }
     }
     if (enqueueSync) _data['__outbox'] = outbox;
+    debugPrint('local-batch: mutated keys');
 
     await _flush();
+    debugPrint('local-batch: flush complete');
     if (notify) notifyListeners();
   }
 
