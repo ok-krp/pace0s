@@ -26,11 +26,33 @@ function getDeviceId() {
   } catch { return `${Date.now()}-${Math.random()}`; }
 }
 
-function readQueue(): string[] { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]"); } catch { return []; } }
+function readQueue(): string[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]");
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((key): key is string =>
+      typeof key === "string" &&
+      key.startsWith(PACE_PREFIX) &&
+      !EXCLUDED.has(key),
+    );
+  } catch { return []; }
+}
 function writeQueue(keys: string[]) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify([...new Set(keys)])); } catch {} }
 function queueKey(key: string) { if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return; writeQueue([...readQueue(), key]); }
 function unqueueKey(key: string) { writeQueue(readQueue().filter((k) => k !== key)); }
-function readMeta(): SyncMeta { try { return JSON.parse(localStorage.getItem(META_KEY) ?? "{}"); } catch { return {}; } }
+function readMeta(): SyncMeta {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(META_KEY) ?? "{}");
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([key, value]) =>
+        key.startsWith(PACE_PREFIX) &&
+        typeof value === "string" &&
+        Number.isFinite(Date.parse(value)),
+      ),
+    ) as SyncMeta;
+  } catch { return {}; }
+}
 function writeMeta(meta: SyncMeta) { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch {} }
 function markLocal(key: string, timestamp: string) { const meta = readMeta(); meta[key] = timestamp; writeMeta(meta); }
 
@@ -205,7 +227,7 @@ export function useCloudSyncEngineInternal() {
       applyRemoteWrite(key, row.value);
       meta[key] = row.updated_at;
       writeMeta(meta);
-      localStorage.setItem("pace.__last_sync_at", row.updated_at);
+      try { localStorage.setItem("pace.__last_sync_at", row.updated_at); } catch {}
       setStatus("ok");
     };
 
