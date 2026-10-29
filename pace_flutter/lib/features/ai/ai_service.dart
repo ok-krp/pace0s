@@ -135,15 +135,27 @@ class PaceAiService {
           .where((item) => item.agent == agent)
           .where((item) => !pendingDeleteIds.contains(item.id))
           .toList();
-      final rows = await client
-          .from('ai_conversations')
-          .select('id,agent_type,title,is_starred,is_archived,is_ephemeral,updated_at')
-          .eq('user_id', user.id)
-          .eq('agent_type', agent.name)
-          .eq('is_ephemeral', false)
-          .order('updated_at', ascending: false);
-      if (!_isAccountScopeCurrent) return const <AiConversation>[];
-      final remote = rows.whereType<Map>().map((row) {
+      // PostgREST applies a server-side row cap. Page conversation metadata
+      // explicitly so older records do not disappear from the native history
+      // once an account exceeds that cap.
+      const pageSize = 500;
+      var offset = 0;
+      final rows = <Map<String, dynamic>>[];
+      while (true) {
+        final page = await client
+            .from('ai_conversations')
+            .select('id,agent_type,title,is_starred,is_archived,is_ephemeral,updated_at')
+            .eq('user_id', user.id)
+            .eq('agent_type', agent.name)
+            .eq('is_ephemeral', false)
+            .order('updated_at', ascending: false)
+            .range(offset, offset + pageSize - 1);
+        if (!_isAccountScopeCurrent) return const <AiConversation>[];
+        rows.addAll(page);
+        if (page.length < pageSize) break;
+        offset += pageSize;
+      }
+      final remote = rows.map((row) {
         final value = Map<String, dynamic>.from(row);
         return AiConversation(
           id: value['id']?.toString() ?? '',
@@ -396,15 +408,27 @@ class PaceAiService {
       // Always refresh the remote message list when authenticated. Returning
       // the local cache merely because it is non-empty prevents messages sent
       // from another device from ever appearing on this device.
-      final rows = await client
-          .from('ai_messages')
-          .select('id,role,plain_text,created_at')
-          .eq('conversation_id', id)
-          .eq('user_id', user.id)
-          .order('created_at');
-      if (!_isAccountScopeCurrent) return const <AiMessage>[];
+      // Message history can exceed PostgREST's default maximum row count.
+      // Fetch every page; otherwise later messages from another device remain
+      // invisible and can be mistaken for a successful complete refresh.
+      const pageSize = 500;
+      var offset = 0;
+      final rows = <Map<String, dynamic>>[];
+      while (true) {
+        final page = await client
+            .from('ai_messages')
+            .select('id,role,plain_text,created_at')
+            .eq('conversation_id', id)
+            .eq('user_id', user.id)
+            .order('created_at')
+            .range(offset, offset + pageSize - 1);
+        if (!_isAccountScopeCurrent) return const <AiMessage>[];
+        rows.addAll(page);
+        if (page.length < pageSize) break;
+        offset += pageSize;
+      }
 
-      final remoteMessages = rows.whereType<Map>().map((row) {
+      final remoteMessages = rows.map((row) {
         final rawTimestamp = row['created_at']?.toString() ?? '';
         return AiMessage(
           id: row['id']?.toString() ?? '',
