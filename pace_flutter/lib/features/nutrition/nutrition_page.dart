@@ -148,6 +148,7 @@ class _NutritionPageState extends State<NutritionPage> {
     fat.dispose();
     if (result == null ||
         itemName.isEmpty ||
+        widget.localStore.isSwitchingAccount ||
         widget.localStore.activeUserId != expectedUserId) {
       return;
     }
@@ -208,6 +209,10 @@ class _NutritionPageState extends State<NutritionPage> {
 
   Future<void> _deleteItem(Map<String, dynamic> item) async {
     final expectedUserId = _accountUserId;
+    if (widget.localStore.isSwitchingAccount ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
     final raw = widget.localStore.read('pace.nutrition.items');
     if (raw is! Map) return;
     final data = Map<String, dynamic>.from(raw);
