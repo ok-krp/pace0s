@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -134,6 +135,57 @@ void main() {
   );
 
   testWidgets(
+    'sign-out during guest activation is handled after the transition',
+    (tester) async {
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('pace-offline-signout-race-'),
+      );
+      if (directory == null) throw StateError('Could not create test directory');
+      final store = await tester.runAsync(
+        () => LocalStore.open(directory: directory),
+      );
+      if (store == null) throw StateError('Could not open test local store');
+      final auth = _EventSessionAuthService();
+      addTearDown(() async {
+        store.dispose();
+        await auth.closeEvents();
+        await tester.runAsync(() => directory.delete(recursive: true));
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PaceApp(
+            localStore: store,
+            auth: auth,
+            sync: SyncService(localStore: store, client: null),
+          ),
+        ),
+      );
+      expect(find.text('Continuer hors connexion'), findsOneWidget);
+
+      await tester.tap(find.text('Continuer hors connexion'));
+      // Emit immediately after the tap, while activateAccount(null) is queued
+      // but before the guest shell has been shown.
+      auth.emitSignedOut();
+
+      for (var attempt = 0;
+          attempt < 20 && find.text('Se connecter').evaluate().isEmpty;
+          attempt++) {
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+
+      expect(find.text('Se connecter'), findsOneWidget);
+      expect(find.byType(NavigationBar), findsNothing);
+      expect(store.activeUserId, isNull);
+    },
+    timeout: const Timeout(Duration(seconds: 45)),
+  );
+
+  testWidgets(
     'offline mode can return to the auth screen without a session',
     (tester) async {
       final directory = await tester.runAsync(
@@ -201,6 +253,26 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 45)),
   );
+}
+
+class _EventSessionAuthService extends PaceAuthService {
+  _EventSessionAuthService()
+      : super(SupabaseClient('https://example.supabase.co', 'test-anon-key'));
+
+  final StreamController<AuthState> _events =
+      StreamController<AuthState>.broadcast();
+
+  @override
+  User? get currentUser => null;
+
+  @override
+  Stream<AuthState> get authStateChanges => _events.stream;
+
+  void emitSignedOut() {
+    _events.add(AuthState(AuthChangeEvent.signedOut, null));
+  }
+
+  Future<void> closeEvents() => _events.close();
 }
 
 class _MutableSessionAuthService extends PaceAuthService {

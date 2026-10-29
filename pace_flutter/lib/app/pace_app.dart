@@ -123,6 +123,9 @@ class _AuthGateState extends State<_AuthGate> {
   bool _signedIn = false;
   bool _offlineMode = false;
   bool _offlineRequested = false;
+  // A sign-out event can arrive while the guest file is still being activated.
+  // Remember it so the event is not lost before offline mode becomes visible.
+  bool _signedOutDuringOfflineTransition = false;
 
   int _accountGeneration = 0;
   bool _accountActivationInProgress = false;
@@ -148,10 +151,13 @@ class _AuthGateState extends State<_AuthGate> {
           // Ignore initial-session/other null-user events while offline. Only
           // a real sign-out should leave the explicitly selected local mode.
           if (state.event != AuthChangeEvent.signedOut) return;
-          // A sign-out event can race the await in _continueOffline(). While
-          // that request is still switching LocalStore to the guest file, do
-          // not invalidate it; only leave offline mode after it has been shown.
-          if (!_offlineMode) return;
+          // A sign-out event can race the await in _continueOffline(). If
+          // the guest shell is not visible yet, defer handling until activation
+          // completes instead of dropping the event permanently.
+          if (!_offlineMode) {
+            _signedOutDuringOfflineTransition = true;
+            return;
+          }
           _offlineRequested = false;
           if (_offlineMode) {
             // Offline shell routes use the root navigator. Clear them even
@@ -236,6 +242,7 @@ class _AuthGateState extends State<_AuthGate> {
     // Set synchronously before the first await so auth events cannot race this
     // choice and reactivate the previously authenticated account's file.
     _offlineRequested = true;
+    _signedOutDuringOfflineTransition = false;
     final generation = ++_accountGeneration;
     _accountActivationInProgress = true;
     try {
@@ -246,11 +253,22 @@ class _AuthGateState extends State<_AuthGate> {
       // A stale failed attempt must not cancel a newer offline request.
       if (generation == _accountGeneration) {
         _offlineRequested = false;
+        _signedOutDuringOfflineTransition = false;
         _accountActivationInProgress = false;
       }
       return;
     }
     if (!mounted || generation != _accountGeneration) return;
+    if (_signedOutDuringOfflineTransition) {
+      _signedOutDuringOfflineTransition = false;
+      _offlineRequested = false;
+      _accountActivationInProgress = false;
+      setState(() {
+        _signedIn = false;
+        _offlineMode = false;
+      });
+      return;
+    }
     final storedTheme = switch (widget.localStore.read('pace.settings.theme')) {
       'light' => ThemeMode.light,
       'dark' => ThemeMode.dark,
