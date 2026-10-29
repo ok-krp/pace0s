@@ -504,6 +504,74 @@ void main() {
     expect(notifications, 3);
   });
 
+  test('applies remote batches with one notification and keeps the newest duplicate', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    var notifications = 0;
+    store.addListener(() => notifications++);
+
+    await store.applyRemoteBatch(
+      [
+        {
+          'key': 'pace.profile.name',
+          'value': 'older value',
+          'updatedAt': '2026-10-17T10:01:00Z',
+        },
+        {
+          'key': 'pace.profile.other',
+          'value': 'other value',
+          'updatedAt': '2026-10-17T10:01:30Z',
+        },
+        {
+          'key': 'pace.profile.name',
+          'value': 'newest value',
+          'updatedAt': '2026-10-17T10:02:00Z',
+        },
+      ],
+      expectedUserId: 'user-a',
+    );
+
+    expect(store.read('pace.profile.name'), 'newest value');
+    expect(store.read('pace.profile.other'), 'other value');
+    expect(
+      store.lastSyncedAt('pace.profile.name'),
+      '2026-10-17T10:02:00Z',
+    );
+    expect(notifications, 1);
+
+    final reopened = await LocalStore.open(directory: directory);
+    await reopened.activateAccount('user-a');
+    expect(reopened.read('pace.profile.name'), 'newest value');
+    expect(reopened.read('pace.profile.other'), 'other value');
+  });
+
+  test('rejects an invalid remote batch before applying any rows', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+
+    await expectLater(
+      store.applyRemoteBatch(
+        [
+          {
+            'key': 'pace.profile.name',
+            'value': 'valid row',
+            'updatedAt': '2026-10-17T10:00:00Z',
+          },
+          {
+            'key': 'pace.profile.other',
+            'value': 'invalid row',
+            'updatedAt': '2026-13-01T10:00:00Z',
+          },
+        ],
+        expectedUserId: 'user-a',
+      ),
+      throwsFormatException,
+    );
+
+    expect(store.read('pace.profile.name'), isNull);
+    expect(store.read('pace.profile.other'), isNull);
+  });
+
   test('application mutations use account-scoped local store helpers', () async {
     final library = Directory('lib');
     expect(await library.exists(), isTrue);
