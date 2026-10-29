@@ -175,7 +175,8 @@ class PaceAiService {
       };
       for (final item in local) {
         final remoteItem = remoteById[item.id];
-        if (remoteItem == null || !item.updatedAt.isAfter(remoteItem.updatedAt)) {
+        if (remoteItem == null ||
+            !shouldRetryConversationRename(local: item, remote: remoteItem)) {
           continue;
         }
         if (!_isAccountScopeCurrent) return const <AiConversation>[];
@@ -265,6 +266,17 @@ class PaceAiService {
     }
     return conversation;
   }
+
+  /// Message activity also advances the local conversation timestamp. Retry
+  /// a metadata write only when the title itself differs; otherwise an offline
+  /// message must not cause an unnecessary remote UPDATE on every history load.
+  static bool shouldRetryConversationRename({
+    required AiConversation local,
+    required AiConversation remote,
+  }) =>
+      local.id == remote.id &&
+      local.title != remote.title &&
+      local.updatedAt.isAfter(remote.updatedAt);
 
   /// The CAS baseline for a retry is the server row just fetched, not the
   /// local timestamp advanced by the offline rename.
