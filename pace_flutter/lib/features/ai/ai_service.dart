@@ -728,9 +728,15 @@ class PaceAiService {
 
   Future<void> _saveLocalConversations(List<AiConversation> conversations) async {
     if (!_isAccountScopeCurrent) return;
-    await localStore.writeForAccount(_accountUserId, _conversationKey, conversations.map((item) => item.toJson()).toList());
-    if (!_isAccountScopeCurrent) return;
-    unawaited(sync.syncNow());
+    // Conversation metadata and messages have dedicated cloud tables. Keep the
+    // full local transcript snapshot on disk only instead of duplicating it as
+    // a large user_state.value payload on every edit or history refresh.
+    await localStore.writeForAccount(
+      _accountUserId,
+      _conversationKey,
+      conversations.map((item) => item.toJson()).toList(),
+      enqueueSync: false,
+    );
   }
 
   static bool hasMessageListChanged({

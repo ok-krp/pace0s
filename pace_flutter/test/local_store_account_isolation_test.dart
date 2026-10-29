@@ -1013,6 +1013,36 @@ void main() {
     expect(ai.loadMemory(), isEmpty);
   });
 
+  test('AI conversation cache persists locally without a user_state outbox payload', () async {
+    final store = await LocalStore.open(directory: directory);
+    final ai = PaceAiService(
+      localStore: store,
+      sync: SyncService(localStore: store, client: null),
+      auth: const PaceAuthService(null),
+    );
+
+    final conversation = await ai.createConversation();
+    expect(conversation.id, isNotEmpty);
+    final raw = store.read('pace.ai.conversations');
+    expect(raw, isA<List>());
+    expect(
+      (raw as List).whereType<Map>().any(
+        (item) => item['id'] == conversation.id,
+      ),
+      isTrue,
+    );
+    expect(
+      store.hasPendingOperationForKey('pace.ai.conversations'),
+      isFalse,
+    );
+    expect(
+      store.pendingOperations().any(
+        (operation) => operation['key'] == 'pace.ai.conversations',
+      ),
+      isFalse,
+    );
+  });
+
   test('AI service reads memory while its guest account scope is current', () async {
     final store = await LocalStore.open(directory: directory);
     await store.write('pace.ai.memory', <Map<String, dynamic>>[

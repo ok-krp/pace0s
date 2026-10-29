@@ -69,9 +69,15 @@ class SyncService {
     return fallback;
   }
 
-  /// Keys that are intentionally device-local in the web sync contract.
-  /// Keep native push and pull behavior aligned with src/hooks/use-cloud-sync-engine.tsx.
-  static const Set<String> excludedSyncKeys = {'pace.sport.active'};
+  /// Keys kept out of the native user_state mirror.
+  /// AI conversations/messages already use their dedicated tables; copying the
+  /// full transcript cache into user_state duplicates large payloads on every
+  /// edit and full reconciliation. Delete tombstones are local retry metadata.
+  static const Set<String> excludedSyncKeys = {
+    'pace.sport.active',
+    'pace.ai.conversations',
+    'pace.ai.deleted_conversations',
+  };
 
   static bool isSyncableKey(String key) =>
       key.startsWith('pace.') &&

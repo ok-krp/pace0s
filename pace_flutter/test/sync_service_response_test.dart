@@ -135,6 +135,11 @@ void main() {
       expect(SyncService.isSyncableKey('pace.sport.active'), isFalse);
     });
 
+    test('keeps AI conversation cache and delete tombstones out of user_state sync', () {
+      expect(SyncService.isSyncableKey('pace.ai.conversations'), isFalse);
+      expect(SyncService.isSyncableKey('pace.ai.deleted_conversations'), isFalse);
+    });
+
     test('keeps all account-local sync metadata out of the cloud outbox', () {
       expect(SyncService.isSyncableKey('pace.__sync_last_pull_at'), isFalse);
       expect(SyncService.isSyncableKey('pace.__sync_last_full_pull_at'), isFalse);
