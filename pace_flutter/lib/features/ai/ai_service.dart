@@ -149,6 +149,7 @@ class PaceAiService {
             .eq('agent_type', agent.name)
             .eq('is_ephemeral', false)
             .order('updated_at', ascending: false)
+            .order('id')
             .range(offset, offset + pageSize - 1);
         if (!_isAccountScopeCurrent) return const <AiConversation>[];
         rows.addAll(page);
@@ -421,6 +422,7 @@ class PaceAiService {
             .eq('conversation_id', id)
             .eq('user_id', user.id)
             .order('created_at')
+            .order('id')
             .range(offset, offset + pageSize - 1);
         if (!_isAccountScopeCurrent) return const <AiMessage>[];
         rows.addAll(page);
