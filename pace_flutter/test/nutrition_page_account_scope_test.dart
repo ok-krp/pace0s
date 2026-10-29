@@ -179,13 +179,23 @@ void main() {
       expect(reopenedStore.activeUserId, isNull);
 
       // Signing in must select an independent file, not import the guest
-      // nutrition journal into the authenticated account.
-      await tester.runAsync(() async {
-        await reopenedStore.activateAccount('user-a');
-        expect(reopenedStore.activeUserId, 'user-a');
-        expect(reopenedStore.read('pace.nutrition.items'), isNull);
-        await reopenedStore.activateAccount(null);
-      });
+      // nutrition journal into the authenticated account. Use a separate
+      // store instance so this widget test does not chain filesystem account
+      // switches through Flutter's fake-async zone.
+      final accountStore = await tester.runAsync(
+        () => LocalStore.open(directory: directory),
+      );
+      if (accountStore == null) {
+        throw StateError('Could not open account-scoped local store');
+      }
+      stores.add(accountStore);
+      await tester.runAsync(() => accountStore.activateAccount('user-a'));
+      expect(accountStore.activeUserId, 'user-a');
+      expect(accountStore.read('pace.nutrition.items'), isNull);
+      accountStore.dispose();
+      stores.remove(accountStore);
+
+      expect(reopenedStore.activeUserId, isNull);
       expect(reopenedStore.read('pace.nutrition.items'), isA<Map>());
 
       await tester.pumpWidget(
