@@ -163,10 +163,10 @@ export function useCloudSyncEngineInternal() {
             }
             applyRemoteWrite(key, row.value);
             markLocal(key, row.updated_at);
-            localStorage.setItem("pace.__last_sync_at", row.updated_at);
+            try { localStorage.setItem("pace.__last_sync_at", row.updated_at); } catch {}
           } else {
             markLocal(key, updatedAt);
-            localStorage.setItem("pace.__last_sync_at", updatedAt);
+            try { localStorage.setItem("pace.__last_sync_at", updatedAt); } catch {}
             if (localStorage.getItem(key) !== rawValue) {
               // The accepted value was already superseded locally. The newer
               // value must stay queued and be sent after this request finishes.
