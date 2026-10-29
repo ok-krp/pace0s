@@ -105,8 +105,12 @@ export function useCloudSyncEngineInternal() {
       if (cancelled || !allowed() || !isSyncableKey(key)) return;
       queueKey(key);
 
-      const previous = keyWrites.current[key] ?? Promise.resolve();
-      const current = previous.then(async () => {
+      // Coalesce repeated local-write events for the same key. The in-flight
+      // write checks whether the local value changed and schedules one trailing
+      // push if necessary, instead of issuing a chain of duplicate RPCs.
+      const existing = keyWrites.current[key];
+      if (existing) return existing;
+      const current = (async () => {
         if (cancelled) return;
         if (!navigator.onLine) { setStatus("offline"); return; }
 
@@ -177,10 +181,12 @@ export function useCloudSyncEngineInternal() {
         } catch {
           if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
         }
+      })();
+      const tracked = current.catch(() => undefined).finally(() => {
+        if (keyWrites.current[key] === tracked) delete keyWrites.current[key];
       });
-
-      keyWrites.current[key] = current.catch(() => undefined);
-      await current;
+      keyWrites.current[key] = tracked;
+      await tracked;
     };
 
     const flushQueue = async () => {
