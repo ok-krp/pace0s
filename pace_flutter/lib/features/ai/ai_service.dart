@@ -356,6 +356,16 @@ class PaceAiService {
     SupabaseClient client,
     String userId,
   ) async {
+  /// An empty DELETE response is not proof of deletion: RLS may filter the
+  /// mutation result. Only a returned row for this ID confirms the tombstone
+  /// can be cleared safely.
+  static bool deleteResponseConfirmsRemoval({
+    required List<Map<String, dynamic>> rows,
+    required String conversationId,
+  }) =>
+      rows.any((row) => row['id']?.toString() == conversationId);
+
+
     final pending = _pendingDeletedConversationIds();
     if (pending.isEmpty) return;
     final deletedRemotely = <String>{};
@@ -368,7 +378,7 @@ class PaceAiService {
             .eq('id', id)
             .eq('user_id', userId)
             .select('id');
-        if (deletedRows.any((row) => row['id']?.toString() == id)) {
+        if (deleteResponseConfirmsRemoval(rows: deletedRows, conversationId: id)) {
           deletedRemotely.add(id);
           continue;
         }
