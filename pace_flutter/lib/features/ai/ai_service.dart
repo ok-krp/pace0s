@@ -172,12 +172,15 @@ class PaceAiService {
             'updated_at': item.updatedAt.toUtc().toIso8601String(),
           }).eq('id', item.id)
               .eq('user_id', user.id)
-              // Compare against the exact version read above. Using the local
-              // clock here could lose an offline rename when clocks differ.
+              // Compare-and-set against the exact server version fetched in
+              // this load, not the locally advanced timestamp. This allows an
+              // offline rename to retry while still rejecting a concurrent
+              // remote edit that lands after the SELECT.
               .eq(
                 'updated_at',
-                remoteItem.updatedAt.toUtc().toIso8601String(),
-              );
+                renameRetryExpectedRemoteVersion(remoteItem),
+              )
+              .select('id');
         } catch (_) {
           // Keep the local title; the next load retries the update.
         }
@@ -249,6 +252,11 @@ class PaceAiService {
     }
     return conversation;
   }
+
+  /// The CAS baseline for a retry is the server row just fetched, not the
+  /// local timestamp advanced by the offline rename.
+  static String renameRetryExpectedRemoteVersion(AiConversation remote) =>
+      remote.updatedAt.toUtc().toIso8601String();
 
   Future<void> renameConversation(String id, String title) async {
     final normalized = title.trim().replaceAll(RegExp(r'\s+'), ' ');
