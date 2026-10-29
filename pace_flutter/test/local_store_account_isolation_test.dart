@@ -1021,6 +1021,10 @@ void main() {
       auth: const PaceAuthService(null),
     );
 
+    // Empty cache reads are immutable snapshots; deleting a stale/unknown ID
+    // must remain a no-op instead of trying to mutate a const empty list.
+    await ai.deleteConversation('missing-conversation-id');
+
     final conversation = await ai.createConversation();
     expect(conversation.id, isNotEmpty);
     final raw = store.read('pace.ai.conversations');

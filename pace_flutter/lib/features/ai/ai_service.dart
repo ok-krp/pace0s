@@ -211,7 +211,8 @@ class PaceAiService {
       ephemeral: ephemeral,
     );
     if (!ephemeral) {
-      final conversations = loadLocalConversations()..insert(0, conversation);
+      final conversations = loadLocalConversations().toList()
+        ..insert(0, conversation);
       await _saveLocalConversations(conversations);
       final client = _client;
       final user = _scopedUser;
@@ -287,7 +288,8 @@ class PaceAiService {
       );
       if (!_isAccountScopeCurrent) return;
     }
-    final conversations = loadLocalConversations()..removeWhere((item) => item.id == id);
+    final conversations = loadLocalConversations().toList()
+      ..removeWhere((item) => item.id == id);
     await _saveLocalConversations(conversations);
     if (client != null && user != null) {
       await _retryPendingConversationDeletes(client, user.id);
