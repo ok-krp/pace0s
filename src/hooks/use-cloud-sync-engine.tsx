@@ -375,10 +375,15 @@ export function useCloudSyncEngineInternal() {
 
     const onOnline = () => { void syncNow(); };
     const onOffline = () => setStatus("offline");
+    // A healthy Realtime channel already delivers changes accumulated while
+    // hidden; avoid a full-table read on every tab focus or pageshow event.
+    // Reconcile on visibility/page-show only when the channel is unhealthy.
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") void syncNow();
+      if (document.visibilityState === "visible" && !realtimeHealthy) void syncNow();
     };
-    const onPageShow = () => { void syncNow(); };
+    const onPageShow = () => {
+      if (!realtimeHealthy) void syncNow();
+    };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     document.addEventListener("visibilitychange", onVisibilityChange);
