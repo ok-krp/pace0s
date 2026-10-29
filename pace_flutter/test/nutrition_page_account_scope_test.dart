@@ -71,6 +71,52 @@ void main() {
   );
 
   testWidgets(
+    'guest can add nutrition while offline using the local store',
+    (tester) async {
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('pace-nutrition-guest-'),
+      );
+      if (directory == null) throw StateError('Could not create test directory');
+
+      final store = await tester.runAsync(
+        () => LocalStore.open(directory: directory),
+      );
+      if (store == null) throw StateError('Could not open guest local store');
+      addTearDown(() async {
+        store.dispose();
+        await tester.runAsync(() => directory.delete(recursive: true));
+      });
+
+      expect(store.activeUserId, isNull);
+      await tester.pumpWidget(
+        MaterialApp(home: NutritionPage(localStore: store)),
+      );
+      await tester.tap(find.byTooltip('Ajouter un aliment'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.enterText(find.byType(TextField).at(0), 'Offline oats');
+      await tester.enterText(find.byType(TextField).at(1), '80');
+      await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(store.activeUserId, isNull);
+      final raw = store.read('pace.nutrition.items');
+      expect(raw, isA<Map>());
+      final entries = (raw as Map).values
+          .whereType<List>()
+          .expand((items) => items)
+          .whereType<Map>()
+          .toList();
+      expect(entries, hasLength(1));
+      expect(entries.single['name'], 'Offline oats');
+      expect(entries.single['kcal'], 80.0);
+      expect(store.read('pace.nutrition.totals'), isA<Map>());
+    },
+    timeout: const Timeout(Duration(seconds: 45)),
+  );
+
+  testWidgets(
     'nutrition rejects malformed numeric input without saving',
     (tester) async {
       final directory = await tester.runAsync(
