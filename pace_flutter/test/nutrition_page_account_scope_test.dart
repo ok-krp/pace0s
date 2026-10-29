@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -117,9 +116,9 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       // The widget callback is fire-and-forget. Let its real filesystem work
-      // settle, then pump the fake-async zone before inspecting the snapshot.
+      // settle, then pump the fake-async zone before inspecting local state.
       await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 150)),
+        () => Future<void>.delayed(const Duration(milliseconds: 350)),
       );
       await tester.pump();
       expect(find.text('Ajouter un aliment'), findsNothing);
@@ -128,44 +127,15 @@ void main() {
         isA<Map>(),
         reason: 'A valid guest food submission must update local state',
       );
-
-      // Await the actual queued disk flush. The UI event handler is
-      // fire-and-forget from the widget tester's perspective, but LocalStore
-      // exposes the already-enqueued flush so the test need not guess a delay.
-      final persisted = await tester.runAsync(() async {
-        await store.waitForPendingWrites();
-        final snapshot = File(
-          '${directory.path}${Platform.pathSeparator}pace_local.json',
-        );
-        if (!await snapshot.exists()) return false;
-        final decoded = jsonDecode(await snapshot.readAsString());
-        final rawItems = decoded is Map
-            ? decoded['pace.nutrition.items']
-            : null;
-        final savedNames = rawItems is Map
-            ? rawItems.values
-                .whereType<List>()
-                .expand((items) => items)
-                .whereType<Map>()
-                .map((item) => item['name']?.toString())
-                .toSet()
-            : <String?>{};
-        return savedNames.contains('Offline oats');
-      });
-      expect(persisted, isTrue, reason: 'Offline nutrition must reach the guest snapshot');
-
       expect(find.text('Offline oats'), findsOneWidget);
       expect(find.text('80.0 kcal'), findsOneWidget);
       expect(store.activeUserId, isNull);
 
-      // Close the first store before reopening the same file. Two live
-      // instances writing the same snapshot could hide persistence races.
+      // Unmount and close the first store before opening a fresh reader.
       await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
       store.dispose();
       stores.remove(store);
 
-      // Reopen the same guest file to prove the journal was flushed to disk,
-      // not merely kept in the widget's in-memory state.
       final reopenedStore = await tester.runAsync(
         () => LocalStore.open(directory: directory),
       );
@@ -174,6 +144,15 @@ void main() {
       }
       stores.add(reopenedStore);
       expect(reopenedStore.activeUserId, isNull);
+      final restoredItems = reopenedStore.read('pace.nutrition.items');
+      expect(restoredItems, isA<Map>());
+      final restoredEntries = (restoredItems as Map).values
+          .whereType<List>()
+          .expand((items) => items)
+          .whereType<Map>()
+          .toList();
+      expect(restoredEntries, hasLength(1));
+      expect(restoredEntries.single['name'], 'Offline oats');
 
       // Signing in must select an independent file, not import the guest
       // nutrition journal into the authenticated account. Use a separate
