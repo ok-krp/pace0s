@@ -826,6 +826,8 @@ class SyncService {
               .range(offset, offset + pageSize - 1);
       if (!_isCurrentAccount(userId)) return;
 
+      final remoteUpdates = <String, Map<String, dynamic>>{};
+      final remoteUpdateTimes = <String, DateTime>{};
       for (final raw in rows) {
         if (!_isCurrentAccount(userId)) return;
         final row = Map<String, dynamic>.from(raw);
@@ -869,10 +871,21 @@ class SyncService {
         )) {
           continue;
         }
-        await localStore.applyRemote(
-          key,
-          row['value'],
-          remoteUpdatedAt,
+        final previousRemoteTime = remoteUpdateTimes[key];
+        if (previousRemoteTime == null ||
+            remoteTime.isAfter(previousRemoteTime)) {
+          remoteUpdateTimes[key] = remoteTime;
+          remoteUpdates[key] = <String, dynamic>{
+            'key': key,
+            'value': row['value'],
+            'updatedAt': remoteUpdatedAt,
+          };
+        }
+      }
+
+      if (remoteUpdates.isNotEmpty) {
+        await localStore.applyRemoteBatch(
+          remoteUpdates.values.toList(),
           expectedUserId: userId,
           notify: false,
         );
