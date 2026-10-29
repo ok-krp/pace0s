@@ -50,7 +50,7 @@ class PaceAiService {
   static const _confirmKey = 'pace.settings.ai.confirm_actions';
   static const _aiUrl = String.fromEnvironment(
     'PACE_AI_URL',
-    defaultValue: 'https://pace0s.lovable.app/api/ai-chat',
+    defaultValue: 'https://pace0s.vercel.app/api/ai-chat',
   );
 
   SupabaseClient? get _client => auth.client;
