@@ -119,9 +119,15 @@ void main() {
       // The widget callback is fire-and-forget. Let its real filesystem work
       // settle, then pump the fake-async zone before inspecting the snapshot.
       await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+        () => Future<void>.delayed(const Duration(milliseconds: 150)),
       );
       await tester.pump();
+      expect(find.text('Ajouter un aliment'), findsNothing);
+      expect(
+        store.read('pace.nutrition.items'),
+        isA<Map>(),
+        reason: 'A valid guest food submission must update local state',
+      );
 
       // Verify the durable snapshot rather than relying on a fixed sleep alone.
       await tester.runAsync(() async {
