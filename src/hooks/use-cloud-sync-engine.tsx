@@ -190,7 +190,10 @@ export function useCloudSyncEngineInternal() {
 
           const remoteTime = Date.parse(row.updated_at);
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
-          if (!shouldRecoverLegacy && (!Number.isFinite(remoteTime) || remoteTime <= localTime)) continue;
+          // Legacy recovery may bypass the timestamp comparison, never timestamp
+          // validation: malformed remote metadata must not be persisted locally.
+          if (!Number.isFinite(remoteTime)) continue;
+          if (!shouldRecoverLegacy && remoteTime <= localTime) continue;
 
           applyRemoteWrite(key, row.value);
           meta[key] = row.updated_at;
