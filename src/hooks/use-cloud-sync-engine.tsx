@@ -216,6 +216,12 @@ export function useCloudSyncEngineInternal() {
 
         for (const rawRow of data) {
           const row = rawRow as unknown as SyncRow;
+          if (
+            !row ||
+            typeof row.key !== "string" ||
+            typeof row.updated_at !== "string" ||
+            !Object.prototype.hasOwnProperty.call(row, "value")
+          ) continue;
           const rawKey = row.key;
           const isLegacy = rawKey.startsWith("lt.");
           const key = isLegacy ? `${PACE_PREFIX}${rawKey.slice(3)}` : rawKey;
