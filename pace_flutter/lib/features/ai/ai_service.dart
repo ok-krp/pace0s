@@ -702,6 +702,7 @@ class PaceAiService {
   }
 
   Future<void> updateMemory(String id, String text) async {
+    if (!_isAccountScopeCurrent) return;
     final values = loadMemory().map((item) => item.id == id ? AiMemoryItem(id: item.id, text: text.trim(), createdAt: item.createdAt, updatedAt: DateTime.now()).toJson() : item.toJson()).toList();
     await localStore.writeForAccount(_accountUserId, _memoryKey, values);
     if (!_isAccountScopeCurrent) return;
@@ -709,6 +710,7 @@ class PaceAiService {
   }
 
   Future<void> deleteMemory(String id) async {
+    if (!_isAccountScopeCurrent) return;
     final values = loadMemory().where((item) => item.id != id).map((item) => item.toJson()).toList();
     await localStore.writeForAccount(_accountUserId, _memoryKey, values);
     if (!_isAccountScopeCurrent) return;
