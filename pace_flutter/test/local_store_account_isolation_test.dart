@@ -616,6 +616,14 @@ void main() {
     // even though account A is still the active ID until its file flush ends.
     await store.writeForAccount('user-a', 'pace.profile.name', 'late scoped write');
     await store.removeForAccount('user-a', 'pace.profile.name');
+    await store.writeBatchForAccount(
+      'user-a',
+      writes: {'pace.profile.name': 'late scoped batch write'},
+    );
+    await store.writeBatchForAccount(
+      null,
+      writes: {'pace.profile.name': 'late guest batch write'},
+    );
     await switching;
 
     expect(store.isSwitchingAccount, isFalse);
