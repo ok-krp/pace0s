@@ -174,8 +174,12 @@ void main() {
       expect(find.text('Continuer hors connexion'), findsOneWidget);
 
       await tester.tap(find.text('Continuer hors connexion'));
-      // Emit immediately after the tap, while activateAccount(null) is queued
-      // but before the guest shell has been shown.
+      expect(store.isSwitchingAccount, isTrue);
+      // The button is still visible while the local file is switching. A
+      // duplicate tap must not reset the sign-out event guard.
+      await tester.tap(find.text('Continuer hors connexion'));
+      // Emit while activateAccount(null) is queued but before the guest shell
+      // has been shown.
       auth.emitSignedOut();
 
       for (var attempt = 0;

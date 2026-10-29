@@ -239,6 +239,9 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   Future<void> _continueOffline() async {
+    // The auth screen remains mounted during file I/O. Ignore repeated taps so
+    // a second request cannot reset a sign-out event observed by the first.
+    if (_offlineRequested) return;
     // Set synchronously before the first await so auth events cannot race this
     // choice and reactivate the previously authenticated account's file.
     _offlineRequested = true;
