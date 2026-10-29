@@ -29,7 +29,8 @@ function getDeviceId() {
 }
 
 function isSyncableKey(key: string): boolean {
-  return key.startsWith(PACE_PREFIX) &&
+  return key.length > PACE_PREFIX.length &&
+    key.startsWith(PACE_PREFIX) &&
     !key.startsWith(INTERNAL_PREFIX) &&
     key !== DOMAIN_OUTBOX_KEY &&
     !EXCLUDED.has(key);
