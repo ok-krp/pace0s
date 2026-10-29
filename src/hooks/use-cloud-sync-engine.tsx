@@ -162,10 +162,78 @@ export function useCloudSyncEngineInternal() {
     };
 
     const syncNow = async () => {
-      if (!navigator.onLine) { setStatus("offline"); return; }
+      if (cancelled || !navigator.onLine) {
+        if (!cancelled) setStatus("offline");
+        return;
+      }
       await flushQueue();
       await pull();
     };
+
+    // Realtime is the low-egress fast path. Keep the existing full pull as an
+    // initial/recovery reconciliation, but do not repeat it every 15 seconds
+    // while the per-user channel is healthy.
+    let realtimeHealthy = false;
+    const applyRemoteRow = (row: SyncRow) => {
+      if (cancelled || !navigator.onLine || !row || typeof row.key !== "string") return;
+      if (row.updated_by === DEVICE_ID) return;
+      const isLegacy = row.key.startsWith("lt.");
+      const key = isLegacy ? `${PACE_PREFIX}${row.key.slice(3)}` : row.key;
+      if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return;
+
+      // Local edits win until the queued write has been acknowledged. Realtime
+      // must never race a local mutation and silently replace its value.
+      if (readQueue().includes(key)) return;
+      const remoteTime = Date.parse(row.updated_at);
+      if (!Number.isFinite(remoteTime)) return;
+
+      const meta = readMeta();
+      const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
+      let localValue: unknown = null;
+      try {
+        const localRaw = localStorage.getItem(key);
+        if (localRaw !== null) localValue = JSON.parse(localRaw);
+      } catch {}
+      const recoverLegacy = isLegacy && isEmptyValue(localValue) && !isEmptyValue(row.value);
+      if (!recoverLegacy && remoteTime <= localTime) return;
+
+      applyRemoteWrite(key, row.value);
+      meta[key] = row.updated_at;
+      writeMeta(meta);
+      localStorage.setItem("pace.__last_sync_at", row.updated_at);
+      setStatus("ok");
+    };
+
+    const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "user_state",
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => applyRemoteRow(payload.new as SyncRow))
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "user_state",
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => applyRemoteRow(payload.new as SyncRow));
+
+    void realtimeChannel.subscribe((subscriptionStatus) => {
+      if (cancelled) return;
+      if (subscriptionStatus === "SUBSCRIBED") {
+        realtimeHealthy = true;
+        // Reconcile after subscribing to close the gap between the initial
+        // snapshot and the channel becoming active.
+        void syncNow();
+      } else if (
+        subscriptionStatus === "CHANNEL_ERROR" ||
+        subscriptionStatus === "TIMED_OUT" ||
+        subscriptionStatus === "CLOSED"
+      ) {
+        realtimeHealthy = false;
+        setStatus(navigator.onLine ? "error" : "offline");
+      }
+    });
 
     const offLocal = onLocalWrite((key) => {
       if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
@@ -175,17 +243,30 @@ export function useCloudSyncEngineInternal() {
 
     const onOnline = () => { void syncNow(); };
     const onOffline = () => setStatus("offline");
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") void syncNow();
+    };
+    const onPageShow = () => { void syncNow(); };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pageshow", onPageShow);
     void syncNow();
-    const interval = window.setInterval(() => void syncNow(), POLL_MS);
+
+    // A 60-second reconciliation is only a fallback when Realtime is down.
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible" && !realtimeHealthy) void syncNow();
+    }, 60_000);
 
     return () => {
       cancelled = true;
       offLocal();
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pageshow", onPageShow);
       window.clearInterval(interval);
+      void supabase.removeChannel(realtimeChannel);
     };
   }, [user]);
 
