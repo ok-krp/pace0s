@@ -111,13 +111,21 @@ class _NutritionPageState extends State<NutritionPage> {
             FilledButton(
               onPressed: () {
                 if (name.text.trim().isEmpty) return;
+                final numericInputs = [kcal, protein, carbs, fat];
+                final hasInvalidNumber = numericInputs.any((controller) {
+                  final text = controller.text.trim();
+                  if (text.isEmpty) return false;
+                  final value = double.tryParse(text.replaceAll(',', '.'));
+                  return value == null || !value.isFinite || value < 0;
+                });
+                if (hasInvalidNumber) return;
+
                 final values = <String, dynamic>{
                   'kcal': _parseOptional(kcal),
                   'p': _parseOptional(protein),
                   'c': _parseOptional(carbs),
                   'f': _parseOptional(fat),
                 };
-                if (values.values.any((value) => value is double && (!value.isFinite || value < 0))) return;
                 Navigator.pop(context, values);
               },
               child: const Text('Ajouter'),
