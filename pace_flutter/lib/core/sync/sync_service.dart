@@ -796,6 +796,19 @@ class SyncService {
     }
   }
 
+  /// Deduplicates normalized remote keys across all PostgREST pages.
+  /// Equal timestamps preserve the first row in the deterministic query order.
+  static bool shouldKeepNewestRemoteUpdate({
+    required Map<String, DateTime> newestByKey,
+    required String key,
+    required DateTime incoming,
+  }) {
+    final previous = newestByKey[key];
+    if (previous != null && !incoming.isAfter(previous)) return false;
+    newestByKey[key] = incoming;
+    return true;
+  }
+
   Future<void> _pullRemote(String userId) async {
     if (!_isCurrentAccount(userId)) return;
     final now = DateTime.now().toUtc();
@@ -828,6 +841,10 @@ class SyncService {
       fullPull: fullPull,
       now: now,
     );
+    // Keep normalized-key conflict resolution across page boundaries too.
+    // A legacy alias at the same timestamp on the next page must not replace
+    // the first row already applied from an earlier page.
+    final newestRemoteTimeByKey = <String, DateTime>{};
     while (true) {
       final rows = fullPull
           ? await client!
@@ -850,7 +867,6 @@ class SyncService {
       if (!_isCurrentAccount(userId)) return;
 
       final remoteUpdates = <String, Map<String, dynamic>>{};
-      final remoteUpdateTimes = <String, DateTime>{};
       for (final raw in rows) {
         if (!_isCurrentAccount(userId)) return;
         final row = Map<String, dynamic>.from(raw);
@@ -894,10 +910,11 @@ class SyncService {
         )) {
           continue;
         }
-        final previousRemoteTime = remoteUpdateTimes[key];
-        if (previousRemoteTime == null ||
-            remoteTime.isAfter(previousRemoteTime)) {
-          remoteUpdateTimes[key] = remoteTime;
+        if (shouldKeepNewestRemoteUpdate(
+          newestByKey: newestRemoteTimeByKey,
+          key: key,
+          incoming: remoteTime,
+        )) {
           remoteUpdates[key] = <String, dynamic>{
             'key': key,
             'value': row['value'],
