@@ -1492,6 +1492,8 @@ void main() {
 
     expect(ai.loadMemory(), isEmpty);
     await ai.addMemory('late response from the guest session');
+    await ai.updateMemory('b-memory', 'stale update must be ignored');
+    await ai.deleteMemory('b-memory');
     await expectLater(
       ai.send(
         conversation: AiConversation(
