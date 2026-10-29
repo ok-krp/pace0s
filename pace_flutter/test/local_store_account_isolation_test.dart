@@ -1393,6 +1393,38 @@ void main() {
     expect(merged.last.id, 'remote-1204');
   });
 
+  test('AI message activity does not trigger a redundant title retry', () {
+    final timestamp = DateTime.utc(2026, 10, 29, 12);
+    final local = AiConversation(
+      id: 'conversation-1',
+      agent: PaceAiAgent.coach,
+      title: 'Same title',
+      updatedAt: timestamp.add(const Duration(minutes: 10)),
+      messages: const <AiMessage>[],
+    );
+    final remote = AiConversation(
+      id: 'conversation-1',
+      agent: PaceAiAgent.coach,
+      title: 'Same title',
+      updatedAt: timestamp,
+    );
+
+    expect(
+      PaceAiService.shouldRetryConversationRename(
+        local: local,
+        remote: remote,
+      ),
+      isFalse,
+    );
+    expect(
+      PaceAiService.shouldRetryConversationRename(
+        local: local.copyWith(title: 'Offline rename'),
+        remote: remote,
+      ),
+      isTrue,
+    );
+  });
+
   test('offline AI rename retry compares against fetched remote version', () {
     final remoteUpdatedAt = DateTime.utc(2026, 10, 29, 12, 30);
     final remote = AiConversation(
