@@ -71,8 +71,25 @@ function isEmptyValue(value: unknown) {
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
+  const [legalRevision, setLegalRevision] = useState(0);
   const running = useRef(false);
   const keyWrites = useRef<Record<string, Promise<void>>>({});
+
+  // Keep listening even when consent is currently absent. Otherwise a later
+  // opt-in would never restart sync because the guarded effect had returned.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onLegalChanged = () => {
+      setLegalRevision((revision) => revision + 1);
+      try {
+        if (!isLegalCategoryAllowed("sync_cloud")) setStatus("idle");
+      } catch {
+        setStatus("idle");
+      }
+    };
+    window.addEventListener("pace.legal.changed", onLegalChanged);
+    return () => window.removeEventListener("pace.legal.changed", onLegalChanged);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined" || !user) return;
@@ -277,15 +294,10 @@ export function useCloudSyncEngineInternal() {
       if (document.visibilityState === "visible") void syncNow();
     };
     const onPageShow = () => { void syncNow(); };
-    const onLegalChanged = () => {
-      if (allowed()) void syncNow();
-      else setStatus("idle");
-    };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pageshow", onPageShow);
-    window.addEventListener("pace.legal.changed", onLegalChanged);
     void syncNow();
 
     // A 60-second reconciliation is only a fallback when Realtime is down.
@@ -300,11 +312,10 @@ export function useCloudSyncEngineInternal() {
       window.removeEventListener("offline", onOffline);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pageshow", onPageShow);
-      window.removeEventListener("pace.legal.changed", onLegalChanged);
       window.clearInterval(interval);
       void supabase.removeChannel(realtimeChannel);
     };
-  }, [user]);
+  }, [user, legalRevision]);
 
   return { status, queuedCount: readQueue().length };
 }
