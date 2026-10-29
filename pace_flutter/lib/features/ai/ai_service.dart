@@ -352,10 +352,6 @@ class PaceAiService {
     return raw.whereType<String>().where((id) => id.isNotEmpty).toSet().toList();
   }
 
-  Future<void> _retryPendingConversationDeletes(
-    SupabaseClient client,
-    String userId,
-  ) async {
   /// An empty DELETE response is not proof of deletion: RLS may filter the
   /// mutation result. Only a returned row for this ID confirms the tombstone
   /// can be cleared safely.
@@ -365,7 +361,10 @@ class PaceAiService {
   }) =>
       rows.any((row) => row['id']?.toString() == conversationId);
 
-
+  Future<void> _retryPendingConversationDeletes(
+    SupabaseClient client,
+    String userId,
+  ) async {
     final pending = _pendingDeletedConversationIds();
     if (pending.isEmpty) return;
     final deletedRemotely = <String>{};
