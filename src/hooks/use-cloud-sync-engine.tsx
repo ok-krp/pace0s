@@ -206,7 +206,9 @@ export function useCloudSyncEngineInternal() {
       pulling = true;
       try {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
-        if (error || !data || cancelled || !allowed()) return;
+        if (cancelled || !allowed()) return;
+        if (error) { setStatus(navigator.onLine ? "error" : "offline"); return; }
+        if (!data) { setStatus("error"); return; }
         const queue = new Set(readQueue());
         const meta = readMeta();
         let applied = 0;
