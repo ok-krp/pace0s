@@ -224,7 +224,14 @@ export function useCloudSyncEngineInternal() {
     // while the per-user channel is healthy.
     let realtimeHealthy = false;
     const applyRemoteRow = (row: SyncRow) => {
-      if (cancelled || !allowed() || !navigator.onLine || !row || typeof row.key !== "string") return;
+      if (
+        cancelled ||
+        !allowed() ||
+        !navigator.onLine ||
+        !row ||
+        typeof row.key !== "string" ||
+        !Object.prototype.hasOwnProperty.call(row, "value")
+      ) return;
       if (row.updated_by === DEVICE_ID) return;
       const isLegacy = row.key.startsWith("lt.");
       const key = isLegacy ? `${PACE_PREFIX}${row.key.slice(3)}` : row.key;
