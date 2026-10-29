@@ -29,6 +29,15 @@ void main() {
       ),
       isTrue,
     );
+    expect(
+      PaceAiService.deleteResponseConfirmsRemoval(
+        rows: const <Map<String, dynamic>>[
+          {'id': ''},
+        ],
+        conversationId: '',
+      ),
+      isFalse,
+    );
   });
 
   test('conversation round-trips locally', () {
