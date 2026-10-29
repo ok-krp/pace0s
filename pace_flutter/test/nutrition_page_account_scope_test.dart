@@ -115,6 +115,10 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
+      // Allow the real filesystem flush to finish before reopening the file.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
 
       expect(find.text('Offline oats'), findsOneWidget);
       expect(find.text('80.0 kcal'), findsOneWidget);
