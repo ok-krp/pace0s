@@ -359,6 +359,7 @@ class PaceAiService {
     required List<Map<String, dynamic>> rows,
     required String conversationId,
   }) =>
+      conversationId.isNotEmpty &&
       rows.any((row) => row['id']?.toString() == conversationId);
 
   Future<void> _retryPendingConversationDeletes(
