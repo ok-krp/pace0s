@@ -1492,6 +1492,18 @@ void main() {
 
     expect(ai.loadMemory(), isEmpty);
     await ai.addMemory('late response from the guest session');
+    await expectLater(
+      ai.send(
+        conversation: AiConversation(
+          id: 'stale-guest-conversation',
+          agent: PaceAiAgent.coach,
+          title: 'Guest conversation',
+          updatedAt: DateTime.utc(2026, 10, 17),
+        ),
+        text: 'must not be sent after sign-in',
+      ),
+      throwsStateError,
+    );
 
     expect(store.read('pace.ai.memory'), accountBMemory);
   });
