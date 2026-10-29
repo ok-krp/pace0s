@@ -78,9 +78,12 @@ export function useCloudSyncEngineInternal() {
     if (typeof window === "undefined" || !user) return;
     try { if (!isLegalCategoryAllowed("sync_cloud")) return; } catch { return; }
     let cancelled = false;
+    const allowed = () => {
+      try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; }
+    };
 
     const pushKeyNow = async (key: string) => {
-      if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
+      if (cancelled || !allowed() || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
       queueKey(key);
 
       const previous = keyWrites.current[key] ?? Promise.resolve();
@@ -134,7 +137,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const flushQueue = async () => {
-      if (cancelled || !navigator.onLine || running.current) return;
+      if (cancelled || !allowed() || !navigator.onLine || running.current) return;
       const queue = readQueue();
       if (!queue.length) return;
       running.current = true;
@@ -146,11 +149,11 @@ export function useCloudSyncEngineInternal() {
     // visibility, Realtime-recovery, or fallback event arrives concurrently.
     let pulling = false;
     const pull = async () => {
-      if (cancelled || !navigator.onLine || running.current || pulling) return;
+      if (cancelled || !allowed() || !navigator.onLine || running.current || pulling) return;
       pulling = true;
       try {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
-        if (error || !data || cancelled) return;
+        if (error || !data || cancelled || !allowed()) return;
         const queue = new Set(readQueue());
         const meta = readMeta();
         let applied = 0;
@@ -189,7 +192,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const syncNow = async () => {
-      if (cancelled || !navigator.onLine) {
+      if (cancelled || !allowed() || !navigator.onLine) {
         if (!cancelled) setStatus("offline");
         return;
       }
@@ -202,7 +205,7 @@ export function useCloudSyncEngineInternal() {
     // while the per-user channel is healthy.
     let realtimeHealthy = false;
     const applyRemoteRow = (row: SyncRow) => {
-      if (cancelled || !navigator.onLine || !row || typeof row.key !== "string") return;
+      if (cancelled || !allowed() || !navigator.onLine || !row || typeof row.key !== "string") return;
       if (row.updated_by === DEVICE_ID) return;
       const isLegacy = row.key.startsWith("lt.");
       const key = isLegacy ? `${PACE_PREFIX}${row.key.slice(3)}` : row.key;
@@ -263,7 +266,7 @@ export function useCloudSyncEngineInternal() {
     });
 
     const offLocal = onLocalWrite((key) => {
-      if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
+      if (!allowed() || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
       queueKey(key);
       void pushKeyNow(key);
     });
@@ -274,10 +277,15 @@ export function useCloudSyncEngineInternal() {
       if (document.visibilityState === "visible") void syncNow();
     };
     const onPageShow = () => { void syncNow(); };
+    const onLegalChanged = () => {
+      if (allowed()) void syncNow();
+      else setStatus("idle");
+    };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("pace.legal.changed", onLegalChanged);
     void syncNow();
 
     // A 60-second reconciliation is only a fallback when Realtime is down.
@@ -292,6 +300,7 @@ export function useCloudSyncEngineInternal() {
       window.removeEventListener("offline", onOffline);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("pace.legal.changed", onLegalChanged);
       window.clearInterval(interval);
       void supabase.removeChannel(realtimeChannel);
     };
