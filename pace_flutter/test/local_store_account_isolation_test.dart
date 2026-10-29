@@ -1508,6 +1508,8 @@ void main() {
     );
 
     expect(store.read('pace.ai.memory'), accountBMemory);
+    final guestStore = await LocalStore.open(directory: directory);
+    expect(guestStore.read('pace.ai.memory'), isNull);
   });
 
   test('stale sync completions cannot mutate another account', () async {
