@@ -141,6 +141,9 @@ class _NutritionPageState extends State<NutritionPage> {
       if (mounted) setState(() {});
     }
     final itemName = name.text.trim();
+    debugPrint(
+      'nutrition-add: result=${result != null}, namePresent=${itemName.isNotEmpty}, scopeMatches=${widget.localStore.activeUserId == expectedUserId}',
+    );
     name.dispose();
     kcal.dispose();
     protein.dispose();
@@ -149,9 +152,11 @@ class _NutritionPageState extends State<NutritionPage> {
     if (result == null ||
         itemName.isEmpty ||
         widget.localStore.activeUserId != expectedUserId) {
+      debugPrint('nutrition-add: rejected after dialog');
       return;
     }
 
+    debugPrint('nutrition-add: writing scoped batch');
     final raw = widget.localStore.read('pace.nutrition.items');
     final data = Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
     final day = _todayKey();
@@ -171,6 +176,7 @@ class _NutritionPageState extends State<NutritionPage> {
         'pace.nutrition.totals': _calculateTotals(data),
       },
     );
+    debugPrint('nutrition-add: batch complete');
     if (mounted) setState(() {});
   }
 
