@@ -51,7 +51,7 @@ function readMeta(): SyncMeta {
     if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     return Object.fromEntries(
       Object.entries(parsed).filter(([key, value]) =>
-        key.startsWith(PACE_PREFIX) &&
+        isSyncableKey(key) &&
         typeof value === "string" &&
         Number.isFinite(Date.parse(value)),
       ),
