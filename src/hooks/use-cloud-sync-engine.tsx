@@ -101,6 +101,11 @@ export function useCloudSyncEngineInternal() {
       try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; }
     };
 
+    let queueRetryTimer: number | null = null;
+    let queueRetryDelayMs = 5_000;
+    let retryingQueue = false;
+    let scheduleQueueRetry: () => void = () => {};
+
     const pushKeyNow = async (key: string) => {
       if (cancelled || !allowed() || !isSyncableKey(key)) return;
       queueKey(key);
@@ -178,8 +183,18 @@ export function useCloudSyncEngineInternal() {
 
           unqueueKey(key);
           setStatus("ok");
+          if (readQueue().length === 0) {
+            queueRetryDelayMs = 5_000;
+            if (queueRetryTimer !== null) {
+              window.clearTimeout(queueRetryTimer);
+              queueRetryTimer = null;
+            }
+          }
         } catch {
-          if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
+          if (!cancelled) {
+            setStatus(navigator.onLine ? "error" : "offline");
+            scheduleQueueRetry();
+          }
         }
       })();
       const tracked = current.catch(() => undefined).finally(() => {
@@ -196,6 +211,31 @@ export function useCloudSyncEngineInternal() {
       running.current = true;
       try { for (const key of queue) await pushKeyNow(key); }
       finally { running.current = false; }
+    };
+
+    // Retry failed queued writes with bounded exponential backoff. This retries
+    // only queued keys, not a full user_state pull, so transient RPC errors do
+    // not leave data stuck indefinitely or multiply table egress.
+    scheduleQueueRetry = () => {
+      if (
+        cancelled ||
+        !allowed() ||
+        !navigator.onLine ||
+        retryingQueue ||
+        queueRetryTimer !== null
+      ) return;
+      queueRetryTimer = window.setTimeout(async () => {
+        queueRetryTimer = null;
+        if (cancelled || !allowed() || !navigator.onLine) return;
+        retryingQueue = true;
+        try { await flushQueue(); } finally { retryingQueue = false; }
+        if (readQueue().length === 0) {
+          queueRetryDelayMs = 5_000;
+        } else {
+          queueRetryDelayMs = Math.min(queueRetryDelayMs * 2, 300_000);
+          scheduleQueueRetry();
+        }
+      }, queueRetryDelayMs);
     };
 
     // Prevent overlapping full-table pulls when a request is slow and an online,
@@ -358,6 +398,7 @@ export function useCloudSyncEngineInternal() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("pageshow", onPageShow);
       window.clearInterval(interval);
+      if (queueRetryTimer !== null) window.clearTimeout(queueRetryTimer);
       void supabase.removeChannel(realtimeChannel);
     };
   }, [user, legalRevision]);
