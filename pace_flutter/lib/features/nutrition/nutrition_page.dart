@@ -171,7 +171,11 @@ class _NutritionPageState extends State<NutritionPage> {
         'pace.nutrition.totals': _calculateTotals(data),
       },
     );
-    if (mounted) setState(() {});
+    if (mounted &&
+        !widget.localStore.isSwitchingAccount &&
+        widget.localStore.activeUserId == expectedUserId) {
+      setState(() {});
+    }
   }
 
   Map<String, dynamic> _calculateTotals(Map<String, dynamic> data) {
@@ -220,7 +224,11 @@ class _NutritionPageState extends State<NutritionPage> {
         'pace.nutrition.totals': _calculateTotals(data),
       },
     );
-    if (mounted) setState(() {});
+    if (mounted &&
+        !widget.localStore.isSwitchingAccount &&
+        widget.localStore.activeUserId == expectedUserId) {
+      setState(() {});
+    }
   }
 
   @override
