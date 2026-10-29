@@ -375,22 +375,22 @@ void main() {
       );
     });
 
-    test('uses a delta pull while the full-reconcile interval is fresh', () {
+    test('uses delta pulls for almost a day after a full reconciliation', () {
       expect(
         SyncService.shouldRunFullReconciliation(
           cursorAt: now.subtract(const Duration(minutes: 1)),
-          lastFullPullAt: now.subtract(const Duration(minutes: 9)),
+          lastFullPullAt: now.subtract(const Duration(hours: 23, minutes: 59)),
           now: now,
         ),
         isFalse,
       );
     });
 
-    test('forces a full pull after ten minutes', () {
+    test('forces a full pull after 24 hours', () {
       expect(
         SyncService.shouldRunFullReconciliation(
-          cursorAt: now.subtract(const Duration(minutes: 11)),
-          lastFullPullAt: now.subtract(const Duration(minutes: 10)),
+          cursorAt: now.subtract(const Duration(hours: 24)),
+          lastFullPullAt: now.subtract(const Duration(hours: 24)),
           now: now,
         ),
         isTrue,
