@@ -89,16 +89,19 @@ void main() {
       );
       if (directory == null) throw StateError('Could not create test directory');
 
-      LocalStore? store;
-      LocalStore? reopenedStore;
+      final stores = <LocalStore>[];
       addTearDown(() async {
-        store?.dispose();
-        reopenedStore?.dispose();
+        for (final openedStore in stores) {
+          openedStore.dispose();
+        }
         await tester.runAsync(() => directory.delete(recursive: true));
       });
 
-      store = await tester.runAsync(() => LocalStore.open(directory: directory));
+      final store = await tester.runAsync(
+        () => LocalStore.open(directory: directory),
+      );
       if (store == null) throw StateError('Could not open guest local store');
+      stores.add(store);
       expect(store.activeUserId, isNull);
 
       await tester.pumpWidget(
@@ -120,14 +123,13 @@ void main() {
       // Reopen the same guest file to prove the journal was flushed to disk,
       // not merely kept in the widget's in-memory state.
       await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
-      store.dispose();
-      store = null;
-      reopenedStore = await tester.runAsync(
+      final reopenedStore = await tester.runAsync(
         () => LocalStore.open(directory: directory),
       );
       if (reopenedStore == null) {
         throw StateError('Could not reopen guest local store');
       }
+      stores.add(reopenedStore);
       expect(reopenedStore.activeUserId, isNull);
 
       await tester.pumpWidget(
