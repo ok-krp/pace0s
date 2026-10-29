@@ -155,9 +155,12 @@ class PaceAiService {
             'updated_at': item.updatedAt.toUtc().toIso8601String(),
           }).eq('id', item.id)
               .eq('user_id', user.id)
-              // Compare-and-set: do not overwrite a title changed on another
-              // device after this refresh fetched its older snapshot.
-              .lt('updated_at', item.updatedAt.toUtc().toIso8601String());
+              // Compare against the exact version read above. Using the local
+              // clock here could lose an offline rename when clocks differ.
+              .eq(
+                'updated_at',
+                remoteItem.updatedAt.toUtc().toIso8601String(),
+              );
         } catch (_) {
           // Keep the local title; the next load retries the update.
         }
@@ -235,7 +238,12 @@ class PaceAiService {
     final conversations = loadLocalConversations();
     final index = conversations.indexWhere((item) => item.id == id);
     if (index >= 0) {
-      final renamedAt = DateTime.now();
+      final previousUpdatedAt = conversations[index].updatedAt;
+      final now = DateTime.now();
+      final renamedAt = now.isAfter(previousUpdatedAt)
+          ? now
+          : previousUpdatedAt.add(const Duration(microseconds: 1));
+      final expectedRemoteUpdatedAt = previousUpdatedAt.toUtc().toIso8601String();
       conversations[index] = conversations[index].copyWith(
         title: clean,
         updatedAt: renamedAt,
@@ -250,8 +258,9 @@ class PaceAiService {
             'updated_at': renamedAt.toUtc().toIso8601String(),
           }).eq('id', id)
               .eq('user_id', user.id)
-              // Never let a delayed local rename overwrite a newer remote edit.
-              .lt('updated_at', renamedAt.toUtc().toIso8601String());
+              // Compare-and-set against the last version this device knew.
+              // A concurrent remote edit wins, even if this device's clock is ahead.
+              .eq('updated_at', expectedRemoteUpdatedAt);
         } catch (_) {
           // The local rename is durable. loadConversations retries it when the
           // network returns, and its timestamp guard protects newer remote edits.
