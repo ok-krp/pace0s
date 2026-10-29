@@ -140,6 +140,23 @@ void main() {
       expect(SyncService.isSyncableKey('pace.ai.deleted_conversations'), isFalse);
     });
 
+    test('filters legacy aliases and large AI caches before remote rows are downloaded', () {
+      for (final rawKey in SyncService.excludedRemotePullKeys) {
+        expect(
+          SyncService.isSyncableKey(SyncService.normalizeRemoteKey(rawKey)),
+          isFalse,
+        );
+      }
+      expect(
+        SyncService.excludedRemotePullKeysFilter,
+        contains('"pace.ai.conversations"'),
+      );
+      expect(
+        SyncService.excludedRemotePullKeysFilter,
+        contains('"lt.ai.conversations"'),
+      );
+    });
+
     test('keeps all account-local sync metadata out of the cloud outbox', () {
       expect(SyncService.isSyncableKey('pace.__sync_last_pull_at'), isFalse);
       expect(SyncService.isSyncableKey('pace.__sync_last_full_pull_at'), isFalse);

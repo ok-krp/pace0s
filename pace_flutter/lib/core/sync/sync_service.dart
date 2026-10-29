@@ -79,6 +79,21 @@ class SyncService {
     'pace.ai.deleted_conversations',
   };
 
+  // Exclude both canonical and legacy aliases in the database query itself.
+  // Client-side filtering alone would still download large transcript blobs
+  // during every full reconciliation before discarding them locally.
+  static const Set<String> excludedRemotePullKeys = {
+    ...excludedSyncKeys,
+    'lt.sport.active',
+    'lt.ai.conversations',
+    'lt.ai.deleted_conversations',
+  };
+
+  static const String excludedRemotePullKeysFilter =
+      '("pace.sport.active","pace.ai.conversations",'
+      '"pace.ai.deleted_conversations","lt.sport.active",'
+      '"lt.ai.conversations","lt.ai.deleted_conversations")';
+
   static bool isSyncableKey(String key) =>
       key.startsWith('pace.') &&
       !key.startsWith('pace.__sync_') &&
@@ -819,6 +834,7 @@ class SyncService {
               .from('user_state')
               .select('key,value,updated_at')
               .eq('user_id', userId)
+              .not('key', 'in', excludedRemotePullKeysFilter)
               .order('updated_at', ascending: true)
               .order('key', ascending: false)
               .range(offset, offset + pageSize - 1)
@@ -826,6 +842,7 @@ class SyncService {
               .from('user_state')
               .select('key,value,updated_at')
               .eq('user_id', userId)
+              .not('key', 'in', excludedRemotePullKeysFilter)
               .gte('updated_at', cursorAt!.toIso8601String())
               .order('updated_at', ascending: true)
               .order('key', ascending: false)
