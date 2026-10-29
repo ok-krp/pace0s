@@ -112,6 +112,13 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
       await tester.enterText(find.byType(TextField).at(0), 'Offline oats');
+      await tester.enterText(find.byType(TextField).at(1), 'eighty');
+      await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
+      await tester.pump();
+      expect(find.text('Ajouter un aliment'), findsOneWidget);
+      expect(find.text('Offline oats'), findsNothing);
+
+      // Correct the invalid value and confirm that a valid offline entry saves.
       await tester.enterText(find.byType(TextField).at(1), '80');
       await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
       await tester.pump();
