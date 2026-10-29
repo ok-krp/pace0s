@@ -116,7 +116,7 @@ void main() {
       await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
       await tester.pump();
       expect(find.text('Ajouter un aliment'), findsOneWidget);
-      expect(find.text('Offline oats'), findsNothing);
+      expect(store.read('pace.nutrition.items'), isNull);
 
       // Correct the invalid value and confirm that a valid offline entry saves.
       await tester.enterText(find.byType(TextField).at(1), '80');
