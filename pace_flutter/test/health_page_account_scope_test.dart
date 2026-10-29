@@ -9,6 +9,31 @@ import 'package:pace/core/sync/sync_service.dart';
 import 'package:pace/features/health/health_page.dart';
 
 void main() {
+  test('health read scope closes at switch request before active account ID changes', () {
+    expect(
+      HealthPage.isHealthReadScopeCurrent(
+        mounted: true,
+        accountSwitching: true,
+        currentGeneration: 4,
+        expectedGeneration: 4,
+        activeUserId: 'user-a',
+        expectedUserId: 'user-a',
+      ),
+      isFalse,
+    );
+    expect(
+      HealthPage.isHealthReadScopeCurrent(
+        mounted: true,
+        accountSwitching: false,
+        currentGeneration: 4,
+        expectedGeneration: 4,
+        activeUserId: 'user-a',
+        expectedUserId: 'user-a',
+      ),
+      isTrue,
+    );
+  });
+
   testWidgets(
     'health page clears prior account samples when the store switches accounts',
     (tester) async {
