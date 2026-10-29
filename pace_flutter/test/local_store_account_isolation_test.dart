@@ -1372,6 +1372,27 @@ void main() {
     expect(byId['build-1']?.title, 'Build remains local');
   });
 
+  test('AI message merge preserves histories above the default PostgREST row cap', () {
+    final remote = List<AiMessage>.generate(
+      1205,
+      (index) => AiMessage(
+        id: 'remote-$index',
+        role: index.isEven ? 'user' : 'assistant',
+        text: 'message $index',
+        createdAt: DateTime.utc(2026, 10, 1).add(Duration(seconds: index)),
+      ),
+    );
+
+    final merged = PaceAiService.mergeMessages(
+      local: const <AiMessage>[],
+      remote: remote,
+    );
+
+    expect(merged, hasLength(1205));
+    expect(merged.first.id, 'remote-0');
+    expect(merged.last.id, 'remote-1204');
+  });
+
   test('offline AI rename retry compares against fetched remote version', () {
     final remoteUpdatedAt = DateTime.utc(2026, 10, 29, 12, 30);
     final remote = AiConversation(
