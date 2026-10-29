@@ -124,17 +124,30 @@ export function useCloudSyncEngineInternal() {
             setStatus("error");
             return;
           }
+          if (typeof data !== "boolean") {
+            throw new Error("invalid cloud sync write response");
+          }
 
           // true = our mutation won; false = the server already had a newer row.
-          // In the latter case, immediately pull the authoritative value instead
-          // of allowing this stale local state to remain marked as current.
+          // A rejected write is not complete until the authoritative row is read;
+          // keep the queue entry if that read fails so no local mutation is lost.
           if (data === false) {
-            const { data: rows } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", key).limit(1);
+            const { data: rows, error: readError } = await supabase
+              .from("user_state")
+              .select("key,value,updated_at,updated_by")
+              .eq("user_id", user.id)
+              .eq("key", key)
+              .limit(1);
+            if (readError) throw readError;
             const row = rows?.[0] as SyncRow | undefined;
-            if (row) {
-              applyRemoteWrite(key, row.value);
-              markLocal(key, row.updated_at);
+            if (!row || typeof row.updated_at !== "string" ||
+                !Number.isFinite(Date.parse(row.updated_at)) ||
+                !Object.prototype.hasOwnProperty.call(row, "value")) {
+              throw new Error("authoritative cloud sync row missing or invalid");
             }
+            applyRemoteWrite(key, row.value);
+            markLocal(key, row.updated_at);
+            localStorage.setItem("pace.__last_sync_at", row.updated_at);
           } else {
             markLocal(key, updatedAt);
             localStorage.setItem("pace.__last_sync_at", updatedAt);
