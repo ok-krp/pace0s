@@ -985,6 +985,34 @@ void main() {
     expect(store.pendingOperations().single['value'], 'account B');
   });
 
+  test('AI service closes guest scope immediately when an account switch is requested', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.write(
+      'pace.ai.memory',
+      <Map<String, dynamic>>[
+        {
+          'id': 'guest-memory',
+          'text': 'guest memory remains private during transition',
+          'createdAt': '2026-10-17T10:00:00Z',
+        },
+      ],
+      enqueueSync: false,
+    );
+    final ai = PaceAiService(
+      localStore: store,
+      sync: SyncService(localStore: store, client: null),
+      auth: const PaceAuthService(null),
+    );
+
+    expect(ai.loadMemory(), hasLength(1));
+    final switching = store.activateAccount('user-a');
+    expect(store.isSwitchingAccount, isTrue);
+    expect(ai.loadMemory(), isEmpty);
+
+    await switching;
+    expect(ai.loadMemory(), isEmpty);
+  });
+
   test('AI service reads memory while its guest account scope is current', () async {
     final store = await LocalStore.open(directory: directory);
     await store.write('pace.ai.memory', <Map<String, dynamic>>[

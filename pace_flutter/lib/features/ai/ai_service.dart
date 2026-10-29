@@ -23,7 +23,12 @@ class PaceAiService {
   final String? _accountUserId;
 
   bool get _isAccountScopeCurrent {
-    if (localStore.activeUserId != _accountUserId) return false;
+    // Close the AI data/network boundary as soon as a transition is requested,
+    // not only after LocalStore has finished switching its active file.
+    if (localStore.isSwitchingAccount ||
+        localStore.activeUserId != _accountUserId) {
+      return false;
+    }
     // Read the auth state directly here. Calling _scopedUser from this getter
     // would recurse through _scopedUser's own scope guard indefinitely.
     final user = auth.currentUser;
@@ -148,7 +153,11 @@ class PaceAiService {
           await client.from('ai_conversations').update({
             'title': item.title,
             'updated_at': item.updatedAt.toUtc().toIso8601String(),
-          }).eq('id', item.id).eq('user_id', user.id);
+          }).eq('id', item.id)
+              .eq('user_id', user.id)
+              // Compare-and-set: do not overwrite a title changed on another
+              // device after this refresh fetched its older snapshot.
+              .lt('updated_at', item.updatedAt.toUtc().toIso8601String());
         } catch (_) {
           // Keep the local title; the next load retries the update.
         }
@@ -226,13 +235,28 @@ class PaceAiService {
     final conversations = loadLocalConversations();
     final index = conversations.indexWhere((item) => item.id == id);
     if (index >= 0) {
-      conversations[index] = conversations[index].copyWith(title: clean, updatedAt: DateTime.now());
+      final renamedAt = DateTime.now();
+      conversations[index] = conversations[index].copyWith(
+        title: clean,
+        updatedAt: renamedAt,
+      );
       await _saveLocalConversations(conversations);
-    }
-    final client = _client;
-    final user = _scopedUser;
-    if (client != null && user != null) {
-      await client.from('ai_conversations').update({'title': clean}).eq('id', id).eq('user_id', user.id);
+      final client = _client;
+      final user = _scopedUser;
+      if (client != null && user != null && _isAccountScopeCurrent) {
+        try {
+          await client.from('ai_conversations').update({
+            'title': clean,
+            'updated_at': renamedAt.toUtc().toIso8601String(),
+          }).eq('id', id)
+              .eq('user_id', user.id)
+              // Never let a delayed local rename overwrite a newer remote edit.
+              .lt('updated_at', renamedAt.toUtc().toIso8601String());
+        } catch (_) {
+          // The local rename is durable. loadConversations retries it when the
+          // network returns, and its timestamp guard protects newer remote edits.
+        }
+      }
     }
   }
 
