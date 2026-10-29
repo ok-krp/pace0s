@@ -416,6 +416,59 @@ class LocalStore extends ChangeNotifier {
     if (notify) notifyListeners();
   }
 
+  /// Applies one page of remote rows with one durable snapshot instead of
+  /// rewriting the complete local JSON file for every row in the page.
+  /// Validate the entire batch before mutating state so malformed remote data
+  /// cannot leave a partially-applied page in memory.
+  Future<void> applyRemoteBatch(
+    List<Map<String, dynamic>> updates, {
+    required String expectedUserId,
+    bool notify = true,
+  }) async {
+    if (updates.isEmpty) return;
+    if (_switchingAccount || _activeUserId != expectedUserId) {
+      throw StateError('Local account changed before remote batch apply');
+    }
+
+    for (final update in updates) {
+      final key = update['key'];
+      final updatedAt = update['updatedAt'];
+      if (key is! String || key.isEmpty) {
+        throw const FormatException('Remote batch key must be a non-empty string');
+      }
+      if (updatedAt is! String || !isValidRemoteTimestamp(updatedAt)) {
+        throw const FormatException(
+          'Remote updated_at must be a zoned ISO timestamp',
+        );
+      }
+    }
+
+    // Legacy and canonical remote keys can normalize to the same local key.
+    // Keep the newest timestamp and preserve the first row when timestamps tie,
+    // matching the ordered single-row application behavior.
+    final newestByKey = <String, Map<String, dynamic>>{};
+    final timestampByKey = <String, DateTime>{};
+    for (final update in updates) {
+      final key = update['key'] as String;
+      final updatedAt = update['updatedAt'] as String;
+      final timestamp = DateTime.parse(updatedAt).toUtc();
+      final previous = timestampByKey[key];
+      if (previous == null || timestamp.isAfter(previous)) {
+        timestampByKey[key] = timestamp;
+        newestByKey[key] = update;
+      }
+    }
+
+    for (final update in newestByKey.values) {
+      final key = update['key'] as String;
+      final updatedAt = update['updatedAt'] as String;
+      _data[key] = update['value'];
+      _setSyncedAt(key, updatedAt);
+    }
+    await _flush();
+    if (notify) notifyListeners();
+  }
+
   /// Public notification hook for batched remote pulls after silent row writes.
   void notifyStateChanged() => notifyListeners();
 
