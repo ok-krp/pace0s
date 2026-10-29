@@ -257,7 +257,13 @@ void main() {
 
 class _EventSessionAuthService extends PaceAuthService {
   _EventSessionAuthService()
-      : super(SupabaseClient('https://example.supabase.co', 'test-anon-key'));
+      : super(
+          SupabaseClient(
+            'https://example.supabase.co',
+            'test-anon-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+        );
 
   final StreamController<AuthState> _events =
       StreamController<AuthState>.broadcast();
