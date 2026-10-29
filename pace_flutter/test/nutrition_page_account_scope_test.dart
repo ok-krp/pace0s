@@ -80,4 +80,62 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 45)),
   );
+
+  testWidgets(
+    'nutrition entries remain available after an offline guest store is reopened',
+    (tester) async {
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('pace-nutrition-offline-'),
+      );
+      if (directory == null) throw StateError('Could not create test directory');
+
+      LocalStore? store;
+      LocalStore? reopenedStore;
+      addTearDown(() async {
+        store?.dispose();
+        reopenedStore?.dispose();
+        await tester.runAsync(() => directory.delete(recursive: true));
+      });
+
+      store = await tester.runAsync(() => LocalStore.open(directory: directory));
+      if (store == null) throw StateError('Could not open guest local store');
+      expect(store.activeUserId, isNull);
+
+      await tester.pumpWidget(
+        MaterialApp(home: NutritionPage(localStore: store)),
+      );
+      await tester.tap(find.byTooltip('Ajouter un aliment'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.enterText(find.byType(TextField).at(0), 'Offline oats');
+      await tester.enterText(find.byType(TextField).at(1), '80');
+      await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('Offline oats'), findsOneWidget);
+      expect(find.text('80.0 kcal'), findsOneWidget);
+      expect(store.activeUserId, isNull);
+
+      // Reopen the same guest file to prove the journal was flushed to disk,
+      // not merely kept in the widget's in-memory state.
+      await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+      store.dispose();
+      store = null;
+      reopenedStore = await tester.runAsync(
+        () => LocalStore.open(directory: directory),
+      );
+      if (reopenedStore == null) {
+        throw StateError('Could not reopen guest local store');
+      }
+      expect(reopenedStore.activeUserId, isNull);
+
+      await tester.pumpWidget(
+        MaterialApp(home: NutritionPage(localStore: reopenedStore)),
+      );
+      expect(find.text('Offline oats'), findsOneWidget);
+      expect(find.text('80.0 kcal'), findsOneWidget);
+    },
+    timeout: const Timeout(Duration(seconds: 45)),
+  );
 }
