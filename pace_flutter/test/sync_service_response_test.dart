@@ -41,6 +41,46 @@ void main() {
     );
   });
 
+  test('remote key deduplication remains stable across pages', () {
+    final first = DateTime.utc(2026, 10, 29, 10);
+    final newer = first.add(const Duration(seconds: 1));
+    final seen = <String, DateTime>{};
+
+    expect(
+      SyncService.shouldKeepNewestRemoteUpdate(
+        newestByKey: seen,
+        key: 'pace.profile.name',
+        incoming: first,
+      ),
+      isTrue,
+    );
+    expect(
+      SyncService.shouldKeepNewestRemoteUpdate(
+        newestByKey: seen,
+        key: 'pace.profile.name',
+        incoming: first,
+      ),
+      isFalse,
+    );
+    expect(
+      SyncService.shouldKeepNewestRemoteUpdate(
+        newestByKey: seen,
+        key: 'pace.profile.name',
+        incoming: first.subtract(const Duration(seconds: 1)),
+      ),
+      isFalse,
+    );
+    expect(
+      SyncService.shouldKeepNewestRemoteUpdate(
+        newestByKey: seen,
+        key: 'pace.profile.name',
+        incoming: newer,
+      ),
+      isTrue,
+    );
+    expect(seen['pace.profile.name'], newer);
+  });
+
   group('SyncService.shouldApplyRemoteValue', () {
     final older = DateTime.utc(2026, 10, 16, 10);
     final newer = DateTime.utc(2026, 10, 17, 10);
