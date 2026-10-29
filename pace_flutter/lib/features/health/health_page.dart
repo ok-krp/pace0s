@@ -17,6 +17,19 @@ class HealthPage extends StatefulWidget {
   final SyncService sync;
   final HealthAdapter? adapter;
 
+  static bool isHealthReadScopeCurrent({
+    required bool mounted,
+    required bool accountSwitching,
+    required int currentGeneration,
+    required int expectedGeneration,
+    required String? activeUserId,
+    required String? expectedUserId,
+  }) =>
+      mounted &&
+      !accountSwitching &&
+      currentGeneration == expectedGeneration &&
+      activeUserId == expectedUserId;
+
   @override
   State<HealthPage> createState() => _HealthPageState();
 }
@@ -98,10 +111,15 @@ class _HealthPageState extends State<HealthPage> {
   }
 
   bool _ownsRead(String? expectedUserId, int generation) =>
-      mounted &&
-      _readGeneration == generation &&
-      _accountUserId == expectedUserId &&
-      widget.localStore.activeUserId == expectedUserId;
+      HealthPage.isHealthReadScopeCurrent(
+        mounted: mounted,
+        accountSwitching: widget.localStore.isSwitchingAccount,
+        currentGeneration: _readGeneration,
+        expectedGeneration: generation,
+        activeUserId: widget.localStore.activeUserId,
+        expectedUserId: expectedUserId,
+      ) &&
+      _accountUserId == expectedUserId;
 
   Future<void> _checkAndRead({bool request = false}) async {
     final expectedUserId = _accountUserId;
