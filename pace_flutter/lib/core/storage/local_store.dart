@@ -748,6 +748,13 @@ class LocalStore extends ChangeNotifier {
     await _flush();
   }
 
+  /// Waits for disk flushes already queued at the time of this call.
+  ///
+  /// UI callbacks are commonly fire-and-forget from Flutter's perspective;
+  /// callers that must verify durability can await this without scheduling an
+  /// extra write or changing the active account scope.
+  Future<void> waitForPendingWrites() => _flushQueue;
+
   Future<void> _flush() {
     // Capture both the destination and snapshot now: an account switch must
     // never redirect a queued write into the next account's file.
