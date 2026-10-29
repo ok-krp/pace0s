@@ -585,6 +585,9 @@ class PaceAiService {
     required String text,
     List<AiMessage> ephemeralHistory = const <AiMessage>[],
   }) async {
+    if (!_isAccountScopeCurrent) {
+      throw StateError('Le compte Pace a changé pendant la requête IA.');
+    }
     final clean = text.trim();
     if (clean.isEmpty) return '';
     final now = DateTime.now();
@@ -592,6 +595,9 @@ class PaceAiService {
     final persistedHistory = conversation.ephemeral
         ? const <AiMessage>[]
         : await loadMessages(conversation.id);
+    if (!_isAccountScopeCurrent) {
+      throw StateError('Le compte Pace a changé pendant la requête IA.');
+    }
     final previous = historyForSend(
       ephemeral: conversation.ephemeral,
       ephemeralHistory: ephemeralHistory,
