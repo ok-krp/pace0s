@@ -1281,6 +1281,40 @@ void main() {
     );
   });
 
+  test('guest nutrition batch persists and stays out of authenticated account files', () async {
+    final day = '2026-10-28';
+    final guest = await LocalStore.open(directory: directory);
+    await guest.writeBatchForAccount(
+      null,
+      writes: {
+        'pace.nutrition.items': {
+          day: [
+            {
+              'id': 'guest-food',
+              'name': 'Offline oats',
+              'kcal': 80.0,
+            },
+          ],
+        },
+        'pace.nutrition.totals': {
+          day: {'kcal': 80.0},
+        },
+      },
+    );
+
+    final authenticated = await LocalStore.open(directory: directory);
+    await authenticated.activateAccount('user-a');
+    expect(authenticated.activeUserId, 'user-a');
+    expect(authenticated.read('pace.nutrition.items'), isNull);
+    expect(authenticated.read('pace.nutrition.totals'), isNull);
+
+    final reopenedGuest = await LocalStore.open(directory: directory);
+    final items = reopenedGuest.read('pace.nutrition.items') as Map;
+    expect((items[day] as List).single['name'], 'Offline oats');
+    final totals = reopenedGuest.read('pace.nutrition.totals') as Map;
+    expect((totals[day] as Map)['kcal'], 80.0);
+  });
+
   test('account data persists independently across store reopen', () async {
     var store = await LocalStore.open(directory: directory);
     await store.activateAccount('user-a');
