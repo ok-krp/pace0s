@@ -120,8 +120,12 @@ export function useCloudSyncEngineInternal() {
       finally { running.current = false; }
     };
 
+    // Prevent overlapping full-table pulls when a request is slow and an online,
+    // visibility, Realtime-recovery, or fallback event arrives concurrently.
+    let pulling = false;
     const pull = async () => {
-      if (cancelled || !navigator.onLine || running.current) return;
+      if (cancelled || !navigator.onLine || running.current || pulling) return;
+      pulling = true;
       try {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
         if (error || !data || cancelled) return;
@@ -156,7 +160,9 @@ export function useCloudSyncEngineInternal() {
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (applied > 0) setStatus("ok");
       } catch {
-        if (!cancelled && !navigator.onLine) setStatus("offline");
+        if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
+      } finally {
+        pulling = false;
       }
     };
 
