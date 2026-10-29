@@ -411,7 +411,7 @@ class LocalStore extends ChangeNotifier {
       throw FormatException('Remote updated_at must be a zoned ISO timestamp');
     }
     _data[key] = value;
-    _setSyncedAt(key, updatedAt);
+    _setSyncedAtIfNewer(key, updatedAt);
     await _flush();
     if (notify) notifyListeners();
   }
@@ -435,6 +435,9 @@ class LocalStore extends ChangeNotifier {
       final updatedAt = update['updatedAt'];
       if (key is! String || key.isEmpty) {
         throw const FormatException('Remote batch key must be a non-empty string');
+      }
+      if (!update.containsKey('value')) {
+        throw const FormatException('Remote batch row must include a value field');
       }
       if (updatedAt is! String || !isValidRemoteTimestamp(updatedAt)) {
         throw const FormatException(
@@ -463,7 +466,7 @@ class LocalStore extends ChangeNotifier {
       final key = update['key'] as String;
       final updatedAt = update['updatedAt'] as String;
       _data[key] = update['value'];
-      _setSyncedAt(key, updatedAt);
+      _setSyncedAtIfNewer(key, updatedAt);
     }
     await _flush();
     if (notify) notifyListeners();
@@ -520,6 +523,20 @@ class LocalStore extends ChangeNotifier {
     final meta = _syncMeta;
     meta[key] = timestamp;
     _data['__sync_meta'] = meta;
+  }
+
+  /// Remote recovery can intentionally restore a non-empty legacy value even
+  /// when that legacy row is older than the current local version. Never let
+  /// that compatibility path regress the per-key sync checkpoint.
+  void _setSyncedAtIfNewer(String key, String timestamp) {
+    final incoming = DateTime.parse(timestamp).toUtc();
+    final previousRaw = lastSyncedAt(key);
+    final previous = previousRaw != null && isValidIsoTimestamp(previousRaw)
+        ? DateTime.tryParse(previousRaw)?.toUtc()
+        : null;
+    if (previous == null || !previous.isAfter(incoming)) {
+      _setSyncedAt(key, timestamp);
+    }
   }
 
   void _quarantineMalformedReplacedOperations(
