@@ -1045,6 +1045,16 @@ void main() {
       ),
       isFalse,
     );
+
+    await ai.renameConversation(conversation.id, 'Renamed while offline');
+    expect(
+      store.read('pace.ai.conversations'),
+      isA<List>(),
+    );
+    expect(
+      store.hasPendingOperationForKey('pace.ai.conversations'),
+      isFalse,
+    );
   });
 
   test('AI service reads memory while its guest account scope is current', () async {

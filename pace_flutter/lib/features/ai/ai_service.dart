@@ -714,13 +714,11 @@ class PaceAiService {
       pendingDeleteIds: _pendingDeletedConversationIds().toSet(),
     );
     if (hasConversationSnapshotChanged(current: latestLocal, next: merged)) {
-      await localStore.writeForAccount(
-        _accountUserId,
-        _conversationKey,
-        merged.map((item) => item.toJson()).toList(),
-      );
+      // The dedicated conversation/message tables are the cloud source of
+      // truth; refreshing a local snapshot must not enqueue its full transcript
+      // as a duplicate user_state payload.
+      await _saveLocalConversations(merged);
       if (!_isAccountScopeCurrent) return const <AiConversation>[];
-      unawaited(sync.syncNow());
     }
     return _isAccountScopeCurrent
         ? (merged.where((item) => item.agent == agent).toList()
