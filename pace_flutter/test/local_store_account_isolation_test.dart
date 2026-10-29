@@ -572,6 +572,54 @@ void main() {
     expect(store.read('pace.profile.other'), isNull);
   });
 
+  test('legacy recovery cannot move synced metadata backwards', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    const newer = '2026-10-17T10:02:00Z';
+    const older = '2026-10-17T10:01:00Z';
+
+    await store.applyRemote(
+      'pace.nutrition.items',
+      <dynamic>[],
+      newer,
+      expectedUserId: 'user-a',
+      notify: false,
+    );
+    await store.applyRemoteBatch(
+      [
+        {
+          'key': 'pace.nutrition.items',
+          'value': ['recovered legacy item'],
+          'updatedAt': older,
+        },
+      ],
+      expectedUserId: 'user-a',
+    );
+
+    expect(store.read('pace.nutrition.items'), ['recovered legacy item']);
+    expect(store.lastSyncedAt('pace.nutrition.items'), newer);
+  });
+
+  test('remote batch rejects a row without a value field', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+
+    await expectLater(
+      store.applyRemoteBatch(
+        [
+          {
+            'key': 'pace.profile.name',
+            'updatedAt': '2026-10-17T10:00:00Z',
+          },
+        ],
+        expectedUserId: 'user-a',
+      ),
+      throwsFormatException,
+    );
+
+    expect(store.read('pace.profile.name'), isNull);
+  });
+
   test('application mutations use account-scoped local store helpers', () async {
     final library = Directory('lib');
     expect(await library.exists(), isTrue);
