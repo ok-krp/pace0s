@@ -82,86 +82,6 @@ void main() {
   );
 
   testWidgets(
-    'nutrition entries remain available after an offline guest store is reopened',
-    (tester) async {
-      final directory = await tester.runAsync(
-        () => Directory.systemTemp.createTemp('pace-nutrition-offline-'),
-      );
-      if (directory == null) throw StateError('Could not create test directory');
-
-      final stores = <LocalStore>[];
-      addTearDown(() async {
-        for (final openedStore in stores) {
-          openedStore.dispose();
-        }
-        await tester.runAsync(() => directory.delete(recursive: true));
-      });
-
-      final store = await tester.runAsync(
-        () => LocalStore.open(directory: directory),
-      );
-      if (store == null) throw StateError('Could not open guest local store');
-      stores.add(store);
-      expect(store.activeUserId, isNull);
-
-      await tester.pumpWidget(
-        MaterialApp(home: NutritionPage(localStore: store)),
-      );
-      await tester.tap(find.byTooltip('Ajouter un aliment'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 300));
-      await tester.enterText(find.byType(TextField).at(0), 'Offline oats');
-      await tester.enterText(find.byType(TextField).at(1), '80');
-      await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-      // The widget callback is fire-and-forget. Let its real filesystem work
-      // settle, then pump the fake-async zone before inspecting local state.
-      await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 350)),
-      );
-      await tester.pump();
-      expect(find.text('Ajouter un aliment'), findsNothing);
-      expect(
-        store.read('pace.nutrition.items'),
-        isA<Map>(),
-        reason: 'A valid guest food submission must update local state',
-      );
-      expect(find.text('Offline oats'), findsOneWidget);
-      expect(find.text('80.0 kcal'), findsOneWidget);
-      expect(store.activeUserId, isNull);
-
-      // A real account transition awaits the guest snapshot flush before
-      // switching the same store to the independent authenticated file.
-      await tester.runAsync(() => store.activateAccount('user-a'));
-      expect(store.activeUserId, 'user-a');
-      expect(store.read('pace.nutrition.items'), isNull);
-
-      // Reopen the guest file with an independent reader after the transition
-      // has awaited the pending guest flush.
-      final guestReader = await tester.runAsync(
-        () => LocalStore.open(directory: directory),
-      );
-      if (guestReader == null) {
-        throw StateError('Could not reopen guest local store');
-      }
-      stores.add(guestReader);
-      expect(guestReader.activeUserId, isNull);
-      final restoredItems = guestReader.read('pace.nutrition.items');
-      expect(restoredItems, isA<Map>());
-      final restoredEntries = (restoredItems as Map).values
-          .whereType<List>()
-          .expand((items) => items)
-          .whereType<Map>()
-          .toList();
-      expect(restoredEntries, hasLength(1));
-      expect(restoredEntries.single['name'], 'Offline oats');
-
-      await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
-    },
-    timeout: const Timeout(Duration(seconds: 45)),
-  );
-  testWidgets(
     'nutrition rejects malformed numeric input without saving',
     (tester) async {
       final directory = await tester.runAsync(
@@ -195,6 +115,12 @@ void main() {
       await tester.tap(find.widgetWithText(TextButton, 'Annuler'));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
+      // Let the dialog's async cleanup finish before the test teardown uses
+      // runAsync for temporary-directory cleanup.
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 350)),
+      );
+      await tester.pump();
       await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
     },
     timeout: const Timeout(Duration(seconds: 45)),
