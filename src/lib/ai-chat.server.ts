@@ -135,13 +135,13 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
     update_profile: tool({
       description: "Mettre à jour le poids, les objectifs ou les informations du profil Pace.",
       inputSchema: z.object({
-              weight_kg: z.number().finite().positive().nullable(),
-              weight_goal_kg: z.number().finite().positive().nullable(),
-              daily_calorie_goal: z.number().finite().positive().nullable(),
-              daily_protein_goal: z.number().finite().positive().nullable(),
-              daily_water_ml_goal: z.number().finite().positive().nullable(),
-              training_goal: z.string().trim().max(160).nullable(),
-            }),
+        weight_kg: z.number().finite().positive().nullable(),
+        weight_goal_kg: z.number().finite().positive().nullable(),
+        daily_calorie_goal: z.number().finite().positive().nullable(),
+        daily_protein_goal: z.number().finite().positive().nullable(),
+        daily_water_ml_goal: z.number().finite().positive().nullable(),
+        training_goal: z.string().trim().max(160).nullable(),
+      }),
       execute: withToolLogging("update_profile", async (input) => {
         if (!permissions.profile) return { ok: false, message: "Permission Profil désactivée" };
         const patch: Database["public"]["Tables"]["profiles"]["Update"] = {
