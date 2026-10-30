@@ -90,36 +90,44 @@
             },
             "kcal": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 100000
             },
             "protein_g": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 10000
             },
             "carbs_g": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 10000
             },
             "fat_g": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 10000
             },
             "fiber_g": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 10000
             },
             "sodium_mg": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 1000000
             },
             "log_date": {
               "type": "string",
               "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-              "description": "Valid calendar date YYYY-MM-DD, defaults to today"
+              "description": "Valid calendar date YYYY-MM-DD, defaults to today",
+              "format": "date"
             },
             "sugar_g": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 10000
             }
           },
           "required": [
