@@ -91,12 +91,40 @@ async function contextForCoach(client: Client, userId: string, permissions: AiPe
   return context;
 }
 
-async function logAction(client: Client, userId: string, conversationId: string, agentType: AgentType, actionType: string, label: string, payload: unknown, status: "executed" | "failed") {
-  // Le log d'audit ne doit jamais faire échouer l'outil lui-même : best-effort.
+async function logAction(
+  client: Client,
+  userId: string,
+  conversationId: string,
+  agentType: AgentType,
+  actionType: string,
+  _label: string,
+  _payload: unknown,
+  status: "executed" | "failed",
+) {
+  // Audit metadata must not duplicate profile, health, nutrition, or task content.
+  // Keep a stable action label and an empty payload; the source tables remain canonical.
+  const safeLabels: Record<string, string> = {
+    update_profile: "Mise à jour du profil",
+    add_food: "Ajout nutrition",
+    add_health_sample: "Enregistrement santé",
+    create_development_task: "Création tâche développement",
+  };
   try {
-    await client.from("ai_action_log").insert({ user_id: userId, conversation_id: conversationId, agent_type: agentType, action_type: actionType, label, payload: payload as Json, status, executed_at: status === "executed" ? new Date().toISOString() : null });
+    await client.from("ai_action_log").insert({
+      user_id: userId,
+      conversation_id: conversationId,
+      agent_type: agentType,
+      action_type: actionType,
+      label: safeLabels[actionType] ?? "Action IA",
+      payload: {} as Json,
+      status,
+      executed_at: status === "executed" ? new Date().toISOString() : null,
+    });
   } catch (error) {
-    console.error("[ai-chat] logAction impossible", { actionType, errorType: error instanceof Error ? error.name : "unknown" });
+    console.error("[ai-chat] logAction impossible", {
+      actionType,
+      errorType: error instanceof Error ? error.name : "unknown",
+    });
   }
 }
 
