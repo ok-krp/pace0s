@@ -84,6 +84,43 @@ jobs:
           cache: npm
       - name: Install locked npm dependencies
         run: npm ci
+      - name: Report npm audit advisories without changing dependencies
+        shell: bash
+        run: |
+          set +e
+          npm audit --json > "$RUNNER_TEMP/npm-audit.json"
+          audit_status=$?
+          set -e
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = process.env.RUNNER_TEMP + "/npm-audit.json";
+          const report = JSON.parse(fs.readFileSync(path, "utf8"));
+          const counts = report.metadata?.vulnerabilities ?? {};
+          const lines = [
+            "### npm audit (read-only)",
+            "",
+            `Total: ${Object.values(counts).reduce((sum, value) => sum + (Number(value) || 0), 0)}`,
+            `Critical: ${counts.critical ?? 0} · High: ${counts.high ?? 0} · Moderate: ${counts.moderate ?? 0} · Low: ${counts.low ?? 0}`,
+            "",
+          ];
+          for (const [name, item] of Object.entries(report.vulnerabilities ?? {})) {
+            const advisories = (item.via ?? []).map((entry) =>
+              typeof entry === "string" ? entry : `${entry.title ?? entry.name ?? "Advisory"} (${entry.url ?? "URL unavailable"})`,
+            );
+            const fix = item.fixAvailable === true
+              ? "non-breaking fix available"
+              : item.fixAvailable
+                ? `fix available: ${JSON.stringify(item.fixAvailable)}`
+                : "no automatic fix reported";
+            lines.push(`- **${name}** — ${item.severity}; direct: ${item.isDirect}; range: ${item.range}; ${fix}`);
+            for (const advisory of advisories) lines.push(`  - ${advisory}`);
+          }
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\\n") + "\\n");
+          console.log(lines.join("\\n"));
+          NODE
+          if [ "$audit_status" -gt 1 ]; then
+            echo "::warning::npm audit returned status $audit_status; see the summary for available diagnostic details."
+          fi
       - name: Type-check repository
         run: npx tsc --noEmit
       - name: Test AI tool approval state policy
