@@ -24,7 +24,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
       .maybeSingle();
-    if (consentError) throw new Error(consentError.message);
+    if (consentError) throw new Error("Impossible de vérifier le consentement IA.");
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
       return { error: "Consentement Analyse IA requis", result: null };
     }
@@ -98,6 +98,6 @@ export const nutritionAdvice = createServerFn({ method: "POST" })
       });
       return { advice: text, error: null };
     } catch (e) {
-      return { advice: null, error: e instanceof Error ? e.message : "Erreur IA" };
+      return { advice: null, error: "Le service IA est momentanément indisponible. Réessayez." };
     }
   });
