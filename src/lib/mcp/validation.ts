@@ -28,3 +28,14 @@ export function isValidIsoDateOnly(value: string): boolean {
   ];
   return day <= daysPerMonth[month - 1];
 }
+
+/**
+ * Accepts ISO-8601 timestamps only when the calendar date, clock time, and
+ * explicit timezone are valid. This avoids local-time ambiguity in filters.
+ */
+export function isValidIsoTimestamp(value: string): boolean {
+  const match = /^(\\d{4}-\\d{2}-\\d{2})T(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d{1,9})?)?(?:Z|[+-](?:[01]\\d|2[0-3]):?[0-5]\\d)$/.exec(value);
+  return match !== null &&
+    isValidIsoDateOnly(match[1]) &&
+    !Number.isNaN(Date.parse(value));
+}
