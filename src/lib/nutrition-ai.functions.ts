@@ -79,7 +79,7 @@ export const nutritionAdvice = createServerFn({ method: "POST" })
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
       .maybeSingle();
-    if (consentError) throw new Error(consentError.message);
+    if (consentError) throw new Error("Impossible de vérifier le consentement IA.");
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
       return { advice: null, error: "Consentement Analyse IA requis" };
     }
