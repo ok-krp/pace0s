@@ -17,7 +17,7 @@ export const registerPushSubscription = createServerFn({ method: "POST" })
         onesignal_subscription_id: data.subscriptionId,
         platform: data.platform,
         updated_at: new Date().toISOString(),
-      } as never,
+      },
       { onConflict: "user_id,onesignal_subscription_id" },
     );
     if (error) {
