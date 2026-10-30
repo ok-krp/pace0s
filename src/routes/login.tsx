@@ -42,7 +42,7 @@ function LoginPage() {
   useEffect(() => {
     if (!loading && user) {
       if (target.startsWith("/") && target !== "/login") window.location.href = target;
-      else navigate({ to: "/" });
+      else navigate({ to: "/", search: { quickAdd: undefined } });
     }
   }, [user, loading, navigate, target]);
 
@@ -65,7 +65,7 @@ function LoginPage() {
         if (error) throw error;
         toast.success("Bienvenue !");
         if (target !== "/") window.location.href = target;
-        else navigate({ to: "/" });
+        else navigate({ to: "/", search: { quickAdd: undefined } });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erreur d'authentification");
