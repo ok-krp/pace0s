@@ -134,7 +134,14 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
   return {
     update_profile: tool({
       description: "Mettre à jour le poids, les objectifs ou les informations du profil Pace.",
-      inputSchema: z.object({ weight_kg: z.number().nullable(), weight_goal_kg: z.number().nullable(), daily_calorie_goal: z.number().nullable(), daily_protein_goal: z.number().nullable(), daily_water_ml_goal: z.number().nullable(), training_goal: z.string().nullable() }),
+      inputSchema: z.object({
+              weight_kg: z.number().finite().positive().nullable(),
+              weight_goal_kg: z.number().finite().positive().nullable(),
+              daily_calorie_goal: z.number().finite().positive().nullable(),
+              daily_protein_goal: z.number().finite().positive().nullable(),
+              daily_water_ml_goal: z.number().finite().positive().nullable(),
+              training_goal: z.string().trim().max(160).nullable(),
+            }),
       execute: withToolLogging("update_profile", async (input) => {
         if (!permissions.profile) return { ok: false, message: "Permission Profil désactivée" };
         const patch: Database["public"]["Tables"]["profiles"]["Update"] = {
@@ -175,7 +182,7 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
     }),
     add_health_sample: tool({
       description: "Enregistrer une mesure de santé comme le poids ou la masse grasse.",
-      inputSchema: z.object({ type: z.string(), value: z.number() }),
+      inputSchema: z.object({ type: z.string().trim().min(1).max(60), value: z.number().finite().nonnegative() }),
       execute: withToolLogging("add_health_sample", async (input) => {
         if (!permissions.profile) return { ok: false, message: "Permission Profil désactivée" };
         const { error } = await client.from("health_samples").insert({ user_id: userId, type: input.type, value: input.value, source: "coach_ai" });
