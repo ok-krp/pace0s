@@ -65,6 +65,30 @@ void main() {
     );
   });
 
+  test('remote messages use model IDs to deduplicate fallback server inserts', () {
+    expect(
+      PaceAiService.remoteMessageStableId({
+        'id': 'server-row-id',
+        'model_message_id': 'client-message-id',
+      }),
+      'client-message-id',
+    );
+    expect(
+      PaceAiService.remoteMessageStableId({
+        'id': 'legacy-row-id',
+        'model_message_id': null,
+      }),
+      'legacy-row-id',
+    );
+    expect(
+      PaceAiService.remoteMessageStableId({
+        'id': 'legacy-row-id',
+        'model_message_id': '',
+      }),
+      'legacy-row-id',
+    );
+  });
+
   test('conversation round-trips locally', () {
     final now = DateTime.utc(2026, 8, 15, 12);
     final conversation = AiConversation(
