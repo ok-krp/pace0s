@@ -65,7 +65,10 @@ async function authenticatedClient(request: Request) {
 }
 
 function textOf(message: UIMessage) {
-  return message.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n");
+  return message.parts
+    .filter((part) => part !== null && typeof part === "object" && part.type === "text")
+    .map((part) => ("text" in part && typeof part.text === "string" ? part.text : ""))
+    .join("\n");
 }
 
 async function contextForCoach(client: Client, userId: string, permissions: AiPermissions) {
@@ -290,6 +293,18 @@ export async function handleAiChat(request: Request) {
     if (body.agentType !== "coach" && body.agentType !== "build") fail(400, "bad_agent", "Assistant inconnu.");
 
     const messages = body.messages as UIMessage[];
+    const hasMalformedMessage = messages.some(
+      (message) =>
+        !message ||
+        typeof message !== "object" ||
+        typeof message.id !== "string" ||
+        message.id.length === 0 ||
+        (message.role !== "user" && message.role !== "assistant") ||
+        !Array.isArray(message.parts),
+    );
+    if (hasMalformedMessage) {
+      fail(400, "invalid_messages", "Le format de la conversation est invalide. Rechargez-la puis réessayez.");
+    }
     const agentType = body.agentType;
     const ephemeral = body.ephemeral === true;
     const conversationId = body.conversationId;
