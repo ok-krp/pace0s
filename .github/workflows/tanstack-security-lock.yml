@@ -105,7 +105,7 @@ jobs:
           const lines = [
             "### npm audit (read-only)",
             "",
-            `Total: ${Object.values(counts).reduce((sum, value) => sum + (Number(value) || 0), 0)}`,
+            `Total: ${counts.total ?? ["critical", "high", "moderate", "low", "info"].reduce((sum, severity) => sum + (Number(counts[severity]) || 0), 0)}`,
             `Critical: ${counts.critical ?? 0} · High: ${counts.high ?? 0} · Moderate: ${counts.moderate ?? 0} · Low: ${counts.low ?? 0}`,
             "",
           ];
