@@ -141,7 +141,7 @@ export function useCloudSyncEngineInternal() {
 
           const localRaw = localStorage.getItem(key);
           let localValue: unknown = null;
-          try { if (localRaw !== null) localValue = JSON.parse(localRaw); } catch {}
+          try { if (localRaw !== null) localValue = JSON.parse(localRaw); } catch { /* Ignore malformed local JSON and evaluate the remote value below. */ }
           const shouldRecoverLegacy = isLegacy && isEmptyValue(localValue) && !isEmptyValue(row.value);
 
           const remoteTime = Date.parse(row.updated_at);
