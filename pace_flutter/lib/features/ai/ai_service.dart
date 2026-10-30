@@ -22,6 +22,10 @@ class PaceAiService {
   final PaceAuthService auth;
   final String? _accountUserId;
 
+  /// Whether this service still belongs to the active local/auth account.
+  /// UI routes that outlive an account transition use this to invalidate stale controls.
+  bool get isAccountScopeCurrent => _isAccountScopeCurrent;
+
   bool get _isAccountScopeCurrent {
     // Close the AI data/network boundary as soon as a transition is requested,
     // not only after LocalStore has finished switching its active file.
