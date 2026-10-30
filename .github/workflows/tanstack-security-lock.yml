@@ -115,8 +115,8 @@ jobs:
             lines.push(`- **${name}** — ${item.severity}; direct: ${item.isDirect}; range: ${item.range}; ${fix}`);
             for (const advisory of advisories) lines.push(`  - ${advisory}`);
           }
-          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\\n") + "\\n");
-          console.log(lines.join("\\n"));
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+          console.log(lines.join("\n"));
           NODE
           if [ "$audit_status" -gt 1 ]; then
             echo "::warning::npm audit returned status $audit_status; see the summary for available diagnostic details."
