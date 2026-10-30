@@ -33,7 +33,7 @@ function writeQueue(keys: string[]) { try { localStorage.setItem(QUEUE_KEY, JSON
 function queueKey(key: string) { if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return; writeQueue([...readQueue(), key]); }
 function unqueueKey(key: string) { writeQueue(readQueue().filter((k) => k !== key)); }
 function readMeta(): SyncMeta { try { return JSON.parse(localStorage.getItem(META_KEY) ?? "{}"); } catch { return {}; } }
-function writeMeta(meta: SyncMeta) { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch {} }
+function writeMeta(meta: SyncMeta) { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch { /* Storage may be unavailable; metadata can be rebuilt on the next sync. */ } }
 function markLocal(key: string, timestamp: string) { const meta = readMeta(); meta[key] = timestamp; writeMeta(meta); }
 
 function isEmptyValue(value: unknown) {
