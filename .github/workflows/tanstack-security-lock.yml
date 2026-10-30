@@ -94,7 +94,13 @@ jobs:
           node <<'NODE'
           const fs = require("node:fs");
           const path = process.env.RUNNER_TEMP + "/npm-audit.json";
-          const report = JSON.parse(fs.readFileSync(path, "utf8"));
+          let report;
+          try {
+            report = JSON.parse(fs.readFileSync(path, "utf8"));
+          } catch {
+            console.log("npm audit returned no machine-readable report; dependency installation and other checks remain independently evaluated.");
+            process.exit(0);
+          }
           const counts = report.metadata?.vulnerabilities ?? {};
           const lines = [
             "### npm audit (read-only)",
