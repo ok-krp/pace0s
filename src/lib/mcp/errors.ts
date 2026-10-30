@@ -1,5 +1,6 @@
 type DatabaseError = {
   code?: string | null;
+  message?: string;
 };
 
 export function mcpDatabaseFailure(operation: string, error: DatabaseError) {
