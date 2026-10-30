@@ -15,7 +15,7 @@ export const getLegalConsentStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { getRequestCountry, legalRegionForCountry } = await import("./legal.server");
-    const { data, error } = await context.supabase.from("legal_consent").select("region,eula_version,privacy_version,opts,consented_at,ip_country").eq("eula_version", LEGAL_VERSIONS.eula).eq("privacy_version", LEGAL_VERSIONS.privacy).maybeSingle();
+    const { data, error } = await context.supabase.from("legal_consent").select("region,eula_version,privacy_version,opts,consented_at,ip_country").eq("user_id", context.userId).eq("eula_version", LEGAL_VERSIONS.eula).eq("privacy_version", LEGAL_VERSIONS.privacy).maybeSingle();
     if (error) { console.error("legal consent lookup failed", error); throw new Error("Impossible de charger les préférences de confidentialité."); }
     const geo = { country: getRequestCountry(), region: legalRegionForCountry(getRequestCountry()) };
     return { required: !data, region: (data?.region ?? geo.region) as ReturnType<typeof legalRegionForCountry>, ipCountry: data?.ip_country ?? geo.country, opts: (data?.opts as LegalConsentOptions | null) ?? DEFAULT_LEGAL_OPTS, consentedAt: data?.consented_at ?? null };
