@@ -15,6 +15,13 @@ on:
       - "src/lib/health-connect-bridge.ts"
       - "src/lib/push-subscriptions.functions.ts"
       - "src/lib/push.functions.ts"
+      - "src/components/AppSidebar.tsx"
+      - "src/routes/__root.tsx"
+      - "src/routes/index.tsx"
+      - "src/routes/login.tsx"
+      - "src/routes/notes.tsx"
+      - "src/routes/sport.tsx"
+      - "src/routes/watch.tsx"
   push:
     branches: [main]
     paths:
@@ -30,6 +37,13 @@ on:
       - "src/lib/health-connect-bridge.ts"
       - "src/lib/push-subscriptions.functions.ts"
       - "src/lib/push.functions.ts"
+      - "src/components/AppSidebar.tsx"
+      - "src/routes/__root.tsx"
+      - "src/routes/index.tsx"
+      - "src/routes/login.tsx"
+      - "src/routes/notes.tsx"
+      - "src/routes/sport.tsx"
+      - "src/routes/watch.tsx"
   workflow_dispatch:
 
 permissions:
@@ -81,3 +95,10 @@ jobs:
           src/lib/health-connect-bridge.ts
           src/lib/push-subscriptions.functions.ts
           src/lib/push.functions.ts
+          src/components/AppSidebar.tsx
+          src/routes/__root.tsx
+          src/routes/index.tsx
+          src/routes/login.tsx
+          src/routes/notes.tsx
+          src/routes/sport.tsx
+          src/routes/watch.tsx
