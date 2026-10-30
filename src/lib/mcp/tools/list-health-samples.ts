@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { mcpDatabaseFailure } from "../errors";
 import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
 import { z } from "zod";
+import { isValidIsoTimestamp } from "../validation";
 
 function supabaseForUser(ctx: ToolContext) {
   return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
@@ -16,8 +17,8 @@ export default defineTool({
   description:
     "List the signed-in user's health_samples (weight, steps, hr, sleep, etc.). Optional type filter and time range (ISO timestamps).",
   inputSchema: {
-    type: z.string().optional().describe("Sample type filter (e.g. weight, steps, hr)"),
-    since: z.string().optional().describe("ISO timestamp — only samples after"),
+    type: z.string().trim().min(1).max(80).optional().describe("Sample type filter (e.g. weight, steps, hr)"),
+    since: z.string().refine(isValidIsoTimestamp, "Expected an ISO-8601 timestamp with an explicit timezone").optional().describe("ISO-8601 timestamp with timezone — only samples after"),
     limit: z.number().int().positive().optional().describe("Max rows (default 100)"),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
