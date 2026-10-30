@@ -1,4 +1,4 @@
-name: TanStack security lock policy
+name: Web dependency and AI quality policy
 
 on:
   pull_request:
@@ -6,12 +6,18 @@ on:
       - "package.json"
       - "bun.lock"
       - ".github/workflows/tanstack-security-lock.yml"
+      - "src/lib/ai-chat.server.ts"
+      - "src/lib/assistant.functions.ts"
+      - "src/lib/nutrition-ai.functions.ts"
   push:
     branches: [main]
     paths:
       - "package.json"
       - "bun.lock"
       - ".github/workflows/tanstack-security-lock.yml"
+      - "src/lib/ai-chat.server.ts"
+      - "src/lib/assistant.functions.ts"
+      - "src/lib/nutrition-ai.functions.ts"
   workflow_dispatch:
 
 permissions:
@@ -42,3 +48,15 @@ jobs:
           echo "Resolved @tanstack/start-server-core=$core"
           at_least "$start" "1.168.60" || { echo "::error::Unpatched @tanstack/react-start: $start"; exit 1; }
           at_least "$core" "1.169.39" || { echo "::error::Unpatched @tanstack/start-server-core: $core"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked npm dependencies
+        run: npm ci
+      - name: Lint server-side AI and Nutrition entry points
+        run: >-
+          npx eslint
+          src/lib/ai-chat.server.ts
+          src/lib/assistant.functions.ts
+          src/lib/nutrition-ai.functions.ts
