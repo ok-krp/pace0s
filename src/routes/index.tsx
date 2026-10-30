@@ -56,7 +56,7 @@ function Dashboard() {
   useEffect(() => {
     if (!quickAdd) return;
     setDialog(quickAdd);
-    navigate({ to: "/", search: {}, replace: true });
+    navigate({ to: "/", search: { quickAdd: undefined }, replace: true });
   }, [quickAdd, navigate]);
 
   const [todayLabel, setTodayLabel] = useState("");
