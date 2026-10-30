@@ -7,6 +7,8 @@ on:
       - "bun.lock"
       - ".github/workflows/tanstack-security-lock.yml"
       - "src/lib/ai-chat.server.ts"
+      - "src/lib/ai-tool-state.ts"
+      - "src/lib/ai-tool-state.test.ts"
       - "src/lib/assistant.functions.ts"
       - "src/lib/nutrition-ai.functions.ts"
       - "src/components/HealthSourcesSection.tsx"
@@ -29,6 +31,8 @@ on:
       - "bun.lock"
       - ".github/workflows/tanstack-security-lock.yml"
       - "src/lib/ai-chat.server.ts"
+      - "src/lib/ai-tool-state.ts"
+      - "src/lib/ai-tool-state.test.ts"
       - "src/lib/assistant.functions.ts"
       - "src/lib/nutrition-ai.functions.ts"
       - "src/components/HealthSourcesSection.tsx"
@@ -82,10 +86,14 @@ jobs:
         run: npm ci
       - name: Type-check repository
         run: npx tsc --noEmit
+      - name: Test AI tool approval state policy
+        run: node --experimental-strip-types --test src/lib/ai-tool-state.test.ts
       - name: Lint server-side AI and Nutrition entry points
         run: >-
           npx eslint --rule 'prettier/prettier: off'
           src/lib/ai-chat.server.ts
+          src/lib/ai-tool-state.ts
+          src/lib/ai-tool-state.test.ts
           src/lib/assistant.functions.ts
           src/lib/nutrition-ai.functions.ts
           src/components/HealthSourcesSection.tsx
