@@ -21,7 +21,7 @@ export const registerPushSubscription = createServerFn({ method: "POST" })
       { onConflict: "user_id,onesignal_subscription_id" },
     );
     if (error) {
-      console.error("push subscription registration failed", error);
+      console.error("push subscription registration failed", { code: error.code ?? "unknown" });
       throw new Error("Impossible d'enregistrer cet appareil pour les notifications.");
     }
     return { ok: true };
@@ -37,7 +37,7 @@ export const unregisterPushSubscription = createServerFn({ method: "POST" })
       .eq("user_id", context.userId)
       .eq("onesignal_subscription_id", data.subscriptionId);
     if (error) {
-      console.error("push subscription removal failed", error);
+      console.error("push subscription removal failed", { code: error.code ?? "unknown" });
       throw new Error("Impossible de désactiver cet appareil pour les notifications.");
     }
     return { ok: true };
