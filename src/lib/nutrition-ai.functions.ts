@@ -23,6 +23,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
       .select("opts")
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .eq("user_id", context.userId)
       .maybeSingle();
     if (consentError) throw new Error("Impossible de vérifier le consentement IA.");
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
@@ -78,6 +79,7 @@ export const nutritionAdvice = createServerFn({ method: "POST" })
       .select("opts")
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .eq("user_id", context.userId)
       .maybeSingle();
     if (consentError) throw new Error("Impossible de vérifier le consentement IA.");
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
