@@ -10,6 +10,7 @@ interface AppleHealthBridge { _receive?: (payload: { ok?: boolean; status?: stri
 
 declare global {
   interface Window {
+    PaceHealthConnect?: NativeHealthConnect;
     PaceAppleHealth?: AppleHealthBridge;
     webkit?: { messageHandlers?: { paceHealthKit?: { postMessage: (message: unknown) => void } } };
   }
