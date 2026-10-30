@@ -337,7 +337,11 @@ export async function handleAiChat(request: Request) {
     const ephemeral = body.ephemeral === true;
     const conversationId = body.conversationId;
     const newest = messages[messages.length - 1];
-    if (newest && textOf(newest).length > MAX_TEXT_CHARS) fail(413, "message_too_long", `Message trop long : réduisez-le sous ${Math.round(MAX_TEXT_CHARS / 1000)} 000 caractères ou envoyez-le en plusieurs parties.`);
+    const windowed = messages.length > RECENT_WINDOW ? messages.slice(-RECENT_WINDOW) : messages;
+    const contextTextChars = windowed.reduce((total, message) => total + textOf(message).length, 0);
+    if (contextTextChars > MAX_TEXT_CHARS) {
+      fail(413, "context_too_long", `Le contexte envoyé à l’IA dépasse ${MAX_TEXT_CHARS.toLocaleString("fr-FR")} caractères. Réduisez les messages récents ou envoyez-les en plusieurs parties.`);
+    }
 
     const { client, userId } = await authenticatedClient(request);
 
@@ -394,7 +398,6 @@ export async function handleAiChat(request: Request) {
       ? `Tu es Coach IA, le coach personnel francophone de Pace. Tu utilises automatiquement les données autorisées ci-dessous sans redemander ce qui est déjà connu. Tu donnes des réponses précises, bienveillantes et actionnables. Quand l'utilisateur demande une modification, utilise l'outil approprié. Après chaque outil, confirme clairement avec ✓ et la modification exacte. Données autorisées: ${JSON.stringify(dataContext)}. Niveau mémoire: ${preferences.memory_level}. Ne parle jamais du développement de Pace; redirige ces demandes vers BUILD IA.${memoryBlock}`
       : `Tu es BUILD IA, l'assistant de développement francophone de Pace. Tu transformes automatiquement les signalements en bugs, améliorations, fonctionnalités ou tâches structurées avec priorité. Tu n'es pas un coach santé et rediriges ces demandes vers Coach IA. Tu ne prétends jamais modifier le code source; tu peux analyser, cadrer et créer des éléments dans le centre Développement.${memoryBlock}`;
 
-    const windowed = messages.length > RECENT_WINDOW ? messages.slice(-RECENT_WINDOW) : messages;
     const toolApproval = Object.fromEntries(Object.keys(tools).map((name) => [name, preferences.confirm_actions ? "user-approval" : "not-applicable"]));
     const safeWindowed = closeDanglingToolCalls(windowed);
 
