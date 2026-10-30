@@ -100,7 +100,7 @@ async function logAction(client: Client, userId: string, conversationId: string,
  * Garantit qu'un outil ne peut JAMAIS terminer sans renvoyer de résultat, même en
  * cas d'exception imprévue (bug, timeout réseau, erreur inattendue) — c'est la
  * cause probable des erreurs "Tool result is missing". Logue systématiquement :
- * appel, paramètres, début, fin, durée, résultat ou erreur.
+ * appel, début, fin et statut — sans enregistrer les paramètres personnels.
  */
 function withToolLogging<Input, Output extends { ok: boolean; message: string }>(
   name: string,
@@ -145,7 +145,7 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
           ...(input.training_goal === null ? {} : { training_goal: input.training_goal }),
         };
         const { error } = await client.from("profiles").update(patch).eq("user_id", userId);
-        if (error) { await logAction(client, userId, conversationId, "coach", "update_profile", "Mise à jour du profil", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
+        if (error) { await logAction(client, userId, conversationId, "coach", "update_profile", "Mise à jour du profil", input, "failed"); return { ok: false, message: "Impossible de mettre à jour le profil. Réessayez." }; }
         await logAction(client, userId, conversationId, "coach", "update_profile", "Profil mis à jour", input, "executed");
         return { ok: true, message: "Profil mis à jour" };
       }),
@@ -156,7 +156,7 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
       execute: withToolLogging("add_food", async (input) => {
         if (!permissions.nutrition) return { ok: false, message: "Permission Nutrition désactivée" };
         const { error } = await client.from("food_log").insert({ user_id: userId, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, protein_g: input.protein_g, carbs_g: input.carbs_g, fat_g: input.fat_g, fiber_g: input.fiber_g, sugar_g: input.sugar_g, sodium_mg: input.sodium_mg, source: "coach_ai" });
-        if (error) { await logAction(client, userId, conversationId, "coach", "add_food", "Ajout nutrition", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
+        if (error) { await logAction(client, userId, conversationId, "coach", "add_food", "Ajout nutrition", input, "failed"); return { ok: false, message: "Impossible d’enregistrer cet aliment. Réessayez." }; }
         await logAction(client, userId, conversationId, "coach", "add_food", `${input.name} ajouté`, input, "executed");
         return { ok: true, message: `${input.name} ajouté au journal` };
       }),
@@ -167,7 +167,7 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
       execute: withToolLogging("add_health_sample", async (input) => {
         if (!permissions.profile) return { ok: false, message: "Permission Profil désactivée" };
         const { error } = await client.from("health_samples").insert({ user_id: userId, type: input.type, value: input.value, source: "coach_ai" });
-        if (error) { await logAction(client, userId, conversationId, "coach", "add_health_sample", "Mesure de santé", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
+        if (error) { await logAction(client, userId, conversationId, "coach", "add_health_sample", "Mesure de santé", input, "failed"); return { ok: false, message: "Impossible d’enregistrer cette mesure. Réessayez." }; }
         await logAction(client, userId, conversationId, "coach", "add_health_sample", `${input.type} enregistré`, input, "executed");
         return { ok: true, message: "Mesure enregistrée" };
       }),
@@ -182,7 +182,7 @@ function buildTools(client: Client, userId: string, conversationId: string) {
       inputSchema: z.object({ kind: z.enum(["bug", "improvement", "feature", "task"]), title: z.string(), description: z.string(), priority: z.enum(["low", "medium", "high", "critical"]) }),
       execute: withToolLogging("create_development_task", async (input) => {
         const { error } = await client.from("development_tasks").insert({ ...input, user_id: userId, conversation_id: conversationId });
-        if (error) { await logAction(client, userId, conversationId, "build", "create_development_task", "Création d’une tâche", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
+        if (error) { await logAction(client, userId, conversationId, "build", "create_development_task", "Création d’une tâche", input, "failed"); return { ok: false, message: "Impossible de créer cette tâche. Réessayez." }; }
         await logAction(client, userId, conversationId, "build", "create_development_task", `${input.kind} créé : ${input.title}`, input, "executed");
         return { ok: true, message: `${input.kind} créé dans Développement` };
       }),
