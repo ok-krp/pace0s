@@ -1,0 +1,46 @@
+name: Pace Web AI Quality
+
+concurrency:
+  group: pace-web-ai-quality-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/ai-chat.server.ts"
+      - "src/lib/assistant.functions.ts"
+      - "src/lib/nutrition-ai.functions.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/web-ai-quality.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/lib/ai-chat.server.ts"
+      - "src/lib/assistant.functions.ts"
+      - "src/lib/nutrition-ai.functions.ts"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/web-ai-quality.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint-ai-server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint AI server and nutrition entry points
+        run: >-
+          npx eslint
+          src/lib/ai-chat.server.ts
+          src/lib/assistant.functions.ts
+          src/lib/nutrition-ai.functions.ts
