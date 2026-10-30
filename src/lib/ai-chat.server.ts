@@ -5,6 +5,7 @@ import { z } from "zod";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { getPreferencesServer } from "./ai-history.server";
 import type { AgentType, AiPermissions } from "./ai-history.types";
+import { LEGAL_VERSIONS } from "./legal";
 
 type Client = SupabaseClient<Database>;
 type ChatBody = { messages?: unknown; conversationId?: unknown; agentType?: unknown; ephemeral?: unknown };
@@ -278,6 +279,24 @@ export async function handleAiChat(request: Request) {
     if (newest && textOf(newest).length > MAX_TEXT_CHARS) fail(413, "message_too_long", `Message trop long : réduisez-le sous ${Math.round(MAX_TEXT_CHARS / 1000)} 000 caractères ou envoyez-le en plusieurs parties.`);
 
     const { client, userId } = await authenticatedClient(request);
+
+    // An authenticated session is not, by itself, consent to send conversation
+    // content to an external AI provider. Enforce the current legal decision
+    // on the server for both persisted and ephemeral conversations.
+    const { data: consent, error: consentError } = await client
+      .from("legal_consent")
+      .select("opts")
+      .eq("user_id", userId)
+      .eq("eula_version", LEGAL_VERSIONS.eula)
+      .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .maybeSingle();
+    if (consentError) {
+      fail(503, "consent_lookup_failed", "Impossible de vérifier le consentement IA. Réessayez.");
+    }
+    const consentOptions = consent?.opts as { ai?: unknown } | null;
+    if (consentOptions?.ai !== true) {
+      fail(403, "ai_consent_required", "Activez le consentement Analyse IA dans Paramètres → Confidentialité.");
+    }
 
     if (!ephemeral) {
       const { data, error } = await client.from("ai_conversations").select("id").eq("id", conversationId).eq("user_id", userId).eq("agent_type", agentType).maybeSingle();
