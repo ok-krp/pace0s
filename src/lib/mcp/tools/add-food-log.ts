@@ -23,6 +23,7 @@ export default defineTool({
     carbs_g: z.number().finite().nonnegative().optional(),
     fat_g: z.number().finite().nonnegative().optional(),
     fiber_g: z.number().finite().nonnegative().optional(),
+    sugar_g: z.number().finite().nonnegative().optional(),
     sodium_mg: z.number().finite().nonnegative().optional(),
     log_date: z.string().refine(isValidIsoDateOnly, "Expected a real calendar date in YYYY-MM-DD format").optional().describe("YYYY-MM-DD, defaults to today"),
   },
@@ -40,7 +41,9 @@ export default defineTool({
       carbs_g: input.carbs_g ?? 0,
       fat_g: input.fat_g ?? 0,
       fiber_g: input.fiber_g ?? null,
+      sugar_g: input.sugar_g ?? null,
       sodium_mg: input.sodium_mg ?? null,
+      source: "mcp",
       log_date: input.log_date ?? new Date().toISOString().slice(0, 10),
     };
     const { data, error } = await sb.from("food_log").insert(row).select().single();
