@@ -449,9 +449,12 @@ export async function handleAiChat(request: Request) {
               .order("id", { ascending: true })
               .limit(1)
               .maybeSingle();
+            const firstUserMessageFromWindow = messages.find((message) => message.role === "user");
             const firstUserText = typeof firstUserMessage?.plain_text === "string"
               ? firstUserMessage.plain_text
-              : messages.find((message) => message.role === "user") ? textOf(messages.find((message) => message.role === "user")!) : "";
+              : firstUserMessageFromWindow
+                ? textOf(firstUserMessageFromWindow)
+                : "";
             const title = firstUserText.trim().replace(/\s+/g, " ").slice(0, 52);
             if (title) await client.from("ai_conversations").update({ title }).eq("id", conversationId).eq("user_id", userId);
           }
