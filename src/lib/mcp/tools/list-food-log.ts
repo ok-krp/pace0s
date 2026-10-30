@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { mcpDatabaseFailure } from "../errors";
 import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
 import { z } from "zod";
-import { isValidIsoDateOnly } from "../validation";
+import { isOrderedIsoDateRange, isValidIsoDateOnly } from "../validation";
 
 function supabaseForUser(ctx: ToolContext) {
   return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
@@ -25,7 +25,7 @@ export default defineTool({
   handler: async ({ from, to, limit }, ctx) => {
     if (!ctx.isAuthenticated())
       return { content: [{ type: "text", text: "Not authenticated" }], isError: true };
-    if (from && to && from > to) {
+    if (!isOrderedIsoDateRange(from, to)) {
       return { content: [{ type: "text", text: "Invalid date range: start date must not be after end date." }], isError: true };
     }
     const sb = supabaseForUser(ctx);
