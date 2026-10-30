@@ -8,7 +8,7 @@ import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema, validate
 
 export const analyzeFoodPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { imageBase64: string; goal?: string; hint?: string }) =>
+  .validator((d: { imageBase64: string; goal?: string; hint?: string }) =>
     z
       .object({
         imageBase64: z.string().min(20).max(8_000_000),
@@ -71,7 +71,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
 
 export const nutritionAdvice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { summary: string }) => z.object({ summary: z.string().min(1).max(4000) }).parse(d))
+  .validator((d: { summary: string }) => z.object({ summary: z.string().min(1).max(4000) }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: consent, error: consentError } = await context.supabase
       .from("legal_consent")
