@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { mcpDatabaseFailure } from "../errors";
 import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
 import { z } from "zod";
 import { isValidIsoDateOnly } from "../validation";
@@ -43,7 +44,7 @@ export default defineTool({
       log_date: input.log_date ?? new Date().toISOString().slice(0, 10),
     };
     const { data, error } = await sb.from("food_log").insert(row).select().single();
-    if (error) return { content: [{ type: "text", text: error.message }], isError: true };
+    if (error) return mcpDatabaseFailure("add_food_log", error);
     return {
       content: [{ type: "text", text: JSON.stringify(data) }],
       structuredContent: { row: data },
