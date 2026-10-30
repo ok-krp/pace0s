@@ -91,6 +91,8 @@ jobs:
         run: |
           bun install --lockfile-only --ignore-scripts
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify committed lockfiles are current
+        run: git diff --exit-code -- package.json bun.lock package-lock.json
       - name: Verify frozen lockfile
         run: bun install --frozen-lockfile
       - name: Enforce patched TanStack versions
