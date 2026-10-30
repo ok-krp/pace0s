@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { mcpDatabaseFailure } from "../errors";
 import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
 
 function supabaseForUser(ctx: ToolContext) {
@@ -23,7 +24,7 @@ export default defineTool({
       .select("*")
       .eq("id", ctx.getUserId())
       .maybeSingle();
-    if (error) return { content: [{ type: "text", text: error.message }], isError: true };
+    if (error) return mcpDatabaseFailure("get_profile", error);
     return {
       content: [{ type: "text", text: JSON.stringify({ email: ctx.getUserEmail(), profile: data }) }],
       structuredContent: { email: ctx.getUserEmail(), profile: data },
