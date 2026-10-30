@@ -153,7 +153,18 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
     }),
     add_food: tool({
       description: "Ajouter un repas ou aliment au journal nutritionnel avec estimation complète des macros.",
-      inputSchema: z.object({ name: z.string(), meal: z.string(), kcal: z.number(), protein_g: z.number(), carbs_g: z.number(), fat_g: z.number(), fiber_g: z.number(), sugar_g: z.number(), sodium_mg: z.number(), grams: z.number() }),
+      inputSchema: z.object({
+              name: z.string().trim().min(1).max(200),
+              meal: z.string().trim().min(1).max(40),
+              kcal: z.number().finite().nonnegative(),
+              protein_g: z.number().finite().nonnegative(),
+              carbs_g: z.number().finite().nonnegative(),
+              fat_g: z.number().finite().nonnegative(),
+              fiber_g: z.number().finite().nonnegative(),
+              sugar_g: z.number().finite().nonnegative(),
+              sodium_mg: z.number().finite().nonnegative(),
+              grams: z.number().finite().positive(),
+            }),
       execute: withToolLogging("add_food", async (input) => {
         if (!permissions.nutrition) return { ok: false, message: "Permission Nutrition désactivée" };
         const { error } = await client.from("food_log").insert({ user_id: userId, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, protein_g: input.protein_g, carbs_g: input.carbs_g, fat_g: input.fat_g, fiber_g: input.fiber_g, sugar_g: input.sugar_g, sodium_mg: input.sodium_mg, source: "coach_ai" });
