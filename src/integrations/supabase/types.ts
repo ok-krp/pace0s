@@ -619,7 +619,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      upsert_user_state_if_newer: {
+        Args: {
+          p_user_id: string
+          p_key: string
+          p_value: Json
+          p_updated_at: string
+          p_updated_by: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
