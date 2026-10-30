@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
 import { z } from "zod";
+import { isValidIsoDateOnly } from "../validation";
 
 function supabaseForUser(ctx: ToolContext) {
   return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
@@ -14,15 +15,15 @@ export default defineTool({
   title: "Add food log entry",
   description: "Insert a food_log entry for the signed-in user.",
   inputSchema: {
-    name: z.string().min(1),
-    meal: z.string().describe("breakfast | lunch | dinner | snack"),
-    kcal: z.number().nonnegative(),
-    protein_g: z.number().nonnegative().optional(),
-    carbs_g: z.number().nonnegative().optional(),
-    fat_g: z.number().nonnegative().optional(),
-    fiber_g: z.number().nonnegative().optional(),
-    sodium_mg: z.number().nonnegative().optional(),
-    log_date: z.string().optional().describe("YYYY-MM-DD, defaults to today"),
+    name: z.string().trim().min(1).max(200),
+    meal: z.string().trim().min(1).max(40).describe("breakfast | lunch | dinner | snack"),
+    kcal: z.number().finite().nonnegative(),
+    protein_g: z.number().finite().nonnegative().optional(),
+    carbs_g: z.number().finite().nonnegative().optional(),
+    fat_g: z.number().finite().nonnegative().optional(),
+    fiber_g: z.number().finite().nonnegative().optional(),
+    sodium_mg: z.number().finite().nonnegative().optional(),
+    log_date: z.string().refine(isValidIsoDateOnly, "Expected a real calendar date in YYYY-MM-DD format").optional().describe("YYYY-MM-DD, defaults to today"),
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async (input, ctx) => {
