@@ -22,7 +22,7 @@ export default defineTool({
     const { data, error } = await sb
       .from("profiles")
       .select("*")
-      .eq("id", ctx.getUserId())
+      .eq("user_id", ctx.getUserId())
       .maybeSingle();
     if (error) return mcpDatabaseFailure("get_profile", error);
     return {
