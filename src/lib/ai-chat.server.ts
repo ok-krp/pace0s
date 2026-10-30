@@ -92,7 +92,7 @@ async function logAction(client: Client, userId: string, conversationId: string,
   try {
     await client.from("ai_action_log").insert({ user_id: userId, conversation_id: conversationId, agent_type: agentType, action_type: actionType, label, payload: payload as Json, status, executed_at: status === "executed" ? new Date().toISOString() : null });
   } catch (error) {
-    console.error("[ai-chat] logAction impossible", { actionType, error });
+    console.error("[ai-chat] logAction impossible", { actionType, errorType: error instanceof Error ? error.name : "unknown" });
   }
 }
 
@@ -220,7 +220,7 @@ async function rollingSummary(client: Client, userId: string, conversationId: st
     await client.from("ai_conversations").update({ summary, summarized_count: target }).eq("id", conversationId).eq("user_id", userId);
     return summary;
   } catch (error) {
-    console.error("[ai-chat] résumé impossible", error);
+    console.error("[ai-chat] résumé impossible", { errorType: error instanceof Error ? error.name : "unknown" });
     return previous;
   }
 }
@@ -281,7 +281,7 @@ export async function handleAiChat(request: Request) {
 
     if (!ephemeral) {
       const { data, error } = await client.from("ai_conversations").select("id").eq("id", conversationId).eq("user_id", userId).eq("agent_type", agentType).maybeSingle();
-      if (error) fail(503, "db_error", `Erreur base de données : ${error.message}`);
+      if (error) fail(503, "db_error", "Le service IA est temporairement indisponible. Réessayez.");
       if (!data) fail(404, "conversation_not_found", "Cette conversation n’existe plus. Créez-en une nouvelle.");
     }
 
@@ -295,7 +295,7 @@ export async function handleAiChat(request: Request) {
       const { data: exists } = await client.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("model_message_id", newest.id).maybeSingle();
       if (!exists) {
         const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "user", parts: newest.parts as unknown as Json, plain_text: text, model_message_id: newest.id });
-        if (error) fail(503, "db_write_error", `Votre message n’a pas pu être enregistré (${error.message}).`);
+        if (error) fail(503, "db_write_error", "Votre message n’a pas pu être enregistré. Réessayez.");
       }
     }
 
@@ -321,7 +321,7 @@ export async function handleAiChat(request: Request) {
       tools,
       toolApproval,
       stopWhen: stepCountIs(50),
-      onError: ({ error }) => console.error("[ai-chat] erreur de flux", error),
+      onError: ({ error }) => console.error("[ai-chat] erreur de flux", { errorType: error instanceof Error ? error.name : "unknown" }),
     });
 
     return result.toUIMessageStreamResponse({
@@ -330,18 +330,18 @@ export async function handleAiChat(request: Request) {
       headers: { "X-Pace-Prepare-Ms": String(Date.now() - startedAt) },
       onError: (error) => {
         const message = error instanceof Error ? error.message : String(error);
-        console.error("[ai-chat] erreur de génération", message);
+        console.error("[ai-chat] erreur de génération", { errorType: error instanceof Error ? error.name : "unknown" });
         if (/rate.?limit|429/i.test(message)) return "Trop de requêtes vers l’IA : réessayez dans quelques instants.";
         if (/402|payment required/i.test(message)) return "Quota IA gratuit dépassé pour aujourd’hui : réessayez demain, ou passez sur un plan payant Gemini.";
         if (/timeout|aborted|network|fetch failed/i.test(message)) return "Connexion à l’IA interrompue : votre message est conservé, réessayez.";
-        return `Erreur de l’IA : ${message}`;
+        return "Le service IA a rencontré une erreur. Réessayez dans quelques instants.";
       },
       onFinish: async ({ responseMessage }) => {
         if (ephemeral) return;
         try {
           const text = responseMessage.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n");
           const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", parts: responseMessage.parts as unknown as Json, plain_text: text, model_message_id: responseMessage.id });
-          if (error) console.error("[ai-chat] sauvegarde assistant impossible", error.message);
+          if (error) console.error("[ai-chat] sauvegarde assistant impossible", { code: error.code ?? "unknown" });
           await client.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", userId);
           const { data: conversation } = await client.from("ai_conversations").select("title").eq("id", conversationId).maybeSingle();
           if (conversation?.title === "Nouvelle conversation") {
@@ -350,7 +350,7 @@ export async function handleAiChat(request: Request) {
           }
           console.info("[ai-chat] terminé", { conversationId, agentType, ms: Date.now() - startedAt });
         } catch (error) {
-          console.error("[ai-chat] post-traitement échoué", error);
+          console.error("[ai-chat] post-traitement échoué", { errorType: error instanceof Error ? error.name : "unknown" });
         }
       },
     });
