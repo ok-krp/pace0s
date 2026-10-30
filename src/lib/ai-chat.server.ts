@@ -376,7 +376,7 @@ export async function handleAiChat(request: Request) {
 
     if (!ephemeral && newest?.role === "user") {
       const text = textOf(newest);
-      const { data: exists } = await client.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("model_message_id", newest.id).maybeSingle();
+      const { data: exists } = await client.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("user_id", userId).eq("model_message_id", newest.id).maybeSingle();
       if (!exists) {
         const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "user", parts: newest.parts as unknown as Json, plain_text: text, model_message_id: newest.id });
         if (error) fail(503, "db_write_error", "Votre message n’a pas pu être enregistré. Réessayez.");
