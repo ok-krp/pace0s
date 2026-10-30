@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
 import { z } from "zod";
 import type { Database, Json } from "@/integrations/supabase/types";
@@ -240,7 +240,7 @@ function buildTools(client: Client, userId: string, conversationId: string) {
   };
 }
 
-type Gateway = ReturnType<typeof createGoogleGenerativeAI>;
+type Gateway = ReturnType<typeof createOpenAICompatible>;
 
 /**
  * Résumé glissant : les messages anciens (au-delà de la fenêtre récente) sont condensés
@@ -262,7 +262,7 @@ async function rollingSummary(client: Client, userId: string, conversationId: st
 
   try {
     const result = streamText({
-      model: gateway("gemini-2.5-flash"),
+      model: gateway.chatModel("gemini-2.5-flash"),
       messages: [{ role: "user", content: `Voici un résumé existant d'une conversation puis de nouveaux échanges à intégrer. Produis un résumé fusionné en français, factuel et dense (800 mots maximum), qui conserve : objectifs, décisions, préférences, chiffres, actions réalisées et informations personnelles utiles. Réponds uniquement par le résumé.\n\n[RÉSUMÉ EXISTANT]\n${previous || "(aucun)"}\n\n[NOUVEAUX ÉCHANGES]\n${transcript}` }],
     });
     const summary = (await result.text).trim();
@@ -366,7 +366,11 @@ export async function handleAiChat(request: Request) {
     }
 
     const key = apiKey();
-    const google = createGoogleGenerativeAI({ apiKey: key });
+    const google = createOpenAICompatible({
+      name: "google",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      apiKey: key,
+    });
 
     const preferences = await getPreferencesServer(client, userId);
 
@@ -395,7 +399,7 @@ export async function handleAiChat(request: Request) {
     const safeWindowed = closeDanglingToolCalls(windowed);
 
     const result = streamText({
-      model: google("gemini-2.5-flash"),
+      model: google.chatModel("gemini-2.5-flash"),
       system: instructions,
       messages: await convertToModelMessages(safeWindowed),
       tools,
