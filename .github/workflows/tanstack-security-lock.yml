@@ -9,6 +9,10 @@ on:
       - "src/lib/ai-chat.server.ts"
       - "src/lib/assistant.functions.ts"
       - "src/lib/nutrition-ai.functions.ts"
+      - "src/components/HealthSourcesSection.tsx"
+      - "src/hooks/use-cloud-sync-engine.tsx"
+      - "src/integrations/supabase/types.ts"
+      - "src/lib/health-connect-bridge.ts"
   push:
     branches: [main]
     paths:
@@ -18,6 +22,10 @@ on:
       - "src/lib/ai-chat.server.ts"
       - "src/lib/assistant.functions.ts"
       - "src/lib/nutrition-ai.functions.ts"
+      - "src/components/HealthSourcesSection.tsx"
+      - "src/hooks/use-cloud-sync-engine.tsx"
+      - "src/integrations/supabase/types.ts"
+      - "src/lib/health-connect-bridge.ts"
   workflow_dispatch:
 
 permissions:
@@ -63,3 +71,7 @@ jobs:
           src/lib/ai-chat.server.ts
           src/lib/assistant.functions.ts
           src/lib/nutrition-ai.functions.ts
+          src/components/HealthSourcesSection.tsx
+          src/hooks/use-cloud-sync-engine.tsx
+          src/integrations/supabase/types.ts
+          src/lib/health-connect-bridge.ts
