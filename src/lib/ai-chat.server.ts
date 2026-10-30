@@ -4,6 +4,7 @@ import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage }
 import { z } from "zod";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { getPreferencesServer } from "./ai-history.server";
+import { isResolvedToolState } from "./ai-tool-state";
 import type { AgentType, AiPermissions } from "./ai-history.types";
 import { LEGAL_VERSIONS } from "./legal";
 
@@ -287,15 +288,6 @@ async function rollingSummary(client: Client, userId: string, conversationId: st
  * jamais d'exception, jamais de conversation bloquée.
  */
 function closeDanglingToolCalls(messages: UIMessage[]): UIMessage[] {
-  // approval-responded is a valid client decision that convertToModelMessages
-  // must translate into a tool-approval-response on the next request.
-  // output-denied is also a completed decision, not a dangling invocation.
-  const TERMINAL_STATES = new Set([
-    "approval-responded",
-    "output-available",
-    "output-denied",
-    "output-error",
-  ]);
   return messages.map((message) => {
     if (message.role !== "assistant") return message;
     let mutated = false;
@@ -303,7 +295,7 @@ function closeDanglingToolCalls(messages: UIMessage[]): UIMessage[] {
       const p = part as unknown as Record<string, unknown>;
       if (typeof p.type !== "string" || !p.type.startsWith("tool-")) return part;
       const state = typeof p.state === "string" ? p.state : "";
-      if (TERMINAL_STATES.has(state)) return part;
+      if (isResolvedToolState(state)) return part;
       mutated = true;
       return {
         ...p,
