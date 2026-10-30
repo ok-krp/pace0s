@@ -29,7 +29,7 @@ function getDeviceId() {
 }
 
 function readQueue(): string[] { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]"); } catch { return []; } }
-function writeQueue(keys: string[]) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify([...new Set(keys)])); } catch {} }
+function writeQueue(keys: string[]) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify([...new Set(keys)])); } catch { /* Storage may be unavailable; keep the in-memory sync path. */ } }
 function queueKey(key: string) { if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return; writeQueue([...readQueue(), key]); }
 function unqueueKey(key: string) { writeQueue(readQueue().filter((k) => k !== key)); }
 function readMeta(): SyncMeta { try { return JSON.parse(localStorage.getItem(META_KEY) ?? "{}"); } catch { return {}; } }
