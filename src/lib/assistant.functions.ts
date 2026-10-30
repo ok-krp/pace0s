@@ -60,6 +60,7 @@ export const assistantChat = createServerFn({ method: "POST" })
       .select("opts")
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .eq("user_id", context.userId)
       .maybeSingle();
     if (consentError) {
       console.error("assistant consent lookup failed", { code: consentError.code ?? "unknown" });
