@@ -436,6 +436,7 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
   late bool _enabled = widget.service.memoryEnabled;
   List<AiMemoryItem> _items = const [];
   bool _dialogOpen = false;
+  bool _scopeInvalidated = false;
 
   @override
   void initState() {
@@ -446,6 +447,20 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
 
   void _onLocalStoreChanged() {
     if (!mounted) return;
+    if (!widget.service.isAccountScopeCurrent) {
+      if (_dialogOpen) {
+        _scopeInvalidated = true;
+        _enabled = false;
+        _items = const [];
+        return;
+      }
+      setState(() {
+        _scopeInvalidated = true;
+        _enabled = false;
+        _items = const [];
+      });
+      return;
+    }
     final enabled = widget.service.memoryEnabled;
     final items = widget.service.loadMemory();
     if (_dialogOpen) {
@@ -466,6 +481,7 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
   }
 
   Future<void> _add() async {
+    if (_scopeInvalidated || !widget.service.isAccountScopeCurrent) return;
     final expectedUserId = widget.service.localStore.activeUserId;
     final controller = TextEditingController();
     String? text;
@@ -519,7 +535,15 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
         body: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            SwitchListTile.adaptive(title: const Text('Mémoire IA'), subtitle: const Text('Autoriser Pace IA à conserver des souvenirs persistants.'), value: _enabled, onChanged: (value) async { await widget.service.setMemoryEnabled(value); if (!mounted) return; setState(() { _enabled = value; _items = widget.service.loadMemory(); }); }),
+            if (_scopeInvalidated)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Le compte a changé. Ces réglages ne sont plus actifs ; revenez à Pace IA pour ouvrir la mémoire du compte courant.'),
+                ),
+              )
+            else
+              SwitchListTile.adaptive(title: const Text('Mémoire IA'), subtitle: const Text('Autoriser Pace IA à conserver des souvenirs persistants.'), value: _enabled, onChanged: (value) async { await widget.service.setMemoryEnabled(value); if (!mounted || _scopeInvalidated || !widget.service.isAccountScopeCurrent) return; setState(() { _enabled = value; _items = widget.service.loadMemory(); }); }),
             const SizedBox(height: 8),
             if (!_enabled)
               const Card(
@@ -528,7 +552,7 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
                   child: Text('La mémoire est désactivée. Les souvenirs existants sont supprimés du stockage local.'),
                 ),
               ),
-            if (_enabled) ...[
+            if (_enabled && !_scopeInvalidated) ...[
               FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('Ajouter un souvenir')),
               const SizedBox(height: 12),
               for (final item in _items) Card(child: ListTile(title: Text(item.text), subtitle: Text('Ajouté le ${item.createdAt.day}/${item.createdAt.month}/${item.createdAt.year}'), trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async { await widget.service.deleteMemory(item.id); if (!mounted) return; setState(() => _items = widget.service.loadMemory()); }))),
