@@ -171,6 +171,39 @@ jobs:
           if [ "$audit_status" -gt 1 ]; then
             echo "::warning::npm audit returned status $audit_status; see the summary for available diagnostic details."
           fi
+      - name: Preview semver-compatible npm security fixes
+        shell: bash
+        run: |
+          set +e
+          npm audit fix --dry-run --json > "$RUNNER_TEMP/npm-audit-fix-plan.json"
+          preview_status=$?
+          set -e
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = process.env.RUNNER_TEMP + "/npm-audit-fix-plan.json";
+          try {
+            const plan = JSON.parse(fs.readFileSync(path, "utf8"));
+            console.log("BEGIN_NPM_AUDIT_FIX_PLAN");
+            console.log(JSON.stringify({
+              added: plan.added,
+              removed: plan.removed,
+              changed: plan.changed,
+              audit: plan.audit?.metadata?.vulnerabilities,
+              advisories: Object.entries(plan.audit?.vulnerabilities ?? {}).map(([name, item]) => ({
+                name,
+                severity: item.severity,
+                range: item.range,
+                fixAvailable: item.fixAvailable,
+              })),
+            }));
+            console.log("END_NPM_AUDIT_FIX_PLAN");
+          } catch {
+            console.log("npm audit fix dry-run did not return a parseable plan.");
+          }
+          NODE
+          if [ "$preview_status" -gt 1 ]; then
+            echo "::warning::npm audit fix --dry-run could not complete; no dependency files were changed by this step."
+          fi
       - name: Type-check repository
         run: npx tsc --noEmit
       - name: Test AI tool approval state policy
