@@ -59,13 +59,13 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
 
       const parsed = foodAnalysisSchema.safeParse(extractJson(text));
       if (!parsed.success) {
-        console.error("AI JSON invalide", parsed.error, text.slice(0, 500));
+        console.error("AI JSON invalide", { issueCount: parsed.error.issues.length });
         return { error: "Réponse IA invalide", result: null };
       }
       return { error: null, result: parsed.data };
     } catch (e) {
-      console.error("analyzeFoodPhoto error", e);
-      return { error: e instanceof Error ? e.message : "Erreur IA", result: null };
+      console.error("analyzeFoodPhoto error", { errorType: e instanceof Error ? e.name : "unknown" });
+      return { error: "Le service IA est momentanément indisponible.", result: null };
     }
   });
 
