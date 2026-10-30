@@ -7,6 +7,7 @@ import 'package:pace/core/supabase/pace_supabase.dart';
 import 'package:pace/core/sync/sync_service.dart';
 import 'package:pace/features/ai/ai_models.dart';
 import 'package:pace/features/ai/ai_page.dart';
+import 'package:pace/features/ai/ai_service.dart';
 
 void main() {
   testWidgets(
