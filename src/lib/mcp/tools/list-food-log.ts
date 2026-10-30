@@ -31,7 +31,7 @@ export default defineTool({
     const sb = supabaseForUser(ctx);
     let q = sb
       .from("food_log")
-      .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sodium_mg,health_score,source")
+      .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,health_score,source")
       .eq("user_id", ctx.getUserId())
       .order("log_date", { ascending: false })
       .order("created_at", { ascending: false })
