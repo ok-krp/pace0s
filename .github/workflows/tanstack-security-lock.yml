@@ -123,7 +123,7 @@ jobs:
           }));
           console.log("END_NPM_SHELL_QUOTE_LOCK");
           console.log("BEGIN_BUN_SHELL_QUOTE_LOCK");
-          console.log(fs.readFileSync("bun.lock", "utf8").split("\\n").filter((line) => line.includes('"shell-quote": [')).join("\\n"));
+          console.log(fs.readFileSync("bun.lock", "utf8").split("\n").filter((line) => line.includes('"shell-quote": [')).join("\n"));
           console.log("END_BUN_SHELL_QUOTE_LOCK");
           NODE
       - name: Install locked npm dependencies
