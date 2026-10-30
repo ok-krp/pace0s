@@ -11,7 +11,12 @@ on:
       - "src/lib/ai-tool-state.test.ts"
       - "src/lib/mcp/validation.ts"
       - "src/lib/mcp/validation.test.ts"
+      - "src/lib/mcp/errors.ts"
+      - "src/lib/mcp/errors.test.ts"
       - "src/lib/mcp/tools/add-food-log.ts"
+      - "src/lib/mcp/tools/get-profile.ts"
+      - "src/lib/mcp/tools/list-food-log.ts"
+      - "src/lib/mcp/tools/list-health-samples.ts"
       - ".lovable/mcp/manifest.json"
       - "src/lib/assistant.functions.ts"
       - "src/lib/nutrition-ai.functions.ts"
@@ -39,7 +44,12 @@ on:
       - "src/lib/ai-tool-state.test.ts"
       - "src/lib/mcp/validation.ts"
       - "src/lib/mcp/validation.test.ts"
+      - "src/lib/mcp/errors.ts"
+      - "src/lib/mcp/errors.test.ts"
       - "src/lib/mcp/tools/add-food-log.ts"
+      - "src/lib/mcp/tools/get-profile.ts"
+      - "src/lib/mcp/tools/list-food-log.ts"
+      - "src/lib/mcp/tools/list-health-samples.ts"
       - ".lovable/mcp/manifest.json"
       - "src/lib/assistant.functions.ts"
       - "src/lib/nutrition-ai.functions.ts"
@@ -141,6 +151,8 @@ jobs:
         run: node --experimental-strip-types --test src/lib/ai-tool-state.test.ts
       - name: Test MCP input validation
         run: node --experimental-strip-types --test src/lib/mcp/validation.test.ts
+      - name: Test MCP database error redaction
+        run: node --experimental-strip-types --test src/lib/mcp/errors.test.ts
       - name: Lint server-side AI and Nutrition entry points
         run: >-
           npx eslint --rule 'prettier/prettier: off'
@@ -149,7 +161,12 @@ jobs:
           src/lib/ai-tool-state.test.ts
           src/lib/mcp/validation.ts
           src/lib/mcp/validation.test.ts
+          src/lib/mcp/errors.ts
+          src/lib/mcp/errors.test.ts
           src/lib/mcp/tools/add-food-log.ts
+          src/lib/mcp/tools/get-profile.ts
+          src/lib/mcp/tools/list-food-log.ts
+          src/lib/mcp/tools/list-health-samples.ts
           src/lib/assistant.functions.ts
           src/lib/nutrition-ai.functions.ts
           src/components/HealthSourcesSection.tsx
