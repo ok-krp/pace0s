@@ -14,7 +14,7 @@ type ChatBody = { messages?: unknown; conversationId?: unknown; agentType?: unkn
 /** Nombre de messages récents envoyés tels quels au modèle. Tout ce qui précède est résumé. */
 const RECENT_WINDOW = 30;
 /** Sécurité anti-abus très large : aucune limite gênante pour l'utilisateur. */
-const MAX_TEXT_CHARS = 400_000;
+const MAX_CONTEXT_PAYLOAD_CHARS = 400_000;
 
 class ChatError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {
@@ -338,9 +338,11 @@ export async function handleAiChat(request: Request) {
     const conversationId = body.conversationId;
     const newest = messages[messages.length - 1];
     const windowed = messages.length > RECENT_WINDOW ? messages.slice(-RECENT_WINDOW) : messages;
-    const contextTextChars = windowed.reduce((total, message) => total + textOf(message).length, 0);
-    if (contextTextChars > MAX_TEXT_CHARS) {
-      fail(413, "context_too_long", `Le contexte envoyé à l’IA dépasse ${MAX_TEXT_CHARS.toLocaleString("fr-FR")} caractères. Réduisez les messages récents ou envoyez-les en plusieurs parties.`);
+    // Bound the complete serialized inference window, not only text parts.
+    // Tool inputs and other message parts are also forwarded to the provider.
+    const contextPayloadChars = JSON.stringify(windowed).length;
+    if (contextPayloadChars > MAX_CONTEXT_PAYLOAD_CHARS) {
+      fail(413, "context_too_long", `Le contexte envoyé à l’IA dépasse ${MAX_CONTEXT_PAYLOAD_CHARS.toLocaleString("fr-FR")} caractères. Réduisez les messages récents ou envoyez-les en plusieurs parties.`);
     }
 
     const { client, userId } = await authenticatedClient(request);
