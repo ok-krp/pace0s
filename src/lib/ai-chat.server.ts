@@ -8,7 +8,7 @@ import type { AgentType, AiPermissions } from "./ai-history.types";
 import { LEGAL_VERSIONS } from "./legal";
 
 type Client = SupabaseClient<Database>;
-type ChatBody = { messages?: unknown; conversationId?: unknown; agentType?: unknown; ephemeral?: unknown };
+type ChatBody = { messages?: unknown; conversationId?: unknown; agentType?: unknown; ephemeral?: unknown; clientPersistsAssistant?: unknown };
 
 /** Nombre de messages récents envoyés tels quels au modèle. Tout ce qui précède est résumé. */
 const RECENT_WINDOW = 30;
@@ -426,14 +426,34 @@ export async function handleAiChat(request: Request) {
       onFinish: async ({ responseMessage }) => {
         if (ephemeral) return;
         try {
-          const text = responseMessage.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n");
-          const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", parts: responseMessage.parts as unknown as Json, plain_text: text, model_message_id: responseMessage.id });
-          if (error) console.error("[ai-chat] sauvegarde assistant impossible", { code: error.code ?? "unknown" });
+          // The native client persists the final assistant message with its own
+          // stable local ID. Avoid inserting a second server-generated row for
+          // the same response; web clients continue to use server persistence.
+          if (body.clientPersistsAssistant !== true) {
+            const text = responseMessage.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n");
+            const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", parts: responseMessage.parts as unknown as Json, plain_text: text, model_message_id: responseMessage.id });
+            if (error) console.error("[ai-chat] sauvegarde assistant impossible", { code: error.code ?? "unknown" });
+          }
           await client.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", userId);
           const { data: conversation } = await client.from("ai_conversations").select("title").eq("id", conversationId).eq("user_id", userId).maybeSingle();
           if (conversation?.title === "Nouvelle conversation") {
-            const firstText = messages.flatMap((message) => message.parts).find((part) => part.type === "text");
-            if (firstText && firstText.type === "text") await client.from("ai_conversations").update({ title: firstText.text.trim().replace(/\s+/g, " ").slice(0, 52) }).eq("id", conversationId).eq("user_id", userId);
+            // Requests may contain only the latest 30 messages. Derive the
+            // title from the persisted first user message, not that window.
+            const { data: firstUserMessage } = await client
+              .from("ai_messages")
+              .select("plain_text")
+              .eq("conversation_id", conversationId)
+              .eq("user_id", userId)
+              .eq("role", "user")
+              .order("created_at", { ascending: true })
+              .order("id", { ascending: true })
+              .limit(1)
+              .maybeSingle();
+            const firstUserText = typeof firstUserMessage?.plain_text === "string"
+              ? firstUserMessage.plain_text
+              : messages.find((message) => message.role === "user") ? textOf(messages.find((message) => message.role === "user")!) : "";
+            const title = firstUserText.trim().replace(/\s+/g, " ").slice(0, 52);
+            if (title) await client.from("ai_conversations").update({ title }).eq("id", conversationId).eq("user_id", userId);
           }
           console.info("[ai-chat] terminé", { conversationId, agentType, ms: Date.now() - startedAt });
         } catch (error) {
