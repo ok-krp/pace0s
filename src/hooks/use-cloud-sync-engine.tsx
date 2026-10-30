@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 
@@ -73,10 +74,10 @@ export function useCloudSyncEngineInternal() {
         setStatus("syncing");
 
         try {
-          const { data, error } = await (supabase.rpc as never)("upsert_user_state_if_newer", {
+          const { data, error } = await supabase.rpc("upsert_user_state_if_newer", {
             p_user_id: user.id,
             p_key: key,
-            p_value: value,
+            p_value: value as Json,
             p_updated_at: updatedAt,
             p_updated_by: DEVICE_ID,
           });
