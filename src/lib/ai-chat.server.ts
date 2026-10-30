@@ -427,7 +427,7 @@ export async function handleAiChat(request: Request) {
           const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", parts: responseMessage.parts as unknown as Json, plain_text: text, model_message_id: responseMessage.id });
           if (error) console.error("[ai-chat] sauvegarde assistant impossible", { code: error.code ?? "unknown" });
           await client.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", userId);
-          const { data: conversation } = await client.from("ai_conversations").select("title").eq("id", conversationId).maybeSingle();
+          const { data: conversation } = await client.from("ai_conversations").select("title").eq("id", conversationId).eq("user_id", userId).maybeSingle();
           if (conversation?.title === "Nouvelle conversation") {
             const firstText = messages.flatMap((message) => message.parts).find((part) => part.type === "text");
             if (firstText && firstText.type === "text") await client.from("ai_conversations").update({ title: firstText.text.trim().replace(/\s+/g, " ").slice(0, 52) }).eq("id", conversationId).eq("user_id", userId);
