@@ -9,6 +9,10 @@ on:
       - "src/lib/ai-chat.server.ts"
       - "src/lib/ai-tool-state.ts"
       - "src/lib/ai-tool-state.test.ts"
+      - "src/lib/mcp/validation.ts"
+      - "src/lib/mcp/validation.test.ts"
+      - "src/lib/mcp/tools/add-food-log.ts"
+      - ".lovable/mcp/manifest.json"
       - "src/lib/assistant.functions.ts"
       - "src/lib/nutrition-ai.functions.ts"
       - "src/components/HealthSourcesSection.tsx"
@@ -33,6 +37,10 @@ on:
       - "src/lib/ai-chat.server.ts"
       - "src/lib/ai-tool-state.ts"
       - "src/lib/ai-tool-state.test.ts"
+      - "src/lib/mcp/validation.ts"
+      - "src/lib/mcp/validation.test.ts"
+      - "src/lib/mcp/tools/add-food-log.ts"
+      - ".lovable/mcp/manifest.json"
       - "src/lib/assistant.functions.ts"
       - "src/lib/nutrition-ai.functions.ts"
       - "src/components/HealthSourcesSection.tsx"
@@ -131,12 +139,17 @@ jobs:
         run: npx tsc --noEmit
       - name: Test AI tool approval state policy
         run: node --experimental-strip-types --test src/lib/ai-tool-state.test.ts
+      - name: Test MCP input validation
+        run: node --experimental-strip-types --test src/lib/mcp/validation.test.ts
       - name: Lint server-side AI and Nutrition entry points
         run: >-
           npx eslint --rule 'prettier/prettier: off'
           src/lib/ai-chat.server.ts
           src/lib/ai-tool-state.ts
           src/lib/ai-tool-state.test.ts
+          src/lib/mcp/validation.ts
+          src/lib/mcp/validation.test.ts
+          src/lib/mcp/tools/add-food-log.ts
           src/lib/assistant.functions.ts
           src/lib/nutrition-ai.functions.ts
           src/components/HealthSourcesSection.tsx
