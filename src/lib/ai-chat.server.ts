@@ -471,7 +471,7 @@ export async function handleAiChat(request: Request) {
             const title = firstUserText.trim().replace(/\s+/g, " ").slice(0, 52);
             if (title) await client.from("ai_conversations").update({ title }).eq("id", conversationId).eq("user_id", userId);
           }
-          console.info("[ai-chat] terminé", { conversationId, agentType, ms: Date.now() - startedAt });
+          console.info("[ai-chat] terminé", { agentType, ms: Date.now() - startedAt });
         } catch (error) {
           console.error("[ai-chat] post-traitement échoué", { errorType: error instanceof Error ? error.name : "unknown" });
         }
