@@ -83,6 +83,14 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Resolve targeted dependency overrides in both lockfiles
+        run: |
+          bun install --lockfile-only --ignore-scripts
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Verify frozen lockfile
         run: bun install --frozen-lockfile
       - name: Enforce patched TanStack versions
@@ -100,10 +108,24 @@ jobs:
           echo "Resolved @tanstack/start-server-core=$core"
           at_least "$start" "1.168.60" || { echo "::error::Unpatched @tanstack/react-start: $start"; exit 1; }
           at_least "$core" "1.169.39" || { echo "::error::Unpatched @tanstack/start-server-core: $core"; exit 1; }
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
+      - name: Export regenerated shell-quote lock entries
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+          const entries = Object.entries(lock.packages ?? {})
+            .filter(([path]) => path === "node_modules/shell-quote" || path.endsWith("/node_modules/shell-quote"));
+          console.log("BEGIN_NPM_SHELL_QUOTE_LOCK");
+          console.log(JSON.stringify({
+            lockfileVersion: lock.lockfileVersion,
+            rootOverrides: lock.packages?.[""]?.overrides ?? null,
+            entries,
+          }));
+          console.log("END_NPM_SHELL_QUOTE_LOCK");
+          console.log("BEGIN_BUN_SHELL_QUOTE_LOCK");
+          console.log(fs.readFileSync("bun.lock", "utf8").split("\\n").filter((line) => line.includes('"shell-quote": [')).join("\\n"));
+          console.log("END_BUN_SHELL_QUOTE_LOCK");
+          NODE
       - name: Install locked npm dependencies
         run: npm ci
       - name: Report npm audit advisories without changing dependencies
