@@ -435,7 +435,7 @@ export async function handleAiChat(request: Request) {
             ? parsedClientAssistantId.data
             : null;
           const text = responseMessage.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n");
-          const { error } = await client.from("ai_messages").insert({
+          const { error } = await client.from("ai_messages").upsert({
             ...(clientAssistantId ? { id: clientAssistantId } : {}),
             conversation_id: conversationId,
             user_id: userId,
@@ -443,7 +443,7 @@ export async function handleAiChat(request: Request) {
             parts: responseMessage.parts as unknown as Json,
             plain_text: text,
             model_message_id: clientAssistantId ?? responseMessage.id,
-          });
+          }, { onConflict: "id" });
           if (error) console.error("[ai-chat] sauvegarde assistant impossible", { code: error.code ?? "unknown" });
           await client.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", userId);
           const { data: conversation } = await client.from("ai_conversations").select("title").eq("id", conversationId).eq("user_id", userId).maybeSingle();
