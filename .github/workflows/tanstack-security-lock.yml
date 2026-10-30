@@ -80,8 +80,7 @@ jobs:
           cache: npm
       - name: Install locked npm dependencies
         run: npm ci
-      - name: Inventory repository TypeScript errors (non-blocking)
-        continue-on-error: true
+      - name: Type-check repository
         run: npx tsc --noEmit
       - name: Lint server-side AI and Nutrition entry points
         run: >-
