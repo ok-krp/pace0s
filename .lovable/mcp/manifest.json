@@ -77,10 +77,13 @@
           "properties": {
             "name": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "maxLength": 200
             },
             "meal": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
               "description": "breakfast | lunch | dinner | snack"
             },
             "kcal": {
@@ -109,7 +112,8 @@
             },
             "log_date": {
               "type": "string",
-              "description": "YYYY-MM-DD, defaults to today"
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Valid calendar date YYYY-MM-DD, defaults to today"
             }
           },
           "required": [
