@@ -576,10 +576,9 @@ class PaceAiService {
         return const <AiMessage>[];
       }
 
-      final recentLocal = messagesForModelRequest(latestLocal.messages);
-      for (final message in messagesMissingFromRemote(
-        local: recentLocal,
-        remote: remoteMessages,
+      for (final message in localMessagesMissingFromRecentRemote(
+        localHistory: latestLocal.messages,
+        remoteRecent: remoteMessages,
       )) {
         if (!_isAccountScopeCurrent) return const <AiMessage>[];
         await _insertCloudMessage(latestLocal, message);
@@ -605,6 +604,32 @@ class PaceAiService {
   /// duplicate IDs. A failed earlier upload must not be lost on refresh.
   /// Local messages that have not reached the fetched cloud history yet.
   /// IDs are stable upsert keys, so retrying these uploads is idempotent.
+  static List<AiMessage> localMessagesMissingFromRecentRemote({
+    required List<AiMessage> localHistory,
+    required List<AiMessage> remoteRecent,
+  }) {
+    final recentLocal = messagesForModelRequest(localHistory);
+    if (remoteRecent.length < _modelRequestHistoryWindow ||
+        remoteRecent.isEmpty) {
+      return messagesMissingFromRemote(
+        local: recentLocal,
+        remote: remoteRecent,
+      );
+    }
+
+    // Rows older than the oldest item in a full remote window are outside the
+    // current request context. Do not re-upsert them on every send just because
+    // another device has advanced the shared conversation by 30+ messages.
+    final remoteWindowStart = remoteRecent.first.createdAt;
+    final relevantLocal = recentLocal
+        .where((message) => !message.createdAt.isBefore(remoteWindowStart))
+        .toList();
+    return messagesMissingFromRemote(
+      local: relevantLocal,
+      remote: remoteRecent,
+    );
+  }
+
   static List<AiMessage> messagesMissingFromRemote({
     required List<AiMessage> local,
     required List<AiMessage> remote,
