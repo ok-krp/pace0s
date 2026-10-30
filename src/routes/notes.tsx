@@ -150,7 +150,7 @@ function NoteEditor({ note, onChange, onDelete, onBack }: {
   onBack: () => void;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     if (editorRef.current && editorRef.current.innerHTML !== note.html) {
