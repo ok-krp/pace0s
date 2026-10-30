@@ -13,6 +13,8 @@ on:
       - "src/hooks/use-cloud-sync-engine.tsx"
       - "src/integrations/supabase/types.ts"
       - "src/lib/health-connect-bridge.ts"
+      - "src/lib/push-subscriptions.functions.ts"
+      - "src/lib/push.functions.ts"
   push:
     branches: [main]
     paths:
@@ -26,6 +28,8 @@ on:
       - "src/hooks/use-cloud-sync-engine.tsx"
       - "src/integrations/supabase/types.ts"
       - "src/lib/health-connect-bridge.ts"
+      - "src/lib/push-subscriptions.functions.ts"
+      - "src/lib/push.functions.ts"
   workflow_dispatch:
 
 permissions:
@@ -75,3 +79,5 @@ jobs:
           src/hooks/use-cloud-sync-engine.tsx
           src/integrations/supabase/types.ts
           src/lib/health-connect-bridge.ts
+          src/lib/push-subscriptions.functions.ts
+          src/lib/push.functions.ts
