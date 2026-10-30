@@ -56,6 +56,7 @@ class PaceAiService {
     'PACE_AI_URL',
     defaultValue: 'https://pace0s.vercel.app/api/ai-chat',
   );
+  static const _modelRequestHistoryWindow = 30;
 
   SupabaseClient? get _client => auth.client;
 
@@ -584,6 +585,14 @@ class PaceAiService {
         ephemeral ? ephemeralHistory : persistedHistory,
       );
 
+  /// The server summarizes older persisted messages and sends only the same
+  /// 30-message inference window used by the web client. Keep full history in
+  /// LocalStore and ai_messages; do not retransmit it on every model request.
+  static List<AiMessage> messagesForModelRequest(List<AiMessage> messages) {
+    final start = max(0, messages.length - _modelRequestHistoryWindow);
+    return List<AiMessage>.unmodifiable(messages.skip(start));
+  }
+
   Future<String> send({
     required AiConversation conversation,
     required String text,
@@ -635,7 +644,10 @@ class PaceAiService {
       'conversationId': conversation.id,
       'agentType': conversation.agent.name,
       'ephemeral': conversation.ephemeral,
-      'messages': messages
+      // The server only sends the latest 30 messages to the model. Do not
+      // upload the full transcript again on every native chat turn.
+      'clientPersistsAssistant': true,
+      'messages': messagesForModelRequest(messages)
           .map((message) => {
                 'id': message.id,
                 'role': message.role,
