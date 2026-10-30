@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isValidIsoDateOnly, isValidIsoTimestamp } from "./validation.ts";
+import { isOrderedIsoDateRange, isValidIsoDateOnly, isValidIsoTimestamp } from "./validation.ts";
 
 test("accepts valid ISO calendar dates including leap days", () => {
   for (const value of [
@@ -53,4 +53,16 @@ test("rejects invalid dates, clock values, and timezone-less timestamps", () => 
   ]) {
     assert.equal(isValidIsoTimestamp(value), false, value);
   }
+});
+
+test("accepts ordered and partially open date ranges", () => {
+  assert.equal(isOrderedIsoDateRange("2026-10-01", "2026-10-30"), true);
+  assert.equal(isOrderedIsoDateRange("2026-10-30", "2026-10-30"), true);
+  assert.equal(isOrderedIsoDateRange(undefined, "2026-10-30"), true);
+  assert.equal(isOrderedIsoDateRange("2026-10-01", undefined), true);
+  assert.equal(isOrderedIsoDateRange(), true);
+});
+
+test("rejects an inverted food log date range", () => {
+  assert.equal(isOrderedIsoDateRange("2026-10-31", "2026-10-30"), false);
 });
