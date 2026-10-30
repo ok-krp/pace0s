@@ -287,7 +287,15 @@ async function rollingSummary(client: Client, userId: string, conversationId: st
  * jamais d'exception, jamais de conversation bloquée.
  */
 function closeDanglingToolCalls(messages: UIMessage[]): UIMessage[] {
-  const TERMINAL_STATES = new Set(["output-available", "output-error"]);
+  // approval-responded is a valid client decision that convertToModelMessages
+  // must translate into a tool-approval-response on the next request.
+  // output-denied is also a completed decision, not a dangling invocation.
+  const TERMINAL_STATES = new Set([
+    "approval-responded",
+    "output-available",
+    "output-denied",
+    "output-error",
+  ]);
   return messages.map((message) => {
     if (message.role !== "assistant") return message;
     let mutated = false;
