@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { isValidIsoDateOnly } from "./validation.ts";
+import { isValidIsoDateOnly, isValidIsoTimestamp } from "./validation.ts";
 
 test("accepts valid ISO calendar dates including leap days", () => {
   for (const value of [
@@ -29,5 +29,28 @@ test("rejects rollover dates and malformed date strings", () => {
     "",
   ]) {
     assert.equal(isValidIsoDateOnly(value), false, value);
+  }
+});
+
+test("accepts timezone-qualified ISO timestamps with valid dates", () => {
+  for (const value of [
+    "2026-10-30T12:30:00Z",
+    "2026-10-30T12:30:00.123456789+01:00",
+    "2000-02-29T23:59:59-0500",
+  ]) {
+    assert.equal(isValidIsoTimestamp(value), true, value);
+  }
+});
+
+test("rejects invalid dates, clock values, and timezone-less timestamps", () => {
+  for (const value of [
+    "2026-02-31T12:00:00Z",
+    "2026-10-30T25:00:00Z",
+    "2026-10-30T12:60:00Z",
+    "2026-10-30T12:00:00",
+    "2026-10-30 12:00:00Z",
+    "2026-10-30T12:00:00+25:00",
+  ]) {
+    assert.equal(isValidIsoTimestamp(value), false, value);
   }
 });
