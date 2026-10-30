@@ -989,7 +989,7 @@ class PaceAiService {
           {'type': 'text', 'text': message.text}
         ],
         'model_message_id': message.id,
-      });
+      }, onConflict: 'id', ignoreDuplicates: message.role == 'assistant');
     } catch (_) {}
   }
 
