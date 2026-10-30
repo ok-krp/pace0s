@@ -73,4 +73,62 @@ void main() {
     },
     timeout: const Timeout(Duration(seconds: 45)),
   );
+
+  testWidgets(
+    'AI memory route invalidates old account controls and content after switch',
+    (tester) async {
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('pace-ai-memory-scope-'),
+      );
+      if (directory == null) throw StateError('Could not create test directory');
+      final store = await tester.runAsync(
+        () => LocalStore.open(directory: directory),
+      );
+      if (store == null) throw StateError('Could not open local store');
+      addTearDown(() async {
+        store.dispose();
+        await tester.runAsync(() => directory.delete(recursive: true));
+      });
+
+      await tester.runAsync(() async {
+        await store.writeBatchForAccount(
+          null,
+          writes: {
+            'pace.settings.ai.memory': true,
+            'pace.ai.memory': [
+              {
+                'id': 'guest-memory',
+                'text': 'Guest-only private memory',
+                'createdAt': DateTime.utc(2026, 10, 28).toIso8601String(),
+              },
+            ],
+          },
+          enqueueSync: false,
+        );
+      });
+      final auth = const PaceAuthService(null);
+      final service = PaceAiService(
+        localStore: store,
+        auth: auth,
+        sync: SyncService(localStore: store, client: null),
+      );
+      await tester.pumpWidget(
+        MaterialApp(home: AiMemoryPage(service: service)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Guest-only private memory'), findsOneWidget);
+      expect(find.text('Ajouter un souvenir'), findsOneWidget);
+
+      await tester.runAsync(() => store.activateAccount('user-b'));
+      await tester.pump();
+
+      expect(find.text('Guest-only private memory'), findsNothing);
+      expect(find.text('Ajouter un souvenir'), findsNothing);
+      expect(
+        find.textContaining('Le compte a changé'),
+        findsOneWidget,
+      );
+    },
+    timeout: const Timeout(Duration(seconds: 45)),
+  );
 }
