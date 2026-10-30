@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { mcpDatabaseFailure } from "../errors";
 import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
 import { z } from "zod";
 
@@ -34,7 +35,7 @@ export default defineTool({
     if (from) q = q.gte("log_date", from);
     if (to) q = q.lte("log_date", to);
     const { data, error } = await q;
-    if (error) return { content: [{ type: "text", text: error.message }], isError: true };
+    if (error) return mcpDatabaseFailure("list_food_log", error);
     return {
       content: [{ type: "text", text: JSON.stringify(data) }],
       structuredContent: { rows: data ?? [] },
