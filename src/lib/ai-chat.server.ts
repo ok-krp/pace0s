@@ -8,7 +8,7 @@ import type { AgentType, AiPermissions } from "./ai-history.types";
 import { LEGAL_VERSIONS } from "./legal";
 
 type Client = SupabaseClient<Database>;
-type ChatBody = { messages?: unknown; conversationId?: unknown; agentType?: unknown; ephemeral?: unknown; clientPersistsAssistant?: unknown };
+type ChatBody = { messages?: unknown; conversationId?: unknown; agentType?: unknown; ephemeral?: unknown; clientAssistantMessageId?: unknown };
 
 /** Nombre de messages récents envoyés tels quels au modèle. Tout ce qui précède est résumé. */
 const RECENT_WINDOW = 30;
@@ -426,14 +426,25 @@ export async function handleAiChat(request: Request) {
       onFinish: async ({ responseMessage }) => {
         if (ephemeral) return;
         try {
-          // The native client persists the final assistant message with its own
-          // stable local ID. Avoid inserting a second server-generated row for
-          // the same response; web clients continue to use server persistence.
-          if (body.clientPersistsAssistant !== true) {
-            const text = responseMessage.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n");
-            const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", parts: responseMessage.parts as unknown as Json, plain_text: text, model_message_id: responseMessage.id });
-            if (error) console.error("[ai-chat] sauvegarde assistant impossible", { code: error.code ?? "unknown" });
-          }
+          // The native client pre-generates a UUID and sends it with the
+          // request. Persist with that ID so its later upsert targets this exact
+          // row; if the client disconnects after generation, the server copy
+          // still survives. Web clients keep the provider-generated message ID.
+          const parsedClientAssistantId = z.string().uuid().safeParse(body.clientAssistantMessageId);
+          const clientAssistantId = parsedClientAssistantId.success
+            ? parsedClientAssistantId.data
+            : null;
+          const text = responseMessage.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n");
+          const { error } = await client.from("ai_messages").insert({
+            ...(clientAssistantId ? { id: clientAssistantId } : {}),
+            conversation_id: conversationId,
+            user_id: userId,
+            role: "assistant",
+            parts: responseMessage.parts as unknown as Json,
+            plain_text: text,
+            model_message_id: clientAssistantId ?? responseMessage.id,
+          });
+          if (error) console.error("[ai-chat] sauvegarde assistant impossible", { code: error.code ?? "unknown" });
           await client.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", userId);
           const { data: conversation } = await client.from("ai_conversations").select("title").eq("id", conversationId).eq("user_id", userId).maybeSingle();
           if (conversation?.title === "Nouvelle conversation") {
