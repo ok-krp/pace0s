@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { mcpDatabaseFailure } from "../errors";
 import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
 import { z } from "zod";
+import { isValidIsoDateOnly } from "../validation";
 
 function supabaseForUser(ctx: ToolContext) {
   return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
@@ -16,14 +17,17 @@ export default defineTool({
   description:
     "List the signed-in user's food_log entries, optionally filtered by date range (YYYY-MM-DD). Returns up to `limit` most recent rows.",
   inputSchema: {
-    from: z.string().optional().describe("Start date YYYY-MM-DD (inclusive)"),
-    to: z.string().optional().describe("End date YYYY-MM-DD (inclusive)"),
+    from: z.string().refine(isValidIsoDateOnly, "Expected a real calendar date in YYYY-MM-DD format").optional().describe("Start date YYYY-MM-DD (inclusive)"),
+    to: z.string().refine(isValidIsoDateOnly, "Expected a real calendar date in YYYY-MM-DD format").optional().describe("End date YYYY-MM-DD (inclusive)"),
     limit: z.number().int().positive().optional().describe("Max rows (default 50)"),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async ({ from, to, limit }, ctx) => {
     if (!ctx.isAuthenticated())
       return { content: [{ type: "text", text: "Not authenticated" }], isError: true };
+    if (from && to && from > to) {
+      return { content: [{ type: "text", text: "Invalid date range: start date must not be after end date." }], isError: true };
+    }
     const sb = supabaseForUser(ctx);
     let q = sb
       .from("food_log")
