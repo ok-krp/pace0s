@@ -632,8 +632,13 @@ class PaceAiService {
     if (!conversation.ephemeral) await _replaceMessages(conversation.id, next);
     await _insertCloudMessage(conversation, userMessage);
 
-    final responseText = await _requestModel(conversation: conversation, messages: next);
-    final assistant = AiMessage(id: _uuid(), role: 'assistant', text: responseText, createdAt: DateTime.now());
+    final assistantMessageId = _uuid();
+    final responseText = await _requestModel(
+      conversation: conversation,
+      messages: next,
+      assistantMessageId: assistantMessageId,
+    );
+    final assistant = AiMessage(id: assistantMessageId, role: 'assistant', text: responseText, createdAt: DateTime.now());
     if (!conversation.ephemeral) {
       await _replaceMessages(conversation.id, [...next, assistant]);
       await _insertCloudMessage(conversation, assistant);
@@ -644,7 +649,11 @@ class PaceAiService {
     return responseText;
   }
 
-  Future<String> _requestModel({required AiConversation conversation, required List<AiMessage> messages}) async {
+  Future<String> _requestModel({
+    required AiConversation conversation,
+    required List<AiMessage> messages,
+    required String assistantMessageId,
+  }) async {
     if (!_isAccountScopeCurrent || _accountUserId == null) {
       throw StateError('Le compte Pace a changé pendant la requête IA.');
     }
@@ -658,7 +667,7 @@ class PaceAiService {
       'ephemeral': conversation.ephemeral,
       // The server only sends the latest 30 messages to the model. Do not
       // upload the full transcript again on every native chat turn.
-      'clientPersistsAssistant': true,
+      'clientAssistantMessageId': assistantMessageId,
       'messages': messagesForModelRequest(messages)
           .map((message) => {
                 'id': message.id,
