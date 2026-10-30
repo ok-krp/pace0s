@@ -28,12 +28,17 @@ function errorResponse(error: unknown, startedAt: number) {
   const known = error instanceof ChatError;
   const status = known ? error.status : 500;
   const code = known ? error.code : "internal_error";
+  // Unexpected provider/database errors can contain SQL details or user data.
+  // Keep the client response and platform logs free of those internal messages.
   const message = known
     ? error.message
-    : error instanceof Error
-      ? `Erreur serveur : ${error.message}`
-      : "Erreur serveur inattendue.";
-  console.error("[ai-chat] échec", { code, status, ms: Date.now() - startedAt, message });
+    : "Une erreur interne est survenue. Réessayez dans quelques instants.";
+  console.error("[ai-chat] échec", {
+    code,
+    status,
+    ms: Date.now() - startedAt,
+    errorType: error instanceof Error ? error.name : "unknown",
+  });
   return new Response(message, {
     status,
     headers: { "Content-Type": "text/plain; charset=utf-8", "X-Pace-Error-Code": code, "X-Pace-Duration-Ms": String(Date.now() - startedAt) },
@@ -103,15 +108,23 @@ function withToolLogging<Input, Output extends { ok: boolean; message: string }>
 ): (input: Input) => Promise<Output> {
   return async (input: Input) => {
     const startedAt = Date.now();
-    console.info("[ai-tool] appelé", { name, input });
+    // Tool inputs may contain health, nutrition, profile, or personal notes.
+    // Never write raw tool arguments or exception messages to platform logs.
+    console.info("[ai-tool] appelé", { name });
     try {
       const output = await execute(input);
       console.info("[ai-tool] terminé", { name, ms: Date.now() - startedAt, ok: output.ok });
       return output;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[ai-tool] échec inattendu", { name, ms: Date.now() - startedAt, error: message });
-      return { ok: false, message: `Action interrompue par une erreur inattendue : ${message}` } as Output;
+      console.error("[ai-tool] échec inattendu", {
+        name,
+        ms: Date.now() - startedAt,
+        errorType: error instanceof Error ? error.name : "unknown",
+      });
+      return {
+        ok: false,
+        message: "Action interrompue par une erreur inattendue. Réessayez.",
+      } as Output;
     }
   };
 }
