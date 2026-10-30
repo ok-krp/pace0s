@@ -65,6 +65,70 @@ void main() {
     );
   });
 
+  test('recent remote window does not re-upload older messages from another device', () {
+    final now = DateTime.utc(2026, 10, 30);
+    final localHistory = List<AiMessage>.generate(
+      35,
+      (index) => AiMessage(
+        id: 'local-$index',
+        role: index.isEven ? 'user' : 'assistant',
+        text: 'local $index',
+        createdAt: now.add(Duration(seconds: index)),
+      ),
+    );
+    final newerRemote = List<AiMessage>.generate(
+      30,
+      (index) => AiMessage(
+        id: 'remote-$index',
+        role: index.isEven ? 'user' : 'assistant',
+        text: 'remote $index',
+        createdAt: now.add(Duration(seconds: 40 + index)),
+      ),
+    );
+
+    expect(
+      PaceAiService.localMessagesMissingFromRecentRemote(
+        localHistory: localHistory,
+        remoteRecent: newerRemote,
+      ),
+      isEmpty,
+    );
+  });
+
+  test('recent remote overlap still retries missing local messages', () {
+    final now = DateTime.utc(2026, 10, 30);
+    final localHistory = List<AiMessage>.generate(
+      35,
+      (index) => AiMessage(
+        id: 'local-$index',
+        role: index.isEven ? 'user' : 'assistant',
+        text: 'local $index',
+        createdAt: now.add(Duration(seconds: index)),
+      ),
+    );
+    final remoteRecent = <AiMessage>[
+      ...localHistory.take(25),
+      ...List<AiMessage>.generate(
+        5,
+        (index) => AiMessage(
+          id: 'remote-$index',
+          role: 'assistant',
+          text: 'remote $index',
+          createdAt: now.add(Duration(seconds: 35 + index)),
+        ),
+      ),
+    ];
+
+    final missing = PaceAiService.localMessagesMissingFromRecentRemote(
+      localHistory: localHistory,
+      remoteRecent: remoteRecent,
+    );
+
+    expect(missing, hasLength(10));
+    expect(missing.first.id, 'local-25');
+    expect(missing.last.id, 'local-34');
+  });
+
   test('remote messages use model IDs to deduplicate fallback server inserts', () {
     expect(
       PaceAiService.remoteMessageStableId({
