@@ -440,7 +440,7 @@ class PaceAiService {
       while (true) {
         final page = await client
             .from('ai_messages')
-            .select('id,role,plain_text,created_at')
+            .select('id,model_message_id,role,plain_text,created_at')
             .eq('conversation_id', id)
             .eq('user_id', user.id)
             .order('created_at')
@@ -455,7 +455,7 @@ class PaceAiService {
       final remoteMessages = rows.map((row) {
         final rawTimestamp = row['created_at']?.toString() ?? '';
         return AiMessage(
-          id: row['id']?.toString() ?? '',
+          id: remoteMessageStableId(row),
           role: row['role']?.toString() ?? 'assistant',
           text: row['plain_text']?.toString() ?? '',
           createdAt: LocalStore.isValidRemoteTimestamp(rawTimestamp)
@@ -591,6 +591,18 @@ class PaceAiService {
   static List<AiMessage> messagesForModelRequest(List<AiMessage> messages) {
     final start = max(0, messages.length - _modelRequestHistoryWindow);
     return List<AiMessage>.unmodifiable(messages.skip(start));
+  }
+
+  /// Prefer the client/model message ID over the database row ID. A fallback
+  /// server insert can generate a different row UUID after a client upload
+  /// failed; using this stable ID lets the local/remote merge recognize the
+  /// same logical message instead of importing it twice.
+  static String remoteMessageStableId(Map<String, dynamic> row) {
+    final modelMessageId = row['model_message_id'];
+    if (modelMessageId is String && modelMessageId.trim().isNotEmpty) {
+      return modelMessageId;
+    }
+    return row['id']?.toString() ?? '';
   }
 
   Future<String> send({
