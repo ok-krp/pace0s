@@ -39,3 +39,8 @@ export function isValidIsoTimestamp(value: string): boolean {
     isValidIsoDateOnly(match[1]) &&
     !Number.isNaN(Date.parse(value));
 }
+
+/** ISO date-only strings sort lexically, so a range can be checked safely. */
+export function isOrderedIsoDateRange(from?: string, to?: string): boolean {
+  return !from || !to || from <= to;
+}
