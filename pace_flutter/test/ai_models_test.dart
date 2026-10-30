@@ -40,6 +40,31 @@ void main() {
     );
   });
 
+  test('native model requests contain only the latest 30 messages', () {
+    final now = DateTime.utc(2026, 10, 30);
+    final history = List<AiMessage>.generate(
+      35,
+      (index) => AiMessage(
+        id: 'message-$index',
+        role: index.isEven ? 'user' : 'assistant',
+        text: 'message $index',
+        createdAt: now.add(Duration(seconds: index)),
+      ),
+    );
+
+    final requestWindow = PaceAiService.messagesForModelRequest(history);
+    expect(requestWindow, hasLength(30));
+    expect(requestWindow.first.id, 'message-5');
+    expect(requestWindow.last.id, 'message-34');
+    expect(history, hasLength(35));
+
+    final shortHistory = history.take(3).toList();
+    expect(
+      PaceAiService.messagesForModelRequest(shortHistory).map((item) => item.id),
+      ['message-0', 'message-1', 'message-2'],
+    );
+  });
+
   test('conversation round-trips locally', () {
     final now = DateTime.utc(2026, 8, 15, 12);
     final conversation = AiConversation(
