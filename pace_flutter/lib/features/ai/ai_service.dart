@@ -514,6 +514,93 @@ class PaceAiService {
     }
   }
 
+  /// Refresh only the recent remote window before a send. Full history is
+  /// loaded when a conversation is opened; repeating that unbounded paginated
+  /// read on every turn caused egress to grow with the entire transcript.
+  /// The recent window still picks up messages added by another device and
+  /// retries recent local uploads that were previously unavailable.
+  Future<List<AiMessage>> refreshRecentMessages(String id) async {
+    final local = loadLocalConversations().firstWhere(
+      (item) => item.id == id,
+      orElse: () => AiConversation(
+        id: '',
+        agent: PaceAiAgent.coach,
+        title: '',
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+      ),
+    );
+    if (local.id.isEmpty || !_isAccountScopeCurrent) {
+      return const <AiMessage>[];
+    }
+    final client = _client;
+    final user = _scopedUser;
+    if (client == null || user == null) return local.messages;
+
+    try {
+      final rows = await client
+          .from('ai_messages')
+          .select('id,model_message_id,role,plain_text,created_at')
+          .eq('conversation_id', id)
+          .eq('user_id', user.id)
+          .order('created_at', ascending: false)
+          .order('id', ascending: false)
+          .limit(_modelRequestHistoryWindow);
+      if (!_isAccountScopeCurrent) return const <AiMessage>[];
+
+      final remoteMessages = rows.map((row) {
+        final rawTimestamp = row['created_at']?.toString() ?? '';
+        return AiMessage(
+          id: remoteMessageStableId(Map<String, dynamic>.from(row)),
+          role: row['role']?.toString() ?? 'assistant',
+          text: row['plain_text']?.toString() ?? '',
+          createdAt: LocalStore.isValidRemoteTimestamp(rawTimestamp)
+              ? DateTime.parse(rawTimestamp).toLocal()
+              : DateTime.fromMillisecondsSinceEpoch(0),
+        );
+      }).toList()
+        ..sort((a, b) {
+          final byTimestamp = a.createdAt.compareTo(b.createdAt);
+          return byTimestamp != 0 ? byTimestamp : a.id.compareTo(b.id);
+        });
+
+      final latestLocal = loadLocalConversations().firstWhere(
+        (item) => item.id == id,
+        orElse: () => AiConversation(
+          id: '',
+          agent: PaceAiAgent.coach,
+          title: '',
+          updatedAt: DateTime.fromMillisecondsSinceEpoch(0),
+        ),
+      );
+      if (!_isAccountScopeCurrent || latestLocal.id.isEmpty) {
+        return const <AiMessage>[];
+      }
+
+      final recentLocal = messagesForModelRequest(latestLocal.messages);
+      for (final message in messagesMissingFromRemote(
+        local: recentLocal,
+        remote: remoteMessages,
+      )) {
+        if (!_isAccountScopeCurrent) return const <AiMessage>[];
+        await _insertCloudMessage(latestLocal, message);
+      }
+      if (!_isAccountScopeCurrent) return const <AiMessage>[];
+
+      final merged = mergeMessages(
+        local: latestLocal.messages,
+        remote: remoteMessages,
+      );
+      await _replaceMessages(id, merged, touchUpdatedAt: false);
+      return _isAccountScopeCurrent ? merged : const <AiMessage>[];
+    } catch (_) {
+      if (!_isAccountScopeCurrent) return const <AiMessage>[];
+      final latestLocal = loadLocalConversations().where((item) => item.id == id);
+      return latestLocal.isEmpty
+          ? const <AiMessage>[]
+          : latestLocal.first.messages;
+    }
+  }
+
   /// Combines the cloud history with local-only messages and local versions of
   /// duplicate IDs. A failed earlier upload must not be lost on refresh.
   /// Local messages that have not reached the fetched cloud history yet.
@@ -619,7 +706,7 @@ class PaceAiService {
     final userMessage = AiMessage(id: _uuid(), role: 'user', text: clean, createdAt: now);
     final persistedHistory = conversation.ephemeral
         ? const <AiMessage>[]
-        : await loadMessages(conversation.id);
+        : await refreshRecentMessages(conversation.id);
     if (!_isAccountScopeCurrent) {
       throw StateError('Le compte Pace a changé pendant la requête IA.');
     }
