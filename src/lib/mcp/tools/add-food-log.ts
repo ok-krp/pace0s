@@ -46,7 +46,11 @@ export default defineTool({
       source: "mcp",
       log_date: input.log_date ?? new Date().toISOString().slice(0, 10),
     };
-    const { data, error } = await sb.from("food_log").insert(row).select().single();
+    const { data, error } = await sb
+      .from("food_log")
+      .insert(row)
+      .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,source")
+      .single();
     if (error) return mcpDatabaseFailure("add_food_log", error);
     return {
       content: [{ type: "text", text: JSON.stringify(data) }],
