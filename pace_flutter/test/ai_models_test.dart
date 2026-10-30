@@ -89,6 +89,34 @@ void main() {
     );
   });
 
+  test('server row ID and stable model ID merge as one logical message', () {
+    final now = DateTime.utc(2026, 10, 30);
+    final local = AiMessage(
+      id: 'client-message-id',
+      role: 'assistant',
+      text: 'Réponse locale',
+      createdAt: now,
+    );
+    final remote = AiMessage(
+      id: PaceAiService.remoteMessageStableId({
+        'id': 'server-row-id',
+        'model_message_id': 'client-message-id',
+      }),
+      role: 'assistant',
+      text: 'Réponse distante enrichie',
+      createdAt: now,
+    );
+
+    final merged = PaceAiService.mergeMessages(
+      local: [local],
+      remote: [remote],
+    );
+
+    expect(merged, hasLength(1));
+    expect(merged.single.id, 'client-message-id');
+    expect(merged.single.text, 'Réponse locale');
+  });
+
   test('conversation round-trips locally', () {
     final now = DateTime.utc(2026, 8, 15, 12);
     final conversation = AiConversation(
