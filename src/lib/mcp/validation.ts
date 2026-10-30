@@ -35,9 +35,13 @@ export function isValidIsoDateOnly(value: string): boolean {
  */
 export function isValidIsoTimestamp(value: string): boolean {
   const match = /^(\\d{4}-\\d{2}-\\d{2})T(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d{1,9})?)?(?:Z|[+-](?:[01]\\d|2[0-3]):?[0-5]\\d)$/.exec(value);
-  return match !== null &&
-    isValidIsoDateOnly(match[1]) &&
-    !Number.isNaN(Date.parse(value));
+  if (match === null || !isValidIsoDateOnly(match[1])) return false;
+  // Date.parse implementations differ on ISO offsets without a colon
+  // (±HHMM). Normalize that valid ISO form to ±HH:MM before parsing.
+  const normalized = value.endsWith("Z")
+    ? value
+    : value.replace(/([+-]\\d{2})(\\d{2})$/, "$1:$2");
+  return !Number.isNaN(Date.parse(normalized));
 }
 
 /** ISO date-only strings sort lexically, so a range can be checked safely. */
