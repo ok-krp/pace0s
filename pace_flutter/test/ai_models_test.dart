@@ -95,6 +95,90 @@ void main() {
     );
   });
 
+  test('pending AI upload references are idempotent and conversation-scoped', () {
+    var references = PaceAiService.addPendingMessageReference(
+      existing: const <Map<String, dynamic>>[],
+      conversationId: 'conversation-a',
+      messageId: 'message-older',
+    );
+    references = PaceAiService.addPendingMessageReference(
+      existing: references,
+      conversationId: 'conversation-a',
+      messageId: 'message-older',
+    );
+    references = PaceAiService.addPendingMessageReference(
+      existing: references,
+      conversationId: 'conversation-b',
+      messageId: 'message-older',
+    );
+
+    expect(references, hasLength(2));
+    expect(
+      PaceAiService.normalizePendingMessageReferences([
+        ...references,
+        {'conversationId': '', 'messageId': 'invalid'},
+        {'conversationId': 'conversation-a', 'messageId': ''},
+        references.first,
+      ]),
+      hasLength(2),
+    );
+
+    final removed = PaceAiService.removePendingMessagesForConversation(
+      existing: references,
+      conversationId: 'conversation-a',
+    );
+    expect(removed, hasLength(1));
+    expect(removed.single['conversationId'], 'conversation-b');
+  });
+
+  test('durable pending queue retries an old message outside the recent window', () {
+    final now = DateTime.utc(2026, 10, 30);
+    final older = AiMessage(
+      id: 'failed-old-message',
+      role: 'user',
+      text: 'older unsynced message',
+      createdAt: now,
+    );
+    final recent = List<AiMessage>.generate(
+      30,
+      (index) => AiMessage(
+        id: 'synced-$index',
+        role: index.isEven ? 'user' : 'assistant',
+        text: 'synced $index',
+        createdAt: now.add(Duration(minutes: index + 1)),
+      ),
+    );
+    final conversation = AiConversation(
+      id: 'conversation-a',
+      agent: PaceAiAgent.coach,
+      title: 'Conversation',
+      updatedAt: now.add(const Duration(minutes: 31)),
+      messages: [older, ...recent],
+    );
+    final pending = PaceAiService.addPendingMessageReference(
+      existing: const <Map<String, dynamic>>[],
+      conversationId: conversation.id,
+      messageId: older.id,
+    );
+
+    // The optimized recent-only recovery intentionally skips messages older
+    // than the 30-row remote window; the durable queue must still recover one.
+    expect(
+      PaceAiService.localMessagesMissingFromRecentRemote(
+        localHistory: conversation.messages,
+        remoteRecent: recent,
+      ),
+      isEmpty,
+    );
+    expect(
+      PaceAiService.pendingMessagesForRetry(
+        conversation: conversation,
+        references: pending,
+      ).map((message) => message.id),
+      [older.id],
+    );
+  });
+
   test('recent remote overlap still retries missing local messages', () {
     final now = DateTime.utc(2026, 10, 30);
     final localHistory = List<AiMessage>.generate(
