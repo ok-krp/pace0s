@@ -10,6 +10,7 @@ const EXCLUDED = new Set<string>(["pace.sport.active"]);
 // Full user_state reconciliation is a fallback, not a realtime transport.
 // Keep it at 60s to reduce repeated downloads of large account snapshots.
 const POLL_MS = 60000;
+const FULL_RECONCILIATION_MS = 24 * 60 * 60 * 1000;
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
@@ -60,6 +61,7 @@ export function useCloudSyncEngineInternal() {
     if (typeof window === "undefined" || !user) return;
     try { if (!isLegalCategoryAllowed("sync_cloud")) return; } catch { return; }
     let cancelled = false;
+    let lastFullReconciliationAt = 0;
 
     const pushKeyNow = async (key: string) => {
       if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
@@ -129,6 +131,7 @@ export function useCloudSyncEngineInternal() {
       try {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
         if (error || !data || cancelled) return;
+        lastFullReconciliationAt = Date.now();
         const queue = new Set(readQueue());
         const meta = readMeta();
         let applied = 0;
@@ -220,7 +223,11 @@ export function useCloudSyncEngineInternal() {
     // through the bounded polling fallback below.
     void flushQueue();
     const interval = window.setInterval(() => {
-      if (!realtimeHealthy) void syncNow();
+      // A healthy channel is the fast path, but a daily full scan still
+      // recovers events missed without an observable channel disconnect.
+      if (!realtimeHealthy || Date.now() - lastFullReconciliationAt >= FULL_RECONCILIATION_MS) {
+        void syncNow();
+      }
     }, POLL_MS);
 
     return () => {
