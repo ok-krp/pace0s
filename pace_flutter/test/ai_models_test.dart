@@ -213,22 +213,12 @@ void main() {
       isTrue,
     );
 
-    pending = PaceAiService.schedulePendingMessageRetry(
-      existing: pending,
-      conversationId: 'conversation-a',
-      messageId: 'message-1',
-      now: nextAttemptAt,
-    );
-    reference = pending.single;
-    nextAttemptAt = DateTime.parse(reference['nextAttemptAt'] as String);
-    expect(reference['attempts'], 2);
-    expect(nextAttemptAt.difference(
-      DateTime.parse(pending.single['nextAttemptAt'] as String)
-          .subtract(const Duration(seconds: 10)),
-    ), const Duration(seconds: 10));
-
-    for (var attempt = 0; attempt < 12; attempt++) {
-      final dueAt = DateTime.parse(reference['nextAttemptAt'] as String);
+    var attempts = reference['attempts'] as int;
+    var dueAt = nextAttemptAt;
+    for (var retry = 0; retry < 12; retry++) {
+      final expectedDelay = Duration(
+        seconds: (5 * (1 << attempts)).clamp(5, 900).toInt(),
+      );
       pending = PaceAiService.schedulePendingMessageRetry(
         existing: pending,
         conversationId: 'conversation-a',
@@ -236,12 +226,23 @@ void main() {
         now: dueAt,
       );
       reference = pending.single;
+      nextAttemptAt = DateTime.parse(reference['nextAttemptAt'] as String);
+      expect(nextAttemptAt.difference(dueAt), expectedDelay);
+      attempts = (attempts + 1).clamp(0, 8).toInt();
+      expect(reference['attempts'], attempts);
+      dueAt = nextAttemptAt;
     }
-    nextAttemptAt = DateTime.parse(reference['nextAttemptAt'] as String);
-    final latestScheduledAt =
-        DateTime.parse(reference['nextAttemptAt'] as String);
-    expect(reference['attempts'], 8);
-    expect(nextAttemptAt.isAfter(latestScheduledAt), isFalse);
+    expect(attempts, 8);
+    expect(dueAt.difference(
+      DateTime.parse(
+        PaceAiService.schedulePendingMessageRetry(
+          existing: pending,
+          conversationId: 'conversation-a',
+          messageId: 'message-1',
+          now: dueAt,
+        ).single['nextAttemptAt'] as String,
+      ),
+    ), const Duration(seconds: -900));
   });
 
   test('durable pending queue retries an old message outside the recent window', () {
