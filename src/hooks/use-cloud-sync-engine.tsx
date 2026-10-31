@@ -164,6 +164,23 @@ export function useCloudSyncEngineInternal() {
       }
     };
 
+    let realtimeHealthy = false;
+
+    const applyRemoteRow = (rawRow: unknown) => {
+      if (cancelled || !rawRow || typeof rawRow !== "object") return;
+      const row = rawRow as SyncRow;
+      if (!row.key?.startsWith(PACE_PREFIX) || EXCLUDED.has(row.key) || row.updated_by === DEVICE_ID) return;
+      const remoteTime = Date.parse(row.updated_at);
+      if (!Number.isFinite(remoteTime)) return;
+      const localTime = Date.parse(readMeta()[row.key] ?? "1970-01-01T00:00:00.000Z");
+      if (remoteTime <= localTime || readQueue().includes(row.key)) return;
+
+      applyRemoteWrite(row.key, row.value);
+      markLocal(row.key, row.updated_at);
+      localStorage.setItem("pace.__last_sync_at", row.updated_at);
+      setStatus("ok");
+    };
+
     const syncNow = async () => {
       if (!navigator.onLine) { setStatus("offline"); return; }
       await flushQueue();
@@ -180,8 +197,29 @@ export function useCloudSyncEngineInternal() {
     const onOffline = () => setStatus("offline");
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
-    void syncNow();
-    const interval = window.setInterval(() => void syncNow(), POLL_MS);
+
+    // Realtime is the normal cross-device transport. Full user_state pulls
+    // remain a recovery path only when the channel is unavailable.
+    const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new));
+    void realtimeChannel.subscribe((subscriptionStatus) => {
+      if (subscriptionStatus === "SUBSCRIBED") {
+        realtimeHealthy = true;
+        void syncNow();
+      } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
+        realtimeHealthy = false;
+        setStatus(navigator.onLine ? "error" : "offline");
+      }
+    });
+
+    // Queue writes immediately; the subscription callback performs the first
+    // reconciliation once Realtime is active. If it never connects, recover
+    // through the bounded polling fallback below.
+    void flushQueue();
+    const interval = window.setInterval(() => {
+      if (!realtimeHealthy) void syncNow();
+    }, POLL_MS);
 
     return () => {
       cancelled = true;
@@ -189,6 +227,7 @@ export function useCloudSyncEngineInternal() {
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       window.clearInterval(interval);
+      void supabase.removeChannel(realtimeChannel);
     };
   }, [user]);
 
