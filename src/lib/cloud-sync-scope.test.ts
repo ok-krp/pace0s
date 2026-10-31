@@ -34,6 +34,7 @@ test("metadata parser accepts only valid timestamps for Pace keys", () => {
   assert.deepEqual(parseSyncMetadata(JSON.stringify({
     "pace.water": "2026-10-31T12:00:00.000Z",
     "pace.nutrition.items": "invalid",
+    "pace.profile.age": "2026-10-31T12:00:00",
     "lt.water": "2026-10-31T12:00:00.000Z",
     "other": "2026-10-31T12:00:00.000Z",
   })), { "pace.water": "2026-10-31T12:00:00.000Z" });
