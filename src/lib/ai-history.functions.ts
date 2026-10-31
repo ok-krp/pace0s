@@ -15,4 +15,4 @@ export const deleteAiConversation = createServerFn({ method: "POST" }).middlewar
 
 export const getAiPreferences = createServerFn({ method: "GET" }).middleware([requireSupabaseAuth]).handler(({ context }) => getPreferencesServer(context.supabase, context.userId));
 
-export const saveAiPreferences = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((data: unknown) => z.object({ memory_level: z.enum(["none", "limited", "complete"]), permissions: z.record(z.boolean()), confirm_actions: z.boolean() }).parse(data)).handler(({ data, context }) => savePreferencesServer(context.supabase, context.userId, data as Parameters<typeof savePreferencesServer>[2]));
+export const saveAiPreferences = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((data: unknown) => z.object({ memory_level: z.enum(["none", "limited", "complete"]), permissions: z.record(z.string(), z.boolean()), confirm_actions: z.boolean() }).parse(data)).handler(({ data, context }) => savePreferencesServer(context.supabase, context.userId, data as Parameters<typeof savePreferencesServer>[2]));
