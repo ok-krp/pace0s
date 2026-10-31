@@ -230,6 +230,8 @@ jobs:
         run: node --experimental-strip-types --test src/lib/ai-tool-state.test.ts
       - name: Test remote domain-state reconciliation
         run: node --experimental-strip-types --test src/lib/domain-store.test.ts
+      - name: Test account-scoped sync bookkeeping
+        run: node --experimental-strip-types --test src/lib/cloud-sync-scope.test.ts
       - name: Test MCP input validation
         run: node --experimental-strip-types --test src/lib/mcp/validation.test.ts
       - name: Test MCP OAuth issuer resolution
