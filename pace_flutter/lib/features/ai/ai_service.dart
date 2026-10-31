@@ -761,9 +761,22 @@ class PaceAiService {
       }
       final key = '$conversationId::$messageId';
       if (!seen.add(key)) continue;
+      final rawAttempts = value['attempts'];
+      final attempts = rawAttempts is num &&
+              rawAttempts.isFinite &&
+              rawAttempts >= 0
+          ? rawAttempts.toInt().clamp(0, 8).toInt()
+          : 0;
+      final rawNextAttemptAt = value['nextAttemptAt'];
+      final nextAttemptAt = rawNextAttemptAt is String &&
+              LocalStore.isValidIsoTimestamp(rawNextAttemptAt)
+          ? rawNextAttemptAt
+          : null;
       result.add({
         'conversationId': conversationId,
         'messageId': messageId,
+        'attempts': attempts,
+        if (nextAttemptAt != null) 'nextAttemptAt': nextAttemptAt,
       });
     }
     return result;
@@ -788,6 +801,41 @@ class PaceAiService {
       });
     }
     return references;
+  }
+
+  static List<Map<String, dynamic>> schedulePendingMessageRetry({
+    required dynamic existing,
+    required String conversationId,
+    required String messageId,
+    required DateTime now,
+  }) {
+    final references = normalizePendingMessageReferences(existing);
+    final index = references.indexWhere(
+      (entry) =>
+          entry['conversationId'] == conversationId &&
+          entry['messageId'] == messageId,
+    );
+    if (index < 0) return references;
+    final attempts = references[index]['attempts'] as int? ?? 0;
+    final delaySeconds = (5 * (1 << attempts)).clamp(5, 900).toInt();
+    references[index] = {
+      ...references[index],
+      'attempts': (attempts + 1).clamp(0, 8).toInt(),
+      'nextAttemptAt': now.toUtc()
+          .add(Duration(seconds: delaySeconds))
+          .toIso8601String(),
+    };
+    return references;
+  }
+
+  static bool isPendingMessageRetryDue({
+    required Map<String, dynamic> reference,
+    required DateTime now,
+  }) {
+    final raw = reference['nextAttemptAt'];
+    if (raw is! String || !LocalStore.isValidIsoTimestamp(raw)) return true;
+    final dueAt = DateTime.tryParse(raw)?.toUtc();
+    return dueAt == null || !dueAt.isAfter(now.toUtc());
   }
 
   static List<Map<String, dynamic>> removePendingMessageReference({
@@ -879,6 +927,19 @@ class PaceAiService {
         ),
       );
 
+  Future<void> _schedulePendingMessageRetry(
+    AiConversation conversation,
+    AiMessage message,
+  ) =>
+      _mutatePendingMessageReferences(
+        (existing) => schedulePendingMessageRetry(
+          existing: existing,
+          conversationId: conversation.id,
+          messageId: message.id,
+          now: DateTime.now().toUtc(),
+        ),
+      );
+
   Future<void> _clearPendingMessage(
     AiConversation conversation,
     AiMessage message,
@@ -926,8 +987,11 @@ class PaceAiService {
     final pendingReferences =
         references ?? await _readPendingMessageReferences();
     if (pendingReferences.isEmpty || !_isAccountScopeCurrent) return;
+    final now = DateTime.now().toUtc();
     for (final reference in pendingReferences.where(
-      (entry) => entry['conversationId'] == conversationId,
+      (entry) =>
+          entry['conversationId'] == conversationId &&
+          isPendingMessageRetryDue(reference: entry, now: now),
     )) {
       if (!_isAccountScopeCurrent) return;
       final referenceConversationId =
@@ -1446,7 +1510,10 @@ class PaceAiService {
     }
     final client = _client;
     final user = _scopedUser;
-    if (client == null || user == null) return false;
+    if (client == null || user == null) {
+      await _schedulePendingMessageRetry(conversation, message);
+      return false;
+    }
     try {
       await client.from('ai_messages').upsert({
         'id': message.id,
@@ -1464,7 +1531,13 @@ class PaceAiService {
       await _clearPendingMessage(conversation, message);
       return true;
     } catch (_) {
-      // Keep the durable reference for a later load or send.
+      // Back off failed requests so every new turn does not immediately retry
+      // the same offline message and generate avoidable egress.
+      if (_isAccountScopeCurrent) {
+        try {
+          await _schedulePendingMessageRetry(conversation, message);
+        } catch (_) {}
+      }
       return false;
     }
   }
