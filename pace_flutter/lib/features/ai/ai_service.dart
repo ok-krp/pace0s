@@ -852,6 +852,9 @@ class PaceAiService {
         localStore.read(_pendingMessagesKey),
       );
       final next = mutate(current);
+      // An idempotent enqueue or an acknowledgement for an already-removed
+      // reference must not flush the entire local store again.
+      if (jsonEncode(current) == jsonEncode(next)) return;
       await localStore.writeForAccount(
         _accountUserId,
         _pendingMessagesKey,
