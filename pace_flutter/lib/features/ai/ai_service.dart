@@ -491,11 +491,25 @@ class PaceAiService {
       // remote snapshot whenever history is loaded again, so a temporary
       // network error cannot strand a message on this device indefinitely.
       if (latestLocal.id.isNotEmpty) {
+        final pendingReferences = await _readPendingMessageReferences();
+        final pendingForConversation = pendingReferences
+            .where((entry) => entry['conversationId'] == id)
+            .toList();
+        final pendingById = <String, Map<String, dynamic>>{
+          for (final entry in pendingForConversation)
+            entry['messageId']!.toString(): entry,
+        };
+        final now = DateTime.now().toUtc();
         for (final message in messagesMissingFromRemote(
           local: latestLocal.messages,
           remote: remoteMessages,
         )) {
           if (!_isAccountScopeCurrent) return const <AiMessage>[];
+          final pending = pendingById[message.id];
+          if (pending != null &&
+              !isPendingMessageRetryDue(reference: pending, now: now)) {
+            continue;
+          }
           await _insertCloudMessage(latestLocal, message);
         }
       }
