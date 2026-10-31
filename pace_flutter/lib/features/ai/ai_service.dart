@@ -746,7 +746,7 @@ class PaceAiService {
   static List<Map<String, dynamic>> normalizePendingMessageReferences(
     dynamic raw,
   ) {
-    if (raw is! List) return const <Map<String, dynamic>>[];
+    if (raw is! List) return <Map<String, dynamic>>[];
     final result = <Map<String, dynamic>>[];
     final seen = <String>{};
     for (final value in raw) {
@@ -905,7 +905,6 @@ class PaceAiService {
     final pendingReferences =
         references ?? await _readPendingMessageReferences();
     if (pendingReferences.isEmpty || !_isAccountScopeCurrent) return;
-    final conversations = loadLocalConversations();
     for (final reference in pendingReferences.where(
       (entry) => entry['conversationId'] == conversationId,
     )) {
@@ -913,7 +912,9 @@ class PaceAiService {
       final referenceConversationId =
           reference['conversationId']?.toString() ?? '';
       final messageId = reference['messageId']?.toString() ?? '';
-      final matching = conversations.where(
+      // Re-read after each network attempt: a concurrent local deletion must
+      // not be followed by an upload from a stale conversation snapshot.
+      final matching = loadLocalConversations().where(
         (item) => item.id == referenceConversationId && !item.ephemeral,
       );
       if (matching.isEmpty) continue;
@@ -1308,7 +1309,11 @@ class PaceAiService {
     AiConversation conversation,
     AiMessage message,
   ) async {
-    if (conversation.ephemeral || !_isAccountScopeCurrent) return false;
+    if (conversation.ephemeral ||
+        !_isAccountScopeCurrent ||
+        !loadLocalConversations().any((item) => item.id == conversation.id)) {
+      return false;
+    }
 
     // Persist a local reference before the network request. If the device goes
     // offline, the message survives outside the bounded recent-history window.
