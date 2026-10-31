@@ -34,6 +34,7 @@ test("remote domain writes update the versioned record and legacy key without en
   assert.deepEqual(record.value, nutrition);
   assert.deepEqual(JSON.parse(values.get("pace.nutrition.items") ?? "null"), nutrition);
   assert.equal(domainEvents.length, 1);
+  assert.equal((domainEvents[0] as CustomEvent).detail.remote, true);
   assert.equal(localWrites.length, 0);
 });
 
