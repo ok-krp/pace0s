@@ -89,7 +89,7 @@ jobs:
           cache: npm
       - name: Resolve targeted dependency overrides in both lockfiles
         run: |
-          bun install --lockfile-only --ignore-scripts --minimum-release-age-excludes "node-releases@2.0.62,electron-to-chromium@1.5.469"
+          bun install --lockfile-only --ignore-scripts --minimum-release-age-excludes "node-releases@2.0.62,electron-to-chromium@1.5.469,eslint@10.14.0"
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Export regenerated package manager lockfiles
         run: |
