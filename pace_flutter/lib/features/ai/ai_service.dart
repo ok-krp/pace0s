@@ -1322,7 +1322,11 @@ class PaceAiService {
     } catch (_) {
       // Still attempt a direct cloud write when local queue persistence fails.
     }
-    if (!_isAccountScopeCurrent) return false;
+    if (!_isAccountScopeCurrent ||
+        !loadLocalConversations().any((item) => item.id == conversation.id)) {
+      await _clearPendingMessage(conversation, message);
+      return false;
+    }
     final client = _client;
     final user = _scopedUser;
     if (client == null || user == null) return false;
