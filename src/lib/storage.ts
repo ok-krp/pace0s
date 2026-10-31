@@ -1,3 +1,4 @@
+import { applyRemoteDomainWrite } from "@/lib/domain-store";
 import { useEffect, useState, useCallback } from "react";
 
 const OLD_PREFIX = "lt.";
@@ -125,8 +126,19 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   return [value, set];
 }
 
-export function applyRemoteWrite(key: string, value: unknown) {
+export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  // Some migrated domains keep an authoritative versioned record alongside
+  // their legacy Pace key. Update both representations on remote sync so a
+  // later domain read cannot resurrect stale local data.
+  if (key.startsWith(NEW_PREFIX)) {
+    const domain = key.slice(NEW_PREFIX.length);
+    try {
+      if (localStorage.getItem(`pace.domain.${domain}`) !== null) {
+        applyRemoteDomainWrite(domain, value, updatedAt);
+      }
+    } catch {}
+  }
   window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value } }));
 }
 
