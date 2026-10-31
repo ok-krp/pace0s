@@ -173,7 +173,13 @@ export function useCloudSyncEngineInternal() {
       if (cancelled || !rawRow || typeof rawRow !== "object") return;
       const row = rawRow as SyncRow;
       if (typeof row.key !== "string" || row.updated_by === DEVICE_ID) return;
-      const key = row.key.startsWith("lt.") ? `${PACE_PREFIX}${row.key.slice(3)}` : row.key;
+      // Legacy rows must go through the compatibility merge in pull(); mapping
+      // one legacy row directly could overwrite a newer canonical value.
+      if (row.key.startsWith("lt.")) {
+        void pull();
+        return;
+      }
+      const key = row.key;
       if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return;
       const remoteTime = Date.parse(row.updated_at);
       if (!Number.isFinite(remoteTime)) return;
