@@ -11,8 +11,6 @@ const EXCLUDED = new Set<string>(["pace.sport.active"]);
 // Keep it at 60s to reduce repeated downloads of large account snapshots.
 const POLL_MS = 60000;
 const FULL_RECONCILIATION_MS = 24 * 60 * 60 * 1000;
-const QUEUE_KEY = "pace.__sync_queue";
-const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
 const DEVICE_ID = getDeviceId();
 
@@ -31,13 +29,15 @@ function getDeviceId() {
   } catch { return `${Date.now()}-${Math.random()}`; }
 }
 
-function readQueue(): string[] { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]"); } catch { return []; } }
-function writeQueue(keys: string[]) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify([...new Set(keys)])); } catch { /* Storage may be unavailable; keep the in-memory sync path. */ } }
-function queueKey(key: string) { if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return; writeQueue([...readQueue(), key]); }
-function unqueueKey(key: string) { writeQueue(readQueue().filter((k) => k !== key)); }
-function readMeta(): SyncMeta { try { return JSON.parse(localStorage.getItem(META_KEY) ?? "{}"); } catch { return {}; } }
-function writeMeta(meta: SyncMeta) { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch { /* Storage may be unavailable; metadata can be rebuilt on the next sync. */ } }
-function markLocal(key: string, timestamp: string) { const meta = readMeta(); meta[key] = timestamp; writeMeta(meta); }
+function syncQueueStorageKey(userId: string) { return `pace.__sync_queue:${encodeURIComponent(userId)}`; }
+function syncMetaStorageKey(userId: string) { return `pace.__sync_meta:${encodeURIComponent(userId)}`; }
+function readQueue(userId: string): string[] { try { const value: unknown = JSON.parse(localStorage.getItem(syncQueueStorageKey(userId)) ?? "[]"); return Array.isArray(value) ? value.filter((key): key is string => typeof key === "string") : []; } catch { return []; } }
+function writeQueue(userId: string, keys: string[]) { try { localStorage.setItem(syncQueueStorageKey(userId), JSON.stringify([...new Set(keys)])); } catch { /* Storage may be unavailable; keep the in-memory sync path. */ } }
+function queueKey(userId: string, key: string) { if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return; writeQueue(userId, [...readQueue(userId), key]); }
+function unqueueKey(userId: string, key: string) { writeQueue(userId, readQueue(userId).filter((k) => k !== key)); }
+function readMeta(userId: string): SyncMeta { try { const value: unknown = JSON.parse(localStorage.getItem(syncMetaStorageKey(userId)) ?? "{}"); return value && typeof value === "object" && !Array.isArray(value) ? value as SyncMeta : {}; } catch { return {}; } }
+function writeMeta(userId: string, meta: SyncMeta) { try { localStorage.setItem(syncMetaStorageKey(userId), JSON.stringify(meta)); } catch { /* Storage may be unavailable; metadata can be rebuilt on the next sync. */ } }
+function markLocal(userId: string, key: string, timestamp: string) { const meta = readMeta(userId); meta[key] = timestamp; writeMeta(userId, meta); }
 
 function isEmptyValue(value: unknown) {
   if (value == null || value === "") return true;
@@ -54,7 +54,7 @@ function isEmptyValue(value: unknown) {
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
-  const running = useRef(false);
+  const running = useRef<Record<string, boolean>>({});
   const keyWrites = useRef<Record<string, Promise<void>>>({});
 
   useEffect(() => {
@@ -65,9 +65,10 @@ export function useCloudSyncEngineInternal() {
 
     const pushKeyNow = async (key: string) => {
       if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
-      queueKey(key);
+      queueKey(user.id, key);
 
-      const previous = keyWrites.current[key] ?? Promise.resolve();
+      const writeId = `${user.id}:${key}`;
+      const previous = keyWrites.current[writeId] ?? Promise.resolve();
       const current = previous.then(async () => {
         if (cancelled) return;
         if (!navigator.onLine) { setStatus("offline"); return; }
@@ -99,41 +100,41 @@ export function useCloudSyncEngineInternal() {
             const row = rows?.[0] as SyncRow | undefined;
             if (row) {
               applyRemoteWrite(key, row.value, row.updated_at);
-              markLocal(key, row.updated_at);
+              markLocal(user.id, key, row.updated_at);
             }
           } else {
-            markLocal(key, updatedAt);
+            markLocal(user.id, key, updatedAt);
             localStorage.setItem("pace.__last_sync_at", updatedAt);
           }
 
-          unqueueKey(key);
+          unqueueKey(user.id, key);
           setStatus("ok");
         } catch {
           if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
         }
       });
 
-      keyWrites.current[key] = current.catch(() => undefined);
+      keyWrites.current[writeId] = current.catch(() => undefined);
       await current;
     };
 
     const flushQueue = async () => {
-      if (cancelled || !navigator.onLine || running.current) return;
-      const queue = readQueue();
+      if (cancelled || !navigator.onLine || running.current[user.id]) return;
+      const queue = readQueue(user.id);
       if (!queue.length) return;
-      running.current = true;
+      running.current[user.id] = true;
       try { for (const key of queue) await pushKeyNow(key); }
-      finally { running.current = false; }
+      finally { running.current[user.id] = false; }
     };
 
     const pull = async () => {
-      if (cancelled || !navigator.onLine || running.current) return;
+      if (cancelled || !navigator.onLine || running.current[user.id]) return;
       try {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
         if (error || !data || cancelled) return;
         lastFullReconciliationAt = Date.now();
-        const queue = new Set(readQueue());
-        const meta = readMeta();
+        const queue = new Set(readQueue(user.id));
+        const meta = readMeta(user.id);
         let applied = 0;
         let newest = "";
 
@@ -159,7 +160,7 @@ export function useCloudSyncEngineInternal() {
           applied++;
         }
 
-        writeMeta(meta);
+        writeMeta(user.id, meta);
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (applied > 0) setStatus("ok");
       } catch {
@@ -183,11 +184,11 @@ export function useCloudSyncEngineInternal() {
       if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return;
       const remoteTime = Date.parse(row.updated_at);
       if (!Number.isFinite(remoteTime)) return;
-      const localTime = Date.parse(readMeta()[key] ?? "1970-01-01T00:00:00.000Z");
-      if (remoteTime <= localTime || readQueue().includes(key)) return;
+      const localTime = Date.parse(readMeta(user.id)[key] ?? "1970-01-01T00:00:00.000Z");
+      if (remoteTime <= localTime || readQueue(user.id).includes(key)) return;
 
       applyRemoteWrite(key, row.value, row.updated_at);
-      markLocal(key, row.updated_at);
+      markLocal(user.id, key, row.updated_at);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
       setStatus("ok");
     };
@@ -200,7 +201,7 @@ export function useCloudSyncEngineInternal() {
 
     const offLocal = onLocalWrite((key) => {
       if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
-      queueKey(key);
+      queueKey(user.id, key);
       void pushKeyNow(key);
     });
 
@@ -248,7 +249,7 @@ export function useCloudSyncEngineInternal() {
     };
   }, [user]);
 
-  return { status, queuedCount: readQueue().length };
+  return { status, queuedCount: user ? readQueue(user.id).length : 0 };
 }
 
 const SyncStatusContext = createContext<SyncStatus>("idle");
