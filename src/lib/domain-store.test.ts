@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyRemoteDomainWrite, writeDomain } from "./domain-store.ts";
+import { applyRemoteDomainWrite, shouldApplyDomainRecord, writeDomain } from "./domain-store.ts";
 
 const values = new Map<string, string>();
 const localStorageMock = {
@@ -64,4 +64,22 @@ test("local domain writes always publish the existing sync event without a secon
   assert.deepEqual((localWrites[0] as CustomEvent).detail, { key: "pace.nutrition.items", value: nutrition });
   assert.equal(domainEvents.length, 1);
   assert.equal(values.has("pace.domain.outbox"), false);
+});
+
+test("accepted remote domain records override a locally clock-skewed timestamp", () => {
+  const local = {
+    version: 1 as const,
+    updatedAt: "2035-01-01T00:00:00.000Z",
+    mutationId: "local-clock-ahead",
+    value: { kcal: 500 },
+  };
+  const remote = {
+    version: 1 as const,
+    updatedAt: "2026-10-31T12:00:00.000Z",
+    mutationId: "remote-authoritative",
+    value: { kcal: 250 },
+  };
+
+  assert.equal(shouldApplyDomainRecord(remote, local, true), true);
+  assert.equal(shouldApplyDomainRecord(remote, local, false), false);
 });
