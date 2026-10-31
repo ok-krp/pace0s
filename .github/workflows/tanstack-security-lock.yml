@@ -238,6 +238,8 @@ jobs:
         run: >-
           npx eslint --rule 'prettier/prettier: off'
           src/lib/ai-chat.server.ts
+          src/lib/ai-history.functions.ts
+          src/lib/ai-history.server.ts
           src/lib/ai-tool-state.ts
           src/lib/ai-tool-state.test.ts
           src/lib/mcp/issuer.ts
