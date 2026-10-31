@@ -233,16 +233,16 @@ void main() {
       dueAt = nextAttemptAt;
     }
     expect(attempts, 8);
-    expect(dueAt.difference(
-      DateTime.parse(
-        PaceAiService.schedulePendingMessageRetry(
-          existing: pending,
-          conversationId: 'conversation-a',
-          messageId: 'message-1',
-          now: dueAt,
-        ).single['nextAttemptAt'] as String,
-      ),
-    ), const Duration(seconds: -900));
+    final cappedRetry = PaceAiService.schedulePendingMessageRetry(
+      existing: pending,
+      conversationId: 'conversation-a',
+      messageId: 'message-1',
+      now: dueAt,
+    ).single;
+    final cappedAt =
+        DateTime.parse(cappedRetry['nextAttemptAt'] as String);
+    expect(cappedAt.difference(dueAt), const Duration(seconds: 900));
+    expect(cappedRetry['attempts'], 8);
   });
 
   test('durable pending queue retries an old message outside the recent window', () {
