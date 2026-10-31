@@ -7,7 +7,9 @@ import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 
 const PACE_PREFIX = "pace.";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
-const POLL_MS = 15000;
+// Full user_state reconciliation is a fallback, not a realtime transport.
+// Keep it at 60s to reduce repeated downloads of large account snapshots.
+const POLL_MS = 60000;
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
