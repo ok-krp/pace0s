@@ -347,10 +347,10 @@ class PaceAiService {
     }
     final conversations = loadLocalConversations().toList()
       ..removeWhere((item) => item.id == id);
-    await _saveLocalConversations(conversations);
-    // A deleted conversation has no remaining message history to upload.
-    // Remove pending message references so they cannot retry forever.
-    await _removePendingMessagesForConversation(id);
+    await _persistConversationDeletion(
+      conversationId: id,
+      conversations: conversations,
+    );
     if (client != null && user != null) {
       await _retryPendingConversationDeletes(client, user.id);
     }
@@ -891,15 +891,33 @@ class PaceAiService {
         ),
       );
 
-  Future<void> _removePendingMessagesForConversation(
-    String conversationId,
-  ) =>
-      _mutatePendingMessageReferences(
-        (existing) => removePendingMessagesForConversation(
-          existing: existing,
-          conversationId: conversationId,
-        ),
+  Future<void> _persistConversationDeletion({
+    required String conversationId,
+    required List<AiConversation> conversations,
+  }) async {
+    final previous = _pendingMessageQueue;
+    final completer = Completer<void>();
+    _pendingMessageQueue = completer.future;
+    try {
+      await previous;
+      if (!_isAccountScopeCurrent || _accountUserId == null) return;
+      final references = removePendingMessagesForConversation(
+        existing: localStore.read(_pendingMessagesKey),
+        conversationId: conversationId,
       );
+      await localStore.writeBatchForAccount(
+        _accountUserId,
+        writes: {
+          _conversationKey:
+              conversations.map((item) => item.toJson()).toList(),
+          _pendingMessagesKey: references,
+        },
+        enqueueSync: false,
+      );
+    } finally {
+      completer.complete();
+    }
+  }
 
   Future<void> _retryPendingMessages({
     required String conversationId,
