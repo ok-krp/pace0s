@@ -98,7 +98,7 @@ export function useCloudSyncEngineInternal() {
             const { data: rows } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", key).limit(1);
             const row = rows?.[0] as SyncRow | undefined;
             if (row) {
-              applyRemoteWrite(key, row.value);
+              applyRemoteWrite(key, row.value, row.updated_at);
               markLocal(key, row.updated_at);
             }
           } else {
@@ -153,7 +153,7 @@ export function useCloudSyncEngineInternal() {
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           if (!shouldRecoverLegacy && (!Number.isFinite(remoteTime) || remoteTime <= localTime)) continue;
 
-          applyRemoteWrite(key, row.value);
+          applyRemoteWrite(key, row.value, row.updated_at);
           meta[key] = row.updated_at;
           newest = row.updated_at;
           applied++;
@@ -186,7 +186,7 @@ export function useCloudSyncEngineInternal() {
       const localTime = Date.parse(readMeta()[key] ?? "1970-01-01T00:00:00.000Z");
       if (remoteTime <= localTime || readQueue().includes(key)) return;
 
-      applyRemoteWrite(key, row.value);
+      applyRemoteWrite(key, row.value, row.updated_at);
       markLocal(key, row.updated_at);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
       setStatus("ok");
