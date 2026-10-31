@@ -1315,6 +1315,26 @@ class PaceAiService {
       jsonEncode(current.map((message) => message.toJson()).toList()) !=
       jsonEncode(next.map((message) => message.toJson()).toList());
 
+  /// Rebase a pending local edit on the latest conversation snapshot without
+  /// dropping messages appended by another in-flight send or metadata refresh.
+  static AiConversation rebaseConversationForAtomicWrite({
+    required AiConversation latest,
+    required AiConversation intended,
+  }) {
+    if (latest.id != intended.id) {
+      throw ArgumentError('Cannot rebase different conversations');
+    }
+    return latest.copyWith(
+      messages: mergeMessages(
+        local: intended.messages,
+        remote: latest.messages,
+      ),
+      updatedAt: intended.updatedAt.isAfter(latest.updatedAt)
+          ? intended.updatedAt
+          : latest.updatedAt,
+    );
+  }
+
   Future<void> _replaceMessages(
     String id,
     List<AiMessage> messages, {
@@ -1373,16 +1393,9 @@ class PaceAiService {
       );
       if (intended.isEmpty) return;
       final latest = latestConversations[latestIndex];
-      final desired = intended.first;
-      final mergedMessages = mergeMessages(
-        local: desired.messages,
-        remote: latest.messages,
-      );
-      latestConversations[latestIndex] = latest.copyWith(
-        messages: mergedMessages,
-        updatedAt: desired.updatedAt.isAfter(latest.updatedAt)
-            ? desired.updatedAt
-            : latest.updatedAt,
+      latestConversations[latestIndex] = rebaseConversationForAtomicWrite(
+        latest: latest,
+        intended: intended.first,
       );
 
       var references = normalizePendingMessageReferences(
