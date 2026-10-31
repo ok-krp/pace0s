@@ -95,6 +95,50 @@ void main() {
     );
   });
 
+  test('atomic conversation rebase preserves concurrent messages and latest metadata', () {
+    final now = DateTime.utc(2026, 10, 31);
+    final latest = AiConversation(
+      id: 'conversation-atomic',
+      agent: PaceAiAgent.coach,
+      title: 'Titre renommé pendant le send',
+      updatedAt: now.add(const Duration(seconds: 3)),
+      messages: [
+        AiMessage(
+          id: 'message-concurrent',
+          role: 'user',
+          text: 'message concurrent',
+          createdAt: now.add(const Duration(seconds: 2)),
+        ),
+      ],
+    );
+    final intended = AiConversation(
+      id: 'conversation-atomic',
+      agent: PaceAiAgent.coach,
+      title: 'Ancien titre capturé',
+      updatedAt: now.add(const Duration(seconds: 1)),
+      messages: [
+        AiMessage(
+          id: 'message-pending',
+          role: 'assistant',
+          text: 'message du send',
+          createdAt: now.add(const Duration(seconds: 1)),
+        ),
+      ],
+    );
+
+    final rebased = PaceAiService.rebaseConversationForAtomicWrite(
+      latest: latest,
+      intended: intended,
+    );
+
+    expect(rebased.title, 'Titre renommé pendant le send');
+    expect(rebased.updatedAt, latest.updatedAt);
+    expect(rebased.messages.map((message) => message.id).toSet(), {
+      'message-concurrent',
+      'message-pending',
+    });
+  });
+
   test('pending AI upload references are idempotent and conversation-scoped', () {
     var references = PaceAiService.addPendingMessageReference(
       existing: const <Map<String, dynamic>>[],
