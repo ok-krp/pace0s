@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
+import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue } from "@/lib/cloud-sync-scope";
 
 const PACE_PREFIX = "pace.";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
@@ -29,14 +30,12 @@ function getDeviceId() {
   } catch { return `${Date.now()}-${Math.random()}`; }
 }
 
-function syncQueueStorageKey(userId: string) { return `pace.__sync_queue:${encodeURIComponent(userId)}`; }
-function syncMetaStorageKey(userId: string) { return `pace.__sync_meta:${encodeURIComponent(userId)}`; }
-function readQueue(userId: string): string[] { try { const value: unknown = JSON.parse(localStorage.getItem(syncQueueStorageKey(userId)) ?? "[]"); return Array.isArray(value) ? value.filter((key): key is string => typeof key === "string") : []; } catch { return []; } }
-function writeQueue(userId: string, keys: string[]) { try { localStorage.setItem(syncQueueStorageKey(userId), JSON.stringify([...new Set(keys)])); } catch { /* Storage may be unavailable; keep the in-memory sync path. */ } }
+function readQueue(userId: string): string[] { try { return parseSyncQueue(localStorage.getItem(accountSyncStorageKeys(userId).queue)); } catch { return []; } }
+function writeQueue(userId: string, keys: string[]) { try { localStorage.setItem(accountSyncStorageKeys(userId).queue, JSON.stringify([...new Set(keys)])); } catch { /* Storage may be unavailable; keep the in-memory sync path. */ } }
 function queueKey(userId: string, key: string) { if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return; writeQueue(userId, [...readQueue(userId), key]); }
 function unqueueKey(userId: string, key: string) { writeQueue(userId, readQueue(userId).filter((k) => k !== key)); }
-function readMeta(userId: string): SyncMeta { try { const value: unknown = JSON.parse(localStorage.getItem(syncMetaStorageKey(userId)) ?? "{}"); return value && typeof value === "object" && !Array.isArray(value) ? value as SyncMeta : {}; } catch { return {}; } }
-function writeMeta(userId: string, meta: SyncMeta) { try { localStorage.setItem(syncMetaStorageKey(userId), JSON.stringify(meta)); } catch { /* Storage may be unavailable; metadata can be rebuilt on the next sync. */ } }
+function readMeta(userId: string): SyncMeta { try { return parseSyncMetadata(localStorage.getItem(accountSyncStorageKeys(userId).metadata)); } catch { return {}; } }
+function writeMeta(userId: string, meta: SyncMeta) { try { localStorage.setItem(accountSyncStorageKeys(userId).metadata, JSON.stringify(meta)); } catch { /* Storage may be unavailable; metadata can be rebuilt on the next sync. */ } }
 function markLocal(userId: string, key: string, timestamp: string) { const meta = readMeta(userId); meta[key] = timestamp; writeMeta(userId, meta); }
 
 function isEmptyValue(value: unknown) {
