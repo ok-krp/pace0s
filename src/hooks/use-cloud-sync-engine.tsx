@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 
@@ -28,11 +29,11 @@ function getDeviceId() {
 }
 
 function readQueue(): string[] { try { return JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]"); } catch { return []; } }
-function writeQueue(keys: string[]) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify([...new Set(keys)])); } catch {} }
+function writeQueue(keys: string[]) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify([...new Set(keys)])); } catch { /* Storage may be unavailable; keep the in-memory sync path. */ } }
 function queueKey(key: string) { if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return; writeQueue([...readQueue(), key]); }
 function unqueueKey(key: string) { writeQueue(readQueue().filter((k) => k !== key)); }
 function readMeta(): SyncMeta { try { return JSON.parse(localStorage.getItem(META_KEY) ?? "{}"); } catch { return {}; } }
-function writeMeta(meta: SyncMeta) { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch {} }
+function writeMeta(meta: SyncMeta) { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch { /* Storage may be unavailable; metadata can be rebuilt on the next sync. */ } }
 function markLocal(key: string, timestamp: string) { const meta = readMeta(); meta[key] = timestamp; writeMeta(meta); }
 
 function isEmptyValue(value: unknown) {
@@ -73,10 +74,10 @@ export function useCloudSyncEngineInternal() {
         setStatus("syncing");
 
         try {
-          const { data, error } = await (supabase.rpc as never)("upsert_user_state_if_newer", {
+          const { data, error } = await supabase.rpc("upsert_user_state_if_newer", {
             p_user_id: user.id,
             p_key: key,
-            p_value: value,
+            p_value: value as Json,
             p_updated_at: updatedAt,
             p_updated_by: DEVICE_ID,
           });
@@ -140,7 +141,7 @@ export function useCloudSyncEngineInternal() {
 
           const localRaw = localStorage.getItem(key);
           let localValue: unknown = null;
-          try { if (localRaw !== null) localValue = JSON.parse(localRaw); } catch {}
+          try { if (localRaw !== null) localValue = JSON.parse(localRaw); } catch { /* Ignore malformed local JSON and evaluate the remote value below. */ }
           const shouldRecoverLegacy = isLegacy && isEmptyValue(localValue) && !isEmptyValue(row.value);
 
           const remoteTime = Date.parse(row.updated_at);

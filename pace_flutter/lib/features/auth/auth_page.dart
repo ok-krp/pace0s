@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import '../../core/supabase/pace_supabase.dart';
 
 class AuthPage extends StatefulWidget {
-  const AuthPage({super.key, required this.auth});
+  const AuthPage({super.key, required this.auth, required this.onContinueOffline});
 
   final PaceAuthService auth;
+  final VoidCallback onContinueOffline;
 
   @override
   State<AuthPage> createState() => _AuthPageState();
@@ -72,6 +73,14 @@ class _AuthPageState extends State<AuthPage> {
                     const SizedBox(height: 20),
                     FilledButton(onPressed: _busy ? null : _submit, child: Text(_busy ? 'Connexion…' : (_createAccount ? 'Créer le compte' : 'Se connecter'))),
                     TextButton(onPressed: _busy ? null : () => setState(() => _createAccount = !_createAccount), child: Text(_createAccount ? 'J’ai déjà un compte' : 'Créer un compte')),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      // Keep offline escape available even if a cloud auth
+                      // request is stalled by DNS/network failure.
+                      onPressed: widget.onContinueOffline,
+                      icon: const Icon(Icons.cloud_off_outlined),
+                      label: const Text('Continuer hors connexion'),
+                    ),
                   ],
                 ),
               ),

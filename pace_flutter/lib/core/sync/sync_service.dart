@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../storage/local_store.dart';
@@ -10,52 +12,580 @@ class SyncService {
   final LocalStore localStore;
   final SupabaseClient? client;
   bool _running = false;
+  bool _rerunRequested = false;
+  // LocalStore mutates memory before disk flush; remember failed marker flushes
+  // so a later pass cannot mistake an in-memory marker for durable state.
+  // A failed local flush belongs to the active account's file, not to the
+  // service globally. Keep uncertainty scoped across account switches.
+  final Set<String> _aiPreferenceMarkerPersistenceUncertainUsers = <String>{};
 
-  Future<void> syncNow() async {
-    if (_running || client == null || client!.auth.currentUser == null) return;
-    _running = true;
-    try {
-      final hadLocalAiPreferenceMutation = localStore.pendingOperations().any(
-        (operation) => operation['key'] == 'pace.settings.ai.confirm_actions' || operation['key'] == 'pace.settings.ai.memory',
+  /// True only while the active session and durable store are settled on
+  /// the expected account. The store closes its switch gate synchronously,
+  /// before [activeUserId] changes, so checking the ID alone is insufficient.
+  static bool isSyncScopeCurrent({
+    required bool accountSwitching,
+    required String? authenticatedUserId,
+    required String? activeUserId,
+    required String expectedUserId,
+  }) =>
+      !accountSwitching &&
+      authenticatedUserId == expectedUserId &&
+      activeUserId == expectedUserId;
+
+  bool _isCurrentAccount(String expectedUserId) => isSyncScopeCurrent(
+        accountSwitching: localStore.isSwitchingAccount,
+        authenticatedUserId: client?.auth.currentUser?.id,
+        activeUserId: localStore.activeUserId,
+        expectedUserId: expectedUserId,
       );
-      await _pushPending();
-      await _syncAiPreferences(pushLocal: hadLocalAiPreferenceMutation);
-      await _pullRemote();
-    } finally {
-      _running = false;
+
+  /// Supports the boolean return type in the checked-in SQL migration and
+  /// structured responses from compatible deployments that include metadata.
+  static bool isUserStateWriteAccepted(dynamic response) {
+    // The checked-in RPC returns bool; newer deployments may return an object
+    // containing acceptance and the database timestamp. Reject partial objects.
+    if (response == true) return true;
+    if (response is! Map || response['accepted'] != true) return false;
+    final updatedAt = response['updated_at'];
+    return updatedAt is String && LocalStore.isValidRemoteTimestamp(updatedAt);
+  }
+
+  /// Prefer a database-authoritative updated_at when a structured RPC
+  /// response provides one. The checked-in boolean RPC writes p_updated_at
+  /// directly, so its fallback is the exact timestamp sent to PostgreSQL.
+  static String userStateWriteUpdatedAt(
+    dynamic response, {
+    required String fallback,
+  }) {
+    if (response is Map) {
+      final raw = response['updated_at'];
+      if (raw is String && LocalStore.isValidRemoteTimestamp(raw)) {
+        final parsed = DateTime.parse(raw);
+        return parsed.toUtc().toIso8601String();
+      }
+    }
+    // Older compatible RPCs may return a bare boolean; retain their existing
+    // fallback behavior instead of making a successful write fail locally.
+    return fallback;
+  }
+
+  /// Keys kept out of the native user_state mirror.
+  /// AI conversations/messages already use their dedicated tables; copying the
+  /// full transcript cache into user_state duplicates large payloads on every
+  /// edit and full reconciliation. Delete tombstones are local retry metadata.
+  static const Set<String> excludedSyncKeys = {
+    'pace.sport.active',
+    'pace.ai.conversations',
+    'pace.ai.deleted_conversations',
+  };
+
+  // Exclude both canonical and legacy aliases in the database query itself.
+  // Client-side filtering alone would still download large transcript blobs
+  // during every full reconciliation before discarding them locally.
+  static const Set<String> excludedRemotePullKeys = {
+    ...excludedSyncKeys,
+    'lt.sport.active',
+    'lt.ai.conversations',
+    'lt.ai.deleted_conversations',
+  };
+
+  static const String excludedRemotePullKeysFilter =
+      '("pace.sport.active","pace.ai.conversations",'
+      '"pace.ai.deleted_conversations","lt.sport.active",'
+      '"lt.ai.conversations","lt.ai.deleted_conversations")';
+
+  static bool isSyncableKey(String key) =>
+      key.startsWith('pace.') &&
+      !key.startsWith('pace.__sync_') &&
+      !excludedSyncKeys.contains(key);
+
+  /// Reject malformed persisted operations before any network request. Such
+  /// entries are quarantined locally so one poison record cannot retry forever.
+  static bool isValidOutboxOperation(Map<String, dynamic> operation) =>
+      LocalStore.isValidOutboxOperation(operation);
+
+  /// Normalize queued timestamps to UTC before sending them to PostgreSQL.
+  /// Older local files may contain a local timestamp without an explicit zone;
+  /// sending that raw string would make its meaning depend on the DB session TZ.
+  static String normalizedOutboxTimestamp(
+    dynamic queuedAt, {
+    required DateTime fallbackNow,
+  }) {
+    final parsed = queuedAt is String && LocalStore.isValidIsoTimestamp(queuedAt)
+        ? DateTime.tryParse(queuedAt)
+        : null;
+    return (parsed ?? fallbackNow).toUtc().toIso8601String();
+  }
+
+  /// Maps legacy cloud keys to the canonical Pace namespace, matching the web
+  /// sync engine. This does not import the unscoped legacy local file.
+  static String normalizeRemoteKey(String key) =>
+      key.startsWith('lt.') ? 'pace.${key.substring(3)}' : key;
+
+  static bool isEmptyValue(dynamic value) {
+    if (value == null || value == '') return true;
+    if (value is List) return value.isEmpty;
+    if (value is Map) return value.isEmpty;
+    return false;
+  }
+
+  /// Mirrors the web client's legacy recovery rule while retaining the native
+  /// requirement that remote timestamps must be valid before applying a row.
+  static bool shouldApplyRemoteValue({
+    required bool isLegacy,
+    required dynamic localValue,
+    required dynamic remoteValue,
+    required DateTime? localUpdatedAt,
+    required DateTime remoteUpdatedAt,
+  }) {
+    final shouldRecoverLegacy =
+        isLegacy && isEmptyValue(localValue) && !isEmptyValue(remoteValue);
+    return shouldRecoverLegacy ||
+        localUpdatedAt == null ||
+        remoteUpdatedAt.isAfter(localUpdatedAt);
+  }
+
+  static const Duration fullReconciliationInterval = Duration(hours: 24);
+  // Keep a small overlap because the client and database clocks may differ.
+  static const Duration cursorOverlapWindow = Duration(minutes: 2);
+
+  static bool shouldRunFullReconciliation({
+    required DateTime? cursorAt,
+    required DateTime? lastFullPullAt,
+    required DateTime now,
+  }) {
+    if (cursorAt == null || lastFullPullAt == null) return true;
+    if (cursorAt.isAfter(now) || lastFullPullAt.isAfter(now)) return true;
+    return now.difference(lastFullPullAt) >= fullReconciliationInterval;
+  }
+
+  /// A full reconciliation must not seed its max timestamp from the old
+  /// cursor: if the table is empty, the cursor must advance to the scan time.
+  static DateTime? cursorSeedBeforePull({
+    required DateTime? cursorAt,
+    required bool fullPull,
+    required DateTime now,
+  }) {
+    if (fullPull || cursorAt == null || cursorAt.isAfter(now)) return null;
+    return cursorAt;
+  }
+
+  /// Establishes a checkpoint after an empty successful full scan. A small
+  /// overlap protects against client/server clock skew: a row inserted just
+  /// after the scan can still have a timestamp slightly behind the client clock.
+  static DateTime? cursorAfterPull({
+    required DateTime? newestSeen,
+    required DateTime? previousCursorAt,
+    required bool fullPull,
+    required DateTime now,
+  }) {
+    if (newestSeen != null) {
+      // Client/server clock skew can make a row timestamp appear to be in the
+      // future. Clamp the cursor to scan time so every 60-second tick does not
+      // trigger another full reconciliation until the local clock catches up.
+      final candidate = newestSeen.isAfter(now) ? now : newestSeen;
+
+      // The cursor is advanced only by syncable rows. If a delta page contains
+      // only device-local/excluded rows, newestSeen remains equal to the prior
+      // cursor and those old rows would be fetched on every 60-second tick.
+      // Move such a stalled cursor forward with a bounded overlap; the periodic
+      // full reconciliation remains the recovery path for late commits.
+      if (!fullPull &&
+          previousCursorAt != null &&
+          !previousCursorAt.isAfter(now) &&
+          !candidate.isAfter(previousCursorAt)) {
+        final overlapCursor = now.subtract(cursorOverlapWindow);
+        return previousCursorAt.isAfter(overlapCursor)
+            ? previousCursorAt
+            : overlapCursor;
+      }
+
+      if (fullPull) {
+        // A full scan already visited every row, so seeding the next delta
+        // cursor with a years-old row timestamp would fetch the whole table
+        // again on the next tick. Advance old full-scan results to the bounded
+        // overlap checkpoint; the periodic reconciliation recovers late commits.
+        final overlapCursor = now.subtract(cursorOverlapWindow);
+        final safeCandidate = candidate.isBefore(overlapCursor)
+            ? overlapCursor
+            : candidate;
+
+        // Never move a valid checkpoint backward when a full scan sees only
+        // older rows than the previously stored cursor.
+        if (previousCursorAt != null &&
+            !previousCursorAt.isAfter(now) &&
+            previousCursorAt.isAfter(safeCandidate)) {
+          return previousCursorAt;
+        }
+        return safeCandidate;
+      }
+      return candidate;
+    }
+    // Empty full scans have no row timestamp to advance from. Use a bounded
+    // overlap rather than the exact client time so slightly-behind server
+    // timestamps are not missed until the next periodic full reconciliation.
+    if (!fullPull) return null;
+    final fallbackCursor = now.subtract(cursorOverlapWindow);
+    if (previousCursorAt != null &&
+        !previousCursorAt.isAfter(now) &&
+        previousCursorAt.isAfter(fallbackCursor)) {
+      return previousCursorAt;
+    }
+    return fallbackCursor;
+  }
+
+  /// Build a partial update so changing one native AI setting cannot
+  /// overwrite a separate preference owned by another UI/domain.
+  static Map<String, dynamic> buildAiPreferencesPatch({
+    required String userId,
+    required dynamic localConfirm,
+    required dynamic localMemory,
+    required bool pushConfirm,
+    required bool pushMemory,
+  }) =>
+      <String, dynamic>{
+        'user_id': userId,
+        if (pushConfirm && localConfirm is bool)
+          'confirm_actions': localConfirm,
+        if (pushMemory && localMemory is bool)
+          'memory_level': localMemory ? 'limited' : 'none',
+      };
+
+  /// Convert only supported database enum values to the native boolean
+  /// preference. Unknown values must not be interpreted as memory enabled.
+  /// The native UI currently models memory as enabled/disabled, so both
+  /// supported non-none levels map to true.
+  static bool? aiMemoryEnabledFromLevel(dynamic level) {
+    switch (level) {
+      case 'none':
+        return false;
+      case 'limited':
+      case 'complete':
+        return true;
+      default:
+        return null;
     }
   }
 
-  Future<void> _pushPending() async {
-    for (final operation in List<Map<String, dynamic>>.from(localStore.pendingOperations())) {
+  static const String aiPreferencesPendingKey =
+      'pace.__sync_ai_preferences_pending';
+
+  /// Parse the durable retry marker for the separate ai_preferences table.
+  /// Only known, explicitly-true flags are retained from local JSON.
+  static Map<String, bool> aiPreferencesPendingFrom(dynamic raw) {
+    if (raw is! Map) return <String, bool>{};
+    return <String, bool>{
+      if (raw['confirm_actions'] == true) 'confirm_actions': true,
+      if (raw['memory'] == true) 'memory': true,
+    };
+  }
+
+  static bool shouldApplyRemoteAiPreference({
+    required String key,
+    required dynamic rawPending,
+    required bool hasPendingMutation,
+  }) =>
+      !hasPendingMutation &&
+      !isAiPreferenceProtectedByRetryMarker(key, rawPending);
+
+  static bool isAiPreferenceProtectedByRetryMarker(
+    String key,
+    dynamic rawPending,
+  ) {
+    final pending = aiPreferencesPendingFrom(rawPending);
+    if (key == 'pace.settings.ai.confirm_actions') {
+      return pending['confirm_actions'] == true;
+    }
+    if (key == 'pace.settings.ai.memory') {
+      return pending['memory'] == true;
+    }
+    return false;
+  }
+
+  /// A rejected user_state write means the newer remote row won. Stop
+  /// retrying that local preference mutation so the dedicated ai_preferences
+  /// row can be pulled instead of downgrading values such as memory_level=complete.
+  static Map<String, bool> clearAiPreferenceRetryAfterRemoteWinner(
+    String userStateKey,
+    dynamic rawPending,
+  ) {
+    if (userStateKey == 'pace.settings.ai.confirm_actions') {
+      return updateAiPreferencesPending(
+        rawPending,
+        confirmActions: false,
+      );
+    }
+    if (userStateKey == 'pace.settings.ai.memory') {
+      return updateAiPreferencesPending(rawPending, memory: false);
+    }
+    return aiPreferencesPendingFrom(rawPending);
+  }
+
+  static Map<String, bool> updateAiPreferencesPending(
+    dynamic raw, {
+    bool? confirmActions,
+    bool? memory,
+  }) {
+    final pending = aiPreferencesPendingFrom(raw);
+    if (confirmActions != null) {
+      if (confirmActions) {
+        pending['confirm_actions'] = true;
+      } else {
+        pending.remove('confirm_actions');
+      }
+    }
+    if (memory != null) {
+      if (memory) {
+        pending['memory'] = true;
+      } else {
+        pending.remove('memory');
+      }
+    }
+    return pending;
+  }
+
+  static bool shouldClearUnpushableAiPreferenceMarker({
+    required bool pushRequested,
+    required bool localValueValid,
+    required bool hasPendingMutation,
+  }) =>
+      pushRequested && !localValueValid && !hasPendingMutation;
+
+  static bool shouldClearAiPreferenceRetryMarker({
+    required bool hasPendingMutation,
+  }) =>
+      !hasPendingMutation;
+
+  static bool shouldPropagateAiPreferences({
+    required bool hasRetryMarker,
+    required bool hasPendingMutation,
+  }) {
+    // The durable marker survives after user_state acknowledges the outbox.
+    // Wait until that key is no longer pending before writing ai_preferences.
+    return hasRetryMarker && !hasPendingMutation;
+  }
+
+  Future<void> syncNow() async {
+    final activeClient = client;
+    final userId = activeClient?.auth.currentUser?.id;
+    if (activeClient == null || userId == null) return;
+    // Guest/offline mutations must never be replayed under whichever account
+    // happens to be signed in later. The switch gate closes synchronously before
+    // activeUserId changes, so also reject sync starts during that transition.
+    if (!_isCurrentAccount(userId)) return;
+    if (_running) {
+      // Account activation can request a sync while an older account's network
+      // request is still unwinding. Queue one follow-up so the new account is
+      // not left waiting for the next 60-second timer tick.
+      _rerunRequested = true;
+      return;
+    }
+
+    _running = true;
+    try {
+      const confirmKey = 'pace.settings.ai.confirm_actions';
+      const memoryKey = 'pace.settings.ai.memory';
+      final hadConfirmMutation = localStore.hasPendingOperationForKey(confirmKey);
+      final hadMemoryMutation = localStore.hasPendingOperationForKey(memoryKey);
+      // Persist a second retry marker before acknowledging user_state outbox
+      // operations. The dedicated ai_preferences upsert can fail independently;
+      // without this marker, the next pass would pull the old cloud value and
+      // overwrite the local preference after the outbox entry was acknowledged.
+      final existingAiPending = aiPreferencesPendingFrom(
+        localStore.read(aiPreferencesPendingKey),
+      );
+      final pendingBeforePush = updateAiPreferencesPending(
+        localStore.read(aiPreferencesPendingKey),
+        confirmActions: hadConfirmMutation ? true : null,
+        memory: hadMemoryMutation ? true : null,
+      );
+      final markerNeedsPersistence =
+          _aiPreferenceMarkerPersistenceUncertainUsers.contains(userId) ||
+          pendingBeforePush.length != existingAiPending.length ||
+          (hadConfirmMutation && existingAiPending['confirm_actions'] != true) ||
+          (hadMemoryMutation && existingAiPending['memory'] != true);
+      if (markerNeedsPersistence) {
+        try {
+          await localStore.writeForAccount(
+            userId,
+            aiPreferencesPendingKey,
+            pendingBeforePush,
+            enqueueSync: false,
+            notify: false,
+          );
+          if (!_isCurrentAccount(userId)) return;
+          _aiPreferenceMarkerPersistenceUncertainUsers.remove(userId);
+        } catch (_) {
+          // Do not acknowledge the source outbox until its retry marker is durable.
+          _aiPreferenceMarkerPersistenceUncertainUsers.add(userId);
+          return;
+        }
+      }
+      if (!_isCurrentAccount(userId)) return;
+      await _pushPending(userId);
+      if (!_isCurrentAccount(userId)) return;
+
+      final confirmStillPending = localStore.hasPendingOperationForKey(confirmKey);
+      final memoryStillPending = localStore.hasPendingOperationForKey(memoryKey);
+      final aiPending = aiPreferencesPendingFrom(
+        localStore.read(aiPreferencesPendingKey),
+      );
+      // A marker survives transient ai_preferences failures and is cleared only
+      // after the dedicated-table write succeeds. Each preference is independent.
+      final pushConfirm = aiPending['confirm_actions'] == true &&
+          shouldPropagateAiPreferences(
+            hasRetryMarker: true,
+            hasPendingMutation: confirmStillPending,
+          );
+      final pushMemory = aiPending['memory'] == true &&
+          shouldPropagateAiPreferences(
+            hasRetryMarker: true,
+            hasPendingMutation: memoryStillPending,
+          );
+      await _syncAiPreferences(
+        expectedUserId: userId,
+        pushConfirm: pushConfirm,
+        pushMemory: pushMemory,
+        preserveLocal: confirmStillPending || memoryStillPending ||
+            aiPending.isNotEmpty && (!pushConfirm || !pushMemory),
+      );
+      if (!_isCurrentAccount(userId)) return;
       try {
-        final result = await _push(operation);
+        await _pullRemote(userId);
+      } catch (_) {
+        // Pulls are best-effort while offline. Keep local state intact and
+        // retry on the next sync trigger instead of leaking an async error
+        // from timer/auth callbacks into Flutter's uncaught-error handler.
+      }
+    } finally {
+      _running = false;
+      if (_rerunRequested) {
+        _rerunRequested = false;
+        unawaited(syncNow());
+      }
+    }
+  }
+
+  Future<void> _pushPending(String expectedUserId) async {
+    // Inspect sync metadata as well as the outbox before persisting repairs.
+    // Otherwise malformed metadata could remain only in memory when the
+    // device is offline and the subsequent pull fails before its next write.
+    localStore.syncedMetadata();
+    final pending = List<Map<String, dynamic>>.from(localStore.pendingOperations());
+    // The synchronous readers quarantine malformed reserved fields/entries.
+    // Flush those repairs before an empty queue returns without another write.
+    try {
+      await localStore.persistOutboxRepairs(expectedUserId: expectedUserId);
+    } catch (_) {
+      // Do not let a local disk failure escape a timer/auth-triggered sync.
+      // The existing on-disk outbox remains authoritative; retry next pass.
+      return;
+    }
+    if (!_isCurrentAccount(expectedUserId)) return;
+    for (final operation in pending) {
+      if (!_isCurrentAccount(expectedUserId)) return;
+      try {
+        if (!isValidOutboxOperation(operation)) {
+          await localStore.quarantineOperation(
+            operation,
+            expectedUserId: expectedUserId,
+            reason: 'invalid-outbox-operation-shape',
+          );
+          continue;
+        }
+        final key = operation['key'] as String;
+        if (!isSyncableKey(key)) {
+          // Clear obsolete/device-local outbox entries without sending them to cloud.
+          await localStore.acknowledgeOperation(operation, expectedUserId: expectedUserId);
+          continue;
+        }
+        final result = await _push(operation, expectedUserId);
+        if (!_isCurrentAccount(expectedUserId)) return;
         if (result.accepted) {
-          await localStore.acknowledgeOperation(operation);
+          await localStore.acknowledgeOperation(
+            operation,
+            expectedUserId: expectedUserId,
+            syncedAt: result.remoteUpdatedAt,
+          );
           continue;
         }
 
         // A newer server value won. Apply it locally before acknowledging the
         // stale mutation so it can never be retried over the newer state.
-        if (result.remoteValue != null && result.remoteUpdatedAt != null) {
-          await localStore.applyRemote(
-            operation['key'] as String,
-            result.remoteValue,
-            result.remoteUpdatedAt!,
-          );
+        if (!result.hasRemote || result.remoteUpdatedAt == null) {
+          // A rejected RPC without a canonical row is ambiguous (for example,
+          // a transient read/RLS failure). Keep the mutation queued and back off;
+          // never silently discard a local change without a confirmed winner.
+          await localStore.deferOperation(operation, expectedUserId: expectedUserId);
+          continue;
         }
-        await localStore.acknowledgeOperation(operation);
+        if (!localStore.isPendingOperation(operation)) {
+          // This request became stale because a newer local edit replaced its
+          // outbox entry while the network call was in flight. Record the
+          // server version and rebase the newer mutation's timestamp, but do
+          // not overwrite the user's current local value with the conflict row.
+          await localStore.acknowledgeOperation(
+            operation,
+            expectedUserId: expectedUserId,
+            syncedAt: result.remoteUpdatedAt,
+          );
+          continue;
+        }
+        await localStore.applyRemote(
+          operation['key'] as String,
+          result.remoteValue,
+          result.remoteUpdatedAt!,
+          expectedUserId: expectedUserId,
+        );
+        if (!_isCurrentAccount(expectedUserId)) return;
+        if (key == 'pace.settings.ai.confirm_actions' ||
+            key == 'pace.settings.ai.memory') {
+          // The newer user_state row won. Persist the marker removal before
+          // acknowledging the outbox operation: if either flush fails, the
+          // source mutation remains pending and the next pass recreates its
+          // marker before retrying, rather than pushing a stale bool into the
+          // dedicated table (which could downgrade memory_level=complete).
+          final clearedMarker = clearAiPreferenceRetryAfterRemoteWinner(
+            key,
+            localStore.read(aiPreferencesPendingKey),
+          );
+          try {
+            await localStore.writeForAccount(
+              expectedUserId,
+              aiPreferencesPendingKey,
+              clearedMarker,
+              enqueueSync: false,
+              notify: false,
+            );
+            _aiPreferenceMarkerPersistenceUncertainUsers.remove(expectedUserId);
+          } catch (_) {
+            _aiPreferenceMarkerPersistenceUncertainUsers.add(expectedUserId);
+            rethrow;
+          }
+          if (!_isCurrentAccount(expectedUserId)) return;
+        }
+        await localStore.acknowledgeOperation(operation, expectedUserId: expectedUserId);
       } catch (_) {
-        // Preserve the operation for the next reconnect/retry.
-        break;
+        try {
+          await localStore.deferOperation(operation, expectedUserId: expectedUserId);
+        } catch (_) {
+          // An account switch is already in progress; leave the outbox untouched.
+        }
+        // Continue with independent keys. A transient failure on one key must
+        // not starve unrelated mutations; this snapshot is finite and each
+        // failed operation has already been deferred with bounded backoff.
+        continue;
       }
     }
   }
 
-  Future<_PushResult> _push(Map<String, dynamic> operation) async {
-    final userId = client!.auth.currentUser!.id;
+  Future<_PushResult> _push(Map<String, dynamic> operation, String userId) async {
+    if (!_isCurrentAccount(userId)) throw StateError('Account changed before sync push');
     final key = operation['key'] as String;
-    final updatedAt = (operation['queuedAt'] as String?) ?? DateTime.now().toUtc().toIso8601String();
+    final updatedAt = normalizedOutboxTimestamp(
+      operation['queuedAt'],
+      fallbackNow: DateTime.now().toUtc(),
+    );
     final value = operation['operation'] == 'delete' ? null : operation['value'];
 
     final response = await client!.rpc('upsert_user_state_if_newer', params: {
@@ -66,7 +596,12 @@ class SyncService {
       'p_updated_by': 'flutter-native',
     });
 
-    if (response == true) return const _PushResult.accepted();
+    if (!_isCurrentAccount(userId)) throw StateError('Account changed during sync push');
+    if (isUserStateWriteAccepted(response)) {
+      return _PushResult.accepted(
+        remoteUpdatedAt: userStateWriteUpdatedAt(response, fallback: updatedAt),
+      );
+    }
 
     final rows = await client!
         .from('user_state')
@@ -74,6 +609,7 @@ class SyncService {
         .eq('user_id', userId)
         .eq('key', key)
         .limit(1);
+    if (!_isCurrentAccount(userId)) throw StateError('Account changed during sync conflict lookup');
     if (rows.isEmpty) return const _PushResult.rejected();
     final row = Map<String, dynamic>.from(rows.first);
     return _PushResult.rejectedWithRemote(
@@ -82,84 +618,375 @@ class SyncService {
     );
   }
 
-  Future<void> _syncAiPreferences({required bool pushLocal}) async {
+  Future<void> _syncAiPreferences({
+    required String expectedUserId,
+    required bool pushConfirm,
+    required bool pushMemory,
+    required bool preserveLocal,
+  }) async {
+    if (!_isCurrentAccount(expectedUserId)) return;
     final user = client!.auth.currentUser;
-    if (user == null) return;
+    if (user == null || user.id != expectedUserId) return;
 
     try {
-      if (pushLocal) {
+      if (pushConfirm || pushMemory) {
+        // A new edit may arrive after syncNow computed the push flags. Do not
+        // publish it to ai_preferences before its user_state mutation is accepted.
+        if ((pushConfirm &&
+                localStore.hasPendingOperationForKey(
+                  'pace.settings.ai.confirm_actions',
+                )) ||
+            (pushMemory &&
+                localStore.hasPendingOperationForKey('pace.settings.ai.memory'))) {
+          return;
+        }
         final localConfirm = localStore.read('pace.settings.ai.confirm_actions');
         final localMemory = localStore.read('pace.settings.ai.memory');
-        final patch = <String, dynamic>{
-          'user_id': user.id,
-          if (localConfirm is bool) 'confirm_actions': localConfirm,
-          if (localMemory is bool) 'memory_level': localMemory ? 'limited' : 'none',
-        };
-        if (patch.length > 1) await client!.from('ai_preferences').upsert(patch);
-        return;
+        final patch = buildAiPreferencesPatch(
+          userId: user.id,
+          localConfirm: localConfirm,
+          localMemory: localMemory,
+          pushConfirm: pushConfirm,
+          pushMemory: pushMemory,
+        );
+        if (patch.length <= 1) {
+          // Corrupt local JSON can contain a non-boolean value for a boolean
+          // preference. It cannot be sent to ai_preferences; release only that
+          // unpushable retry marker so the authoritative cloud preference can
+          // repair the local value instead of retrying forever.
+          final currentPending = aiPreferencesPendingFrom(
+            localStore.read(aiPreferencesPendingKey),
+          );
+          final confirmCanClear = shouldClearUnpushableAiPreferenceMarker(
+            pushRequested: pushConfirm,
+            localValueValid: localConfirm is bool,
+            hasPendingMutation: localStore.hasPendingOperationForKey(
+              'pace.settings.ai.confirm_actions',
+            ),
+          );
+          final memoryCanClear = shouldClearUnpushableAiPreferenceMarker(
+            pushRequested: pushMemory,
+            localValueValid: localMemory is bool,
+            hasPendingMutation: localStore.hasPendingOperationForKey(
+              'pace.settings.ai.memory',
+            ),
+          );
+          final remainingPending = updateAiPreferencesPending(
+            currentPending,
+            confirmActions: confirmCanClear ? false : null,
+            memory: memoryCanClear ? false : null,
+          );
+          try {
+            await localStore.writeForAccount(
+              expectedUserId,
+              aiPreferencesPendingKey,
+              remainingPending,
+              enqueueSync: false,
+              notify: false,
+            );
+            if (!_isCurrentAccount(expectedUserId)) return;
+            _aiPreferenceMarkerPersistenceUncertainUsers.remove(expectedUserId);
+          } catch (_) {
+            _aiPreferenceMarkerPersistenceUncertainUsers.add(expectedUserId);
+            return;
+          }
+          // Continue to the read path below. It can repair invalid local values
+          // from the cloud, while the guards below protect any concurrent edit.
+        } else {
+          await client!.from('ai_preferences').upsert(patch);
+          if (!_isCurrentAccount(expectedUserId)) return;
+          final currentPending = aiPreferencesPendingFrom(
+            localStore.read(aiPreferencesPendingKey),
+          );
+          final confirmCanClear = pushConfirm &&
+              shouldClearAiPreferenceRetryMarker(
+                hasPendingMutation: localStore.hasPendingOperationForKey(
+                  'pace.settings.ai.confirm_actions',
+                ),
+              );
+          final memoryCanClear = pushMemory &&
+              shouldClearAiPreferenceRetryMarker(
+                hasPendingMutation: localStore.hasPendingOperationForKey(
+                  'pace.settings.ai.memory',
+                ),
+              );
+          final remainingPending = updateAiPreferencesPending(
+            currentPending,
+            confirmActions: confirmCanClear ? false : null,
+            memory: memoryCanClear ? false : null,
+          );
+          try {
+            await localStore.writeForAccount(
+              expectedUserId,
+              aiPreferencesPendingKey,
+              remainingPending,
+              enqueueSync: false,
+              notify: false,
+            );
+            if (!_isCurrentAccount(expectedUserId)) return;
+            _aiPreferenceMarkerPersistenceUncertainUsers.remove(expectedUserId);
+          } catch (_) {
+            _aiPreferenceMarkerPersistenceUncertainUsers.add(expectedUserId);
+            // LocalStore mutates memory before flushing. Restore the retry marker
+            // in memory if clearing it could not be persisted.
+            try {
+              await localStore.writeForAccount(
+                expectedUserId,
+                aiPreferencesPendingKey,
+                currentPending,
+                enqueueSync: false,
+                notify: false,
+              );
+            } catch (_) {
+              // The next pass/restart can retry persistence when storage recovers.
+            }
+            rethrow;
+          }
+          return;
+        }
       }
+
+      // Do not pull cloud preferences over a local mutation waiting for retry.
+      if (preserveLocal) return;
 
       final rows = await client!
           .from('ai_preferences')
           .select('confirm_actions,memory_level')
           .eq('user_id', user.id)
           .limit(1);
-      if (rows.isEmpty) return;
+      if (!_isCurrentAccount(expectedUserId) || rows.isEmpty) return;
       final row = Map<String, dynamic>.from(rows.first);
       final remoteConfirm = row['confirm_actions'];
       final remoteMemory = row['memory_level'];
-      if (remoteConfirm is bool) {
-        await localStore.write('pace.settings.ai.confirm_actions', remoteConfirm, enqueueSync: false);
+      if (!_isCurrentAccount(expectedUserId)) return;
+      const confirmKey = 'pace.settings.ai.confirm_actions';
+      if (remoteConfirm is bool &&
+          localStore.read(confirmKey) != remoteConfirm &&
+          shouldApplyRemoteAiPreference(
+            key: confirmKey,
+            rawPending: localStore.read(aiPreferencesPendingKey),
+            hasPendingMutation: localStore.hasPendingOperationForKey(confirmKey),
+          )) {
+        await localStore.writeForAccount(
+          expectedUserId,
+          confirmKey,
+          remoteConfirm,
+          enqueueSync: false,
+        );
       }
-      if (remoteMemory is String) {
-        await localStore.write('pace.settings.ai.memory', remoteMemory != 'none', enqueueSync: false);
+      if (!_isCurrentAccount(expectedUserId)) return;
+      final memoryEnabled = aiMemoryEnabledFromLevel(remoteMemory);
+      const memoryKey = 'pace.settings.ai.memory';
+      if (memoryEnabled != null &&
+          localStore.read(memoryKey) != memoryEnabled &&
+          shouldApplyRemoteAiPreference(
+            key: memoryKey,
+            rawPending: localStore.read(aiPreferencesPendingKey),
+            hasPendingMutation: localStore.hasPendingOperationForKey(memoryKey),
+          )) {
+        await localStore.writeForAccount(
+          expectedUserId,
+          memoryKey,
+          memoryEnabled,
+          enqueueSync: false,
+        );
       }
     } catch (_) {
       // Cloud preference sync is best-effort; local settings remain available.
     }
   }
 
-  Future<void> _pullRemote() async {
-    final userId = client!.auth.currentUser!.id;
-    final rows = await client!
-        .from('user_state')
-        .select('key,value,updated_at')
-        .eq('user_id', userId);
+  /// Deduplicates normalized remote keys across all PostgREST pages.
+  /// Equal timestamps preserve the first row in the deterministic query order.
+  static bool shouldKeepNewestRemoteUpdate({
+    required Map<String, DateTime> newestByKey,
+    required String key,
+    required DateTime incoming,
+  }) {
+    final previous = newestByKey[key];
+    if (previous != null && !incoming.isAfter(previous)) return false;
+    newestByKey[key] = incoming;
+    return true;
+  }
 
-    for (final raw in rows) {
-      final row = Map<String, dynamic>.from(raw);
-      final key = row['key'] as String;
-      final remoteUpdatedAt = row['updated_at'] as String?;
-      if (remoteUpdatedAt == null || localStore.pendingOperations().any((op) => op['key'] == key)) continue;
+  Future<void> _pullRemote(String userId) async {
+    if (!_isCurrentAccount(userId)) return;
+    final now = DateTime.now().toUtc();
+    final rawCursor = localStore.read('pace.__sync_last_pull_at');
+    final rawLastFullPull = localStore.read('pace.__sync_last_full_pull_at');
+    final cursorAt = rawCursor is String && LocalStore.isValidIsoTimestamp(rawCursor)
+        ? DateTime.tryParse(rawCursor)?.toUtc()
+        : null;
+    final lastFullPullAt =
+        rawLastFullPull is String && LocalStore.isValidIsoTimestamp(rawLastFullPull)
+            ? DateTime.tryParse(rawLastFullPull)?.toUtc()
+            : null;
+    final fullPull = shouldRunFullReconciliation(
+      cursorAt: cursorAt,
+      lastFullPullAt: lastFullPullAt,
+      now: now,
+    );
 
-      final localUpdatedAt = localStore.lastSyncedAt(key);
-      if (localUpdatedAt != null) {
-        final remoteTime = DateTime.tryParse(remoteUpdatedAt);
-        final localTime = DateTime.tryParse(localUpdatedAt);
-        if (remoteTime != null && localTime != null && !remoteTime.isAfter(localTime)) continue;
+    // Most passes fetch only rows changed since the last cursor. A bounded full
+    // reconciliation catches late commits, clock skew, and any gap caused by a
+    // concurrent write sharing an update timestamp. Cursor metadata is local to
+    // the account-scoped file and is never enqueued for cloud sync. Page results
+    // so accounts with more than PostgREST's default row cap do not silently skip
+    // keys when the cursor advances.
+    const pageSize = 500;
+    var offset = 0;
+    var appliedRemoteRows = false;
+    var newestSeen = cursorSeedBeforePull(
+      cursorAt: cursorAt,
+      fullPull: fullPull,
+      now: now,
+    );
+    // Keep normalized-key conflict resolution across page boundaries too.
+    // A legacy alias at the same timestamp on the next page must not replace
+    // the first row already applied from an earlier page.
+    final newestRemoteTimeByKey = <String, DateTime>{};
+    while (true) {
+      final rows = fullPull
+          ? await client!
+              .from('user_state')
+              .select('key,value,updated_at')
+              .eq('user_id', userId)
+              .not('key', 'in', excludedRemotePullKeysFilter)
+              .order('updated_at', ascending: true)
+              .order('key', ascending: false)
+              .range(offset, offset + pageSize - 1)
+          : await client!
+              .from('user_state')
+              .select('key,value,updated_at')
+              .eq('user_id', userId)
+              .not('key', 'in', excludedRemotePullKeysFilter)
+              .gte('updated_at', cursorAt!.toIso8601String())
+              .order('updated_at', ascending: true)
+              .order('key', ascending: false)
+              .range(offset, offset + pageSize - 1);
+      if (!_isCurrentAccount(userId)) return;
+
+      final remoteUpdates = <String, Map<String, dynamic>>{};
+      for (final raw in rows) {
+        if (!_isCurrentAccount(userId)) return;
+        final row = Map<String, dynamic>.from(raw);
+        final rawKey = row['key'] as String;
+        final isLegacy = rawKey.startsWith('lt.');
+        final key = normalizeRemoteKey(rawKey);
+        final remoteUpdatedAt = row['updated_at'] as String?;
+        final remoteTime = remoteUpdatedAt == null ||
+                !LocalStore.isValidRemoteTimestamp(remoteUpdatedAt)
+            ? null
+            : DateTime.tryParse(remoteUpdatedAt)?.toUtc();
+        // Device-local rows must not advance the cloud-sync cursor; otherwise
+        // an excluded key could move the checkpoint past a late syncable write.
+        if (isSyncableKey(key) &&
+            remoteTime != null &&
+            (newestSeen == null || remoteTime.isAfter(newestSeen))) {
+          newestSeen = remoteTime;
+        }
+        if (!isSyncableKey(key) ||
+            remoteUpdatedAt == null ||
+            remoteTime == null ||
+            localStore.hasPendingOperationForKey(key) ||
+            isAiPreferenceProtectedByRetryMarker(
+              key,
+              localStore.read(aiPreferencesPendingKey),
+            )) {
+          continue;
+        }
+
+        final rawLocalUpdatedAt = localStore.lastSyncedAt(key);
+        final localTime = rawLocalUpdatedAt == null ||
+                !LocalStore.isValidIsoTimestamp(rawLocalUpdatedAt)
+            ? null
+            : DateTime.tryParse(rawLocalUpdatedAt)?.toUtc();
+        if (!shouldApplyRemoteValue(
+          isLegacy: isLegacy,
+          localValue: localStore.read(key),
+          remoteValue: row['value'],
+          localUpdatedAt: localTime,
+          remoteUpdatedAt: remoteTime,
+        )) {
+          continue;
+        }
+        if (shouldKeepNewestRemoteUpdate(
+          newestByKey: newestRemoteTimeByKey,
+          key: key,
+          incoming: remoteTime,
+        )) {
+          remoteUpdates[key] = <String, dynamic>{
+            'key': key,
+            'value': row['value'],
+            'updatedAt': remoteUpdatedAt,
+          };
+        }
       }
-      await localStore.applyRemote(key, row['value'], remoteUpdatedAt);
+
+      if (remoteUpdates.isNotEmpty) {
+        await localStore.applyRemoteBatch(
+          remoteUpdates.values.toList(),
+          expectedUserId: userId,
+          notify: false,
+        );
+        appliedRemoteRows = true;
+      }
+
+      if (rows.length < pageSize) break;
+      offset += pageSize;
+    }
+
+    if (!_isCurrentAccount(userId)) return;
+    final cursorToSave = cursorAfterPull(
+      newestSeen: newestSeen,
+      previousCursorAt: cursorAt,
+      fullPull: fullPull,
+      now: now,
+    );
+    if (cursorToSave != null) {
+      await localStore.writeForAccount(
+        userId,
+        'pace.__sync_last_pull_at',
+        cursorToSave.toIso8601String(),
+        enqueueSync: false,
+        notify: false,
+      );
+    }
+    if (fullPull) {
+      await localStore.writeForAccount(
+        userId,
+        'pace.__sync_last_full_pull_at',
+        now.toIso8601String(),
+        enqueueSync: false,
+        notify: false,
+      );
+    }
+    if (appliedRemoteRows) {
+      localStore.notifyStateChanged();
     }
   }
 }
 
 class _PushResult {
-  const _PushResult.accepted()
+  const _PushResult.accepted({required this.remoteUpdatedAt})
       : accepted = true,
-        remoteValue = null,
-        remoteUpdatedAt = null;
+        hasRemote = false,
+        remoteValue = null;
 
   const _PushResult.rejected()
       : accepted = false,
+        hasRemote = false,
         remoteValue = null,
         remoteUpdatedAt = null;
 
   const _PushResult.rejectedWithRemote({
     required this.remoteValue,
     required this.remoteUpdatedAt,
-  }) : accepted = false;
+  }) : accepted = false,
+       hasRemote = true;
 
   final bool accepted;
+  final bool hasRemote;
   final dynamic remoteValue;
   final String? remoteUpdatedAt;
 }

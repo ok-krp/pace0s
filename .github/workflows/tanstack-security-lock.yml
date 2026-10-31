@@ -1,0 +1,260 @@
+name: Web dependency and AI quality policy
+
+on:
+  pull_request:
+    paths:
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/tanstack-security-lock.yml"
+      - "src/lib/ai-chat.server.ts"
+      - "src/lib/ai-tool-state.ts"
+      - "src/lib/ai-tool-state.test.ts"
+      - "src/lib/mcp/issuer.ts"
+      - "src/lib/mcp/issuer.test.ts"
+      - "src/lib/mcp/validation.ts"
+      - "src/lib/mcp/validation.test.ts"
+      - "src/lib/mcp/errors.ts"
+      - "src/lib/mcp/errors.test.ts"
+      - "src/lib/mcp/tools/add-food-log.ts"
+      - "src/lib/mcp/tools/get-profile.ts"
+      - "src/lib/mcp/tools/list-food-log.ts"
+      - "src/lib/mcp/tools/list-health-samples.ts"
+      - ".lovable/mcp/manifest.json"
+      - "src/lib/assistant.functions.ts"
+      - "src/lib/nutrition-ai.functions.ts"
+      - "src/components/HealthSourcesSection.tsx"
+      - "src/hooks/use-cloud-sync-engine.tsx"
+      - "src/integrations/supabase/types.ts"
+      - "src/lib/health-connect-bridge.ts"
+      - "src/lib/push-subscriptions.functions.ts"
+      - "src/lib/push.functions.ts"
+      - "src/components/AppSidebar.tsx"
+      - "src/routes/__root.tsx"
+      - "src/routes/index.tsx"
+      - "src/routes/login.tsx"
+      - "src/routes/notes.tsx"
+      - "src/routes/sport.tsx"
+      - "src/routes/watch.tsx"
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "bun.lock"
+      - ".github/workflows/tanstack-security-lock.yml"
+      - "src/lib/ai-chat.server.ts"
+      - "src/lib/ai-tool-state.ts"
+      - "src/lib/ai-tool-state.test.ts"
+      - "src/lib/mcp/issuer.ts"
+      - "src/lib/mcp/issuer.test.ts"
+      - "src/lib/mcp/validation.ts"
+      - "src/lib/mcp/validation.test.ts"
+      - "src/lib/mcp/errors.ts"
+      - "src/lib/mcp/errors.test.ts"
+      - "src/lib/mcp/tools/add-food-log.ts"
+      - "src/lib/mcp/tools/get-profile.ts"
+      - "src/lib/mcp/tools/list-food-log.ts"
+      - "src/lib/mcp/tools/list-health-samples.ts"
+      - ".lovable/mcp/manifest.json"
+      - "src/lib/assistant.functions.ts"
+      - "src/lib/nutrition-ai.functions.ts"
+      - "src/components/HealthSourcesSection.tsx"
+      - "src/hooks/use-cloud-sync-engine.tsx"
+      - "src/integrations/supabase/types.ts"
+      - "src/lib/health-connect-bridge.ts"
+      - "src/lib/push-subscriptions.functions.ts"
+      - "src/lib/push.functions.ts"
+      - "src/components/AppSidebar.tsx"
+      - "src/routes/__root.tsx"
+      - "src/routes/index.tsx"
+      - "src/routes/login.tsx"
+      - "src/routes/notes.tsx"
+      - "src/routes/sport.tsx"
+      - "src/routes/watch.tsx"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-patched-lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Resolve targeted dependency overrides in both lockfiles
+        run: |
+          bun install --lockfile-only --ignore-scripts --minimum-release-age-excludes "node-releases@2.0.62,electron-to-chromium@1.5.469,eslint@10.14.0"
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Export regenerated package manager lockfiles
+        run: |
+          echo "BEGIN_REGENERATED_PACKAGE_LOCK"
+          cat package-lock.json
+          echo "END_REGENERATED_PACKAGE_LOCK"
+          echo "BEGIN_REGENERATED_BUN_LOCK"
+          cat bun.lock
+          echo "END_REGENERATED_BUN_LOCK"
+      - name: Verify committed lockfiles are current
+        run: git diff --exit-code -- package.json bun.lock package-lock.json
+      - name: Verify frozen lockfile
+        run: bun install --frozen-lockfile
+      - name: Enforce patched TanStack versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          start="$(grep -oE '"@tanstack/react-start@[^"]+"' bun.lock | head -n 1 | sed -E 's/.*@([0-9]+\.[0-9]+\.[0-9]+)"/\1/')"
+          core="$(grep -oE '"@tanstack/start-server-core@[^"]+"' bun.lock | head -n 1 | sed -E 's/.*@([0-9]+\.[0-9]+\.[0-9]+)"/\1/')"
+          at_least() {
+            local actual="$1" minimum="$2" lowest
+            lowest="$(printf '%s\n%s\n' "$minimum" "$actual" | sort -V | head -n 1)"
+            [ "$lowest" = "$minimum" ]
+          }
+          echo "Resolved @tanstack/react-start=$start"
+          echo "Resolved @tanstack/start-server-core=$core"
+          at_least "$start" "1.168.60" || { echo "::error::Unpatched @tanstack/react-start: $start"; exit 1; }
+          at_least "$core" "1.169.39" || { echo "::error::Unpatched @tanstack/start-server-core: $core"; exit 1; }
+      - name: Export regenerated shell-quote lock entries
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+          const entries = Object.entries(lock.packages ?? {})
+            .filter(([path]) => path === "node_modules/shell-quote" || path.endsWith("/node_modules/shell-quote"));
+          console.log("BEGIN_NPM_SHELL_QUOTE_LOCK");
+          console.log(JSON.stringify({
+            lockfileVersion: lock.lockfileVersion,
+            rootOverrides: lock.packages?.[""]?.overrides ?? null,
+            entries,
+          }));
+          console.log("END_NPM_SHELL_QUOTE_LOCK");
+          console.log("BEGIN_BUN_SHELL_QUOTE_LOCK");
+          console.log(fs.readFileSync("bun.lock", "utf8").split("\n").filter((line) => line.includes('"shell-quote": [')).join("\n"));
+          console.log("END_BUN_SHELL_QUOTE_LOCK");
+          NODE
+      - name: Install locked npm dependencies
+        run: npm ci
+      - name: Report npm audit advisories without changing dependencies
+        shell: bash
+        run: |
+          set +e
+          npm audit --json > "$RUNNER_TEMP/npm-audit.json"
+          audit_status=$?
+          set -e
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = process.env.RUNNER_TEMP + "/npm-audit.json";
+          let report;
+          try {
+            report = JSON.parse(fs.readFileSync(path, "utf8"));
+          } catch {
+            console.log("npm audit returned no machine-readable report; dependency installation and other checks remain independently evaluated.");
+            process.exit(0);
+          }
+          const counts = report.metadata?.vulnerabilities ?? {};
+          const lines = [
+            "### npm audit (read-only)",
+            "",
+            `Total: ${counts.total ?? ["critical", "high", "moderate", "low", "info"].reduce((sum, severity) => sum + (Number(counts[severity]) || 0), 0)}`,
+            `Critical: ${counts.critical ?? 0} · High: ${counts.high ?? 0} · Moderate: ${counts.moderate ?? 0} · Low: ${counts.low ?? 0}`,
+            "",
+          ];
+          for (const [name, item] of Object.entries(report.vulnerabilities ?? {})) {
+            const advisories = (item.via ?? []).map((entry) =>
+              typeof entry === "string" ? entry : `${entry.title ?? entry.name ?? "Advisory"} (${entry.url ?? "URL unavailable"})`,
+            );
+            const fix = item.fixAvailable === true
+              ? "non-breaking fix available"
+              : item.fixAvailable
+                ? `fix available: ${JSON.stringify(item.fixAvailable)}`
+                : "no automatic fix reported";
+            lines.push(`- **${name}** — ${item.severity}; direct: ${item.isDirect}; range: ${item.range}; ${fix}`);
+            for (const advisory of advisories) lines.push(`  - ${advisory}`);
+          }
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join("\n") + "\n");
+          console.log(lines.join("\n"));
+          NODE
+          if [ "$audit_status" -gt 1 ]; then
+            echo "::warning::npm audit returned status $audit_status; see the summary for available diagnostic details."
+          fi
+      - name: Preview semver-compatible npm security fixes
+        shell: bash
+        run: |
+          set +e
+          npm audit fix --dry-run --json > "$RUNNER_TEMP/npm-audit-fix-plan.json"
+          preview_status=$?
+          set -e
+          node <<'NODE'
+          const fs = require("node:fs");
+          const path = process.env.RUNNER_TEMP + "/npm-audit-fix-plan.json";
+          try {
+            const plan = JSON.parse(fs.readFileSync(path, "utf8"));
+            console.log("BEGIN_NPM_AUDIT_FIX_PLAN");
+            console.log(JSON.stringify({
+              added: plan.added,
+              removed: plan.removed,
+              changed: plan.changed,
+              audit: plan.audit?.metadata?.vulnerabilities,
+              advisories: Object.entries(plan.audit?.vulnerabilities ?? {}).map(([name, item]) => ({
+                name,
+                severity: item.severity,
+                range: item.range,
+                fixAvailable: item.fixAvailable,
+              })),
+            }));
+            console.log("END_NPM_AUDIT_FIX_PLAN");
+          } catch {
+            const raw = fs.readFileSync(path, "utf8");
+            console.log("npm audit fix dry-run raw output (first 20,000 characters):");
+            console.log(raw.slice(0, 20_000));
+          }
+          NODE
+          if [ "$preview_status" -gt 1 ]; then
+            echo "::warning::npm audit fix --dry-run could not complete; no dependency files were changed by this step."
+          fi
+      - name: Type-check repository
+        run: npx tsc --noEmit
+      - name: Test AI tool approval state policy
+        run: node --experimental-strip-types --test src/lib/ai-tool-state.test.ts
+      - name: Test MCP input validation
+        run: node --experimental-strip-types --test src/lib/mcp/validation.test.ts
+      - name: Test MCP OAuth issuer resolution
+        run: node --experimental-strip-types --test src/lib/mcp/issuer.test.ts
+      - name: Test MCP database error redaction
+        run: node --experimental-strip-types --test src/lib/mcp/errors.test.ts
+      - name: Lint server-side AI and Nutrition entry points
+        run: >-
+          npx eslint --rule 'prettier/prettier: off'
+          src/lib/ai-chat.server.ts
+          src/lib/ai-tool-state.ts
+          src/lib/ai-tool-state.test.ts
+          src/lib/mcp/issuer.ts
+          src/lib/mcp/issuer.test.ts
+          src/lib/mcp/index.ts
+          src/lib/mcp/validation.ts
+          src/lib/mcp/validation.test.ts
+          src/lib/mcp/errors.ts
+          src/lib/mcp/errors.test.ts
+          src/lib/mcp/tools/add-food-log.ts
+          src/lib/mcp/tools/get-profile.ts
+          src/lib/mcp/tools/list-food-log.ts
+          src/lib/mcp/tools/list-health-samples.ts
+          src/lib/assistant.functions.ts
+          src/lib/nutrition-ai.functions.ts
+          src/components/HealthSourcesSection.tsx
+          src/hooks/use-cloud-sync-engine.tsx
+          src/integrations/supabase/types.ts
+          src/lib/health-connect-bridge.ts
+          src/lib/push-subscriptions.functions.ts
+          src/lib/push.functions.ts
+          src/components/AppSidebar.tsx
+          src/routes/__root.tsx
+          src/routes/index.tsx
+          src/routes/login.tsx
+          src/routes/notes.tsx
+          src/routes/sport.tsx
+          src/routes/watch.tsx

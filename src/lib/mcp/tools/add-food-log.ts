@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import { mcpDatabaseFailure } from "../errors";
 import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
 import { z } from "zod";
+import { isValidIsoDateOnly } from "../validation";
 
 function supabaseForUser(ctx: ToolContext) {
   return createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
@@ -14,15 +16,16 @@ export default defineTool({
   title: "Add food log entry",
   description: "Insert a food_log entry for the signed-in user.",
   inputSchema: {
-    name: z.string().min(1),
-    meal: z.string().describe("breakfast | lunch | dinner | snack"),
-    kcal: z.number().nonnegative(),
-    protein_g: z.number().nonnegative().optional(),
-    carbs_g: z.number().nonnegative().optional(),
-    fat_g: z.number().nonnegative().optional(),
-    fiber_g: z.number().nonnegative().optional(),
-    sodium_mg: z.number().nonnegative().optional(),
-    log_date: z.string().optional().describe("YYYY-MM-DD, defaults to today"),
+    name: z.string().trim().min(1).max(200),
+    meal: z.string().trim().min(1).max(40).describe("breakfast | lunch | dinner | snack"),
+    kcal: z.number().finite().nonnegative().max(100_000),
+    protein_g: z.number().finite().nonnegative().max(10_000).optional(),
+    carbs_g: z.number().finite().nonnegative().max(10_000).optional(),
+    fat_g: z.number().finite().nonnegative().max(10_000).optional(),
+    fiber_g: z.number().finite().nonnegative().max(10_000).optional(),
+    sugar_g: z.number().finite().nonnegative().max(10_000).optional(),
+    sodium_mg: z.number().finite().nonnegative().max(1_000_000).optional(),
+    log_date: z.string().refine(isValidIsoDateOnly, "Expected a real calendar date in YYYY-MM-DD format").optional().describe("YYYY-MM-DD, defaults to today"),
   },
   annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
   handler: async (input, ctx) => {
@@ -38,11 +41,17 @@ export default defineTool({
       carbs_g: input.carbs_g ?? 0,
       fat_g: input.fat_g ?? 0,
       fiber_g: input.fiber_g ?? null,
+      sugar_g: input.sugar_g ?? null,
       sodium_mg: input.sodium_mg ?? null,
+      source: "mcp",
       log_date: input.log_date ?? new Date().toISOString().slice(0, 10),
     };
-    const { data, error } = await sb.from("food_log").insert(row).select().single();
-    if (error) return { content: [{ type: "text", text: error.message }], isError: true };
+    const { data, error } = await sb
+      .from("food_log")
+      .insert(row)
+      .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,source")
+      .single();
+    if (error) return mcpDatabaseFailure("add_food_log", error);
     return {
       content: [{ type: "text", text: JSON.stringify(data) }],
       structuredContent: { row: data },

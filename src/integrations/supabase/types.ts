@@ -452,6 +452,33 @@ export type Database = {
         }
         Relationships: []
       }
+      push_subscriptions: {
+        Row: {
+          created_at: string
+          id: string
+          onesignal_subscription_id: string
+          platform: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          onesignal_subscription_id: string
+          platform?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          onesignal_subscription_id?: string
+          platform?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           activity_level: string | null
@@ -619,7 +646,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      upsert_user_state_if_newer: {
+        Args: {
+          p_user_id: string
+          p_key: string
+          p_value: Json
+          p_updated_at: string
+          p_updated_by: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

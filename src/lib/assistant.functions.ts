@@ -60,9 +60,10 @@ export const assistantChat = createServerFn({ method: "POST" })
       .select("opts")
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .eq("user_id", context.userId)
       .maybeSingle();
     if (consentError) {
-      console.error("assistant consent lookup failed", consentError);
+      console.error("assistant consent lookup failed", { code: consentError.code ?? "unknown" });
       return { error: "Impossible de vérifier le consentement IA.", result: null as AssistantReply | null };
     }
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
@@ -116,12 +117,12 @@ Réponds UNIQUEMENT avec un JSON valide (aucun markdown) :
         .trim();
       const parsed = replySchema.safeParse(JSON.parse(cleaned));
       if (!parsed.success) {
-        console.error("assistant JSON invalide", parsed.error, cleaned.slice(0, 400));
+        console.error("assistant JSON invalide", { issueCount: parsed.error.issues.length });
         return { error: "Réponse IA invalide", result: null as AssistantReply | null };
       }
       return { error: null as string | null, result: parsed.data };
     } catch (e) {
-      console.error("assistantChat error", e);
+      console.error("assistantChat error", { errorType: e instanceof Error ? e.name : "unknown" });
       return {
         error: "Le service IA est momentanément indisponible.",
         result: null as AssistantReply | null,

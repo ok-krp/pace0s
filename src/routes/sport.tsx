@@ -626,8 +626,8 @@ const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, se
     if (!focusExerciseId) return;
     const target = exs.find((e) => e.id === focusExerciseId);
     if (!target) return;
-    setMuscle(target.muscle);
     const id = requestAnimationFrame(() => {
+      setMuscle(target.muscle);
       document.getElementById(`ov-${focusExerciseId}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
     });
     return () => cancelAnimationFrame(id);
@@ -663,20 +663,17 @@ const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, se
     syncExerciseFromRow(exerciseId, r);
   };
   const updateRow = (exerciseId: string, id: string, patch: Partial<OverloadRow>) => {
-    let updatedRow: OverloadRow | null = null;
+    const rows = rowsByExercise[exerciseId] ?? [];
+    const currentRow = rows.find((row) => row.id === id);
+    if (!currentRow) return;
+    const updatedRow = { ...currentRow, ...patch };
     setManualStore((p) => ({
       ...p,
-      [exerciseId]: (p[exerciseId] ?? []).map((r) => {
-        if (r.id !== id) return r;
-        updatedRow = { ...r, ...patch };
-        return updatedRow;
-      }),
+      [exerciseId]: (p[exerciseId] ?? []).map((row) => row.id === id ? updatedRow : row),
     }));
-    // Resynchronise si la ligne éditée est bien la plus récente en date (comparaison
-    // directe par date, pas par position dans une liste potentiellement pas encore à jour).
-    const rows = rowsByExercise[exerciseId] ?? [];
-    const mostRecentDate = rows.reduce((max, r) => (r.date > max ? r.date : max), "");
-    if (updatedRow && updatedRow.date >= mostRecentDate) syncExerciseFromRow(exerciseId, updatedRow);
+    // Compare directly with the latest date, not the row's current list position.
+    const mostRecentDate = rows.reduce((max, row) => (row.date > max ? row.date : max), "");
+    if (updatedRow.date >= mostRecentDate) syncExerciseFromRow(exerciseId, updatedRow);
   };
   const removeRow = (exerciseId: string, id: string) => {
     setManualStore((p) => ({ ...p, [exerciseId]: (p[exerciseId] ?? []).filter((r) => r.id !== id) }));

@@ -1,18 +1,20 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
 import { z } from "zod";
 import type { Database, Json } from "@/integrations/supabase/types";
 import { getPreferencesServer } from "./ai-history.server";
+import { isResolvedToolState } from "./ai-tool-state";
 import type { AgentType, AiPermissions } from "./ai-history.types";
+import { LEGAL_VERSIONS } from "./legal";
 
 type Client = SupabaseClient<Database>;
-type ChatBody = { messages?: unknown; conversationId?: unknown; agentType?: unknown; ephemeral?: unknown };
+type ChatBody = { messages?: unknown; conversationId?: unknown; agentType?: unknown; ephemeral?: unknown; clientAssistantMessageId?: unknown };
 
 /** Nombre de messages récents envoyés tels quels au modèle. Tout ce qui précède est résumé. */
 const RECENT_WINDOW = 30;
 /** Sécurité anti-abus très large : aucune limite gênante pour l'utilisateur. */
-const MAX_TEXT_CHARS = 400_000;
+const MAX_CONTEXT_PAYLOAD_CHARS = 400_000;
 
 class ChatError extends Error {
   constructor(readonly status: number, readonly code: string, message: string) {
@@ -28,12 +30,17 @@ function errorResponse(error: unknown, startedAt: number) {
   const known = error instanceof ChatError;
   const status = known ? error.status : 500;
   const code = known ? error.code : "internal_error";
+  // Unexpected provider/database errors can contain SQL details or user data.
+  // Keep the client response and platform logs free of those internal messages.
   const message = known
     ? error.message
-    : error instanceof Error
-      ? `Erreur serveur : ${error.message}`
-      : "Erreur serveur inattendue.";
-  console.error("[ai-chat] échec", { code, status, ms: Date.now() - startedAt, message });
+    : "Une erreur interne est survenue. Réessayez dans quelques instants.";
+  console.error("[ai-chat] échec", {
+    code,
+    status,
+    ms: Date.now() - startedAt,
+    errorType: error instanceof Error ? error.name : "unknown",
+  });
   return new Response(message, {
     status,
     headers: { "Content-Type": "text/plain; charset=utf-8", "X-Pace-Error-Code": code, "X-Pace-Duration-Ms": String(Date.now() - startedAt) },
@@ -59,7 +66,10 @@ async function authenticatedClient(request: Request) {
 }
 
 function textOf(message: UIMessage) {
-  return message.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n");
+  return message.parts
+    .filter((part) => part !== null && typeof part === "object" && part.type === "text")
+    .map((part) => ("text" in part && typeof part.text === "string" ? part.text : ""))
+    .join("\n");
 }
 
 async function contextForCoach(client: Client, userId: string, permissions: AiPermissions) {
@@ -82,12 +92,40 @@ async function contextForCoach(client: Client, userId: string, permissions: AiPe
   return context;
 }
 
-async function logAction(client: Client, userId: string, conversationId: string, agentType: AgentType, actionType: string, label: string, payload: unknown, status: "executed" | "failed") {
-  // Le log d'audit ne doit jamais faire échouer l'outil lui-même : best-effort.
+async function logAction(
+  client: Client,
+  userId: string,
+  conversationId: string,
+  agentType: AgentType,
+  actionType: string,
+  _label: string,
+  _payload: unknown,
+  status: "executed" | "failed",
+) {
+  // Audit metadata must not duplicate profile, health, nutrition, or task content.
+  // Keep a stable action label and an empty payload; the source tables remain canonical.
+  const safeLabels: Record<string, string> = {
+    update_profile: "Mise à jour du profil",
+    add_food: "Ajout nutrition",
+    add_health_sample: "Enregistrement santé",
+    create_development_task: "Création tâche développement",
+  };
   try {
-    await client.from("ai_action_log").insert({ user_id: userId, conversation_id: conversationId, agent_type: agentType, action_type: actionType, label, payload: payload as Json, status, executed_at: status === "executed" ? new Date().toISOString() : null });
+    await client.from("ai_action_log").insert({
+      user_id: userId,
+      conversation_id: conversationId,
+      agent_type: agentType,
+      action_type: actionType,
+      label: safeLabels[actionType] ?? "Action IA",
+      payload: {} as Json,
+      status,
+      executed_at: status === "executed" ? new Date().toISOString() : null,
+    });
   } catch (error) {
-    console.error("[ai-chat] logAction impossible", { actionType, error });
+    console.error("[ai-chat] logAction impossible", {
+      actionType,
+      errorType: error instanceof Error ? error.name : "unknown",
+    });
   }
 }
 
@@ -95,7 +133,7 @@ async function logAction(client: Client, userId: string, conversationId: string,
  * Garantit qu'un outil ne peut JAMAIS terminer sans renvoyer de résultat, même en
  * cas d'exception imprévue (bug, timeout réseau, erreur inattendue) — c'est la
  * cause probable des erreurs "Tool result is missing". Logue systématiquement :
- * appel, paramètres, début, fin, durée, résultat ou erreur.
+ * appel, début, fin et statut — sans enregistrer les paramètres personnels.
  */
 function withToolLogging<Input, Output extends { ok: boolean; message: string }>(
   name: string,
@@ -103,15 +141,23 @@ function withToolLogging<Input, Output extends { ok: boolean; message: string }>
 ): (input: Input) => Promise<Output> {
   return async (input: Input) => {
     const startedAt = Date.now();
-    console.info("[ai-tool] appelé", { name, input });
+    // Tool inputs may contain health, nutrition, profile, or personal notes.
+    // Never write raw tool arguments or exception messages to platform logs.
+    console.info("[ai-tool] appelé", { name });
     try {
       const output = await execute(input);
       console.info("[ai-tool] terminé", { name, ms: Date.now() - startedAt, ok: output.ok });
       return output;
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error("[ai-tool] échec inattendu", { name, ms: Date.now() - startedAt, error: message });
-      return { ok: false, message: `Action interrompue par une erreur inattendue : ${message}` } as Output;
+      console.error("[ai-tool] échec inattendu", {
+        name,
+        ms: Date.now() - startedAt,
+        errorType: error instanceof Error ? error.name : "unknown",
+      });
+      return {
+        ok: false,
+        message: "Action interrompue par une erreur inattendue. Réessayez.",
+      } as Output;
     }
   };
 }
@@ -120,7 +166,14 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
   return {
     update_profile: tool({
       description: "Mettre à jour le poids, les objectifs ou les informations du profil Pace.",
-      inputSchema: z.object({ weight_kg: z.number().nullable(), weight_goal_kg: z.number().nullable(), daily_calorie_goal: z.number().nullable(), daily_protein_goal: z.number().nullable(), daily_water_ml_goal: z.number().nullable(), training_goal: z.string().nullable() }),
+      inputSchema: z.object({
+        weight_kg: z.number().finite().positive().nullable(),
+        weight_goal_kg: z.number().finite().positive().nullable(),
+        daily_calorie_goal: z.number().finite().positive().nullable(),
+        daily_protein_goal: z.number().finite().positive().nullable(),
+        daily_water_ml_goal: z.number().finite().positive().nullable(),
+        training_goal: z.string().trim().max(160).nullable(),
+      }),
       execute: withToolLogging("update_profile", async (input) => {
         if (!permissions.profile) return { ok: false, message: "Permission Profil désactivée" };
         const patch: Database["public"]["Tables"]["profiles"]["Update"] = {
@@ -132,29 +185,40 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
           ...(input.training_goal === null ? {} : { training_goal: input.training_goal }),
         };
         const { error } = await client.from("profiles").update(patch).eq("user_id", userId);
-        if (error) { await logAction(client, userId, conversationId, "coach", "update_profile", "Mise à jour du profil", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
+        if (error) { await logAction(client, userId, conversationId, "coach", "update_profile", "Mise à jour du profil", input, "failed"); return { ok: false, message: "Impossible de mettre à jour le profil. Réessayez." }; }
         await logAction(client, userId, conversationId, "coach", "update_profile", "Profil mis à jour", input, "executed");
         return { ok: true, message: "Profil mis à jour" };
       }),
     }),
     add_food: tool({
       description: "Ajouter un repas ou aliment au journal nutritionnel avec estimation complète des macros.",
-      inputSchema: z.object({ name: z.string(), meal: z.string(), kcal: z.number(), protein_g: z.number(), carbs_g: z.number(), fat_g: z.number(), fiber_g: z.number(), sugar_g: z.number(), sodium_mg: z.number(), grams: z.number() }),
+      inputSchema: z.object({
+        name: z.string().trim().min(1).max(200),
+        meal: z.string().trim().min(1).max(40),
+        kcal: z.number().finite().nonnegative(),
+        protein_g: z.number().finite().nonnegative(),
+        carbs_g: z.number().finite().nonnegative(),
+        fat_g: z.number().finite().nonnegative(),
+        fiber_g: z.number().finite().nonnegative(),
+        sugar_g: z.number().finite().nonnegative(),
+        sodium_mg: z.number().finite().nonnegative(),
+        grams: z.number().finite().positive(),
+      }),
       execute: withToolLogging("add_food", async (input) => {
         if (!permissions.nutrition) return { ok: false, message: "Permission Nutrition désactivée" };
         const { error } = await client.from("food_log").insert({ user_id: userId, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, protein_g: input.protein_g, carbs_g: input.carbs_g, fat_g: input.fat_g, fiber_g: input.fiber_g, sugar_g: input.sugar_g, sodium_mg: input.sodium_mg, source: "coach_ai" });
-        if (error) { await logAction(client, userId, conversationId, "coach", "add_food", "Ajout nutrition", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
+        if (error) { await logAction(client, userId, conversationId, "coach", "add_food", "Ajout nutrition", input, "failed"); return { ok: false, message: "Impossible d’enregistrer cet aliment. Réessayez." }; }
         await logAction(client, userId, conversationId, "coach", "add_food", `${input.name} ajouté`, input, "executed");
         return { ok: true, message: `${input.name} ajouté au journal` };
       }),
     }),
     add_health_sample: tool({
       description: "Enregistrer une mesure de santé comme le poids ou la masse grasse.",
-      inputSchema: z.object({ type: z.string(), value: z.number() }),
+      inputSchema: z.object({ type: z.string().trim().min(1).max(60), value: z.number().finite().nonnegative() }),
       execute: withToolLogging("add_health_sample", async (input) => {
         if (!permissions.profile) return { ok: false, message: "Permission Profil désactivée" };
         const { error } = await client.from("health_samples").insert({ user_id: userId, type: input.type, value: input.value, source: "coach_ai" });
-        if (error) { await logAction(client, userId, conversationId, "coach", "add_health_sample", "Mesure de santé", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
+        if (error) { await logAction(client, userId, conversationId, "coach", "add_health_sample", "Mesure de santé", input, "failed"); return { ok: false, message: "Impossible d’enregistrer cette mesure. Réessayez." }; }
         await logAction(client, userId, conversationId, "coach", "add_health_sample", `${input.type} enregistré`, input, "executed");
         return { ok: true, message: "Mesure enregistrée" };
       }),
@@ -169,7 +233,7 @@ function buildTools(client: Client, userId: string, conversationId: string) {
       inputSchema: z.object({ kind: z.enum(["bug", "improvement", "feature", "task"]), title: z.string(), description: z.string(), priority: z.enum(["low", "medium", "high", "critical"]) }),
       execute: withToolLogging("create_development_task", async (input) => {
         const { error } = await client.from("development_tasks").insert({ ...input, user_id: userId, conversation_id: conversationId });
-        if (error) { await logAction(client, userId, conversationId, "build", "create_development_task", "Création d’une tâche", input, "failed"); return { ok: false, message: `Erreur base de données : ${error.message}` }; }
+        if (error) { await logAction(client, userId, conversationId, "build", "create_development_task", "Création d’une tâche", input, "failed"); return { ok: false, message: "Impossible de créer cette tâche. Réessayez." }; }
         await logAction(client, userId, conversationId, "build", "create_development_task", `${input.kind} créé : ${input.title}`, input, "executed");
         return { ok: true, message: `${input.kind} créé dans Développement` };
       }),
@@ -177,7 +241,7 @@ function buildTools(client: Client, userId: string, conversationId: string) {
   };
 }
 
-type Gateway = ReturnType<typeof createGoogleGenerativeAI>;
+type Gateway = ReturnType<typeof createOpenAICompatible>;
 
 /**
  * Résumé glissant : les messages anciens (au-delà de la fenêtre récente) sont condensés
@@ -199,7 +263,7 @@ async function rollingSummary(client: Client, userId: string, conversationId: st
 
   try {
     const result = streamText({
-      model: gateway("gemini-2.5-flash"),
+      model: gateway.chatModel("gemini-2.5-flash"),
       messages: [{ role: "user", content: `Voici un résumé existant d'une conversation puis de nouveaux échanges à intégrer. Produis un résumé fusionné en français, factuel et dense (800 mots maximum), qui conserve : objectifs, décisions, préférences, chiffres, actions réalisées et informations personnelles utiles. Réponds uniquement par le résumé.\n\n[RÉSUMÉ EXISTANT]\n${previous || "(aucun)"}\n\n[NOUVEAUX ÉCHANGES]\n${transcript}` }],
     });
     const summary = (await result.text).trim();
@@ -207,7 +271,7 @@ async function rollingSummary(client: Client, userId: string, conversationId: st
     await client.from("ai_conversations").update({ summary, summarized_count: target }).eq("id", conversationId).eq("user_id", userId);
     return summary;
   } catch (error) {
-    console.error("[ai-chat] résumé impossible", error);
+    console.error("[ai-chat] résumé impossible", { errorType: error instanceof Error ? error.name : "unknown" });
     return previous;
   }
 }
@@ -224,7 +288,6 @@ async function rollingSummary(client: Client, userId: string, conversationId: st
  * jamais d'exception, jamais de conversation bloquée.
  */
 function closeDanglingToolCalls(messages: UIMessage[]): UIMessage[] {
-  const TERMINAL_STATES = new Set(["output-available", "output-error"]);
   return messages.map((message) => {
     if (message.role !== "assistant") return message;
     let mutated = false;
@@ -232,7 +295,7 @@ function closeDanglingToolCalls(messages: UIMessage[]): UIMessage[] {
       const p = part as unknown as Record<string, unknown>;
       if (typeof p.type !== "string" || !p.type.startsWith("tool-")) return part;
       const state = typeof p.state === "string" ? p.state : "";
-      if (TERMINAL_STATES.has(state)) return part;
+      if (isResolvedToolState(state)) return part;
       mutated = true;
       return {
         ...p,
@@ -258,31 +321,71 @@ export async function handleAiChat(request: Request) {
     if (body.agentType !== "coach" && body.agentType !== "build") fail(400, "bad_agent", "Assistant inconnu.");
 
     const messages = body.messages as UIMessage[];
+    const hasMalformedMessage = messages.some(
+      (message) =>
+        !message ||
+        typeof message !== "object" ||
+        typeof message.id !== "string" ||
+        message.id.length === 0 ||
+        (message.role !== "user" && message.role !== "assistant") ||
+        !Array.isArray(message.parts),
+    );
+    if (hasMalformedMessage) {
+      fail(400, "invalid_messages", "Le format de la conversation est invalide. Rechargez-la puis réessayez.");
+    }
     const agentType = body.agentType;
     const ephemeral = body.ephemeral === true;
     const conversationId = body.conversationId;
     const newest = messages[messages.length - 1];
-    if (newest && textOf(newest).length > MAX_TEXT_CHARS) fail(413, "message_too_long", `Message trop long : réduisez-le sous ${Math.round(MAX_TEXT_CHARS / 1000)} 000 caractères ou envoyez-le en plusieurs parties.`);
+    const windowed = messages.length > RECENT_WINDOW ? messages.slice(-RECENT_WINDOW) : messages;
+    // Bound the complete serialized inference window, not only text parts.
+    // Tool inputs and other message parts are also forwarded to the provider.
+    const contextPayloadChars = JSON.stringify(windowed).length;
+    if (contextPayloadChars > MAX_CONTEXT_PAYLOAD_CHARS) {
+      fail(413, "context_too_long", `Le contexte envoyé à l’IA dépasse ${MAX_CONTEXT_PAYLOAD_CHARS.toLocaleString("fr-FR")} caractères. Réduisez les messages récents ou envoyez-les en plusieurs parties.`);
+    }
 
     const { client, userId } = await authenticatedClient(request);
 
+    // An authenticated session is not, by itself, consent to send conversation
+    // content to an external AI provider. Enforce the current legal decision
+    // on the server for both persisted and ephemeral conversations.
+    const { data: consent, error: consentError } = await client
+      .from("legal_consent")
+      .select("opts")
+      .eq("user_id", userId)
+      .eq("eula_version", LEGAL_VERSIONS.eula)
+      .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .maybeSingle();
+    if (consentError) {
+      fail(503, "consent_lookup_failed", "Impossible de vérifier le consentement IA. Réessayez.");
+    }
+    const consentOptions = consent?.opts as { ai?: unknown } | null;
+    if (consentOptions?.ai !== true) {
+      fail(403, "ai_consent_required", "Activez le consentement Analyse IA dans Paramètres → Confidentialité.");
+    }
+
     if (!ephemeral) {
       const { data, error } = await client.from("ai_conversations").select("id").eq("id", conversationId).eq("user_id", userId).eq("agent_type", agentType).maybeSingle();
-      if (error) fail(503, "db_error", `Erreur base de données : ${error.message}`);
+      if (error) fail(503, "db_error", "Le service IA est temporairement indisponible. Réessayez.");
       if (!data) fail(404, "conversation_not_found", "Cette conversation n’existe plus. Créez-en une nouvelle.");
     }
 
     const key = apiKey();
-    const google = createGoogleGenerativeAI({ apiKey: key });
+    const google = createOpenAICompatible({
+      name: "google",
+      baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+      apiKey: key,
+    });
 
     const preferences = await getPreferencesServer(client, userId);
 
     if (!ephemeral && newest?.role === "user") {
       const text = textOf(newest);
-      const { data: exists } = await client.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("model_message_id", newest.id).maybeSingle();
+      const { data: exists } = await client.from("ai_messages").select("id").eq("conversation_id", conversationId).eq("user_id", userId).eq("model_message_id", newest.id).maybeSingle();
       if (!exists) {
         const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "user", parts: newest.parts as unknown as Json, plain_text: text, model_message_id: newest.id });
-        if (error) fail(503, "db_write_error", `Votre message n’a pas pu être enregistré (${error.message}).`);
+        if (error) fail(503, "db_write_error", "Votre message n’a pas pu être enregistré. Réessayez.");
       }
     }
 
@@ -297,18 +400,17 @@ export async function handleAiChat(request: Request) {
       ? `Tu es Coach IA, le coach personnel francophone de Pace. Tu utilises automatiquement les données autorisées ci-dessous sans redemander ce qui est déjà connu. Tu donnes des réponses précises, bienveillantes et actionnables. Quand l'utilisateur demande une modification, utilise l'outil approprié. Après chaque outil, confirme clairement avec ✓ et la modification exacte. Données autorisées: ${JSON.stringify(dataContext)}. Niveau mémoire: ${preferences.memory_level}. Ne parle jamais du développement de Pace; redirige ces demandes vers BUILD IA.${memoryBlock}`
       : `Tu es BUILD IA, l'assistant de développement francophone de Pace. Tu transformes automatiquement les signalements en bugs, améliorations, fonctionnalités ou tâches structurées avec priorité. Tu n'es pas un coach santé et rediriges ces demandes vers Coach IA. Tu ne prétends jamais modifier le code source; tu peux analyser, cadrer et créer des éléments dans le centre Développement.${memoryBlock}`;
 
-    const windowed = messages.length > RECENT_WINDOW ? messages.slice(-RECENT_WINDOW) : messages;
     const toolApproval = Object.fromEntries(Object.keys(tools).map((name) => [name, preferences.confirm_actions ? "user-approval" : "not-applicable"]));
     const safeWindowed = closeDanglingToolCalls(windowed);
 
     const result = streamText({
-      model: google("gemini-2.5-flash"),
+      model: google.chatModel("gemini-2.5-flash"),
       system: instructions,
       messages: await convertToModelMessages(safeWindowed),
       tools,
       toolApproval,
       stopWhen: stepCountIs(50),
-      onError: ({ error }) => console.error("[ai-chat] erreur de flux", error),
+      onError: ({ error }) => console.error("[ai-chat] erreur de flux", { errorType: error instanceof Error ? error.name : "unknown" }),
     });
 
     return result.toUIMessageStreamResponse({
@@ -317,27 +419,61 @@ export async function handleAiChat(request: Request) {
       headers: { "X-Pace-Prepare-Ms": String(Date.now() - startedAt) },
       onError: (error) => {
         const message = error instanceof Error ? error.message : String(error);
-        console.error("[ai-chat] erreur de génération", message);
+        console.error("[ai-chat] erreur de génération", { errorType: error instanceof Error ? error.name : "unknown" });
         if (/rate.?limit|429/i.test(message)) return "Trop de requêtes vers l’IA : réessayez dans quelques instants.";
         if (/402|payment required/i.test(message)) return "Quota IA gratuit dépassé pour aujourd’hui : réessayez demain, ou passez sur un plan payant Gemini.";
         if (/timeout|aborted|network|fetch failed/i.test(message)) return "Connexion à l’IA interrompue : votre message est conservé, réessayez.";
-        return `Erreur de l’IA : ${message}`;
+        return "Le service IA a rencontré une erreur. Réessayez dans quelques instants.";
       },
       onFinish: async ({ responseMessage }) => {
         if (ephemeral) return;
         try {
+          // The native client pre-generates a UUID and sends it with the
+          // request. Persist with that ID so its later upsert targets this exact
+          // row; if the client disconnects after generation, the server copy
+          // still survives. Web clients keep the provider-generated message ID.
+          const parsedClientAssistantId = z.string().uuid().safeParse(body.clientAssistantMessageId);
+          const clientAssistantId = parsedClientAssistantId.success
+            ? parsedClientAssistantId.data
+            : null;
           const text = responseMessage.parts.filter((part) => part.type === "text").map((part) => ("text" in part ? part.text : "")).join("\n");
-          const { error } = await client.from("ai_messages").insert({ conversation_id: conversationId, user_id: userId, role: "assistant", parts: responseMessage.parts as unknown as Json, plain_text: text, model_message_id: responseMessage.id });
-          if (error) console.error("[ai-chat] sauvegarde assistant impossible", error.message);
+          const { error } = await client.from("ai_messages").upsert({
+            ...(clientAssistantId ? { id: clientAssistantId } : {}),
+            conversation_id: conversationId,
+            user_id: userId,
+            role: "assistant",
+            parts: responseMessage.parts as unknown as Json,
+            plain_text: text,
+            model_message_id: clientAssistantId ?? responseMessage.id,
+          }, { onConflict: "id" });
+          if (error) console.error("[ai-chat] sauvegarde assistant impossible", { code: error.code ?? "unknown" });
           await client.from("ai_conversations").update({ updated_at: new Date().toISOString() }).eq("id", conversationId).eq("user_id", userId);
-          const { data: conversation } = await client.from("ai_conversations").select("title").eq("id", conversationId).maybeSingle();
+          const { data: conversation } = await client.from("ai_conversations").select("title").eq("id", conversationId).eq("user_id", userId).maybeSingle();
           if (conversation?.title === "Nouvelle conversation") {
-            const firstText = messages.flatMap((message) => message.parts).find((part) => part.type === "text");
-            if (firstText && firstText.type === "text") await client.from("ai_conversations").update({ title: firstText.text.trim().replace(/\s+/g, " ").slice(0, 52) }).eq("id", conversationId).eq("user_id", userId);
+            // Requests may contain only the latest 30 messages. Derive the
+            // title from the persisted first user message, not that window.
+            const { data: firstUserMessage } = await client
+              .from("ai_messages")
+              .select("plain_text")
+              .eq("conversation_id", conversationId)
+              .eq("user_id", userId)
+              .eq("role", "user")
+              .order("created_at", { ascending: true })
+              .order("id", { ascending: true })
+              .limit(1)
+              .maybeSingle();
+            const firstUserMessageFromWindow = messages.find((message) => message.role === "user");
+            const firstUserText = typeof firstUserMessage?.plain_text === "string"
+              ? firstUserMessage.plain_text
+              : firstUserMessageFromWindow
+                ? textOf(firstUserMessageFromWindow)
+                : "";
+            const title = firstUserText.trim().replace(/\s+/g, " ").slice(0, 52);
+            if (title) await client.from("ai_conversations").update({ title }).eq("id", conversationId).eq("user_id", userId);
           }
-          console.info("[ai-chat] terminé", { conversationId, agentType, ms: Date.now() - startedAt });
+          console.info("[ai-chat] terminé", { agentType, ms: Date.now() - startedAt });
         } catch (error) {
-          console.error("[ai-chat] post-traitement échoué", error);
+          console.error("[ai-chat] post-traitement échoué", { errorType: error instanceof Error ? error.name : "unknown" });
         }
       },
     });
