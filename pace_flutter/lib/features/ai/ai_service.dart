@@ -581,21 +581,31 @@ class PaceAiService {
         return const <AiMessage>[];
       }
 
-      for (final message in localMessagesMissingFromRecentRemote(
-        localHistory: latestLocal.messages,
-        remoteRecent: remoteMessages,
-      )) {
-        if (!_isAccountScopeCurrent) return const <AiMessage>[];
-        await _insertCloudMessage(latestLocal, message);
+      // Capture the durable queue before retrying it. Its IDs are excluded
+      // from the best-effort recent-window pass below, preventing two uploads
+      // of the same failed message during one refresh.
+      final pendingReferences = await _readPendingMessageReferences();
+      final alreadyPendingIds = pendingReferences
+          .where((entry) => entry['conversationId'] == id)
+          .map((entry) => entry['messageId'])
+          .whereType<String>()
+          .toSet();
+      try {
+        await _retryPendingMessages(
+          conversationId: id,
+          references: pendingReferences,
+        );
+      } catch (_) {
+        // Keep the local transcript usable; pending references remain durable.
       }
       if (!_isAccountScopeCurrent) return const <AiMessage>[];
 
-      // Retry durable references even after a failed message has aged out of
-      // the recent 30-message cloud window.
-      try {
-        await _retryPendingMessages();
-      } catch (_) {
-        // Keep the local transcript usable; pending references remain durable.
+      for (final message in localMessagesMissingFromRecentRemote(
+        localHistory: latestLocal.messages,
+        remoteRecent: remoteMessages,
+      ).where((message) => !alreadyPendingIds.contains(message.id))) {
+        if (!_isAccountScopeCurrent) return const <AiMessage>[];
+        await _insertCloudMessage(latestLocal, message);
       }
       if (!_isAccountScopeCurrent) return const <AiMessage>[];
 
@@ -888,11 +898,17 @@ class PaceAiService {
         ),
       );
 
-  Future<void> _retryPendingMessages() async {
-    final references = await _readPendingMessageReferences();
-    if (references.isEmpty || !_isAccountScopeCurrent) return;
+  Future<void> _retryPendingMessages({
+    required String conversationId,
+    List<Map<String, dynamic>>? references,
+  }) async {
+    final pendingReferences =
+        references ?? await _readPendingMessageReferences();
+    if (pendingReferences.isEmpty || !_isAccountScopeCurrent) return;
     final conversations = loadLocalConversations();
-    for (final reference in references) {
+    for (final reference in pendingReferences.where(
+      (entry) => entry['conversationId'] == conversationId,
+    )) {
       if (!_isAccountScopeCurrent) return;
       final conversationId = reference['conversationId']?.toString() ?? '';
       final messageId = reference['messageId']?.toString() ?? '';
