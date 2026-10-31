@@ -123,6 +123,14 @@ void main() {
       hasLength(2),
     );
 
+    final removedOne = PaceAiService.removePendingMessageReference(
+      existing: references,
+      conversationId: 'conversation-a',
+      messageId: 'message-older',
+    );
+    expect(removedOne, hasLength(1));
+    expect(removedOne.single['conversationId'], 'conversation-b');
+
     final removed = PaceAiService.removePendingMessagesForConversation(
       existing: references,
       conversationId: 'conversation-a',
