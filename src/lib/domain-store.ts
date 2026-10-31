@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { enqueueDomainWrite } from "@/lib/domain-outbox";
+import { enqueueDomainWrite } from "./domain-outbox.ts";
 
 export type DomainRecord<T> = {
   version: 1;
