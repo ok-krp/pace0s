@@ -964,7 +964,13 @@ class PaceAiService {
       persistedHistory: persistedHistory,
     );
     final next = [...previous, userMessage];
-    if (!conversation.ephemeral) await _replaceMessages(conversation.id, next);
+    if (!conversation.ephemeral) {
+      await _replaceMessages(
+        conversation.id,
+        next,
+        pendingUploads: [userMessage],
+      );
+    }
     await _insertCloudMessage(conversation, userMessage);
 
     final assistantMessageId = _uuid();
@@ -975,7 +981,11 @@ class PaceAiService {
     );
     final assistant = AiMessage(id: assistantMessageId, role: 'assistant', text: responseText, createdAt: DateTime.now());
     if (!conversation.ephemeral) {
-      await _replaceMessages(conversation.id, [...next, assistant]);
+      await _replaceMessages(
+        conversation.id,
+        [...next, assistant],
+        pendingUploads: [assistant],
+      );
       await _insertCloudMessage(conversation, assistant);
       if (conversation.title == 'Nouvelle conversation') {
         await renameConversation(conversation.id, clean.length > 52 ? '${clean.substring(0, 52).trim()}…' : clean);
@@ -1291,6 +1301,7 @@ class PaceAiService {
     String id,
     List<AiMessage> messages, {
     bool touchUpdatedAt = true,
+    List<AiMessage> pendingUploads = const <AiMessage>[],
   }) async {
     final conversations = loadLocalConversations();
     final index = conversations.indexWhere((item) => item.id == id);
@@ -1305,7 +1316,53 @@ class PaceAiService {
       messages: messages,
       updatedAt: touchUpdatedAt ? DateTime.now() : existing.updatedAt,
     );
-    await _saveLocalConversations(conversations);
+    if (pendingUploads.isEmpty) {
+      await _saveLocalConversations(conversations);
+    } else {
+      await _persistConversationWithPendingUploads(
+        conversationId: id,
+        conversations: conversations,
+        messages: pendingUploads,
+      );
+    }
+  }
+
+  /// Stores the transcript and retry references in one durable local snapshot.
+  /// A process exit cannot leave a newly-saved message without its pending
+  /// upload marker, or a marker without its corresponding local message.
+  Future<void> _persistConversationWithPendingUploads({
+    required String conversationId,
+    required List<AiConversation> conversations,
+    required List<AiMessage> messages,
+  }) async {
+    final previous = _pendingMessageQueue;
+    final completer = Completer<void>();
+    _pendingMessageQueue = completer.future;
+    try {
+      await previous;
+      if (!_isAccountScopeCurrent || _accountUserId == null) return;
+      var references = normalizePendingMessageReferences(
+        localStore.read(_pendingMessagesKey),
+      );
+      for (final message in messages) {
+        references = addPendingMessageReference(
+          existing: references,
+          conversationId: conversationId,
+          messageId: message.id,
+        );
+      }
+      await localStore.writeBatchForAccount(
+        _accountUserId,
+        writes: {
+          _conversationKey:
+              conversations.map((item) => item.toJson()).toList(),
+          _pendingMessagesKey: references,
+        },
+        enqueueSync: false,
+      );
+    } finally {
+      completer.complete();
+    }
   }
 
   Future<bool> _insertCloudMessage(
