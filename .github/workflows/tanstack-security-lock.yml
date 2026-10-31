@@ -4,7 +4,11 @@ on:
   pull_request:
     paths:
       - "package.json"
+      - "package-lock.json"
       - "bun.lock"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - ".lovable/mcp/**"
       - ".github/workflows/tanstack-security-lock.yml"
       - "src/lib/ai-chat.server.ts"
       - "src/lib/ai-tool-state.ts"
@@ -39,7 +43,11 @@ on:
     branches: [main]
     paths:
       - "package.json"
+      - "package-lock.json"
       - "bun.lock"
+      - "**/*.ts"
+      - "**/*.tsx"
+      - ".lovable/mcp/**"
       - ".github/workflows/tanstack-security-lock.yml"
       - "src/lib/ai-chat.server.ts"
       - "src/lib/ai-tool-state.ts"
