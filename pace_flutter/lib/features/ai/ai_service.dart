@@ -910,10 +910,11 @@ class PaceAiService {
       (entry) => entry['conversationId'] == conversationId,
     )) {
       if (!_isAccountScopeCurrent) return;
-      final conversationId = reference['conversationId']?.toString() ?? '';
+      final referenceConversationId =
+          reference['conversationId']?.toString() ?? '';
       final messageId = reference['messageId']?.toString() ?? '';
       final matching = conversations.where(
-        (item) => item.id == conversationId && !item.ephemeral,
+        (item) => item.id == referenceConversationId && !item.ephemeral,
       );
       if (matching.isEmpty) continue;
       final conversation = matching.first;
@@ -925,7 +926,7 @@ class PaceAiService {
         await _mutatePendingMessageReferences(
           (existing) => removePendingMessageReference(
             existing: existing,
-            conversationId: conversationId,
+            conversationId: referenceConversationId,
             messageId: messageId,
           ),
         );
