@@ -53,6 +53,31 @@ export function readDomain<T>(domain: string, fallback: T): DomainRecord<T> {
   return { version: 1, updatedAt: new Date(0).toISOString(), mutationId: "empty", value: fallback };
 }
 
+/**
+ * Apply a server-confirmed domain value without enqueueing it as a new local
+ * mutation. This keeps domain-backed readers in sync with the legacy key while
+ * avoiding a Realtime echo/write loop.
+ */
+export function applyRemoteDomainWrite<T>(domain: string, value: T, updatedAt?: string): void {
+  if (typeof window === "undefined") return;
+  const timestamp = updatedAt && Number.isFinite(Date.parse(updatedAt))
+    ? updatedAt
+    : new Date().toISOString();
+  const record: DomainRecord<T> = {
+    version: 1,
+    updatedAt: timestamp,
+    mutationId: `remote:${timestamp}`,
+    value,
+  };
+  try {
+    localStorage.setItem(storageKey(domain), JSON.stringify(record));
+    localStorage.setItem(`pace.${domain}`, JSON.stringify(value));
+    window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record } }));
+  } catch {
+    // The legacy storage event remains the fallback if domain storage is full.
+  }
+}
+
 export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
   const record: DomainRecord<T> = {
     version: 1,
