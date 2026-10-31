@@ -71,7 +71,7 @@ export function applyRemoteDomainWrite<T>(domain: string, value: T, updatedAt?: 
   try {
     localStorage.setItem(storageKey(domain), JSON.stringify(record));
     localStorage.setItem(`pace.${domain}`, JSON.stringify(value));
-    window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record } }));
+    window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record, remote: true } }));
   } catch {
     // The legacy storage event remains the fallback if domain storage is full.
   }
@@ -111,8 +111,16 @@ export function useDomainState<T>(domain: string, fallback: T): [T, (next: T | (
 
   useEffect(() => {
     const onWrite = (event: Event) => {
-      const detail = (event as CustomEvent<{ domain: string; record: DomainRecord<T> }>).detail;
+      const detail = (event as CustomEvent<{ domain: string; record: DomainRecord<T>; remote?: boolean }>).detail;
       if (!detail || detail.domain !== domain) return;
+      // The sync engine has already compared the server timestamp with this
+      // account's checkpoint and excluded locally queued keys. An accepted
+      // remote value is authoritative even if this device's wall clock was
+      // ahead when the local version was created.
+      if (detail.remote) {
+        setRecord(detail.record);
+        return;
+      }
       setRecord((current) => {
         if (compareRecords(detail.record, current) <= 0) return current;
         return detail.record;
