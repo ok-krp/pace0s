@@ -169,14 +169,16 @@ export function useCloudSyncEngineInternal() {
     const applyRemoteRow = (rawRow: unknown) => {
       if (cancelled || !rawRow || typeof rawRow !== "object") return;
       const row = rawRow as SyncRow;
-      if (!row.key?.startsWith(PACE_PREFIX) || EXCLUDED.has(row.key) || row.updated_by === DEVICE_ID) return;
+      if (typeof row.key !== "string" || row.updated_by === DEVICE_ID) return;
+      const key = row.key.startsWith("lt.") ? `${PACE_PREFIX}${row.key.slice(3)}` : row.key;
+      if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return;
       const remoteTime = Date.parse(row.updated_at);
       if (!Number.isFinite(remoteTime)) return;
-      const localTime = Date.parse(readMeta()[row.key] ?? "1970-01-01T00:00:00.000Z");
-      if (remoteTime <= localTime || readQueue().includes(row.key)) return;
+      const localTime = Date.parse(readMeta()[key] ?? "1970-01-01T00:00:00.000Z");
+      if (remoteTime <= localTime || readQueue().includes(key)) return;
 
-      applyRemoteWrite(row.key, row.value);
-      markLocal(row.key, row.updated_at);
+      applyRemoteWrite(key, row.value);
+      markLocal(key, row.updated_at);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
       setStatus("ok");
     };
