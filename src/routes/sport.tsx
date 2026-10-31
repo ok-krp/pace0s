@@ -626,8 +626,8 @@ const OverloadTab = memo(function OverloadTab({ exs, setExs, progs, setProgs, se
     if (!focusExerciseId) return;
     const target = exs.find((e) => e.id === focusExerciseId);
     if (!target) return;
-    setMuscle(target.muscle);
     const id = requestAnimationFrame(() => {
+      setMuscle(target.muscle);
       document.getElementById(`ov-${focusExerciseId}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
     });
     return () => cancelAnimationFrame(id);
