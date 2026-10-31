@@ -215,6 +215,8 @@ export function useCloudSyncEngineInternal() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new))
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new));
     void realtimeChannel.subscribe((subscriptionStatus) => {
+      // removeChannel may report CLOSED after this effect has already cleaned up.
+      if (cancelled) return;
       if (subscriptionStatus === "SUBSCRIBED") {
         realtimeHealthy = true;
         void syncNow();
