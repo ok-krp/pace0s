@@ -15,10 +15,12 @@ test("sync queue and metadata storage are isolated by authenticated user", () =>
 
 test("legacy unscoped queue is not implicitly adopted by an authenticated account", () => {
   const legacyQueue = '["pace.nutrition.items"]';
-  const aliceQueue = null;
+  const storage = new Map([["pace.__sync_queue", legacyQueue]]);
+  const aliceQueueKey = accountSyncStorageKeys("user/alice").queue;
 
-  assert.deepEqual(parseSyncQueue(aliceQueue), []);
-  assert.notEqual(parseSyncQueue(legacyQueue).length, 0);
+  // The account-scoped reader looks up only Alice's key; it must not replay
+  // the old global queue because that queue has no trustworthy owner marker.
+  assert.deepEqual(parseSyncQueue(storage.get(aliceQueueKey) ?? null), []);
 });
 
 test("queue parser rejects malformed, non-string and non-Pace keys and de-duplicates", () => {
