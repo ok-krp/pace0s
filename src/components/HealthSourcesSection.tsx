@@ -27,8 +27,10 @@ export function HealthSourcesSection() {
   const platform = useMemo(() => (isAndroid() ? "android" : isIOS() ? "ios" : "web"), []);
 
   useEffect(() => {
-    setHealthConnectAvailable(!!window.PaceHealthConnect);
-    setHealthKitBridgeAvailable(!!window.webkit?.messageHandlers?.paceHealthKit);
+    const availabilityFrame = requestAnimationFrame(() => {
+      setHealthConnectAvailable(!!window.PaceHealthConnect);
+      setHealthKitBridgeAvailable(!!window.webkit?.messageHandlers?.paceHealthKit);
+    });
     const previous = window.PaceAppleHealth?._receive;
     window.PaceAppleHealth = {
       _receive: async (payload) => {
@@ -53,7 +55,11 @@ export function HealthSourcesSection() {
         }
       },
     };
-    return () => { if (previous) window.PaceAppleHealth = { _receive: previous }; else delete window.PaceAppleHealth; };
+    return () => {
+      cancelAnimationFrame(availabilityFrame);
+      if (previous) window.PaceAppleHealth = { _receive: previous };
+      else delete window.PaceAppleHealth;
+    };
   }, [insert]);
 
   const connectHealthConnect = () => {
