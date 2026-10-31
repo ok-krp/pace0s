@@ -36,7 +36,10 @@ export function parseSyncMetadata(raw: string | null): Record<string, string> {
     if (!value || typeof value !== "object" || Array.isArray(value)) return {};
     return Object.fromEntries(
       Object.entries(value).filter(([key, timestamp]) =>
-        key.startsWith("pace.") && typeof timestamp === "string" && Number.isFinite(Date.parse(timestamp)),
+        key.startsWith("pace.") &&
+        typeof timestamp === "string" &&
+        /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d+)?(?:Z|[+-]\\d{2}:\\d{2})$/.test(timestamp) &&
+        Number.isFinite(Date.parse(timestamp)),
       ),
     );
   } catch {
