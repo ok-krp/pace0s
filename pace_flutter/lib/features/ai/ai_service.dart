@@ -1341,6 +1341,32 @@ class PaceAiService {
     try {
       await previous;
       if (!_isAccountScopeCurrent || _accountUserId == null) return;
+
+      // Rebase against the latest local snapshot after acquiring the queue.
+      // Concurrent sends may have appended other messages while this write
+      // waited; merge by stable ID rather than replacing that newer history.
+      final latestConversations = loadLocalConversations().toList();
+      final latestIndex = latestConversations.indexWhere(
+        (item) => item.id == conversationId,
+      );
+      if (latestIndex < 0) return;
+      final intended = conversations.where(
+        (item) => item.id == conversationId,
+      );
+      if (intended.isEmpty) return;
+      final latest = latestConversations[latestIndex];
+      final desired = intended.first;
+      final mergedMessages = mergeMessages(
+        local: desired.messages,
+        remote: latest.messages,
+      );
+      latestConversations[latestIndex] = latest.copyWith(
+        messages: mergedMessages,
+        updatedAt: desired.updatedAt.isAfter(latest.updatedAt)
+            ? desired.updatedAt
+            : latest.updatedAt,
+      );
+
       var references = normalizePendingMessageReferences(
         localStore.read(_pendingMessagesKey),
       );
@@ -1355,7 +1381,7 @@ class PaceAiService {
         _accountUserId,
         writes: {
           _conversationKey:
-              conversations.map((item) => item.toJson()).toList(),
+              latestConversations.map((item) => item.toJson()).toList(),
           _pendingMessagesKey: references,
         },
         enqueueSync: false,
