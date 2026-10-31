@@ -228,6 +228,8 @@ jobs:
         run: npx tsc --noEmit
       - name: Test AI tool approval state policy
         run: node --experimental-strip-types --test src/lib/ai-tool-state.test.ts
+      - name: Test remote domain-state reconciliation
+        run: node --experimental-strip-types --test src/lib/domain-store.test.ts
       - name: Test MCP input validation
         run: node --experimental-strip-types --test src/lib/mcp/validation.test.ts
       - name: Test MCP OAuth issuer resolution
