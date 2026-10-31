@@ -21,6 +21,7 @@ class PaceAiService {
   final SyncService sync;
   final PaceAuthService auth;
   final String? _accountUserId;
+  Future<void> _pendingMessageQueue = Future<void>.value();
 
   /// Whether this service still belongs to the active local/auth account.
   /// UI routes that outlive an account transition use this to invalidate stale controls.
@@ -49,6 +50,7 @@ class PaceAiService {
   static const _deletedConversationKey = 'pace.ai.deleted_conversations';
   static const _legacyConversationImportKey =
       'pace.__sync_ai_conversations_imported';
+  static const _pendingMessagesKey = 'pace.ai.pending_message_uploads';
   static const _memoryKey = 'pace.ai.memory';
   static const _memoryEnabledKey = 'pace.settings.ai.memory';
   static const _confirmKey = 'pace.settings.ai.confirm_actions';
@@ -346,6 +348,9 @@ class PaceAiService {
     final conversations = loadLocalConversations().toList()
       ..removeWhere((item) => item.id == id);
     await _saveLocalConversations(conversations);
+    // A deleted conversation has no remaining message history to upload.
+    // Remove pending message references so they cannot retry forever.
+    await _removePendingMessagesForConversation(id);
     if (client != null && user != null) {
       await _retryPendingConversationDeletes(client, user.id);
     }
@@ -585,6 +590,15 @@ class PaceAiService {
       }
       if (!_isAccountScopeCurrent) return const <AiMessage>[];
 
+      // Retry durable references even after a failed message has aged out of
+      // the recent 30-message cloud window.
+      try {
+        await _retryPendingMessages();
+      } catch (_) {
+        // Keep the local transcript usable; pending references remain durable.
+      }
+      if (!_isAccountScopeCurrent) return const <AiMessage>[];
+
       final merged = mergeMessages(
         local: latestLocal.messages,
         remote: remoteMessages,
@@ -715,6 +729,194 @@ class PaceAiService {
       return modelMessageId;
     }
     return row['id']?.toString() ?? '';
+  }
+
+  /// Normalizes the durable queue to stable IDs only. Message text is already
+  /// stored in the conversation snapshot, so it is not duplicated in the queue.
+  static List<Map<String, dynamic>> normalizePendingMessageReferences(
+    dynamic raw,
+  ) {
+    if (raw is! List) return const <Map<String, dynamic>>[];
+    final result = <Map<String, dynamic>>[];
+    final seen = <String>{};
+    for (final value in raw) {
+      if (value is! Map) continue;
+      final conversationId = value['conversationId'];
+      final messageId = value['messageId'];
+      if (conversationId is! String ||
+          conversationId.isEmpty ||
+          messageId is! String ||
+          messageId.isEmpty) {
+        continue;
+      }
+      final key = '$conversationId::$messageId';
+      if (!seen.add(key)) continue;
+      result.add({
+        'conversationId': conversationId,
+        'messageId': messageId,
+      });
+    }
+    return result;
+  }
+
+  static List<Map<String, dynamic>> addPendingMessageReference({
+    required dynamic existing,
+    required String conversationId,
+    required String messageId,
+  }) {
+    final references = normalizePendingMessageReferences(existing);
+    if (conversationId.isEmpty || messageId.isEmpty) return references;
+    final exists = references.any(
+      (entry) =>
+          entry['conversationId'] == conversationId &&
+          entry['messageId'] == messageId,
+    );
+    if (!exists) {
+      references.add({
+        'conversationId': conversationId,
+        'messageId': messageId,
+      });
+    }
+    return references;
+  }
+
+  static List<Map<String, dynamic>> removePendingMessageReference({
+    required dynamic existing,
+    required String conversationId,
+    required String messageId,
+  }) =>
+      normalizePendingMessageReferences(existing)
+          .where(
+            (entry) =>
+                entry['conversationId'] != conversationId ||
+                entry['messageId'] != messageId,
+          )
+          .toList();
+
+  static List<Map<String, dynamic>> removePendingMessagesForConversation({
+    required dynamic existing,
+    required String conversationId,
+  }) =>
+      normalizePendingMessageReferences(existing)
+          .where((entry) => entry['conversationId'] != conversationId)
+          .toList();
+
+  static List<AiMessage> pendingMessagesForRetry({
+    required AiConversation conversation,
+    required List<Map<String, dynamic>> references,
+  }) {
+    if (conversation.ephemeral || conversation.id.isEmpty) {
+      return const <AiMessage>[];
+    }
+    final pendingIds = references
+        .where((entry) => entry['conversationId'] == conversation.id)
+        .map((entry) => entry['messageId'])
+        .whereType<String>()
+        .toSet();
+    return conversation.messages
+        .where(
+          (message) =>
+              message.id.isNotEmpty && pendingIds.contains(message.id),
+        )
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _readPendingMessageReferences() async {
+    await _pendingMessageQueue;
+    if (!_isAccountScopeCurrent) return const <Map<String, dynamic>>[];
+    return normalizePendingMessageReferences(
+      localStore.read(_pendingMessagesKey),
+    );
+  }
+
+  Future<void> _mutatePendingMessageReferences(
+    List<Map<String, dynamic>> Function(List<Map<String, dynamic>>) mutate,
+  ) async {
+    final previous = _pendingMessageQueue;
+    final completer = Completer<void>();
+    _pendingMessageQueue = completer.future;
+    try {
+      await previous;
+      if (!_isAccountScopeCurrent || _accountUserId == null) return;
+      final current = normalizePendingMessageReferences(
+        localStore.read(_pendingMessagesKey),
+      );
+      final next = mutate(current);
+      await localStore.writeForAccount(
+        _accountUserId,
+        _pendingMessagesKey,
+        next,
+        enqueueSync: false,
+        notify: false,
+      );
+    } finally {
+      completer.complete();
+    }
+  }
+
+  Future<void> _queuePendingMessage(
+    AiConversation conversation,
+    AiMessage message,
+  ) =>
+      _mutatePendingMessageReferences(
+        (existing) => addPendingMessageReference(
+          existing: existing,
+          conversationId: conversation.id,
+          messageId: message.id,
+        ),
+      );
+
+  Future<void> _clearPendingMessage(
+    AiConversation conversation,
+    AiMessage message,
+  ) =>
+      _mutatePendingMessageReferences(
+        (existing) => removePendingMessageReference(
+          existing: existing,
+          conversationId: conversation.id,
+          messageId: message.id,
+        ),
+      );
+
+  Future<void> _removePendingMessagesForConversation(
+    String conversationId,
+  ) =>
+      _mutatePendingMessageReferences(
+        (existing) => removePendingMessagesForConversation(
+          existing: existing,
+          conversationId: conversationId,
+        ),
+      );
+
+  Future<void> _retryPendingMessages() async {
+    final references = await _readPendingMessageReferences();
+    if (references.isEmpty || !_isAccountScopeCurrent) return;
+    final conversations = loadLocalConversations();
+    for (final reference in references) {
+      if (!_isAccountScopeCurrent) return;
+      final conversationId = reference['conversationId']?.toString() ?? '';
+      final messageId = reference['messageId']?.toString() ?? '';
+      final matching = conversations.where(
+        (item) => item.id == conversationId && !item.ephemeral,
+      );
+      if (matching.isEmpty) continue;
+      final conversation = matching.first;
+      final messages = pendingMessagesForRetry(
+        conversation: conversation,
+        references: [reference],
+      );
+      if (messages.isEmpty) {
+        await _mutatePendingMessageReferences(
+          (existing) => removePendingMessageReference(
+            existing: existing,
+            conversationId: conversationId,
+            messageId: messageId,
+          ),
+        );
+        continue;
+      }
+      await _insertCloudMessage(conversation, messages.first);
+    }
   }
 
   Future<String> send({
@@ -1085,11 +1287,23 @@ class PaceAiService {
     await _saveLocalConversations(conversations);
   }
 
-  Future<void> _insertCloudMessage(AiConversation conversation, AiMessage message) async {
-    if (conversation.ephemeral) return;
+  Future<bool> _insertCloudMessage(
+    AiConversation conversation,
+    AiMessage message,
+  ) async {
+    if (conversation.ephemeral || !_isAccountScopeCurrent) return false;
+
+    // Persist a local reference before the network request. If the device goes
+    // offline, the message survives outside the bounded recent-history window.
+    try {
+      await _queuePendingMessage(conversation, message);
+    } catch (_) {
+      // Still attempt a direct cloud write when local queue persistence fails.
+    }
+    if (!_isAccountScopeCurrent) return false;
     final client = _client;
     final user = _scopedUser;
-    if (client == null || user == null) return;
+    if (client == null || user == null) return false;
     try {
       await client.from('ai_messages').upsert({
         'id': message.id,
@@ -1101,8 +1315,15 @@ class PaceAiService {
           {'type': 'text', 'text': message.text}
         ],
         'model_message_id': message.id,
+        'created_at': message.createdAt.toUtc().toIso8601String(),
       }, onConflict: 'id', ignoreDuplicates: message.role == 'assistant');
-    } catch (_) {}
+      if (!_isAccountScopeCurrent) return false;
+      await _clearPendingMessage(conversation, message);
+      return true;
+    } catch (_) {
+      // Keep the durable reference for a later load or send.
+      return false;
+    }
   }
 
   String _uuid() {
