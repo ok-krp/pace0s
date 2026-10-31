@@ -183,6 +183,67 @@ void main() {
     expect(removed.single['conversationId'], 'conversation-b');
   });
 
+  test('pending upload retry schedule uses bounded exponential backoff', () {
+    final now = DateTime.utc(2026, 10, 31, 12);
+    var pending = PaceAiService.addPendingMessageReference(
+      existing: const <Map<String, dynamic>>[],
+      conversationId: 'conversation-a',
+      messageId: 'message-1',
+    );
+
+    pending = PaceAiService.schedulePendingMessageRetry(
+      existing: pending,
+      conversationId: 'conversation-a',
+      messageId: 'message-1',
+      now: now,
+    );
+    var reference = pending.single;
+    var nextAttemptAt = DateTime.parse(reference['nextAttemptAt'] as String);
+    expect(reference['attempts'], 1);
+    expect(nextAttemptAt.difference(now), const Duration(seconds: 5));
+    expect(
+      PaceAiService.isPendingMessageRetryDue(reference: reference, now: now),
+      isFalse,
+    );
+    expect(
+      PaceAiService.isPendingMessageRetryDue(
+        reference: reference,
+        now: nextAttemptAt,
+      ),
+      isTrue,
+    );
+
+    pending = PaceAiService.schedulePendingMessageRetry(
+      existing: pending,
+      conversationId: 'conversation-a',
+      messageId: 'message-1',
+      now: nextAttemptAt,
+    );
+    reference = pending.single;
+    nextAttemptAt = DateTime.parse(reference['nextAttemptAt'] as String);
+    expect(reference['attempts'], 2);
+    expect(nextAttemptAt.difference(
+      DateTime.parse(pending.single['nextAttemptAt'] as String)
+          .subtract(const Duration(seconds: 10)),
+    ), const Duration(seconds: 10));
+
+    for (var attempt = 0; attempt < 12; attempt++) {
+      final dueAt = DateTime.parse(reference['nextAttemptAt'] as String);
+      pending = PaceAiService.schedulePendingMessageRetry(
+        existing: pending,
+        conversationId: 'conversation-a',
+        messageId: 'message-1',
+        now: dueAt,
+      );
+      reference = pending.single;
+    }
+    nextAttemptAt = DateTime.parse(reference['nextAttemptAt'] as String);
+    final latestScheduledAt =
+        DateTime.parse(reference['nextAttemptAt'] as String);
+    expect(reference['attempts'], 8);
+    expect(nextAttemptAt.isAfter(latestScheduledAt), isFalse);
+  });
+
   test('durable pending queue retries an old message outside the recent window', () {
     final now = DateTime.utc(2026, 10, 30);
     final older = AiMessage(
