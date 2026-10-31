@@ -26,6 +26,15 @@ function compareRecords<T>(a: DomainRecord<T>, b: DomainRecord<T>) {
   return a.mutationId.localeCompare(b.mutationId);
 }
 
+/** Server sync has already validated account scope and server timestamps. */
+export function shouldApplyDomainRecord<T>(
+  incoming: DomainRecord<T>,
+  current: DomainRecord<T>,
+  remote = false,
+): boolean {
+  return remote || compareRecords(incoming, current) > 0;
+}
+
 export function readDomain<T>(domain: string, fallback: T): DomainRecord<T> {
   if (typeof window === "undefined") {
     return { version: 1, updatedAt: new Date(0).toISOString(), mutationId: "server", value: fallback };
@@ -117,14 +126,9 @@ export function useDomainState<T>(domain: string, fallback: T): [T, (next: T | (
       // account's checkpoint and excluded locally queued keys. An accepted
       // remote value is authoritative even if this device's wall clock was
       // ahead when the local version was created.
-      if (detail.remote) {
-        setRecord(detail.record);
-        return;
-      }
-      setRecord((current) => {
-        if (compareRecords(detail.record, current) <= 0) return current;
-        return detail.record;
-      });
+      setRecord((current) =>
+        shouldApplyDomainRecord(detail.record, current, detail.remote) ? detail.record : current,
+      );
     };
     window.addEventListener(WRITE_EVENT, onWrite);
     return () => window.removeEventListener(WRITE_EVENT, onWrite);
