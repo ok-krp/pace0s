@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { enqueueDomainWrite } from "./domain-outbox.ts";
 
 export type DomainRecord<T> = {
   version: 1;
@@ -91,8 +90,6 @@ export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
       localStorage.setItem(storageKey(domain), JSON.stringify(record));
       // Keep the old key during the progressive migration as a recovery copy.
       localStorage.setItem(`pace.${domain}`, JSON.stringify(value));
-      // Persist the mutation before asking the cloud-sync layer to process it.
-      enqueueDomainWrite(domain, value);
       window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record } }));
       // Reuse the existing cloud-sync event contract so domain writes are queued
       // by the current sync engine instead of creating a second sync mechanism.
