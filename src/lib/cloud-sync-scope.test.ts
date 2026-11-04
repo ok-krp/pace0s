@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue } from "./cloud-sync-scope.ts";
+import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue, syncPullCursor } from "./cloud-sync-scope.ts";
 
 test("sync queue and metadata storage are isolated by authenticated user", () => {
   const alice = accountSyncStorageKeys("user/alice");
@@ -38,4 +38,24 @@ test("metadata parser accepts only valid timestamps for Pace keys", () => {
     "lt.water": "2026-10-31T12:00:00.000Z",
     "other": "2026-10-31T12:00:00.000Z",
   })), { "pace.water": "2026-10-31T12:00:00.000Z" });
+});
+
+test("incremental pull cursor uses an overlap from the newest account watermark", () => {
+  const now = Date.parse("2026-11-04T20:00:00.000Z");
+  const cursor = syncPullCursor({
+    "pace.water": "2026-11-04T19:58:00.000Z",
+    "pace.nutrition.items": "2026-11-04T19:59:00.000Z",
+  }, now, 5 * 60 * 1000);
+
+  assert.equal(cursor, "2026-11-04T19:54:00.000Z");
+});
+
+test("missing or future-dated pull watermarks require full reconciliation", () => {
+  const now = Date.parse("2026-11-04T20:00:00.000Z");
+  assert.equal(syncPullCursor({}, now), null);
+  assert.equal(syncPullCursor({ "pace.water": "2026-11-04T20:01:00.000Z" }, now), null);
+});
+
+test("incremental pull cursor rejects invalid overlap configuration", () => {
+  assert.throws(() => syncPullCursor({}, Date.now(), -1), RangeError);
 });
