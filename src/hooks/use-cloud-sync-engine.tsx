@@ -4,15 +4,17 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
-import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue } from "@/lib/cloud-sync-scope";
+import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue, syncPullCursor } from "@/lib/cloud-sync-scope";
 import { fetchAllKeysetPages } from "@/lib/user-state-pagination";
 
 const PACE_PREFIX = "pace.";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
-// Full user_state reconciliation is a fallback, not a realtime transport.
-// Keep it at 60s to reduce repeated downloads of large account snapshots.
+// When Realtime is unhealthy, poll only rows changed since the per-account
+// watermark. Keep a short overlap for equal/late timestamps and do a full
+// reconciliation at startup and at least once every 24 hours.
 const POLL_MS = 60000;
 const FULL_RECONCILIATION_MS = 24 * 60 * 60 * 1000;
+const PULL_CURSOR_OVERLAP_MS = 5 * 60 * 1000;
 // PostgREST may cap responses at 1,000 rows; use stable keyset pages so a
 // reconciliation never silently leaves later user_state keys unsynchronized.
 const USER_STATE_PAGE_SIZE = 500;
@@ -133,15 +135,28 @@ export function useCloudSyncEngineInternal() {
     const pull = async () => {
       if (cancelled || !navigator.onLine || running.current[user.id]) return;
       try {
-        // Fetch every row before applying any: a failed later page must not
-        // leave a partially reconciled local snapshot marked as complete.
+        const metadataAtStart = readMeta(user.id);
+        const incrementalCursor = syncPullCursor(
+          metadataAtStart,
+          Date.now(),
+          PULL_CURSOR_OVERLAP_MS,
+        );
+        const fullReconciliation =
+          incrementalCursor === null ||
+          lastFullReconciliationAt === 0 ||
+          Date.now() - lastFullReconciliationAt >= FULL_RECONCILIATION_MS;
+
+        // Fetch the complete selected window before applying any row. If a
+        // later page fails, no partial batch is marked as reconciled.
         const data = await fetchAllKeysetPages<SyncRow>(
           async (afterKey, pageSize) => {
             let query = supabase.from("user_state")
               .select("key,value,updated_at,updated_by")
-              .eq("user_id", user.id)
-              .order("key", { ascending: true })
-              .limit(pageSize);
+              .eq("user_id", user.id);
+            if (!fullReconciliation) {
+              query = query.gte("updated_at", incrementalCursor!);
+            }
+            query = query.order("key", { ascending: true }).limit(pageSize);
             if (afterKey !== null) query = query.gt("key", afterKey);
             const { data, error } = await query;
             return { data: data as SyncRow[] | null, error };
@@ -149,36 +164,41 @@ export function useCloudSyncEngineInternal() {
           { pageSize: USER_STATE_PAGE_SIZE, isCancelled: () => cancelled },
         );
         if (data === null || cancelled) return;
-        lastFullReconciliationAt = Date.now();
+        if (fullReconciliation) lastFullReconciliationAt = Date.now();
+
         const queue = new Set(readQueue(user.id));
         const meta = readMeta(user.id);
         let applied = 0;
-        let newest = "";
+        let newest = Date.parse(localStorage.getItem("pace.__last_sync_at") ?? "");
 
-        for (const rawRow of data) {
-          const row = rawRow as unknown as SyncRow;
+        for (const row of data) {
+          if (cancelled || typeof row.key !== "string") return;
           const rawKey = row.key;
           const isLegacy = rawKey.startsWith("lt.");
           const key = isLegacy ? `${PACE_PREFIX}${rawKey.slice(3)}` : rawKey;
           if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key) || queue.has(key)) continue;
+
+          const remoteTime = Date.parse(row.updated_at);
+          if (!Number.isFinite(remoteTime)) continue;
 
           const localRaw = localStorage.getItem(key);
           let localValue: unknown = null;
           try { if (localRaw !== null) localValue = JSON.parse(localRaw); } catch { /* Ignore malformed local JSON and evaluate the remote value below. */ }
           const shouldRecoverLegacy = isLegacy && isEmptyValue(localValue) && !isEmptyValue(row.value);
 
-          const remoteTime = Date.parse(row.updated_at);
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
-          if (!shouldRecoverLegacy && (!Number.isFinite(remoteTime) || remoteTime <= localTime)) continue;
+          if (!shouldRecoverLegacy && remoteTime <= localTime) continue;
 
           applyRemoteWrite(key, row.value, row.updated_at);
           meta[key] = row.updated_at;
-          newest = row.updated_at;
+          newest = Number.isFinite(newest) ? Math.max(newest, remoteTime) : remoteTime;
           applied++;
         }
 
         writeMeta(user.id, meta);
-        if (newest) localStorage.setItem("pace.__last_sync_at", newest);
+        if (Number.isFinite(newest)) {
+          localStorage.setItem("pace.__last_sync_at", new Date(newest).toISOString());
+        }
         if (applied > 0) setStatus("ok");
       } catch {
         if (!cancelled && !navigator.onLine) setStatus("offline");
