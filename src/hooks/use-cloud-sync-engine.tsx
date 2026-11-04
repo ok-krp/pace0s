@@ -145,7 +145,7 @@ export function useCloudSyncEngineInternal() {
         // A completed full scan is also a watermark when the account has no
         // syncable rows yet or every remote row is currently queued locally.
         const lastFullCursor = lastFullReconciliationAt > 0
-          ? new Date(Math.max(0, lastFullReconciliationAt - PULL_CURSOR_OVERLAP_MS)).toISOString()
+          ? new Date(Math.max(0, Math.min(lastFullReconciliationAt, now) - PULL_CURSOR_OVERLAP_MS)).toISOString()
           : null;
         const cursorCandidates = [metadataCursor, lastFullCursor].filter(
           (value): value is string => value !== null,
@@ -157,6 +157,7 @@ export function useCloudSyncEngineInternal() {
         );
         const fullReconciliation =
           lastFullReconciliationAt === 0 ||
+          now < lastFullReconciliationAt ||
           now - lastFullReconciliationAt >= FULL_RECONCILIATION_MS;
 
         // Fetch the complete selected window before applying any row. If a
