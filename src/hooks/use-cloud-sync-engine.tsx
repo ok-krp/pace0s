@@ -97,19 +97,37 @@ export function useCloudSyncEngineInternal() {
             return;
           }
 
-          // true = our mutation won; false = the server already had a newer row.
-          // In the latter case, immediately pull the authoritative value instead
-          // of allowing this stale local state to remain marked as current.
+          // The RPC contract returns a boolean. Treat every other value as
+          // ambiguous: never acknowledge a queued mutation without proof that
+          // it won or that a newer authoritative row was successfully fetched.
           if (data === false) {
-            const { data: rows } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", key).limit(1);
-            const row = rows?.[0] as SyncRow | undefined;
-            if (row) {
-              applyRemoteWrite(key, row.value, row.updated_at);
-              markLocal(user.id, key, row.updated_at);
+            const { data: rows, error: readError } = await supabase
+              .from("user_state")
+              .select("key,value,updated_at,updated_by")
+              .eq("user_id", user.id)
+              .eq("key", key)
+              .limit(1);
+            if (cancelled) return;
+            if (readError) {
+              setStatus("error");
+              return;
             }
-          } else {
+            const row = rows?.[0] as SyncRow | undefined;
+            if (!row) {
+              // A false RPC result means a newer row won. If that row cannot
+              // be read (RLS/policy/transient inconsistency), keep the outbox
+              // entry so a later pass can reconcile instead of losing it.
+              setStatus("error");
+              return;
+            }
+            applyRemoteWrite(key, row.value, row.updated_at);
+            markLocal(user.id, key, row.updated_at);
+          } else if (data === true) {
             markLocal(user.id, key, updatedAt);
             localStorage.setItem("pace.__last_sync_at", updatedAt);
+          } else {
+            setStatus("error");
+            return;
           }
 
           unqueueKey(user.id, key);
