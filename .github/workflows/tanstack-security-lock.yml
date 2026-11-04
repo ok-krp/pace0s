@@ -28,6 +28,8 @@ on:
       - "src/lib/nutrition-ai.functions.ts"
       - "src/components/HealthSourcesSection.tsx"
       - "src/hooks/use-cloud-sync-engine.tsx"
+      - "src/lib/user-state-pagination.ts"
+      - "src/lib/user-state-pagination.test.ts"
       - "src/integrations/supabase/types.ts"
       - "src/lib/health-connect-bridge.ts"
       - "src/lib/push-subscriptions.functions.ts"
@@ -67,6 +69,8 @@ on:
       - "src/lib/nutrition-ai.functions.ts"
       - "src/components/HealthSourcesSection.tsx"
       - "src/hooks/use-cloud-sync-engine.tsx"
+      - "src/lib/user-state-pagination.ts"
+      - "src/lib/user-state-pagination.test.ts"
       - "src/integrations/supabase/types.ts"
       - "src/lib/health-connect-bridge.ts"
       - "src/lib/push-subscriptions.functions.ts"
@@ -232,6 +236,8 @@ jobs:
         run: node --experimental-strip-types --test src/lib/domain-store.test.ts
       - name: Test account-scoped sync bookkeeping
         run: node --experimental-strip-types --test src/lib/cloud-sync-scope.test.ts
+      - name: Test keyset pagination and incomplete-page protection
+        run: node --experimental-strip-types --test src/lib/user-state-pagination.test.ts
       - name: Test MCP input validation
         run: node --experimental-strip-types --test src/lib/mcp/validation.test.ts
       - name: Test MCP OAuth issuer resolution
@@ -261,6 +267,8 @@ jobs:
           src/lib/nutrition-ai.functions.ts
           src/components/HealthSourcesSection.tsx
           src/hooks/use-cloud-sync-engine.tsx
+          src/lib/user-state-pagination.ts
+          src/lib/user-state-pagination.test.ts
           src/integrations/supabase/types.ts
           src/lib/health-connect-bridge.ts
           src/lib/push-subscriptions.functions.ts
