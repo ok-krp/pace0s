@@ -65,7 +65,7 @@ export function useCloudSyncEngineInternal() {
 
   useEffect(() => {
     if (typeof window === "undefined" || !user) return;
-    const userId = userId;
+    const userId = user.id;
     try { if (!isLegalCategoryAllowed("sync_cloud")) return; } catch { return; }
     let cancelled = false;
     let lastFullReconciliationAt = 0;
