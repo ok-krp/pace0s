@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
-import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue, syncPullCursor } from "@/lib/cloud-sync-scope";
+import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
 import { fetchAllKeysetPages } from "@/lib/user-state-pagination";
 
 const PACE_PREFIX = "pace.";
@@ -135,30 +135,14 @@ export function useCloudSyncEngineInternal() {
     const pull = async () => {
       if (cancelled || !navigator.onLine || running.current[user.id]) return;
       try {
-        const now = Date.now();
-        const metadataAtStart = readMeta(user.id);
-        const metadataCursor = syncPullCursor(
-          metadataAtStart,
-          now,
+        const pullPlan = syncPullPlan(
+          readMeta(user.id),
+          lastFullReconciliationAt,
+          Date.now(),
           PULL_CURSOR_OVERLAP_MS,
+          FULL_RECONCILIATION_MS,
         );
-        // A completed full scan is also a watermark when the account has no
-        // syncable rows yet or every remote row is currently queued locally.
-        const lastFullCursor = lastFullReconciliationAt > 0
-          ? new Date(Math.max(0, Math.min(lastFullReconciliationAt, now) - PULL_CURSOR_OVERLAP_MS)).toISOString()
-          : null;
-        const cursorCandidates = [metadataCursor, lastFullCursor].filter(
-          (value): value is string => value !== null,
-        );
-        const incrementalCursor = cursorCandidates.reduce<string | null>(
-          (newest, value) =>
-            newest === null || Date.parse(value) > Date.parse(newest) ? value : newest,
-          null,
-        );
-        const fullReconciliation =
-          lastFullReconciliationAt === 0 ||
-          now < lastFullReconciliationAt ||
-          now - lastFullReconciliationAt >= FULL_RECONCILIATION_MS;
+        const { cursor: incrementalCursor, fullReconciliation } = pullPlan;
 
         // Fetch the complete selected window before applying any row. If a
         // later page fails, no partial batch is marked as reconciled.
