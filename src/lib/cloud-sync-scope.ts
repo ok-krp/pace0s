@@ -49,8 +49,8 @@ export function parseSyncMetadata(raw: string | null): Record<string, string> {
 
 /**
  * Returns an overlap cursor for incremental pulls. A future-dated watermark is
- * rejected so a device clock skew cannot suppress remote updates indefinitely;
- * callers then perform a full reconciliation instead.
+ * capped at the current time so a device clock skew cannot suppress updates
+ * indefinitely or force an expensive full scan on every fallback poll.
  */
 export function syncPullCursor(
   metadata: Record<string, string>,
@@ -67,6 +67,6 @@ export function syncPullCursor(
     if (Number.isFinite(parsed) && parsed > newest) newest = parsed;
   }
 
-  if (!Number.isFinite(newest) || newest > nowMs) return null;
-  return new Date(Math.max(0, newest - overlapMs)).toISOString();
+  if (!Number.isFinite(newest)) return null;
+  return new Date(Math.max(0, Math.min(newest, nowMs) - overlapMs)).toISOString();
 }
