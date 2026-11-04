@@ -50,10 +50,13 @@ test("incremental pull cursor uses an overlap from the newest account watermark"
   assert.equal(cursor, "2026-11-04T19:54:00.000Z");
 });
 
-test("missing or future-dated pull watermarks require full reconciliation", () => {
+test("missing pull watermarks require full reconciliation and future values are capped", () => {
   const now = Date.parse("2026-11-04T20:00:00.000Z");
   assert.equal(syncPullCursor({}, now), null);
-  assert.equal(syncPullCursor({ "pace.water": "2026-11-04T20:01:00.000Z" }, now), null);
+  assert.equal(
+    syncPullCursor({ "pace.water": "2026-11-04T20:01:00.000Z" }, now),
+    "2026-11-04T19:55:00.000Z",
+  );
 });
 
 test("incremental pull cursor rejects invalid overlap configuration", () => {
