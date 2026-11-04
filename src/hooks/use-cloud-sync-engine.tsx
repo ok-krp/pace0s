@@ -135,16 +135,29 @@ export function useCloudSyncEngineInternal() {
     const pull = async () => {
       if (cancelled || !navigator.onLine || running.current[user.id]) return;
       try {
+        const now = Date.now();
         const metadataAtStart = readMeta(user.id);
-        const incrementalCursor = syncPullCursor(
+        const metadataCursor = syncPullCursor(
           metadataAtStart,
-          Date.now(),
+          now,
           PULL_CURSOR_OVERLAP_MS,
         );
+        // A completed full scan is also a watermark when the account has no
+        // syncable rows yet or every remote row is currently queued locally.
+        const lastFullCursor = lastFullReconciliationAt > 0
+          ? new Date(Math.max(0, lastFullReconciliationAt - PULL_CURSOR_OVERLAP_MS)).toISOString()
+          : null;
+        const cursorCandidates = [metadataCursor, lastFullCursor].filter(
+          (value): value is string => value !== null,
+        );
+        const incrementalCursor = cursorCandidates.reduce<string | null>(
+          (newest, value) =>
+            newest === null || Date.parse(value) > Date.parse(newest) ? value : newest,
+          null,
+        );
         const fullReconciliation =
-          incrementalCursor === null ||
           lastFullReconciliationAt === 0 ||
-          Date.now() - lastFullReconciliationAt >= FULL_RECONCILIATION_MS;
+          now - lastFullReconciliationAt >= FULL_RECONCILIATION_MS;
 
         // Fetch the complete selected window before applying any row. If a
         // later page fails, no partial batch is marked as reconciled.
