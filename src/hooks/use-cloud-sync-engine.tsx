@@ -5,6 +5,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue } from "@/lib/cloud-sync-scope";
+import { fetchAllKeysetPages } from "@/lib/user-state-pagination";
 
 const PACE_PREFIX = "pace.";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
@@ -134,24 +135,20 @@ export function useCloudSyncEngineInternal() {
       try {
         // Fetch every row before applying any: a failed later page must not
         // leave a partially reconciled local snapshot marked as complete.
-        const data: Array<{ key: string; value: unknown; updated_at: string; updated_by: string | null }> = [];
-        let afterKey: string | null = null;
-        while (!cancelled) {
-          let query = supabase.from("user_state")
-            .select("key,value,updated_at,updated_by")
-            .eq("user_id", user.id)
-            .order("key", { ascending: true })
-            .limit(USER_STATE_PAGE_SIZE);
-          if (afterKey !== null) query = query.gt("key", afterKey);
-          const { data: page, error } = await query;
-          if (error || !page) return;
-          data.push(...(page as typeof data));
-          if (page.length < USER_STATE_PAGE_SIZE) break;
-          const lastKey = page[page.length - 1]?.key;
-          if (typeof lastKey !== "string" || lastKey <= (afterKey ?? "")) return;
-          afterKey = lastKey;
-        }
-        if (cancelled) return;
+        const data = await fetchAllKeysetPages<SyncRow>(
+          async (afterKey, pageSize) => {
+            let query = supabase.from("user_state")
+              .select("key,value,updated_at,updated_by")
+              .eq("user_id", user.id)
+              .order("key", { ascending: true })
+              .limit(pageSize);
+            if (afterKey !== null) query = query.gt("key", afterKey);
+            const { data, error } = await query;
+            return { data: data as SyncRow[] | null, error };
+          },
+          { pageSize: USER_STATE_PAGE_SIZE, isCancelled: () => cancelled },
+        );
+        if (data === null || cancelled) return;
         lastFullReconciliationAt = Date.now();
         const queue = new Set(readQueue(user.id));
         const meta = readMeta(user.id);
