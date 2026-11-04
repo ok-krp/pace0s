@@ -46,7 +46,7 @@ export async function fetchAllKeysetPages<T extends { key: string }>(
     const page = pageResult.data;
     if (page.length > pageSize) return null;
 
-    let lastKey = cursor;
+    let lastKey: string | null = cursor;
     for (const row of page) {
       if (!row || typeof row.key !== "string" || row.key.length === 0) return null;
       if (row.key === lastKey) return null;
