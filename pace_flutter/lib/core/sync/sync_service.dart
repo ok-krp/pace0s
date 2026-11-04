@@ -864,7 +864,7 @@ class SyncService {
         query = query.gte('updated_at', cursorAt!.toIso8601String());
       }
       if (afterKey != null) {
-        query = query.lt('key', afterKey!);
+        query = query.lt('key', afterKey);
       }
       final rows = await query
           .order('key', ascending: false)
