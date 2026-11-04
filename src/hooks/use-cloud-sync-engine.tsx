@@ -288,7 +288,7 @@ export function useCloudSyncEngineInternal() {
           }
         }
       }
-    };
+    }
 
     let realtimeHealthy = false;
 
