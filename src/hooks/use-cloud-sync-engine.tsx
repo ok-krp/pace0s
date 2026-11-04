@@ -15,6 +15,7 @@ const EXCLUDED = new Set<string>(["pace.sport.active"]);
 const POLL_MS = 60000;
 const FULL_RECONCILIATION_MS = 24 * 60 * 60 * 1000;
 const PULL_CURSOR_OVERLAP_MS = 5 * 60 * 1000;
+const FULL_RECONCILIATION_META_KEY = "pace.__sync_last_full_reconcile_at";
 // PostgREST may cap responses at 1,000 rows; use stable keyset pages so a
 // reconciliation never silently leaves later user_state keys unsynchronized.
 const USER_STATE_PAGE_SIZE = 500;
@@ -191,10 +192,18 @@ export function useCloudSyncEngineInternal() {
       const forceFull = forceFullPullPending;
       forceFullPullPending = false;
       try {
+        const now = Date.now();
+        const metadataAtStart = readMeta(user.id);
+        const persistedFullAt = Date.parse(
+          metadataAtStart[FULL_RECONCILIATION_META_KEY] ?? "",
+        );
+        const lastFullAt = Number.isFinite(persistedFullAt)
+          ? Math.max(lastFullReconciliationAt, persistedFullAt)
+          : lastFullReconciliationAt;
         const pullPlan = syncPullPlan(
-          readMeta(user.id),
-          lastFullReconciliationAt,
-          Date.now(),
+          metadataAtStart,
+          lastFullAt,
+          now,
           PULL_CURSOR_OVERLAP_MS,
           FULL_RECONCILIATION_MS,
         );
@@ -219,10 +228,13 @@ export function useCloudSyncEngineInternal() {
           { pageSize: USER_STATE_PAGE_SIZE, isCancelled: () => cancelled },
         );
         if (data === null || cancelled) return;
-        if (fullReconciliation) lastFullReconciliationAt = Date.now();
 
         const queue = new Set(readQueue(user.id));
         const meta = readMeta(user.id);
+        if (fullReconciliation) {
+          lastFullReconciliationAt = Date.now();
+          meta[FULL_RECONCILIATION_META_KEY] = new Date(lastFullReconciliationAt).toISOString();
+        }
         let applied = 0;
         let newest = Date.parse(localStorage.getItem("pace.__last_sync_at") ?? "");
 
