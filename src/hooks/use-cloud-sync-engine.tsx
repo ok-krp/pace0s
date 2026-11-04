@@ -264,11 +264,6 @@ export function useCloudSyncEngineInternal() {
         if (applied > 0) setStatus("ok");
       } catch {
         if (!cancelled && !navigator.onLine) setStatus("offline");
-      }
-    };
-
-      } catch {
-        if (!cancelled && !navigator.onLine) setStatus("offline");
       } finally {
         pullRunning = false;
         if (!cancelled && navigator.onLine) {
