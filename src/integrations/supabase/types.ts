@@ -620,6 +620,7 @@ export type Database = {
           id: string
           key: string
           updated_at: string
+          updated_by: string | null
           user_id: string
           value: Json | null
         }
@@ -628,6 +629,7 @@ export type Database = {
           id?: string
           key: string
           updated_at?: string
+          updated_by?: string | null
           user_id: string
           value?: Json | null
         }
@@ -636,6 +638,7 @@ export type Database = {
           id?: string
           key?: string
           updated_at?: string
+          updated_by?: string | null
           user_id?: string
           value?: Json | null
         }
