@@ -12,6 +12,9 @@ const EXCLUDED = new Set<string>(["pace.sport.active"]);
 // Keep it at 60s to reduce repeated downloads of large account snapshots.
 const POLL_MS = 60000;
 const FULL_RECONCILIATION_MS = 24 * 60 * 60 * 1000;
+// PostgREST may cap responses at 1,000 rows; use stable keyset pages so a
+// reconciliation never silently leaves later user_state keys unsynchronized.
+const USER_STATE_PAGE_SIZE = 500;
 const DEVICE_KEY = "pace.__sync_device_id";
 const DEVICE_ID = getDeviceId();
 
@@ -129,8 +132,26 @@ export function useCloudSyncEngineInternal() {
     const pull = async () => {
       if (cancelled || !navigator.onLine || running.current[user.id]) return;
       try {
-        const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
-        if (error || !data || cancelled) return;
+        // Fetch every row before applying any: a failed later page must not
+        // leave a partially reconciled local snapshot marked as complete.
+        const data: Array<{ key: string; value: unknown; updated_at: string; updated_by: string | null }> = [];
+        let afterKey: string | null = null;
+        while (!cancelled) {
+          let query = supabase.from("user_state")
+            .select("key,value,updated_at,updated_by")
+            .eq("user_id", user.id)
+            .order("key", { ascending: true })
+            .limit(USER_STATE_PAGE_SIZE);
+          if (afterKey !== null) query = query.gt("key", afterKey);
+          const { data: page, error } = await query;
+          if (error || !page) return;
+          data.push(...(page as typeof data));
+          if (page.length < USER_STATE_PAGE_SIZE) break;
+          const lastKey = page[page.length - 1]?.key;
+          if (typeof lastKey !== "string" || lastKey <= (afterKey ?? "")) return;
+          afterKey = lastKey;
+        }
+        if (cancelled) return;
         lastFullReconciliationAt = Date.now();
         const queue = new Set(readQueue(user.id));
         const meta = readMeta(user.id);
