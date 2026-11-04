@@ -72,7 +72,6 @@ export function useCloudSyncEngineInternal() {
     let pullPending = false;
     let forceFullPullPending = false;
     let flushPending = false;
-    let pull!: (forceFullReconciliation?: boolean) => Promise<void>;
 
     const pushKeyNow = async (key: string) => {
       if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
@@ -180,7 +179,7 @@ export function useCloudSyncEngineInternal() {
       }
     };
 
-    pull = async (forceFullReconciliation = false) => {
+    async function pull(forceFullReconciliation = false) {
       if (forceFullReconciliation) forceFullPullPending = true;
       if (cancelled || !navigator.onLine) return;
       if (running.current[user.id] || pullRunning) {
