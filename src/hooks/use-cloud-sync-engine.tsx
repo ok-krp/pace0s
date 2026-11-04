@@ -67,6 +67,11 @@ export function useCloudSyncEngineInternal() {
     try { if (!isLegalCategoryAllowed("sync_cloud")) return; } catch { return; }
     let cancelled = false;
     let lastFullReconciliationAt = 0;
+    let pullRunning = false;
+    let pullPending = false;
+    let forceFullPullPending = false;
+    let flushPending = false;
+    let pull!: (forceFullReconciliation?: boolean) => Promise<void>;
 
     const pushKeyNow = async (key: string) => {
       if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
@@ -142,16 +147,49 @@ export function useCloudSyncEngineInternal() {
     };
 
     const flushQueue = async () => {
-      if (cancelled || !navigator.onLine || running.current[user.id]) return;
+      if (cancelled || !navigator.onLine) return;
+      if (running.current[user.id] || pullRunning) {
+        flushPending = true;
+        return;
+      }
+      flushPending = false;
       const queue = readQueue(user.id);
-      if (!queue.length) return;
+      if (!queue.length) {
+        if (pullPending || forceFullPullPending) {
+          const force = forceFullPullPending;
+          pullPending = false;
+          void pull(force);
+        }
+        return;
+      }
       running.current[user.id] = true;
       try { for (const key of queue) await pushKeyNow(key); }
-      finally { running.current[user.id] = false; }
+      finally {
+        running.current[user.id] = false;
+        if (!cancelled && navigator.onLine) {
+          if (pullPending || forceFullPullPending) {
+            const force = forceFullPullPending;
+            pullPending = false;
+            void pull(force);
+          } else if (flushPending) {
+            flushPending = false;
+            void flushQueue();
+          }
+        }
+      }
     };
 
-    const pull = async (forceFullReconciliation = false) => {
-      if (cancelled || !navigator.onLine || running.current[user.id]) return;
+    pull = async (forceFullReconciliation = false) => {
+      if (forceFullReconciliation) forceFullPullPending = true;
+      if (cancelled || !navigator.onLine) return;
+      if (running.current[user.id] || pullRunning) {
+        pullPending = true;
+        return;
+      }
+      pullPending = false;
+      pullRunning = true;
+      const forceFull = forceFullPullPending;
+      forceFullPullPending = false;
       try {
         const pullPlan = syncPullPlan(
           readMeta(user.id),
@@ -161,7 +199,7 @@ export function useCloudSyncEngineInternal() {
           FULL_RECONCILIATION_MS,
         );
         const { cursor: incrementalCursor } = pullPlan;
-        const fullReconciliation = forceFullReconciliation || pullPlan.fullReconciliation;
+        const fullReconciliation = forceFull || pullPlan.fullReconciliation;
 
         // Fetch the complete selected window before applying any row. If a
         // later page fails, no partial batch is marked as reconciled.
@@ -226,6 +264,23 @@ export function useCloudSyncEngineInternal() {
         if (applied > 0) setStatus("ok");
       } catch {
         if (!cancelled && !navigator.onLine) setStatus("offline");
+      }
+    };
+
+      } catch {
+        if (!cancelled && !navigator.onLine) setStatus("offline");
+      } finally {
+        pullRunning = false;
+        if (!cancelled && navigator.onLine) {
+          if (flushPending && !running.current[user.id]) {
+            flushPending = false;
+            void flushQueue();
+          } else if (pullPending || forceFullPullPending) {
+            const force = forceFullPullPending;
+            pullPending = false;
+            void pull(force);
+          }
+        }
       }
     };
 
