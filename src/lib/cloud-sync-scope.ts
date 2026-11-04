@@ -70,3 +70,51 @@ export function syncPullCursor(
   if (!Number.isFinite(newest)) return null;
   return new Date(Math.max(0, Math.min(newest, nowMs) - overlapMs)).toISOString();
 }
+
+export type SyncPullPlan = {
+  fullReconciliation: boolean;
+  cursor: string | null;
+};
+
+/**
+ * Plans a bounded incremental pull, using the latest per-key watermark and
+ * the last successful full scan as independent recovery anchors.
+ */
+export function syncPullPlan(
+  metadata: Record<string, string>,
+  lastFullAt: number,
+  nowMs = Date.now(),
+  overlapMs = 5 * 60 * 1000,
+  fullIntervalMs = 24 * 60 * 60 * 1000,
+): SyncPullPlan {
+  if (
+    !Number.isFinite(lastFullAt) ||
+    !Number.isFinite(nowMs) ||
+    !Number.isFinite(overlapMs) ||
+    overlapMs < 0 ||
+    !Number.isFinite(fullIntervalMs) ||
+    fullIntervalMs < 1
+  ) {
+    throw new RangeError("Sync pull timestamps and intervals must be finite and non-negative");
+  }
+
+  const metadataCursor = syncPullCursor(metadata, nowMs, overlapMs);
+  const lastFullCursor = lastFullAt > 0
+    ? new Date(Math.max(0, Math.min(lastFullAt, nowMs) - overlapMs)).toISOString()
+    : null;
+  const candidates = [metadataCursor, lastFullCursor].filter(
+    (value): value is string => value !== null,
+  );
+  const cursor = candidates.reduce<string | null>(
+    (newest, value) =>
+      newest === null || Date.parse(value) > Date.parse(newest) ? value : newest,
+    null,
+  );
+
+  const fullReconciliation =
+    lastFullAt <= 0 ||
+    nowMs < lastFullAt ||
+    nowMs - lastFullAt >= fullIntervalMs;
+
+  return { fullReconciliation, cursor };
+}
