@@ -41,6 +41,44 @@ void main() {
     );
   });
 
+  test('native keyset cursor rejects repeated or malformed page boundaries', () {
+    expect(
+      SyncService.isValidRemoteKeysetCursor(
+        nextKey: 'pace.profile.name',
+        previousCursor: null,
+      ),
+      isTrue,
+    );
+    expect(
+      SyncService.isValidRemoteKeysetCursor(
+        nextKey: 'pace.profile.name',
+        previousCursor: 'pace.profile.name',
+      ),
+      isFalse,
+    );
+    expect(
+      SyncService.isValidRemoteKeysetCursor(
+        nextKey: null,
+        previousCursor: 'pace.profile.name',
+      ),
+      isFalse,
+    );
+    expect(
+      SyncService.isValidRemoteKeysetCursor(
+        nextKey: '',
+        previousCursor: null,
+      ),
+      isFalse,
+    );
+    expect(
+      SyncService.isValidRemoteKeysetCursor(
+        nextKey: 42,
+        previousCursor: null,
+      ),
+      isFalse,
+    );
+  });
+
   test('remote key deduplication remains stable across pages', () {
     final first = DateTime.utc(2026, 10, 29, 10);
     final newer = first.add(const Duration(seconds: 1));
@@ -100,8 +138,8 @@ void main() {
 
     test('keeps canonical cloud values ahead of equal-time legacy aliases', () {
       final timestamp = DateTime.utc(2026, 10, 17, 10);
-      // The pull query sorts keys descending after updated_at, so pace.* is
-      // applied before lt.* when both aliases have the same server timestamp.
+      // The pull query sorts immutable keys descending, so pace.* is applied
+      // before lt.* when both aliases have the same server timestamp.
       expect(
         SyncService.shouldApplyRemoteValue(
           isLegacy: false,
