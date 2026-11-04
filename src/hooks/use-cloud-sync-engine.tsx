@@ -176,22 +176,29 @@ export function useCloudSyncEngineInternal() {
           const rawKey = row.key;
           const isLegacy = rawKey.startsWith("lt.");
           const key = isLegacy ? `${PACE_PREFIX}${rawKey.slice(3)}` : rawKey;
-          if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key) || queue.has(key)) continue;
+          if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) continue;
 
           const remoteTime = Date.parse(row.updated_at);
           if (!Number.isFinite(remoteTime)) continue;
+          newest = Number.isFinite(newest) ? Math.max(newest, remoteTime) : remoteTime;
+
+          const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
+          if (queue.has(key)) {
+            // The pending mutation remains authoritative locally until its
+            // push resolves. Record the observed server version so a queued
+            // offline key does not force a full-account scan on every poll.
+            if (remoteTime > localTime) meta[key] = row.updated_at;
+            continue;
+          }
 
           const localRaw = localStorage.getItem(key);
           let localValue: unknown = null;
           try { if (localRaw !== null) localValue = JSON.parse(localRaw); } catch { /* Ignore malformed local JSON and evaluate the remote value below. */ }
           const shouldRecoverLegacy = isLegacy && isEmptyValue(localValue) && !isEmptyValue(row.value);
-
-          const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           if (!shouldRecoverLegacy && remoteTime <= localTime) continue;
 
           applyRemoteWrite(key, row.value, row.updated_at);
           meta[key] = row.updated_at;
-          newest = Number.isFinite(newest) ? Math.max(newest, remoteTime) : remoteTime;
           applied++;
         }
 
