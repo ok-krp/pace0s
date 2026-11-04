@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue, syncPullCursor } from "./cloud-sync-scope.ts";
+import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue, syncPullCursor, syncPullPlan } from "./cloud-sync-scope.ts";
 
 test("sync queue and metadata storage are isolated by authenticated user", () => {
   const alice = accountSyncStorageKeys("user/alice");
@@ -61,4 +61,45 @@ test("missing pull watermarks require full reconciliation and future values are 
 
 test("incremental pull cursor rejects invalid overlap configuration", () => {
   assert.throws(() => syncPullCursor({}, Date.now(), -1), RangeError);
+});
+
+test("pull plan uses the last full scan when an empty account has no row metadata", () => {
+  const now = Date.parse("2026-11-04T20:00:00.000Z");
+  const plan = syncPullPlan(
+    {},
+    Date.parse("2026-11-04T19:59:00.000Z"),
+    now,
+    5 * 60 * 1000,
+    24 * 60 * 60 * 1000,
+  );
+
+  assert.deepEqual(plan, {
+    fullReconciliation: false,
+    cursor: "2026-11-04T19:54:00.000Z",
+  });
+});
+
+test("pull plan schedules a full scan after 24 hours and on clock rollback", () => {
+  const now = Date.parse("2026-11-04T20:00:00.000Z");
+  const dayOld = syncPullPlan(
+    { "pace.water": "2026-11-03T19:00:00.000Z" },
+    now - 24 * 60 * 60 * 1000,
+    now,
+  );
+  assert.equal(dayOld.fullReconciliation, true);
+
+  const clockRollback = syncPullPlan(
+    { "pace.water": "2026-11-04T19:59:00.000Z" },
+    now + 60 * 60 * 1000,
+    now,
+  );
+  assert.equal(clockRollback.fullReconciliation, true);
+  assert.equal(clockRollback.cursor, "2026-11-04T19:55:00.000Z");
+});
+
+test("pull plan rejects invalid reconciliation intervals", () => {
+  assert.throws(
+    () => syncPullPlan({}, 0, Date.now(), 300_000, 0),
+    RangeError,
+  );
 });
