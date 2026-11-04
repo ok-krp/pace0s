@@ -132,7 +132,7 @@ export function useCloudSyncEngineInternal() {
       finally { running.current[user.id] = false; }
     };
 
-    const pull = async () => {
+    const pull = async (forceFullReconciliation = false) => {
       if (cancelled || !navigator.onLine || running.current[user.id]) return;
       try {
         const pullPlan = syncPullPlan(
@@ -142,7 +142,8 @@ export function useCloudSyncEngineInternal() {
           PULL_CURSOR_OVERLAP_MS,
           FULL_RECONCILIATION_MS,
         );
-        const { cursor: incrementalCursor, fullReconciliation } = pullPlan;
+        const { cursor: incrementalCursor } = pullPlan;
+        const fullReconciliation = forceFullReconciliation || pullPlan.fullReconciliation;
 
         // Fetch the complete selected window before applying any row. If a
         // later page fails, no partial batch is marked as reconciled.
@@ -219,7 +220,9 @@ export function useCloudSyncEngineInternal() {
       // Legacy rows must go through the compatibility merge in pull(); mapping
       // one legacy row directly could overwrite a newer canonical value.
       if (row.key.startsWith("lt.")) {
-        void pull();
+        // Preserve one-time legacy recovery even when the row's timestamp is
+        // older than the incremental cursor.
+        void pull(true);
         return;
       }
       const key = row.key;
