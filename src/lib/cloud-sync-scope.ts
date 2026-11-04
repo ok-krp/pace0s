@@ -46,3 +46,27 @@ export function parseSyncMetadata(raw: string | null): Record<string, string> {
     return {};
   }
 }
+
+/**
+ * Returns an overlap cursor for incremental pulls. A future-dated watermark is
+ * rejected so a device clock skew cannot suppress remote updates indefinitely;
+ * callers then perform a full reconciliation instead.
+ */
+export function syncPullCursor(
+  metadata: Record<string, string>,
+  nowMs = Date.now(),
+  overlapMs = 5 * 60 * 1000,
+): string | null {
+  if (!Number.isFinite(nowMs) || !Number.isFinite(overlapMs) || overlapMs < 0) {
+    throw new RangeError("nowMs and overlapMs must be finite, with a non-negative overlap");
+  }
+
+  let newest = Number.NEGATIVE_INFINITY;
+  for (const timestamp of Object.values(metadata)) {
+    const parsed = Date.parse(timestamp);
+    if (Number.isFinite(parsed) && parsed > newest) newest = parsed;
+  }
+
+  if (!Number.isFinite(newest) || newest > nowMs) return null;
+  return new Date(Math.max(0, newest - overlapMs)).toISOString();
+}
