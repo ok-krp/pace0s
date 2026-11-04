@@ -65,6 +65,7 @@ export function useCloudSyncEngineInternal() {
 
   useEffect(() => {
     if (typeof window === "undefined" || !user) return;
+    const userId = userId;
     try { if (!isLegalCategoryAllowed("sync_cloud")) return; } catch { return; }
     let cancelled = false;
     let lastFullReconciliationAt = 0;
@@ -75,9 +76,9 @@ export function useCloudSyncEngineInternal() {
 
     const pushKeyNow = async (key: string) => {
       if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
-      queueKey(user.id, key);
+      queueKey(userId, key);
 
-      const writeId = `${user.id}:${key}`;
+      const writeId = `${userId}:${key}`;
       const previous = keyWrites.current[writeId] ?? Promise.resolve();
       const current = previous.then(async () => {
         if (cancelled) return;
@@ -90,7 +91,7 @@ export function useCloudSyncEngineInternal() {
 
         try {
           const { data, error } = await supabase.rpc("upsert_user_state_if_newer", {
-            p_user_id: user.id,
+            p_user_id: userId,
             p_key: key,
             p_value: value as Json,
             p_updated_at: updatedAt,
@@ -109,7 +110,7 @@ export function useCloudSyncEngineInternal() {
             const { data: rows, error: readError } = await supabase
               .from("user_state")
               .select("key,value,updated_at,updated_by")
-              .eq("user_id", user.id)
+              .eq("user_id", userId)
               .eq("key", key)
               .limit(1);
             if (cancelled) return;
@@ -126,16 +127,16 @@ export function useCloudSyncEngineInternal() {
               return;
             }
             applyRemoteWrite(key, row.value, row.updated_at);
-            markLocal(user.id, key, row.updated_at);
+            markLocal(userId, key, row.updated_at);
           } else if (data === true) {
-            markLocal(user.id, key, updatedAt);
+            markLocal(userId, key, updatedAt);
             localStorage.setItem("pace.__last_sync_at", updatedAt);
           } else {
             setStatus("error");
             return;
           }
 
-          unqueueKey(user.id, key);
+          unqueueKey(userId, key);
           setStatus("ok");
         } catch {
           if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
@@ -148,12 +149,12 @@ export function useCloudSyncEngineInternal() {
 
     const flushQueue = async () => {
       if (cancelled || !navigator.onLine) return;
-      if (running.current[user.id] || pullRunning) {
+      if (running.current[userId] || pullRunning) {
         flushPending = true;
         return;
       }
       flushPending = false;
-      const queue = readQueue(user.id);
+      const queue = readQueue(userId);
       if (!queue.length) {
         if (pullPending || forceFullPullPending) {
           const force = forceFullPullPending;
@@ -162,10 +163,10 @@ export function useCloudSyncEngineInternal() {
         }
         return;
       }
-      running.current[user.id] = true;
+      running.current[userId] = true;
       try { for (const key of queue) await pushKeyNow(key); }
       finally {
-        running.current[user.id] = false;
+        running.current[userId] = false;
         if (!cancelled && navigator.onLine) {
           if (pullPending || forceFullPullPending) {
             const force = forceFullPullPending;
@@ -182,7 +183,7 @@ export function useCloudSyncEngineInternal() {
     async function pull(forceFullReconciliation = false) {
       if (forceFullReconciliation) forceFullPullPending = true;
       if (cancelled || !navigator.onLine) return;
-      if (running.current[user.id] || pullRunning) {
+      if (running.current[userId] || pullRunning) {
         pullPending = true;
         return;
       }
@@ -192,7 +193,7 @@ export function useCloudSyncEngineInternal() {
       forceFullPullPending = false;
       try {
         const now = Date.now();
-        const metadataAtStart = readMeta(user.id);
+        const metadataAtStart = readMeta(userId);
         const persistedFullAt = Date.parse(
           metadataAtStart[FULL_RECONCILIATION_META_KEY] ?? "",
         );
@@ -215,7 +216,7 @@ export function useCloudSyncEngineInternal() {
           async (afterKey, pageSize) => {
             let query = supabase.from("user_state")
               .select("key,value,updated_at,updated_by")
-              .eq("user_id", user.id);
+              .eq("user_id", userId);
             if (!fullReconciliation) {
               query = query.gte("updated_at", incrementalCursor!);
             }
@@ -228,8 +229,8 @@ export function useCloudSyncEngineInternal() {
         );
         if (data === null || cancelled) return;
 
-        const queue = new Set(readQueue(user.id));
-        const meta = readMeta(user.id);
+        const queue = new Set(readQueue(userId));
+        const meta = readMeta(userId);
         if (fullReconciliation) {
           lastFullReconciliationAt = Date.now();
           meta[FULL_RECONCILIATION_META_KEY] = new Date(lastFullReconciliationAt).toISOString();
@@ -268,7 +269,7 @@ export function useCloudSyncEngineInternal() {
           applied++;
         }
 
-        writeMeta(user.id, meta);
+        writeMeta(userId, meta);
         if (Number.isFinite(newest)) {
           localStorage.setItem("pace.__last_sync_at", new Date(newest).toISOString());
         }
@@ -278,7 +279,7 @@ export function useCloudSyncEngineInternal() {
       } finally {
         pullRunning = false;
         if (!cancelled && navigator.onLine) {
-          if (flushPending && !running.current[user.id]) {
+          if (flushPending && !running.current[userId]) {
             flushPending = false;
             void flushQueue();
           } else if (pullPending || forceFullPullPending) {
@@ -308,11 +309,11 @@ export function useCloudSyncEngineInternal() {
       if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return;
       const remoteTime = Date.parse(row.updated_at);
       if (!Number.isFinite(remoteTime)) return;
-      const localTime = Date.parse(readMeta(user.id)[key] ?? "1970-01-01T00:00:00.000Z");
-      if (remoteTime <= localTime || readQueue(user.id).includes(key)) return;
+      const localTime = Date.parse(readMeta(userId)[key] ?? "1970-01-01T00:00:00.000Z");
+      if (remoteTime <= localTime || readQueue(userId).includes(key)) return;
 
       applyRemoteWrite(key, row.value, row.updated_at);
-      markLocal(user.id, key, row.updated_at);
+      markLocal(userId, key, row.updated_at);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
       setStatus("ok");
     };
@@ -325,7 +326,7 @@ export function useCloudSyncEngineInternal() {
 
     const offLocal = onLocalWrite((key) => {
       if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
-      queueKey(user.id, key);
+      queueKey(userId, key);
       void pushKeyNow(key);
     });
 
@@ -336,9 +337,9 @@ export function useCloudSyncEngineInternal() {
 
     // Realtime is the normal cross-device transport. Full user_state pulls
     // remain a recovery path only when the channel is unavailable.
-    const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new))
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new));
+    const realtimeChannel = supabase.channel(`pace-user-state-${userId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${userId}` }, (payload) => applyRemoteRow(payload.new))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${userId}` }, (payload) => applyRemoteRow(payload.new));
     void realtimeChannel.subscribe((subscriptionStatus) => {
       // removeChannel may report CLOSED after this effect has already cleaned up.
       if (cancelled) return;
@@ -352,7 +353,7 @@ export function useCloudSyncEngineInternal() {
     });
 
     const isFullReconciliationDue = () => {
-      const metadata = readMeta(user.id);
+      const metadata = readMeta(userId);
       const persistedAt = Date.parse(metadata[FULL_RECONCILIATION_META_KEY] ?? "");
       const lastFullAt = Number.isFinite(persistedAt)
         ? Math.max(lastFullReconciliationAt, persistedAt)
