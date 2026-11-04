@@ -351,16 +351,36 @@ export function useCloudSyncEngineInternal() {
       }
     });
 
-    // Queue writes immediately; the subscription callback performs the first
-    // reconciliation once Realtime is active. If it never connects, recover
-    // through the bounded polling fallback below.
+    const isFullReconciliationDue = () => {
+      const metadata = readMeta(user.id);
+      const persistedAt = Date.parse(metadata[FULL_RECONCILIATION_META_KEY] ?? "");
+      const lastFullAt = Number.isFinite(persistedAt)
+        ? Math.max(lastFullReconciliationAt, persistedAt)
+        : lastFullReconciliationAt;
+      return syncPullPlan(
+        metadata,
+        lastFullAt,
+        Date.now(),
+        PULL_CURSOR_OVERLAP_MS,
+        FULL_RECONCILIATION_MS,
+      ).fullReconciliation;
+    };
+
+    // Flush queued writes immediately. The timer also retries them while
+    // Realtime is healthy; otherwise one transient RPC error could leave an
+    // outbox key waiting until the next reconnect or daily reconciliation.
     void flushQueue();
     const interval = window.setInterval(() => {
-      // A healthy channel is the fast path, but a daily full scan still
-      // recovers events missed without an observable channel disconnect.
-      if (!realtimeHealthy || Date.now() - lastFullReconciliationAt >= FULL_RECONCILIATION_MS) {
+      if (!realtimeHealthy) {
+        // Realtime outage: incremental pull + outbox retry, not a full scan.
         void syncNow();
+        return;
       }
+
+      // Realtime is the normal transport. Retry only pending mutations here;
+      // pull remote state only when the persisted daily recovery scan is due.
+      void flushQueue();
+      if (isFullReconciliationDue()) void syncNow();
     }, POLL_MS);
 
     return () => {
