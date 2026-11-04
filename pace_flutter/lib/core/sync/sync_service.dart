@@ -842,7 +842,7 @@ class SyncService {
     // so accounts with more than PostgREST's default row cap do not silently skip
     // keys when the cursor advances.
     const pageSize = 500;
-    var afterKey: String? = null;
+    String? afterKey;
     var appliedRemoteRows = false;
     var newestSeen = cursorSeedBeforePull(
       cursorAt: cursorAt,
