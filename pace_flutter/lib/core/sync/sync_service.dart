@@ -796,6 +796,14 @@ class SyncService {
     }
   }
 
+  /// Validates a descending keyset cursor without relying on client-side
+  /// string collation; PostgreSQL remains responsible for row ordering.
+  static bool isValidRemoteKeysetCursor({
+    required Object? nextKey,
+    required String? previousCursor,
+  }) =>
+      nextKey is String && nextKey.isNotEmpty && nextKey != previousCursor;
+
   /// Deduplicates normalized remote keys across all PostgREST pages.
   /// Equal timestamps preserve the first row in the deterministic query order.
   static bool shouldKeepNewestRemoteUpdate({
@@ -834,7 +842,7 @@ class SyncService {
     // so accounts with more than PostgREST's default row cap do not silently skip
     // keys when the cursor advances.
     const pageSize = 500;
-    var offset = 0;
+    var afterKey: String? = null;
     var appliedRemoteRows = false;
     var newestSeen = cursorSeedBeforePull(
       cursorAt: cursorAt,
@@ -842,28 +850,25 @@ class SyncService {
       now: now,
     );
     // Keep normalized-key conflict resolution across page boundaries too.
-    // A legacy alias at the same timestamp on the next page must not replace
-    // the first row already applied from an earlier page.
+    // The immutable key ordering keeps page boundaries stable while updated_at
+    // changes concurrently; descending order also puts canonical pace.* keys
+    // before their lt.* aliases when timestamps are equal.
     final newestRemoteTimeByKey = <String, DateTime>{};
     while (true) {
-      final rows = fullPull
-          ? await client!
-              .from('user_state')
-              .select('key,value,updated_at')
-              .eq('user_id', userId)
-              .not('key', 'in', excludedRemotePullKeysFilter)
-              .order('updated_at', ascending: true)
-              .order('key', ascending: false)
-              .range(offset, offset + pageSize - 1)
-          : await client!
-              .from('user_state')
-              .select('key,value,updated_at')
-              .eq('user_id', userId)
-              .not('key', 'in', excludedRemotePullKeysFilter)
-              .gte('updated_at', cursorAt!.toIso8601String())
-              .order('updated_at', ascending: true)
-              .order('key', ascending: false)
-              .range(offset, offset + pageSize - 1);
+      var query = client!
+          .from('user_state')
+          .select('key,value,updated_at')
+          .eq('user_id', userId)
+          .not('key', 'in', excludedRemotePullKeysFilter);
+      if (!fullPull) {
+        query = query.gte('updated_at', cursorAt!.toIso8601String());
+      }
+      if (afterKey != null) {
+        query = query.lt('key', afterKey!);
+      }
+      final rows = await query
+          .order('key', ascending: false)
+          .limit(pageSize);
       if (!_isCurrentAccount(userId)) return;
 
       final remoteUpdates = <String, Map<String, dynamic>>{};
@@ -933,7 +938,16 @@ class SyncService {
       }
 
       if (rows.length < pageSize) break;
-      offset += pageSize;
+      final nextKey = rows.isEmpty ? null : rows.last['key'];
+      if (!isValidRemoteKeysetCursor(
+        nextKey: nextKey,
+        previousCursor: afterKey,
+      )) {
+        // Never advance the persisted sync cursor after a malformed/repeated
+        // page boundary; the next pass can safely retry the same pull.
+        return;
+      }
+      afterKey = nextKey as String;
     }
 
     if (!_isCurrentAccount(userId)) return;
