@@ -1,5 +1,5 @@
 import { applyRemoteDomainWrite } from "@/lib/domain-store";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 const OLD_PREFIX = "lt.";
 const NEW_PREFIX = "pace.";
@@ -92,32 +92,47 @@ const REMOTE_WRITE_EVENT = "pace.remote.write";
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
+  // Hydrating from disk or receiving a server-confirmed value is not a new
+  // user mutation. Without this guard the first render after an account switch
+  // could enqueue the previous account's global localStorage value under the
+  // newly authenticated user.
+  const skipNextPersist = useRef(true);
 
   useEffect(() => {
+    skipNextPersist.current = true;
     try {
       const raw = localStorage.getItem(key);
       if (raw !== null) setValue(JSON.parse(raw));
-    } catch {}
+    } catch {
+      // Preserve the provided initial value if the cached JSON is malformed.
+    }
     setLoaded(true);
   }, [key]);
 
   useEffect(() => {
     if (!loaded) return;
+    if (skipNextPersist.current) {
+      skipNextPersist.current = false;
+      return;
+    }
     try {
       localStorage.setItem(key, JSON.stringify(value));
       window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key, value } }));
-    } catch {}
+    } catch {
+      // The in-memory state remains usable when localStorage is unavailable.
+    }
   }, [key, value, loaded]);
 
   useEffect(() => {
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
-      if (!detail || detail.key !== key) return;
+      if (!detail || detail.key !== key || Object.is(value, detail.value)) return;
+      skipNextPersist.current = true;
       setValue(detail.value as T);
     };
     window.addEventListener(REMOTE_WRITE_EVENT, onRemote);
     return () => window.removeEventListener(REMOTE_WRITE_EVENT, onRemote);
-  }, [key]);
+  }, [key, value]);
 
   const set = useCallback((next: T | ((p: T) => T)) => {
     setValue((prev) => (typeof next === "function" ? (next as (p: T) => T)(prev) : next));
