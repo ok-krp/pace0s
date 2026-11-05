@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/storage/local_store.dart';
 import '../../core/sync/sync_service.dart';
+import '../../core/sync/food_log_sync.dart';
 import '../../ui/pace_theme.dart';
 
 class NutritionPage extends StatefulWidget {
@@ -27,10 +28,10 @@ class _NutritionPageState extends State<NutritionPage> {
     super.initState();
     _accountUserId = widget.localStore.activeUserId;
     widget.localStore.addListener(_onLocalStoreChanged);
-    unawaited(_refreshFoodLog());
+    unawaited(_pushAndRefreshFoodLog(syncUserState: true));
     _foodLogRefreshTimer = Timer.periodic(
       const Duration(minutes: 1),
-      (_) => unawaited(_refreshFoodLog()),
+      (_) => unawaited(_pushAndRefreshFoodLog()),
     );
   }
 
@@ -111,6 +112,27 @@ class _NutritionPageState extends State<NutritionPage> {
     return rawMissing.whereType<String>().toSet();
   }
 
+  Future<void> _pushAndRefreshFoodLog({bool syncUserState = false}) async {
+    final expectedUserId = _accountUserId;
+    if (expectedUserId == null ||
+        widget.localStore.isSwitchingAccount ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
+    if (syncUserState) await widget.sync.syncNow();
+    if (!mounted ||
+        widget.localStore.isSwitchingAccount ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
+    await FoodLogSync.pushPending(
+      client: widget.sync.client,
+      localStore: widget.localStore,
+      expectedUserId: expectedUserId,
+    );
+    await _refreshFoodLog();
+  }
+
   Future<void> _refreshFoodLog() async {
     final expectedUserId = _accountUserId;
     if (expectedUserId == null ||
@@ -119,7 +141,9 @@ class _NutritionPageState extends State<NutritionPage> {
       return;
     }
     final day = _todayKey();
-    final rows = await widget.sync.fetchFoodLogForDay(
+    final rows = await FoodLogSync.fetchForDay(
+      client: widget.sync.client,
+      localStore: widget.localStore,
       expectedUserId: expectedUserId,
       logDate: day,
     );
@@ -143,7 +167,7 @@ class _NutritionPageState extends State<NutritionPage> {
     final localItems = localRaw is List
         ? localRaw.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
         : <Map<String, dynamic>>[];
-    final deletedIds = widget.sync.pendingFoodLogDeletes;
+    final deletedIds = FoodLogSync.pendingDeletes(widget.localStore);
     final remoteItems = rows
         .where((row) => !deletedIds.contains(row['id']?.toString()))
         .map((row) => <String, dynamic>{
@@ -305,15 +329,15 @@ class _NutritionPageState extends State<NutritionPage> {
           ],
         },
       };
-      writes[SyncService.foodLogOutboxKey] = SyncService.queueFoodLogOperation(
-        widget.localStore.read(SyncService.foodLogOutboxKey),
+      writes[FoodLogSync.outboxKey] = FoodLogSync.queueOperation(
+        widget.localStore.read(FoodLogSync.outboxKey),
         operation: 'upsert',
         id: id,
         row: foodLogRow,
         now: DateTime.now().toUtc(),
       );
       localOnlyKeys.addAll({
-        SyncService.foodLogOutboxKey,
+        FoodLogSync.outboxKey,
         'pace.nutrition.items',
         'pace.nutrition.totals',
       });
@@ -324,7 +348,7 @@ class _NutritionPageState extends State<NutritionPage> {
       localOnlyKeys: localOnlyKeys,
     );
     if (expectedUserId != null) {
-      unawaited(widget.sync.syncNow().then((_) => _refreshFoodLog()));
+      unawaited(_pushAndRefreshFoodLog(syncUserState: true));
     }
     if (mounted &&
         !widget.localStore.isSwitchingAccount &&
@@ -376,14 +400,34 @@ class _NutritionPageState extends State<NutritionPage> {
     final itemId = item['id']?.toString() ?? '';
     list.removeWhere((entry) => entry is Map && entry['id']?.toString() == itemId);
     if (list.length == before) return;
+
     data[day] = list;
     final writes = <String, dynamic>{
       'pace.nutrition.items': data,
       'pace.nutrition.totals': _calculateTotals(data),
     };
     final localOnlyKeys = <String>{};
-    if (expectedUserId != null &&
-        RegExp(r'^[0-9a-fA-F-]{36}
+    if (expectedUserId != null && FoodLogSync.isUuid(itemId)) {
+      writes[FoodLogSync.outboxKey] = FoodLogSync.queueOperation(
+        widget.localStore.read(FoodLogSync.outboxKey),
+        operation: 'delete',
+        id: itemId,
+        now: DateTime.now().toUtc(),
+      );
+      localOnlyKeys.addAll({
+        'pace.nutrition.items',
+        'pace.nutrition.totals',
+        FoodLogSync.outboxKey,
+      });
+    }
+    await widget.localStore.writeBatchForAccount(
+      expectedUserId,
+      writes: writes,
+      localOnlyKeys: localOnlyKeys,
+    );
+    if (expectedUserId != null) {
+      unawaited(_pushAndRefreshFoodLog(syncUserState: true));
+    }
     if (mounted &&
         !widget.localStore.isSwitchingAccount &&
         widget.localStore.activeUserId == expectedUserId) {
