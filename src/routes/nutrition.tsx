@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { applyRemoteWrite, useLocalState, todayKey } from "@/lib/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { accountSyncStorageKeys, parseSyncQueue } from "@/lib/cloud-sync-scope";
-import { mapFoodLogRow, mergeCanonicalNutritionItems, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
+import { mergeCanonicalNutritionItems, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -287,7 +287,7 @@ function NutritionLogView() {
     try { if (rawTotals) currentTotals = JSON.parse(rawTotals) as typeof currentTotals; } catch {}
 
     const merged = mergeCanonicalNutritionItems(
-      currentItems[day] ?? [],
+      Array.isArray(currentItems[day]) ? currentItems[day] : [],
       data as unknown as CanonicalFoodLogRow[],
     );
     const nextItems = { ...currentItems, [day]: merged };
