@@ -20,6 +20,7 @@ class NutritionPage extends StatefulWidget {
 class _NutritionPageState extends State<NutritionPage> {
   late String? _accountUserId;
   bool _foodDialogOpen = false;
+  Timer? _foodLogRefreshTimer;
 
   @override
   void initState() {
@@ -27,6 +28,10 @@ class _NutritionPageState extends State<NutritionPage> {
     _accountUserId = widget.localStore.activeUserId;
     widget.localStore.addListener(_onLocalStoreChanged);
     unawaited(_refreshFoodLog());
+    _foodLogRefreshTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => unawaited(_refreshFoodLog()),
+    );
   }
 
   void _onLocalStoreChanged() {
@@ -58,6 +63,7 @@ class _NutritionPageState extends State<NutritionPage> {
 
   @override
   void dispose() {
+    _foodLogRefreshTimer?.cancel();
     widget.localStore.removeListener(_onLocalStoreChanged);
     super.dispose();
   }
@@ -95,6 +101,14 @@ class _NutritionPageState extends State<NutritionPage> {
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     final hex = bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
+  }
+
+  Set<String> _foodLogMissingNutrients(Map<String, dynamic> row) {
+    final rawMeta = row['meta'];
+    if (rawMeta is! Map) return <String>{};
+    final rawMissing = rawMeta['missing_nutrients'];
+    if (rawMissing is! List) return <String>{};
+    return rawMissing.whereType<String>().toSet();
   }
 
   Future<void> _refreshFoodLog() async {
@@ -137,10 +151,10 @@ class _NutritionPageState extends State<NutritionPage> {
               'name': row['name'],
               'meal': row['meal'],
               'qty': 1,
-              'kcal': row['kcal'],
-              'p': row['protein_g'],
-              'c': row['carbs_g'],
-              'f': row['fat_g'],
+              'kcal': _foodLogMissingNutrients(row).contains('kcal') ? null : row['kcal'],
+              'p': _foodLogMissingNutrients(row).contains('protein_g') ? null : row['protein_g'],
+              'c': _foodLogMissingNutrients(row).contains('carbs_g') ? null : row['carbs_g'],
+              'f': _foodLogMissingNutrients(row).contains('fat_g') ? null : row['fat_g'],
               'fiber': row['fiber_g'],
               'sugar': row['sugar_g'],
               'sodium': row['sodium_mg'],
@@ -281,7 +295,15 @@ class _NutritionPageState extends State<NutritionPage> {
         'sugar_g': 0,
         'sodium_mg': 0,
         'source': 'manual',
-        'meta': {'client': 'pace_flutter'},
+        'meta': {
+          'client': 'pace_flutter',
+          'missing_nutrients': [
+            if (values['kcal'] == null) 'kcal',
+            if (values['p'] == null) 'protein_g',
+            if (values['c'] == null) 'carbs_g',
+            if (values['f'] == null) 'fat_g',
+          ],
+        },
       };
       writes[SyncService.foodLogOutboxKey] = SyncService.queueFoodLogOperation(
         widget.localStore.read(SyncService.foodLogOutboxKey),
@@ -290,7 +312,11 @@ class _NutritionPageState extends State<NutritionPage> {
         row: foodLogRow,
         now: DateTime.now().toUtc(),
       );
-      localOnlyKeys.add(SyncService.foodLogOutboxKey);
+      localOnlyKeys.addAll({
+        SyncService.foodLogOutboxKey,
+        'pace.nutrition.items',
+        'pace.nutrition.totals',
+      });
     }
     await widget.localStore.writeBatchForAccount(
       expectedUserId,
