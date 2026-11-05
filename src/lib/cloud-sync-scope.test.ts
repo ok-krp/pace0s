@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { accountSyncStorageKeys, isLatestKeyWrite, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullCursor, syncPullPlan } from "./cloud-sync-scope.ts";
+import { accountSyncStorageKeys, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullCursor, syncPullPlan } from "./cloud-sync-scope.ts";
 
 test("sync queue and metadata storage are isolated by authenticated user", () => {
   const alice = accountSyncStorageKeys("user/alice");
@@ -26,7 +26,7 @@ test("legacy unscoped queue is not implicitly adopted by an authenticated accoun
 test("queue parser rejects malformed, non-string and non-Pace keys and de-duplicates", () => {
   assert.deepEqual(parseSyncQueue("{"), []);
   assert.deepEqual(parseSyncQueue('{"key":"pace.water"}'), []);
-  assert.deepEqual(parseSyncQueue('["pace.water","pace.water","lt.water",4,null]'), ["pace.water"]);
+  assert.deepEqual(parseSyncQueue('["pace.water","pace.water","pace.__sync_queue","pace.__sync_last_full_reconcile_at","lt.water",4,null]'), ["pace.water"]);
 });
 
 test("metadata parser accepts only valid timestamps for Pace keys", () => {
@@ -132,4 +132,13 @@ test("per-key write timestamps recover from invalid previous metadata", () => {
   );
   assert.throws(() => nextSyncWriteTimestamp(Number.NaN), RangeError);
   assert.throws(() => nextSyncWriteTimestamp(-1), RangeError);
+});
+
+test("reserved internal sync keys are never treated as user domain state", () => {
+  assert.equal(isSyncableLocalKey("pace.nutrition.items"), true);
+  assert.equal(isSyncableLocalKey("pace.settings.theme"), true);
+  assert.equal(isSyncableLocalKey("pace.__sync_queue"), false);
+  assert.equal(isSyncableLocalKey("pace.__sync_meta:user-a"), false);
+  assert.equal(isSyncableLocalKey("lt.water"), false);
+  assert.equal(isSyncableLocalKey("__outbox"), false);
 });
