@@ -51,7 +51,7 @@ class FoodLogSync {
     if (id is! String ||
         !isUuid(id) ||
         queuedAt is! String ||
-        !LocalStore.isValidIsoTimestamp(queuedAt)) {
+        !LocalStore.isValidRemoteTimestamp(queuedAt)) {
       return false;
     }
     if (kind == 'delete') return true;
