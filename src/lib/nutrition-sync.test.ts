@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapFoodLogRow, mergeCanonicalNutritionItems, readActiveNutritionTombstones } from "./nutrition-sync.ts";
+import { mapFoodLogRow, mergeCanonicalNutritionItems, queueNutritionTombstone, readActiveNutritionTombstones } from "./nutrition-sync.ts";
 
 const canonical = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -99,4 +99,15 @@ test("accepts only valid, unexpired food-log tombstones", () => {
     [...tombstones],
     ["00000000-0000-4000-8000-000000000001"],
   );
+});
+
+test("queues valid bounded tombstones and replaces the same ID deterministically", () => {
+  const now = Date.parse("2026-11-05T10:00:00.000Z");
+  const id = "00000000-0000-4000-8000-000000000001";
+  const first = queueNutritionTombstone(null, id, now);
+  const second = queueNutritionTombstone(JSON.stringify(first), id, now + 1000);
+
+  assert.deepEqual(Object.keys(second), [id]);
+  assert.equal(second[id], "2026-11-05T10:00:01.000Z");
+  assert.throws(() => queueNutritionTombstone(null, "not-a-uuid", now), RangeError);
 });
