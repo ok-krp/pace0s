@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { applyRemoteWrite, useLocalState, todayKey } from "@/lib/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { accountSyncStorageKeys, parseSyncQueue } from "@/lib/cloud-sync-scope";
-import { mergeCanonicalNutritionItems, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
+import { mergeCanonicalNutritionItems, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -306,9 +306,13 @@ function NutritionLogView() {
       // Ignore malformed cached JSON; totals are recomputed from validated items.
     }
 
+    const deletedIds = readActiveNutritionTombstones(
+      localStorage.getItem("pace.nutrition.deleted_ids"),
+    );
     const merged = mergeCanonicalNutritionItems(
       Array.isArray(currentItems[day]) ? currentItems[day] : [],
       data as unknown as CanonicalFoodLogRow[],
+      deletedIds,
     );
     const nextItems = { ...currentItems, [day]: merged };
     const nextTotals = recomputeNutritionTotals(nextItems);
