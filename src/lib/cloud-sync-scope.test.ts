@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue, syncPullCursor, syncPullPlan } from "./cloud-sync-scope.ts";
+import { accountSyncStorageKeys, isLatestKeyWrite, parseSyncMetadata, parseSyncQueue, syncPullCursor, syncPullPlan } from "./cloud-sync-scope.ts";
 
 test("sync queue and metadata storage are isolated by authenticated user", () => {
   const alice = accountSyncStorageKeys("user/alice");
@@ -102,4 +102,13 @@ test("pull plan rejects invalid reconciliation intervals", () => {
     () => syncPullPlan({}, 0, Date.now(), 300_000, 0),
     RangeError,
   );
+});
+
+test("only the latest same-key push may acknowledge its local outbox entry", () => {
+  assert.equal(isLatestKeyWrite(1, 1), true);
+  assert.equal(isLatestKeyWrite(1, 2), false);
+  assert.equal(isLatestKeyWrite(2, 2), true);
+  assert.equal(isLatestKeyWrite(0, 0), false);
+  assert.equal(isLatestKeyWrite(Number.NaN, 1), false);
+  assert.equal(isLatestKeyWrite(1, Number.POSITIVE_INFINITY), false);
 });
