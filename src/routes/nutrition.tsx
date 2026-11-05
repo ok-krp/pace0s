@@ -272,7 +272,7 @@ function NutritionLogView() {
 
     if (!activeUserId) {
       const previousOwner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
-      if (!mayReadGlobalNutritionCache(previousOwner, null)) {
+      if (previousOwner && !mayReadGlobalNutritionCache(previousOwner, null)) {
         const previousKeys = nutritionAccountCacheKeys(previousOwner);
         const globalItems = localStorage.getItem("pace.nutrition.items");
         const globalTotals = localStorage.getItem("pace.nutrition.totals");
