@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
-import { accountSyncStorageKeys, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
+import { accountSyncStorageKeys, isLatestKeyWrite, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
 import { fetchAllKeysetPages } from "@/lib/user-state-pagination";
 
 const PACE_PREFIX = "pace.";
@@ -62,6 +62,7 @@ export function useCloudSyncEngineInternal() {
   const [status, setStatus] = useState<SyncStatus>("idle");
   const running = useRef<Record<string, boolean>>({});
   const keyWrites = useRef<Record<string, Promise<void>>>({});
+  const keyWriteVersions = useRef<Record<string, number>>({});
 
   useEffect(() => {
     if (typeof window === "undefined" || !user) return;
@@ -79,6 +80,8 @@ export function useCloudSyncEngineInternal() {
       queueKey(userId, key);
 
       const writeId = `${userId}:${key}`;
+      const writeVersion = (keyWriteVersions.current[writeId] ?? 0) + 1;
+      keyWriteVersions.current[writeId] = writeVersion;
       const previous = keyWrites.current[writeId] ?? Promise.resolve();
       const current = previous.then(async () => {
         if (cancelled) return;
@@ -86,7 +89,8 @@ export function useCloudSyncEngineInternal() {
 
         let value: unknown;
         try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { return; }
-        const updatedAt = new Date().toISOString();
+        const previousTimestamp = readMeta(userId)[key];
+        const updatedAt = nextSyncWriteTimestamp(Date.now(), previousTimestamp);
         setStatus("syncing");
 
         try {
@@ -118,6 +122,10 @@ export function useCloudSyncEngineInternal() {
               setStatus("error");
               return;
             }
+            // A later local edit may have arrived while the conflict row was
+            // being fetched. Never replace that newer local value with the
+            // response for an older queued attempt.
+            if (!isLatestKeyWrite(writeVersion, keyWriteVersions.current[writeId] ?? 0)) return;
             const row = rows?.[0] as SyncRow | undefined;
             if (!row) {
               // A false RPC result means a newer row won. If that row cannot
@@ -136,6 +144,10 @@ export function useCloudSyncEngineInternal() {
             return;
           }
 
+          // The queue is shared by invocations for the same key. Only the
+          // latest invocation may acknowledge it; an earlier accepted write
+          // must not erase a newer edit that is waiting behind it.
+          if (!isLatestKeyWrite(writeVersion, keyWriteVersions.current[writeId] ?? 0)) return;
           unqueueKey(userId, key);
           setStatus("ok");
         } catch {
@@ -145,6 +157,9 @@ export function useCloudSyncEngineInternal() {
 
       keyWrites.current[writeId] = current.catch(() => undefined);
       await current;
+      if (isLatestKeyWrite(writeVersion, keyWriteVersions.current[writeId] ?? 0)) {
+        delete keyWriteVersions.current[writeId];
+      }
     };
 
     const flushQueue = async () => {
