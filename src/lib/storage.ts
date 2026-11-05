@@ -97,6 +97,9 @@ const REMOTE_WRITE_EVENT = "pace.remote.write";
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const initialValue = useRef(initial);
+  initialValue.current = initial;
+  const mutationVersion = useRef(0);
   // Hydrating from disk or receiving a server-confirmed value is not a new
   // user mutation. Keep the target until React has applied that exact value;
   // this also handles key changes where the first effect sees the old state.
@@ -106,8 +109,15 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     // Defer state hydration to the next task. This avoids a synchronous
     // setState inside the effect while allowing the current render to expose
     // only the new key's fallback value during an account/key transition.
+    const scheduledVersion = mutationVersion.current;
     const timer = window.setTimeout(() => {
-      let nextValue = initial;
+      // A user edit or a remote update won the race with disk hydration.
+      // Mark this key ready without replacing the newer state.
+      if (mutationVersion.current !== scheduledVersion) {
+        setLoadedKey(key);
+        return;
+      }
+      let nextValue = initialValue.current;
       try {
         const raw = localStorage.getItem(key);
         if (raw !== null) nextValue = JSON.parse(raw) as T;
@@ -137,7 +147,9 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
       if (!detail || detail.key !== key || Object.is(value, detail.value)) return;
       const nextValue = detail.value as T;
+      mutationVersion.current += 1;
       hydratedValue.current = { pending: true, value: nextValue };
+      setLoadedKey(key);
       setValue(nextValue);
     };
     window.addEventListener(REMOTE_WRITE_EVENT, onRemote);
@@ -145,8 +157,11 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   }, [key, value]);
 
   const set = useCallback((next: T | ((p: T) => T)) => {
+    mutationVersion.current += 1;
+    hydratedValue.current = null;
+    setLoadedKey(key);
     setValue((prev) => (typeof next === "function" ? (next as (p: T) => T)(prev) : next));
-  }, []);
+  }, [key]);
 
   return [loadedKey === key ? value : initial, set];
 }
