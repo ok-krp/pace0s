@@ -127,3 +127,27 @@ export function mergeCanonicalNutritionItems(
   });
   return [...remoteItems, ...legacyItems];
 }
+
+export const NUTRITION_CACHE_OWNER_KEY = "pace.__nutrition_cache_owner";
+export const NUTRITION_UNASSIGNED_BACKUP_KEY = "pace.__nutrition_unassigned_legacy_backup";
+
+export function nutritionAccountCacheKeys(userId: string): {
+  items: string;
+  totals: string;
+} {
+  if (!userId.trim()) throw new Error("A user ID is required for the Nutrition cache");
+  const scope = encodeURIComponent(userId);
+  return {
+    items: `pace.__nutrition_cache:${scope}:items`,
+    totals: `pace.__nutrition_cache:${scope}:totals`,
+  };
+}
+
+/** Old unowned global JSON must never be auto-assigned to the first login. */
+export function mayReadGlobalNutritionCache(
+  cacheOwner: string | null,
+  userId: string | null,
+): boolean {
+  if (!userId) return cacheOwner === null;
+  return cacheOwner === userId;
+}
