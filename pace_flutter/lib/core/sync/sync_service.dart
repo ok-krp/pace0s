@@ -91,7 +91,9 @@ class SyncService {
 
   static const String excludedRemotePullKeysFilter =
       '("pace.sport.active","pace.ai.conversations",'
-      '"pace.ai.deleted_conversations","lt.sport.active",'
+      '"pace.ai.deleted_conversations","pace.__sync_food_log_outbox",'
+      '"pace.__sync_ai_preferences_pending","pace.__sync_last_pull_at",'
+      '"pace.__sync_last_full_pull_at","lt.sport.active",'
       '"lt.ai.conversations","lt.ai.deleted_conversations")';
 
   static bool isSyncableKey(String key) =>
