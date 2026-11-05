@@ -1,12 +1,17 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 
 import '../../core/storage/local_store.dart';
+import '../../core/sync/sync_service.dart';
 import '../../ui/pace_theme.dart';
 
 class NutritionPage extends StatefulWidget {
-  const NutritionPage({super.key, required this.localStore});
+  const NutritionPage({super.key, required this.localStore, required this.sync});
 
   final LocalStore localStore;
+  final SyncService sync;
 
   @override
   State<NutritionPage> createState() => _NutritionPageState();
@@ -21,6 +26,7 @@ class _NutritionPageState extends State<NutritionPage> {
     super.initState();
     _accountUserId = widget.localStore.activeUserId;
     widget.localStore.addListener(_onLocalStoreChanged);
+    unawaited(_refreshFoodLog());
   }
 
   void _onLocalStoreChanged() {
@@ -36,6 +42,7 @@ class _NutritionPageState extends State<NutritionPage> {
     // the dialog closes. The dialog still validates its captured account ID.
     if (_foodDialogOpen) return;
     setState(() {});
+    unawaited(_refreshFoodLog());
   }
 
   @override
@@ -45,6 +52,7 @@ class _NutritionPageState extends State<NutritionPage> {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
       _accountUserId = widget.localStore.activeUserId;
       widget.localStore.addListener(_onLocalStoreChanged);
+      unawaited(_refreshFoodLog());
     }
   }
 
@@ -78,6 +86,91 @@ class _NutritionPageState extends State<NutritionPage> {
     final text = controller.text.trim();
     if (text.isEmpty) return null;
     return double.tryParse(text.replaceAll(',', '.'));
+  }
+
+  String _newFoodLogId() {
+    final random = Random.secure();
+    final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    final hex = bytes.map((value) => value.toRadixString(16).padLeft(2, '0')).join();
+    return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
+  }
+
+  Future<void> _refreshFoodLog() async {
+    final expectedUserId = _accountUserId;
+    if (expectedUserId == null ||
+        widget.localStore.isSwitchingAccount ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
+    final day = _todayKey();
+    final rows = await widget.sync.fetchFoodLogForDay(
+      expectedUserId: expectedUserId,
+      logDate: day,
+    );
+    if (rows == null ||
+        !mounted ||
+        widget.localStore.isSwitchingAccount ||
+        widget.localStore.activeUserId != expectedUserId ||
+        _todayKey() != day) {
+      return;
+    }
+    // Do not replace a newer local JSON mutation that has not yet reached
+    // user_state. The next manual refresh can merge the canonical SQL rows
+    // after the existing sync outbox has been acknowledged.
+    if (widget.localStore.hasPendingOperationForKey('pace.nutrition.items')) {
+      return;
+    }
+
+    final raw = widget.localStore.read('pace.nutrition.items');
+    final data = Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
+    final localRaw = data[day];
+    final localItems = localRaw is List
+        ? localRaw.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+        : <Map<String, dynamic>>[];
+    final deletedIds = widget.sync.pendingFoodLogDeletes;
+    final remoteItems = rows
+        .where((row) => !deletedIds.contains(row['id']?.toString()))
+        .map((row) => <String, dynamic>{
+              'id': row['id'],
+              'name': row['name'],
+              'meal': row['meal'],
+              'qty': 1,
+              'kcal': row['kcal'],
+              'p': row['protein_g'],
+              'c': row['carbs_g'],
+              'f': row['fat_g'],
+              'fiber': row['fiber_g'],
+              'sugar': row['sugar_g'],
+              'sodium': row['sodium_mg'],
+              'created_at': row['created_at'],
+            })
+        .toList();
+    final remoteIds = remoteItems.map((item) => item['id']?.toString()).toSet();
+    final legacyOrPending = localItems.where((item) {
+      final id = item['id']?.toString() ?? '';
+      return !deletedIds.contains(id) && !remoteIds.contains(id);
+    });
+    final merged = <Map<String, dynamic>>[
+      ...remoteItems,
+      ...legacyOrPending,
+    ];
+    data[day] = merged;
+    final totals = _calculateTotals(data);
+    await widget.localStore.writeBatchForAccount(
+      expectedUserId,
+      writes: {
+        'pace.nutrition.items': data,
+        'pace.nutrition.totals': totals,
+      },
+      enqueueSync: false,
+    );
+    if (mounted &&
+        !widget.localStore.isSwitchingAccount &&
+        widget.localStore.activeUserId == expectedUserId) {
+      setState(() {});
+    }
   }
 
   Future<void> _addFood() async {
@@ -157,21 +250,56 @@ class _NutritionPageState extends State<NutritionPage> {
     final data = Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
     final day = _todayKey();
     final list = data[day] is List ? List<dynamic>.from(data[day] as List) : <dynamic>[];
-    list.add({
-      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+    final id = expectedUserId == null ? DateTime.now().microsecondsSinceEpoch.toString() : _newFoodLogId();
+    final item = <String, dynamic>{
+      'id': id,
       'name': itemName,
       'meal': 'Repas',
       'qty': 1,
       ...result,
-    });
+    };
+    list.add(item);
     data[day] = list;
+    final writes = <String, dynamic>{
+      'pace.nutrition.items': data,
+      'pace.nutrition.totals': _calculateTotals(data),
+    };
+    final localOnlyKeys = <String>{};
+    if (expectedUserId != null) {
+      final values = result;
+      final foodLogRow = <String, dynamic>{
+        'id': id,
+        'user_id': expectedUserId,
+        'log_date': day,
+        'meal': 'Repas',
+        'name': itemName,
+        'kcal': values['kcal'] ?? 0,
+        'protein_g': values['p'] ?? 0,
+        'carbs_g': values['c'] ?? 0,
+        'fat_g': values['f'] ?? 0,
+        'fiber_g': 0,
+        'sugar_g': 0,
+        'sodium_mg': 0,
+        'source': 'manual',
+        'meta': {'client': 'pace_flutter'},
+      };
+      writes[SyncService.foodLogOutboxKey] = SyncService.queueFoodLogOperation(
+        widget.localStore.read(SyncService.foodLogOutboxKey),
+        operation: 'upsert',
+        id: id,
+        row: foodLogRow,
+        now: DateTime.now().toUtc(),
+      );
+      localOnlyKeys.add(SyncService.foodLogOutboxKey);
+    }
     await widget.localStore.writeBatchForAccount(
       expectedUserId,
-      writes: {
-        'pace.nutrition.items': data,
-        'pace.nutrition.totals': _calculateTotals(data),
-      },
+      writes: writes,
+      localOnlyKeys: localOnlyKeys,
     );
+    if (expectedUserId != null) {
+      unawaited(widget.sync.syncNow().then((_) => _refreshFoodLog()));
+    }
     if (mounted &&
         !widget.localStore.isSwitchingAccount &&
         widget.localStore.activeUserId == expectedUserId) {
@@ -219,16 +347,90 @@ class _NutritionPageState extends State<NutritionPage> {
     final day = _todayKey();
     final list = data[day] is List ? List<dynamic>.from(data[day] as List) : <dynamic>[];
     final before = list.length;
-    list.removeWhere((entry) => entry is Map && entry['id']?.toString() == item['id']?.toString());
+    final itemId = item['id']?.toString() ?? '';
+    list.removeWhere((entry) => entry is Map && entry['id']?.toString() == itemId);
     if (list.length == before) return;
     data[day] = list;
+    final writes = <String, dynamic>{
+      'pace.nutrition.items': data,
+      'pace.nutrition.totals': _calculateTotals(data),
+    };
+    final localOnlyKeys = <String>{};
+    if (expectedUserId != null &&
+        RegExp(r'^[0-9a-fA-F-]{36}
+    if (mounted &&
+        !widget.localStore.isSwitchingAccount &&
+        widget.localStore.activeUserId == expectedUserId) {
+      setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totals = _totals();
+    final items = _items();
+    String number(String key) {
+      final value = totals[key];
+      return value is num ? value.toStringAsFixed(1) : '—';
+    }
+    return RefreshIndicator(
+      onRefresh: _refreshFoodLog,
+      child: ListView(padding: const EdgeInsets.all(20), children: [
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text('Nutrition', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
+          IconButton(onPressed: _addFood, icon: const Icon(Icons.add_circle_outline), tooltip: 'Ajouter un aliment'),
+        ]),
+        const SizedBox(height: 6),
+        Text('Données réelles de ton journal Pace', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+        const SizedBox(height: 18),
+        PaceGlassCard(child: Column(children: [
+          _NutritionRow('Calories', '${number('kcal')} kcal', Icons.local_fire_department_outlined),
+          _NutritionRow('Protéines', '${number('p')} g', Icons.fitness_center_outlined),
+          _NutritionRow('Glucides', '${number('c')} g', Icons.grain_outlined),
+          _NutritionRow('Lipides', '${number('f')} g', Icons.opacity_outlined),
+        ])),
+        const SizedBox(height: 14),
+        Text('Repas du jour', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        if (items.isEmpty) const PaceGlassCard(child: ListTile(title: Text('Aucun aliment enregistré aujourd’hui'))),
+        for (final item in items)
+          Padding(padding: const EdgeInsets.only(bottom: 8), child: PaceGlassCard(child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+            title: Text(item['name']?.toString() ?? 'Aliment'),
+            subtitle: Text('${item['meal'] ?? 'Repas'} · ${item['kcal'] is num ? (item['kcal'] as num).toStringAsFixed(0) : '—'} kcal · P ${item['p'] is num ? (item['p'] as num).toStringAsFixed(1) : '—'} g'),
+            trailing: IconButton(onPressed: () => _deleteItem(item), icon: const Icon(Icons.delete_outline)),
+          ))),
+      ]),
+    );
+  }
+}
+
+class _NutritionRow extends StatelessWidget {
+  const _NutritionRow(this.label, this.value, this.icon);
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) => ListTile(contentPadding: EdgeInsets.zero, leading: Icon(icon), title: Text(label), trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.w700)));
+}
+).hasMatch(itemId)) {
+      writes[SyncService.foodLogOutboxKey] = SyncService.queueFoodLogOperation(
+        widget.localStore.read(SyncService.foodLogOutboxKey),
+        operation: 'delete',
+        id: itemId,
+        now: DateTime.now().toUtc(),
+      );
+      localOnlyKeys.add(SyncService.foodLogOutboxKey);
+    }
     await widget.localStore.writeBatchForAccount(
       expectedUserId,
-      writes: {
-        'pace.nutrition.items': data,
-        'pace.nutrition.totals': _calculateTotals(data),
-      },
+      writes: writes,
+      localOnlyKeys: localOnlyKeys,
     );
+    if (expectedUserId != null) {
+      unawaited(widget.sync.syncNow().then((_) => _refreshFoodLog()));
+    }
     if (mounted &&
         !widget.localStore.isSwitchingAccount &&
         widget.localStore.activeUserId == expectedUserId) {
