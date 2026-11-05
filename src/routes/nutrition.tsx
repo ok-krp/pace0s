@@ -267,73 +267,141 @@ function NutritionLogView() {
   const refreshInFlight = useRef<Set<string>>(new Set());
 
   const refreshCanonicalNutrition = useCallback(async () => {
-    if (refreshInFlight.current) return;
-    refreshInFlight.current = true;
+    if (authLoading) return;
+
+    if (!user) {
+      const previousOwner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
+      if (previousOwner) {
+        const previousKeys = nutritionAccountCacheKeys(previousOwner);
+        const globalItems = localStorage.getItem("pace.nutrition.items");
+        const globalTotals = localStorage.getItem("pace.nutrition.totals");
+        if (globalItems && !localStorage.getItem(previousKeys.items)) {
+          localStorage.setItem(previousKeys.items, globalItems);
+        }
+        if (globalTotals && !localStorage.getItem(previousKeys.totals)) {
+          localStorage.setItem(previousKeys.totals, globalTotals);
+        }
+        // A signed-out guest must never see the last authenticated account's
+        // data. Its scoped copy above remains available after that account logs in.
+        applyRemoteWrite("pace.nutrition.items", {});
+        applyRemoteWrite("pace.nutrition.totals", {});
+      }
+      setReadyCacheOwner(null);
+      setGuestCacheReady(true);
+      return;
+    }
+
+    const userId = user.id;
+    if (refreshInFlight.current.has(userId)) return;
+    refreshInFlight.current.add(userId);
     try {
-      // getSession reads the authenticated local session; it avoids a network
-      // auth lookup on every lightweight Nutrition refresh.
       const { data: authData, error: authError } = await supabase.auth.getSession();
-      const user = authData.session?.user;
-      if (authError || !user) return;
+      if (authError || authData.session?.user.id !== userId) return;
 
-    const queueKey = accountSyncStorageKeys(user.id).queue;
-    const pendingKeys = parseSyncQueue(localStorage.getItem(queueKey));
-    // A newer local JSON write must finish its existing outbox replay before
-    // the SQL snapshot is allowed to replace this day's cache.
-    if (pendingKeys.includes("pace.nutrition.items")) return;
+      const owner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
+      const globalItems = localStorage.getItem("pace.nutrition.items");
+      const globalTotals = localStorage.getItem("pace.nutrition.totals");
 
-    const day = todayKey();
-    const { data, error } = await supabase
-      .from("food_log")
-      .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta,created_at")
-      .eq("user_id", user.id)
-      .eq("log_date", day)
-      .order("created_at", { ascending: true })
-      .limit(1000);
-    if (error || !data || todayKey() !== day) return;
-
-    const rawItems = localStorage.getItem("pace.nutrition.items");
-    const rawTotals = localStorage.getItem("pace.nutrition.totals");
-    let currentItems: Record<string, Item[]> = {};
-    try {
-      const parsed: unknown = rawItems ? JSON.parse(rawItems) : {};
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        currentItems = parsed as Record<string, Item[]>;
+      // Preserve the previous authenticated owner's cache before changing the
+      // global compatibility keys used by existing UI components.
+      if (owner && owner !== userId) {
+        const previousKeys = nutritionAccountCacheKeys(owner);
+        if (globalItems && !localStorage.getItem(previousKeys.items)) {
+          localStorage.setItem(previousKeys.items, globalItems);
+        }
+        if (globalTotals && !localStorage.getItem(previousKeys.totals)) {
+          localStorage.setItem(previousKeys.totals, globalTotals);
+        }
+      } else if (!owner && globalItems) {
+        // Historical global JSON has no reliable owner. Preserve it for
+        // explicit recovery, but do not silently attribute it to this login.
+        if (!localStorage.getItem(NUTRITION_UNASSIGNED_BACKUP_KEY)) {
+          localStorage.setItem(NUTRITION_UNASSIGNED_BACKUP_KEY, globalItems);
+        }
+        if (globalTotals && !localStorage.getItem(`${NUTRITION_UNASSIGNED_BACKUP_KEY}:totals`)) {
+          localStorage.setItem(`${NUTRITION_UNASSIGNED_BACKUP_KEY}:totals`, globalTotals);
+        }
       }
-    } catch {
-      // Ignore malformed cached JSON; the canonical SQL snapshot remains authoritative.
-    }
-    let currentTotals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
-    try {
-      const parsed: unknown = rawTotals ? JSON.parse(rawTotals) : {};
-      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-        currentTotals = parsed as typeof currentTotals;
-      }
-    } catch {
-      // Ignore malformed cached JSON; totals are recomputed from validated items.
-    }
 
-    const deletedIds = readActiveNutritionTombstones(
-      localStorage.getItem("pace.nutrition.deleted_ids"),
-    );
-    const merged = mergeCanonicalNutritionItems(
-      Array.isArray(currentItems[day]) ? currentItems[day] : [],
-      data as unknown as CanonicalFoodLogRow[],
-      deletedIds,
-    );
-    const nextItems = { ...currentItems, [day]: merged };
-    const nextTotals = recomputeNutritionTotals(nextItems);
-    // These are read-side cache writes. Do not enqueue the full Nutrition JSON
-    // back to user_state: food_log is now the cross-device source of truth.
-    applyRemoteWrite("pace.nutrition.items", nextItems);
-    applyRemoteWrite("pace.nutrition.totals", { ...currentTotals, ...nextTotals });
+      const accountKeys = nutritionAccountCacheKeys(userId);
+      let scopedItemsRaw = localStorage.getItem(accountKeys.items);
+      let scopedTotalsRaw = localStorage.getItem(accountKeys.totals);
+      if (owner === userId) {
+        scopedItemsRaw ??= globalItems;
+        scopedTotalsRaw ??= globalTotals;
+      }
+
+      let currentItems: Record<string, Item[]> = {};
+      try {
+        const parsed: unknown = scopedItemsRaw ? JSON.parse(scopedItemsRaw) : {};
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          currentItems = parsed as Record<string, Item[]>;
+        }
+      } catch {
+        // A malformed account cache is ignored; it is not sent to another account.
+      }
+      let currentTotals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
+      try {
+        const parsed: unknown = scopedTotalsRaw ? JSON.parse(scopedTotalsRaw) : {};
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          currentTotals = parsed as typeof currentTotals;
+        }
+      } catch {
+        // Totals are recomputed from valid item rows below.
+      }
+
+      // Hydrate only this user's cache into the compatibility keys first. If
+      // SQL is temporarily unavailable, this account still sees its own data.
+      localStorage.setItem(NUTRITION_CACHE_OWNER_KEY, userId);
+      localStorage.setItem(accountKeys.items, JSON.stringify(currentItems));
+      localStorage.setItem(accountKeys.totals, JSON.stringify(currentTotals));
+      applyRemoteWrite("pace.nutrition.items", currentItems);
+      applyRemoteWrite("pace.nutrition.totals", currentTotals);
+      setReadyCacheOwner(userId);
+      setGuestCacheReady(false);
+
+      const queueKey = accountSyncStorageKeys(userId).queue;
+      const pendingKeys = parseSyncQueue(localStorage.getItem(queueKey));
+      // A legacy JSON write in this account's outbox must be acknowledged
+      // before SQL becomes authoritative for the cached day.
+      if (pendingKeys.includes("pace.nutrition.items")) return;
+
+      const day = todayKey();
+      const { data, error } = await supabase
+        .from("food_log")
+        .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta,created_at")
+        .eq("user_id", userId)
+        .eq("log_date", day)
+        .order("created_at", { ascending: true })
+        .limit(1000);
+      if (error || !data || todayKey() !== day) return;
+      const { data: confirmedSession } = await supabase.auth.getSession();
+      if (confirmedSession.session?.user.id !== userId) return;
+
+      const deletedIds = readActiveNutritionTombstones(
+        localStorage.getItem("pace.nutrition.deleted_ids"),
+      );
+      const merged = mergeCanonicalNutritionItems(
+        Array.isArray(currentItems[day]) ? currentItems[day] : [],
+        data as unknown as CanonicalFoodLogRow[],
+        deletedIds,
+      );
+      const nextItems = { ...currentItems, [day]: merged };
+      const nextTotals = recomputeNutritionTotals(nextItems);
+
+      // Cache by account first, then update the compatibility keys. These
+      // read-side cache writes never enter the generic user_state outbox.
+      localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
+      localStorage.setItem(accountKeys.totals, JSON.stringify({ ...currentTotals, ...nextTotals }));
+      localStorage.setItem(NUTRITION_CACHE_OWNER_KEY, userId);
+      applyRemoteWrite("pace.nutrition.items", nextItems);
+      applyRemoteWrite("pace.nutrition.totals", { ...currentTotals, ...nextTotals });
     } catch {
       // The next focus/online event or bounded refresh will retry transient failures.
     } finally {
-      refreshInFlight.current = false;
+      refreshInFlight.current.delete(userId);
     }
-  }, []);
-
+  }, [authLoading, user?.id]);
   useEffect(() => {
     const handler = () => {
       try {
@@ -358,7 +426,7 @@ function NutritionLogView() {
       window.removeEventListener("online", refresh);
       window.clearInterval(interval);
     };
-  }, [refreshCanonicalNutrition, setItems, setTotals]);
+  }, [authLoading, refreshCanonicalNutrition, setItems, setTotals, user?.id]);
 
   const [meal, setMeal] = useState("Petit déjeuner");
   const [name, setName] = useState("");
@@ -492,10 +560,14 @@ function NutritionLogView() {
     });
   };
 
-  const t = totals[today] ?? { kcal: 0, p: 0, c: 0, f: 0 };
+  const t = (cacheReady ? visibleTotals[today] : undefined) ?? { kcal: 0, p: 0, c: 0, f: 0 };
   const meals = ["Petit déjeuner", "Déjeuner", "Goûter", "Dîner"];
   const activeCols: NutCol[] = cols.includes("kcal") ? cols : ["kcal", ...cols];
   const sumCol = (arr: Item[], k: NutCol) => arr.reduce((s, x) => s + (Number(x[COL_FIELD[k]] as number | undefined) || 0), 0);
+
+  if (!cacheReady) {
+    return <div className="py-16 text-center text-sm text-muted-foreground">Chargement du journal nutritionnel…</div>;
+  }
 
   return (
     <div>
