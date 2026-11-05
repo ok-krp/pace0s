@@ -118,3 +118,16 @@ export function syncPullPlan(
 
   return { fullReconciliation, cursor };
 }
+
+/**
+ * A queued push may finish after a newer local edit was enqueued for the same
+ * key. Only the latest invocation is allowed to acknowledge that key's outbox
+ * entry or apply a conflict response over local state.
+ */
+export function isLatestKeyWrite(attemptedVersion: number, latestVersion: number): boolean {
+  return Number.isSafeInteger(attemptedVersion) &&
+    attemptedVersion > 0 &&
+    Number.isSafeInteger(latestVersion) &&
+    latestVersion > 0 &&
+    attemptedVersion === latestVersion;
+}
