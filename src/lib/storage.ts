@@ -165,6 +165,15 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   return [loadedKey === key ? value : initial, set];
 }
 
+export function applyLocalWrite(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Keep the caller's in-memory state even when persistence is unavailable.
+  }
+  window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key, value } }));
+}
+
 export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
