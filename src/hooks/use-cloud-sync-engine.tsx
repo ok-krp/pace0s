@@ -6,7 +6,7 @@ import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 import { accountSyncStorageKeys, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
 import { fetchAllKeysetPages } from "@/lib/user-state-pagination";
-import { NUTRITION_CACHE_OWNER_KEY } from "@/lib/nutrition-sync";
+import { NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys } from "@/lib/nutrition-sync";
 
 const PACE_PREFIX = "pace.";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
@@ -76,9 +76,31 @@ export function useCloudSyncEngineInternal() {
     let forceFullPullPending = false;
     let flushPending = false;
 
-    const markNutritionCacheOwner = (key: string) => {
+    const markNutritionCacheOwner = (
+      key: string,
+      nextValue?: unknown,
+      preservePreviousGlobal = false,
+    ) => {
       if (key !== "pace.nutrition.items" && key !== "pace.nutrition.totals") return;
       try {
+        const previousOwner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
+        const globalValue = localStorage.getItem(key);
+        if (preservePreviousGlobal && globalValue) {
+          if (previousOwner && previousOwner !== userId) {
+            const previousKeys = nutritionAccountCacheKeys(previousOwner);
+            const target = key.endsWith(".items") ? previousKeys.items : previousKeys.totals;
+            if (!localStorage.getItem(target)) localStorage.setItem(target, globalValue);
+          } else if (!previousOwner && !localStorage.getItem(NUTRITION_UNASSIGNED_BACKUP_KEY)) {
+            const target = key.endsWith(".items")
+              ? NUTRITION_UNASSIGNED_BACKUP_KEY
+              : `${NUTRITION_UNASSIGNED_BACKUP_KEY}:totals`;
+            localStorage.setItem(target, globalValue);
+          }
+        }
+        const accountKeys = nutritionAccountCacheKeys(userId);
+        const target = key.endsWith(".items") ? accountKeys.items : accountKeys.totals;
+        const serialized = nextValue === undefined ? globalValue : JSON.stringify(nextValue);
+        if (serialized !== null) localStorage.setItem(target, serialized);
         localStorage.setItem(NUTRITION_CACHE_OWNER_KEY, userId);
       } catch {
         // The active account guard still prevents this tab from reading
@@ -145,10 +167,10 @@ export function useCloudSyncEngineInternal() {
               setStatus("error");
               return;
             }
-            markNutritionCacheOwner(key);
-            markNutritionCacheOwner(key);
-          markNutritionCacheOwner(key);
-      markNutritionCacheOwner(key);
+            markNutritionCacheOwner(key, row.value, true);
+            markNutritionCacheOwner(key, row.value, true);
+          markNutritionCacheOwner(key, row.value, true);
+      markNutritionCacheOwner(key, row.value, true);
       applyRemoteWrite(key, row.value, row.updated_at);
             markLocal(userId, key, row.updated_at);
           } else if (data === true) {
@@ -294,8 +316,8 @@ export function useCloudSyncEngineInternal() {
           const shouldRecoverLegacy = isLegacy && isEmptyValue(localValue) && !isEmptyValue(row.value);
           if (!shouldRecoverLegacy && remoteTime <= localTime) continue;
 
-          markNutritionCacheOwner(key);
-          markNutritionCacheOwner(key);
+          markNutritionCacheOwner(key, row.value, true);
+          markNutritionCacheOwner(key, row.value, true);
       applyRemoteWrite(key, row.value, row.updated_at);
           meta[key] = row.updated_at;
           applied++;
@@ -358,7 +380,7 @@ export function useCloudSyncEngineInternal() {
 
     const offLocal = onLocalWrite((key) => {
       if (EXCLUDED.has(key) || !isSyncableLocalKey(key)) return;
-      markNutritionCacheOwner(key);
+      markNutritionCacheOwner(key, row.value, true);
       queueKey(userId, key);
       void pushKeyNow(key);
     });
