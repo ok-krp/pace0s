@@ -252,6 +252,7 @@ function NutritionPage() {
 
 function NutritionLogView() {
   const { user, loading: authLoading } = useAuth();
+  const activeUserId = user?.id ?? null;
   const [items, setItems] = useLocalState<Record<string, Item[]>>("pace.nutrition.items", {});
   const [totals, setTotals] = useLocalState<Record<string, { kcal: number; p: number; c: number; f: number }>>("pace.nutrition.totals", {});
   const [readyCacheOwner, setReadyCacheOwner] = useState<string | null>(null);
@@ -260,7 +261,7 @@ function NutritionLogView() {
   const goals = useUserGoals();
   const goal = goals.kcal;
   const today = todayKey();
-  const cacheReady = user ? readyCacheOwner === user.id : !authLoading && guestCacheReady;
+  const cacheReady = activeUserId ? readyCacheOwner === activeUserId : !authLoading && guestCacheReady;
   const visibleItems = cacheReady ? items : {};
   const visibleTotals = cacheReady ? totals : {};
   const list = visibleItems[today] ?? [];
@@ -269,9 +270,9 @@ function NutritionLogView() {
   const refreshCanonicalNutrition = useCallback(async () => {
     if (authLoading) return;
 
-    if (!user) {
+    if (!activeUserId) {
       const previousOwner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
-      if (previousOwner) {
+      if (!mayReadGlobalNutritionCache(previousOwner, null)) {
         const previousKeys = nutritionAccountCacheKeys(previousOwner);
         const globalItems = localStorage.getItem("pace.nutrition.items");
         const globalTotals = localStorage.getItem("pace.nutrition.totals");
@@ -291,7 +292,7 @@ function NutritionLogView() {
       return;
     }
 
-    const userId = user.id;
+    const userId = activeUserId;
     if (refreshInFlight.current.has(userId)) return;
     refreshInFlight.current.add(userId);
     try {
@@ -401,7 +402,7 @@ function NutritionLogView() {
     } finally {
       refreshInFlight.current.delete(userId);
     }
-  }, [authLoading, user?.id]);
+  }, [activeUserId, authLoading]);
   useEffect(() => {
     const handler = () => {
       try {
@@ -426,7 +427,7 @@ function NutritionLogView() {
       window.removeEventListener("online", refresh);
       window.clearInterval(interval);
     };
-  }, [authLoading, refreshCanonicalNutrition, setItems, setTotals, user?.id]);
+  }, [activeUserId, authLoading, refreshCanonicalNutrition, setItems, setTotals]);
 
   const [meal, setMeal] = useState("Petit déjeuner");
   const [name, setName] = useState("");
