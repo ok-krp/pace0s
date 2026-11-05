@@ -63,7 +63,7 @@ export function readActiveNutritionTombstones(
     return new Set(
       Object.entries(value).filter(([id, timestamp]) => {
         if (
-          !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9]{3}-[89ab][0-9]{3}-[0-9]{12}$/i.test(id) ||
           typeof timestamp !== "string"
         ) {
           return false;
@@ -130,16 +130,19 @@ export function mergeCanonicalNutritionItems(
 
 export const NUTRITION_CACHE_OWNER_KEY = "pace.__nutrition_cache_owner";
 export const NUTRITION_UNASSIGNED_BACKUP_KEY = "pace.__nutrition_unassigned_legacy_backup";
+export const NUTRITION_LEGACY_TOMBSTONES_KEY = "pace.nutrition.deleted_ids";
 
 export function nutritionAccountCacheKeys(userId: string): {
   items: string;
   totals: string;
+  deletedIds: string;
 } {
   if (!userId.trim()) throw new Error("A user ID is required for the Nutrition cache");
   const scope = encodeURIComponent(userId);
   return {
     items: `pace.__nutrition_cache:${scope}:items`,
     totals: `pace.__nutrition_cache:${scope}:totals`,
+    deletedIds: `pace.__nutrition_cache:${scope}:deleted_ids`,
   };
 }
 
