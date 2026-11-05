@@ -37,23 +37,25 @@ void main() {
             'row': {'id': '00000000-0000-4000-8000-000000000001'},
           },
         ],
+        'pace.settings.theme': 'dark',
       },
-      localOnlyKeys: const {'pace.__sync_food_log_outbox'},
+      localOnlyKeys: const {
+        'pace.nutrition.items',
+        'pace.nutrition.totals',
+        'pace.__sync_food_log_outbox',
+      },
     );
 
     expect(store.read('pace.__sync_food_log_outbox'), isA<List>());
     expect(
       store.pendingOperations().map((entry) => entry['key']).toSet(),
-      {'pace.nutrition.items', 'pace.nutrition.totals'},
+      {'pace.settings.theme'},
     );
 
     final reopened = await LocalStore.open(directory: directory);
     await reopened.activateAccount('user-a');
     expect(reopened.read('pace.__sync_food_log_outbox'), isA<List>());
-    expect(
-      reopened.pendingOperations().map((entry) => entry['key']).toSet(),
-      {'pace.nutrition.items', 'pace.nutrition.totals'},
-    );
+    expect(reopened.pendingOperations().map((entry) => entry['key']), ['pace.settings.theme']);
   });
 
   test('batch rejects local-only keys absent from the mutation set', () async {
