@@ -308,10 +308,19 @@ class LocalStore extends ChangeNotifier {
     String? expectedUserId, {
     Map<String, dynamic> writes = const <String, dynamic>{},
     Set<String> removes = const <String>{},
+    Set<String> localOnlyKeys = const <String>{},
     bool enqueueSync = true,
     bool notify = true,
   }) async {
     if (writes.isEmpty && removes.isEmpty) return;
+    final mutatedKeys = writes.keys.toSet().union(removes);
+    if (!mutatedKeys.containsAll(localOnlyKeys)) {
+      throw ArgumentError.value(
+        localOnlyKeys.difference(mutatedKeys),
+        'localOnlyKeys',
+        'Local-only keys must be written or removed in the same batch',
+      );
+    }
     final conflictingKeys = writes.keys.toSet().intersection(removes);
     if (conflictingKeys.isNotEmpty) {
       throw ArgumentError.value(
@@ -325,7 +334,7 @@ class LocalStore extends ChangeNotifier {
     final outbox = enqueueSync ? _outbox : <Map<String, dynamic>>[];
     for (final entry in writes.entries) {
       _data[entry.key] = entry.value;
-      if (enqueueSync) {
+      if (enqueueSync && !localOnlyKeys.contains(entry.key)) {
         _queueOperation(
           outbox,
           entry.key,
@@ -336,7 +345,7 @@ class LocalStore extends ChangeNotifier {
     }
     for (final key in removes) {
       _data.remove(key);
-      if (enqueueSync) {
+      if (enqueueSync && !localOnlyKeys.contains(key)) {
         _queueOperation(outbox, key, operation: 'delete');
       }
     }
