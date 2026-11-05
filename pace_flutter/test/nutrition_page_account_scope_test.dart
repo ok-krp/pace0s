@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/storage/local_store.dart';
+import 'package:pace/core/sync/sync_service.dart';
 import 'package:pace/features/nutrition/nutrition_page.dart';
 
 void main() {
@@ -25,7 +26,7 @@ void main() {
     });
 
     await tester.runAsync(() => store.activateAccount('user-a'));
-    await tester.pumpWidget(MaterialApp(home: NutritionPage(localStore: store)));
+    await tester.pumpWidget(MaterialApp(home: NutritionPage(localStore: store, sync: SyncService(localStore: store, client: null))));
 
     // A dialog opened for account A must not write its contents into account B
     // if sign-out/sign-in happens before the user submits it.
@@ -89,7 +90,7 @@ void main() {
 
       expect(store.activeUserId, isNull);
       await tester.pumpWidget(
-        MaterialApp(home: NutritionPage(localStore: store)),
+        MaterialApp(home: NutritionPage(localStore: store, sync: SyncService(localStore: store, client: null))),
       );
       await tester.tap(find.byTooltip('Ajouter un aliment'));
       await tester.pump();
@@ -134,7 +135,7 @@ void main() {
       });
 
       await tester.pumpWidget(
-        MaterialApp(home: NutritionPage(localStore: store)),
+        MaterialApp(home: NutritionPage(localStore: store, sync: SyncService(localStore: store, client: null))),
       );
       await tester.tap(find.byTooltip('Ajouter un aliment'));
       await tester.pump();
