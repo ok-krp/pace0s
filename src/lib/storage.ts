@@ -1,5 +1,6 @@
 import { applyRemoteDomainWrite } from "@/lib/domain-store";
 import { useEffect, useState, useCallback, useRef } from "react";
+import { shouldPersistLocalStateValue } from "@/lib/local-state-hydration";
 
 const OLD_PREFIX = "lt.";
 const NEW_PREFIX = "pace.";
@@ -112,12 +113,7 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
 
   useEffect(() => {
     if (!loaded) return;
-    const hydration = hydratedValue.current;
-    if (hydration?.pending) {
-      if (!Object.is(value, hydration.value)) return;
-      hydration.pending = false;
-      return;
-    }
+    if (!shouldPersistLocalStateValue(value, hydratedValue.current)) return;
     try {
       localStorage.setItem(key, JSON.stringify(value));
       window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key, value } }));
