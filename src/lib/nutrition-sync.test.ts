@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapFoodLogRow, mergeCanonicalNutritionItems } from "./nutrition-sync.ts";
+import { mapFoodLogRow, mergeCanonicalNutritionItems, readActiveNutritionTombstones } from "./nutrition-sync.ts";
 
 const canonical = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -84,4 +84,19 @@ test("honours pending deletion IDs while the SQL delete is in flight", () => {
     new Set([canonical.id]),
   );
   assert.deepEqual(merged, []);
+});
+
+test("accepts only valid, unexpired food-log tombstones", () => {
+  const now = Date.parse("2026-11-05T10:00:00.000Z");
+  const tombstones = readActiveNutritionTombstones(JSON.stringify({
+    "00000000-0000-4000-8000-000000000001": "2026-11-05T09:00:00.000Z",
+    "00000000-0000-4000-8000-000000000002": "2026-08-01T09:00:00.000Z",
+    "not-a-uuid": "2026-11-05T09:00:00.000Z",
+    "00000000-0000-4000-8000-000000000003": "invalid",
+  }), now);
+
+  assert.deepEqual(
+    [...tombstones],
+    ["00000000-0000-4000-8000-000000000001"],
+  );
 });
