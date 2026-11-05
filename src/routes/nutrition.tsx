@@ -9,12 +9,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { applyLocalWrite, applyRemoteWrite, useLocalState, todayKey } from "@/lib/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { accountSyncStorageKeys, parseSyncQueue } from "@/lib/cloud-sync-scope";
-import { mergeCanonicalNutritionItems, queueNutritionTombstone, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
+import { mergeCanonicalNutritionItems, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useUserGoals } from "@/hooks/use-user-goals";
+import { useAuth } from "@/hooks/use-auth";
 import { useNutritionCols, NUT_COLS, type NutCol } from "@/hooks/use-nutrition-cols";
 import { addNutritionItem, recomputeNutritionTotals, type NutritionItem } from "@/lib/nutrition-log";
 import { WaterView } from "@/components/WaterView";
@@ -250,14 +251,20 @@ function NutritionPage() {
 
 
 function NutritionLogView() {
+  const { user, loading: authLoading } = useAuth();
   const [items, setItems] = useLocalState<Record<string, Item[]>>("pace.nutrition.items", {});
   const [totals, setTotals] = useLocalState<Record<string, { kcal: number; p: number; c: number; f: number }>>("pace.nutrition.totals", {});
+  const [readyCacheOwner, setReadyCacheOwner] = useState<string | null>(null);
+  const [guestCacheReady, setGuestCacheReady] = useState(false);
   const [cols] = useNutritionCols();
   const goals = useUserGoals();
   const goal = goals.kcal;
   const today = todayKey();
-  const list = items[today] ?? [];
-  const refreshInFlight = useRef(false);
+  const cacheReady = user ? readyCacheOwner === user.id : !authLoading && guestCacheReady;
+  const visibleItems = cacheReady ? items : {};
+  const visibleTotals = cacheReady ? totals : {};
+  const list = visibleItems[today] ?? [];
+  const refreshInFlight = useRef<Set<string>>(new Set());
 
   const refreshCanonicalNutrition = useCallback(async () => {
     if (refreshInFlight.current) return;
