@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { applyLocalWrite, applyRemoteWrite, useLocalState, todayKey } from "@/lib/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { accountSyncStorageKeys, parseSyncQueue } from "@/lib/cloud-sync-scope";
-import { mergeCanonicalNutritionItems, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
+import { mergeCanonicalNutritionItems, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, NUTRITION_LEGACY_TOMBSTONES_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -325,6 +325,13 @@ function NutritionLogView() {
       }
 
       const accountKeys = nutritionAccountCacheKeys(userId);
+      // Migrate legacy tombstones only when the compatibility cache still
+      // explicitly belongs to this same account. Never assign an unowned or
+      // previous-account deletion marker to a newly signed-in user.
+      if (owner === userId && !localStorage.getItem(accountKeys.deletedIds)) {
+        const legacyTombstones = localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY);
+        if (legacyTombstones) localStorage.setItem(accountKeys.deletedIds, legacyTombstones);
+      }
       let scopedItemsRaw = localStorage.getItem(accountKeys.items);
       let scopedTotalsRaw = localStorage.getItem(accountKeys.totals);
       if (owner === userId) {
@@ -380,7 +387,7 @@ function NutritionLogView() {
       if (confirmedSession.session?.user.id !== userId) return;
 
       const deletedIds = readActiveNutritionTombstones(
-        localStorage.getItem("pace.nutrition.deleted_ids"),
+        localStorage.getItem(accountKeys.deletedIds),
       );
       const merged = mergeCanonicalNutritionItems(
         Array.isArray(currentItems[day]) ? currentItems[day] : [],
@@ -516,8 +523,8 @@ function NutritionLogView() {
         try {
           const { data: authData, error: authError } = await supabase.auth.getSession();
           const user = authData.session?.user;
-          if (authError || !user) {
-            toast.error("Impossible de supprimer cet aliment sans session active.");
+          if (authError || !user || user.id !== activeUserId) {
+            toast.error("La session a changé. Recharge le journal avant de supprimer cet aliment.");
             return;
           }
           const { error } = await supabase
@@ -530,9 +537,10 @@ function NutritionLogView() {
             return;
           }
 
-          const rawTombstones = localStorage.getItem("pace.nutrition.deleted_ids");
+          const accountKeys = nutritionAccountCacheKeys(user.id);
+          const rawTombstones = localStorage.getItem(accountKeys.deletedIds);
           const tombstones = queueNutritionTombstone(rawTombstones, id);
-          applyLocalWrite("pace.nutrition.deleted_ids", tombstones);
+          applyLocalWrite(accountKeys.deletedIds, tombstones);
 
           let current: Record<string, Item[]> = {};
           try {
