@@ -84,6 +84,10 @@ class SyncService {
   // during every full reconciliation before discarding them locally.
   static const Set<String> excludedRemotePullKeys = {
     ...excludedSyncKeys,
+    'pace.__sync_food_log_outbox',
+    'pace.__sync_ai_preferences_pending',
+    'pace.__sync_last_pull_at',
+    'pace.__sync_last_full_pull_at',
     'lt.sport.active',
     'lt.ai.conversations',
     'lt.ai.deleted_conversations',
