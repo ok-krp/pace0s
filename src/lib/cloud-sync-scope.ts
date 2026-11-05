@@ -131,3 +131,21 @@ export function isLatestKeyWrite(attemptedVersion: number, latestVersion: number
     latestVersion > 0 &&
     attemptedVersion === latestVersion;
 }
+
+/**
+ * Ensures two local edits of the same key cannot share an updated_at value
+ * when they are queued within one clock millisecond. The server RPC uses a
+ * strict newest-wins comparison, so equal timestamps would otherwise turn a
+ * later local edit into a conflict with the earlier one.
+ */
+export function nextSyncWriteTimestamp(nowMs: number, previousTimestamp?: string): string {
+  if (!Number.isFinite(nowMs) || nowMs < 0) {
+    throw new RangeError("nowMs must be a non-negative finite timestamp");
+  }
+
+  const previousMs = previousTimestamp ? Date.parse(previousTimestamp) : Number.NaN;
+  const nextMs = Number.isFinite(previousMs)
+    ? Math.max(nowMs, previousMs + 1)
+    : nowMs;
+  return new Date(nextMs).toISOString();
+}
