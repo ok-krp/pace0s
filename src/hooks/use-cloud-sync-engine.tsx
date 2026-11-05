@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
-import { accountSyncStorageKeys, isLatestKeyWrite, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
+import { accountSyncStorageKeys, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
 import { fetchAllKeysetPages } from "@/lib/user-state-pagination";
 
 const PACE_PREFIX = "pace.";
@@ -39,7 +39,7 @@ function getDeviceId() {
 
 function readQueue(userId: string): string[] { try { return parseSyncQueue(localStorage.getItem(accountSyncStorageKeys(userId).queue)); } catch { return []; } }
 function writeQueue(userId: string, keys: string[]) { try { localStorage.setItem(accountSyncStorageKeys(userId).queue, JSON.stringify([...new Set(keys)])); } catch { /* Storage may be unavailable; keep the in-memory sync path. */ } }
-function queueKey(userId: string, key: string) { if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return; writeQueue(userId, [...readQueue(userId), key]); }
+function queueKey(userId: string, key: string) { if (!isSyncableLocalKey(key) || EXCLUDED.has(key)) return; writeQueue(userId, [...readQueue(userId), key]); }
 function unqueueKey(userId: string, key: string) { writeQueue(userId, readQueue(userId).filter((k) => k !== key)); }
 function readMeta(userId: string): SyncMeta { try { return parseSyncMetadata(localStorage.getItem(accountSyncStorageKeys(userId).metadata)); } catch { return {}; } }
 function writeMeta(userId: string, meta: SyncMeta) { try { localStorage.setItem(accountSyncStorageKeys(userId).metadata, JSON.stringify(meta)); } catch { /* Storage may be unavailable; metadata can be rebuilt on the next sync. */ } }
@@ -76,7 +76,7 @@ export function useCloudSyncEngineInternal() {
     let flushPending = false;
 
     const pushKeyNow = async (key: string) => {
-      if (cancelled || EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
+      if (cancelled || EXCLUDED.has(key) || !isSyncableLocalKey(key)) return;
       queueKey(userId, key);
 
       const writeId = `${userId}:${key}`;
@@ -258,7 +258,7 @@ export function useCloudSyncEngineInternal() {
           const rawKey = row.key;
           const isLegacy = rawKey.startsWith("lt.");
           const key = isLegacy ? `${PACE_PREFIX}${rawKey.slice(3)}` : rawKey;
-          if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) continue;
+          if (!isSyncableLocalKey(key) || EXCLUDED.has(key)) continue;
 
           const remoteTime = Date.parse(row.updated_at);
           if (!Number.isFinite(remoteTime)) continue;
@@ -321,7 +321,7 @@ export function useCloudSyncEngineInternal() {
         return;
       }
       const key = row.key;
-      if (!key.startsWith(PACE_PREFIX) || EXCLUDED.has(key)) return;
+      if (!isSyncableLocalKey(key) || EXCLUDED.has(key)) return;
       const remoteTime = Date.parse(row.updated_at);
       if (!Number.isFinite(remoteTime)) return;
       const localTime = Date.parse(readMeta(userId)[key] ?? "1970-01-01T00:00:00.000Z");
@@ -340,7 +340,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const offLocal = onLocalWrite((key) => {
-      if (EXCLUDED.has(key) || !key.startsWith(PACE_PREFIX)) return;
+      if (EXCLUDED.has(key) || !isSyncableLocalKey(key)) return;
       queueKey(userId, key);
       void pushKeyNow(key);
     });
