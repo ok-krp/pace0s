@@ -6,10 +6,10 @@ import { motion } from "framer-motion";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader, StatCard } from "@/components/Stat";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { applyRemoteWrite, useLocalState, todayKey } from "@/lib/storage";
+import { applyLocalWrite, applyRemoteWrite, useLocalState, todayKey } from "@/lib/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { accountSyncStorageKeys, parseSyncQueue } from "@/lib/cloud-sync-scope";
-import { mergeCanonicalNutritionItems, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
+import { mergeCanonicalNutritionItems, queueNutritionTombstone, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -363,7 +363,7 @@ function NutritionLogView() {
   const recompute = (arr: Item[]) =>
     arr.reduce((a, x) => ({ kcal: a.kcal + x.kcal, p: a.p + x.p, c: a.c + x.c, f: a.f + x.f }), { kcal: 0, p: 0, c: 0, f: 0 });
 
-  const add = () => {
+  const add = async () => {
     if (!name || !fields.kcal) return;
     const it: Item = {
       id: crypto.randomUUID(), name, meal, qty: 1,
@@ -372,16 +372,112 @@ function NutritionLogView() {
       salt: +fields.salt || undefined, sodium: +fields.sodium || undefined,
       iron: +fields.iron || undefined, calcium: +fields.calcium || undefined, vitC: +fields.vit_c || undefined,
     };
-    setItems((prev) => {
-      const next = { ...prev, [today]: [...(prev[today] ?? []), it] };
-      setTotals((t) => ({ ...t, [today]: recompute(next[today]) }));
-      return next;
-    });
+
+    let savedToFoodLog = false;
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getSession();
+      const user = authData.session?.user;
+      if (!authError && user) {
+        const { error } = await supabase.from("food_log").insert({
+          id: it.id,
+          user_id: user.id,
+          log_date: today,
+          meal,
+          name,
+          kcal: it.kcal,
+          protein_g: it.p,
+          carbs_g: it.c,
+          fat_g: it.f,
+          fiber_g: it.fiber ?? 0,
+          sugar_g: it.sugar ?? 0,
+          sodium_mg: it.sodium ?? 0,
+          source: "manual",
+          meta: {
+            client: "pace_web",
+            sat_fat_g: it.sat ?? null,
+            salt_g: it.salt ?? null,
+            iron_mg: it.iron ?? null,
+            calcium_mg: it.calcium ?? null,
+            vitamin_c_mg: it.vitC ?? null,
+          },
+        });
+        if (!error) {
+          let current: Record<string, Item[]> = {};
+          try {
+            const raw = localStorage.getItem("pace.nutrition.items");
+            if (raw) current = JSON.parse(raw) as Record<string, Item[]>;
+          } catch {
+            // Rebuild the visible day's list if the local cache is malformed.
+          }
+          const nextItems = {
+            ...current,
+            [today]: [...(Array.isArray(current[today]) ? current[today] : []), { ...it, __foodLogCanonical: true }],
+          };
+          applyRemoteWrite("pace.nutrition.items", nextItems);
+          applyRemoteWrite("pace.nutrition.totals", recomputeNutritionTotals(nextItems));
+          savedToFoodLog = true;
+        }
+      }
+    } catch {
+      // Fall back to the existing local outbox path while SQL is unavailable.
+    }
+
+    if (!savedToFoodLog) {
+      setItems((prev) => {
+        const next = { ...prev, [today]: [...(prev[today] ?? []), it] };
+        setTotals((t) => ({ ...t, [today]: recompute(next[today]) }));
+        return next;
+      });
+    }
     setName("");
     setFields(Object.fromEntries(NUT_COLS.map((c) => [c.key, ""])) as Record<NutCol, string>);
   };
 
   const remove = (id: string) => {
+    const currentItem = list.find((item) => item.id === id) as (Item & { __foodLogCanonical?: boolean }) | undefined;
+    if (currentItem?.__foodLogCanonical) {
+      void (async () => {
+        try {
+          const { data: authData, error: authError } = await supabase.auth.getSession();
+          const user = authData.session?.user;
+          if (authError || !user) {
+            toast.error("Impossible de supprimer cet aliment sans session active.");
+            return;
+          }
+          const { error } = await supabase
+            .from("food_log")
+            .delete()
+            .eq("user_id", user.id)
+            .eq("id", id);
+          if (error) {
+            toast.error("La suppression distante a échoué. L’aliment est conservé.");
+            return;
+          }
+
+          const rawTombstones = localStorage.getItem("pace.nutrition.deleted_ids");
+          const tombstones = queueNutritionTombstone(rawTombstones, id);
+          applyLocalWrite("pace.nutrition.deleted_ids", tombstones);
+
+          let current: Record<string, Item[]> = {};
+          try {
+            const raw = localStorage.getItem("pace.nutrition.items");
+            if (raw) current = JSON.parse(raw) as Record<string, Item[]>;
+          } catch {
+            // Rebuild the visible day from the remaining cached entries.
+          }
+          const nextItems = {
+            ...current,
+            [today]: (Array.isArray(current[today]) ? current[today] : []).filter((item) => item.id !== id),
+          };
+          applyRemoteWrite("pace.nutrition.items", nextItems);
+          applyRemoteWrite("pace.nutrition.totals", recomputeNutritionTotals(nextItems));
+        } catch {
+          toast.error("La suppression distante est temporairement indisponible.");
+        }
+      })();
+      return;
+    }
+
     setItems((prev) => {
       const next = { ...prev, [today]: (prev[today] ?? []).filter((x) => x.id !== id) };
       setTotals((t) => ({ ...t, [today]: recompute(next[today]) }));
