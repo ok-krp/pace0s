@@ -6,6 +6,7 @@ import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 import { accountSyncStorageKeys, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
 import { fetchAllKeysetPages } from "@/lib/user-state-pagination";
+import { NUTRITION_CACHE_OWNER_KEY } from "@/lib/nutrition-sync";
 
 const PACE_PREFIX = "pace.";
 const EXCLUDED = new Set<string>(["pace.sport.active"]);
@@ -75,6 +76,16 @@ export function useCloudSyncEngineInternal() {
     let forceFullPullPending = false;
     let flushPending = false;
 
+    const markNutritionCacheOwner = (key: string) => {
+      if (key !== "pace.nutrition.items" && key !== "pace.nutrition.totals") return;
+      try {
+        localStorage.setItem(NUTRITION_CACHE_OWNER_KEY, userId);
+      } catch {
+        // The active account guard still prevents this tab from reading
+        // another account's scoped cache; ownership metadata is best-effort.
+      }
+    };
+
     const pushKeyNow = async (key: string) => {
       if (cancelled || EXCLUDED.has(key) || !isSyncableLocalKey(key)) return;
       queueKey(userId, key);
@@ -134,7 +145,11 @@ export function useCloudSyncEngineInternal() {
               setStatus("error");
               return;
             }
-            applyRemoteWrite(key, row.value, row.updated_at);
+            markNutritionCacheOwner(key);
+            markNutritionCacheOwner(key);
+          markNutritionCacheOwner(key);
+      markNutritionCacheOwner(key);
+      applyRemoteWrite(key, row.value, row.updated_at);
             markLocal(userId, key, row.updated_at);
           } else if (data === true) {
             markLocal(userId, key, updatedAt);
@@ -279,7 +294,9 @@ export function useCloudSyncEngineInternal() {
           const shouldRecoverLegacy = isLegacy && isEmptyValue(localValue) && !isEmptyValue(row.value);
           if (!shouldRecoverLegacy && remoteTime <= localTime) continue;
 
-          applyRemoteWrite(key, row.value, row.updated_at);
+          markNutritionCacheOwner(key);
+          markNutritionCacheOwner(key);
+      applyRemoteWrite(key, row.value, row.updated_at);
           meta[key] = row.updated_at;
           applied++;
         }
@@ -341,6 +358,7 @@ export function useCloudSyncEngineInternal() {
 
     const offLocal = onLocalWrite((key) => {
       if (EXCLUDED.has(key) || !isSyncableLocalKey(key)) return;
+      markNutritionCacheOwner(key);
       queueKey(userId, key);
       void pushKeyNow(key);
     });
