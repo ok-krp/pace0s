@@ -164,7 +164,12 @@ class _NutritionPageState extends State<NutritionPage> {
     final localItems = localRaw is List
         ? localRaw.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
         : <Map<String, dynamic>>[];
-    final deletedIds = FoodLogSync.pendingDeletes(widget.localStore);
+    final deletedIds = <String>{
+      ...FoodLogSync.pendingDeletes(widget.localStore),
+      ...FoodLogSync.activeDeletedIds(
+        widget.localStore.read(FoodLogSync.deletedIdsKey),
+      ),
+    };
     final remoteItems = rows
         .where((row) => !deletedIds.contains(row['id']?.toString()))
         .map((row) {
@@ -407,11 +412,20 @@ class _NutritionPageState extends State<NutritionPage> {
     };
     final localOnlyKeys = <String>{};
     if (expectedUserId != null && FoodLogSync.isUuid(itemId)) {
+      final now = DateTime.now().toUtc();
       writes[FoodLogSync.outboxKey] = FoodLogSync.queueOperation(
         widget.localStore.read(FoodLogSync.outboxKey),
         operation: 'delete',
         id: itemId,
-        now: DateTime.now().toUtc(),
+        now: now,
+      );
+      // The SQL outbox remains local and durable; the compact tombstone is a
+      // normal account-scoped user_state key so other devices can hide a
+      // deleted cached item even before their next SQL reconciliation.
+      writes[FoodLogSync.deletedIdsKey] = FoodLogSync.queueDeletedId(
+        widget.localStore.read(FoodLogSync.deletedIdsKey),
+        id: itemId,
+        now: now,
       );
       localOnlyKeys.addAll({
         FoodLogSync.outboxKey,
