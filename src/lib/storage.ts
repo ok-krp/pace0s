@@ -64,7 +64,9 @@ function recoverLegacyWaterKeys() {
     try {
       const raw = localStorage.getItem(targetKey);
       if (raw) target = JSON.parse(raw);
-    } catch {}
+    } catch {
+      // A malformed current value is replaced by the validated legacy recovery below.
+    }
 
     const candidates = ["lt.water", "lt.water_consumed", "lt.hydration", "pace.water_consumed", "pace.hydration"];
     for (const key of candidates) {
@@ -80,7 +82,9 @@ function recoverLegacyWaterKeys() {
     }
     localStorage.setItem(targetKey, JSON.stringify(target));
     localStorage.setItem(WATER_RECOVERY_FLAG, "1");
-  } catch {}
+  } catch {
+    // Retry water recovery on a later startup if storage is unavailable.
+  }
 }
 
 // Recover first, then copy legacy keys. Legacy keys remain available for future recovery.
@@ -99,16 +103,22 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const hydratedValue = useRef<{ pending: boolean; value: T } | null>(null);
 
   useEffect(() => {
-    let nextValue = initial;
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw !== null) nextValue = JSON.parse(raw) as T;
-    } catch {
-      // Preserve the provided initial value if the cached JSON is malformed.
-    }
-    hydratedValue.current = { pending: true, value: nextValue };
-    setValue(nextValue);
-    setLoadedKey(key);
+    // Defer state hydration to the next task. This avoids a synchronous
+    // setState inside the effect while allowing the current render to expose
+    // only the new key's fallback value during an account/key transition.
+    const timer = window.setTimeout(() => {
+      let nextValue = initial;
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw !== null) nextValue = JSON.parse(raw) as T;
+      } catch {
+        // Preserve the provided initial value if the cached JSON is malformed.
+      }
+      hydratedValue.current = { pending: true, value: nextValue };
+      setValue(nextValue);
+      setLoadedKey(key);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [key]);
 
   useEffect(() => {
@@ -138,11 +148,15 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     setValue((prev) => (typeof next === "function" ? (next as (p: T) => T)(prev) : next));
   }, []);
 
-  return [value, set];
+  return [loadedKey === key ? value : initial, set];
 }
 
 export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // React listeners still receive the remote value when storage is unavailable.
+  }
   // Some migrated domains keep an authoritative versioned record alongside
   // their legacy Pace key. Update both representations on remote sync so a
   // later domain read cannot resurrect stale local data.
@@ -152,7 +166,9 @@ export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string
       if (localStorage.getItem(`pace.domain.${domain}`) !== null) {
         applyRemoteDomainWrite(domain, value, updatedAt);
       }
-    } catch {}
+    } catch {
+      // The canonical legacy value remains written even if its domain mirror is unavailable.
+    }
   }
   window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value } }));
 }
