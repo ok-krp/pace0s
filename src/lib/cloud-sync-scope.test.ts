@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { accountSyncStorageKeys, isLatestKeyWrite, parseSyncMetadata, parseSyncQueue, syncPullCursor, syncPullPlan } from "./cloud-sync-scope.ts";
+import { accountSyncStorageKeys, isLatestKeyWrite, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullCursor, syncPullPlan } from "./cloud-sync-scope.ts";
 
 test("sync queue and metadata storage are isolated by authenticated user", () => {
   const alice = accountSyncStorageKeys("user/alice");
@@ -111,4 +111,25 @@ test("only the latest same-key push may acknowledge its local outbox entry", () 
   assert.equal(isLatestKeyWrite(0, 0), false);
   assert.equal(isLatestKeyWrite(Number.NaN, 1), false);
   assert.equal(isLatestKeyWrite(1, Number.POSITIVE_INFINITY), false);
+});
+
+test("per-key write timestamps advance when multiple edits share one millisecond", () => {
+  const now = Date.parse("2026-11-05T09:00:00.123Z");
+  const first = nextSyncWriteTimestamp(now);
+  const second = nextSyncWriteTimestamp(now, first);
+  const third = nextSyncWriteTimestamp(now, second);
+
+  assert.equal(first, "2026-11-05T09:00:00.123Z");
+  assert.equal(second, "2026-11-05T09:00:00.124Z");
+  assert.equal(third, "2026-11-05T09:00:00.125Z");
+});
+
+test("per-key write timestamps recover from invalid previous metadata", () => {
+  const now = Date.parse("2026-11-05T09:00:00.123Z");
+  assert.equal(
+    nextSyncWriteTimestamp(now, "invalid"),
+    "2026-11-05T09:00:00.123Z",
+  );
+  assert.throws(() => nextSyncWriteTimestamp(Number.NaN), RangeError);
+  assert.throws(() => nextSyncWriteTimestamp(-1), RangeError);
 });
