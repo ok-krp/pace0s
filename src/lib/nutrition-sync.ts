@@ -19,6 +19,35 @@ export type CanonicalNutritionItem = NutritionItem & {
   __foodLogCanonical: true;
 };
 
+const TOMBSTONE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+export function readActiveNutritionTombstones(
+  raw: string | null,
+  nowMs = Date.now(),
+): Set<string> {
+  if (!raw || !Number.isFinite(nowMs)) return new Set();
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return new Set();
+    return new Set(
+      Object.entries(value).filter(([id, timestamp]) => {
+        if (
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ||
+          typeof timestamp !== "string"
+        ) {
+          return false;
+        }
+        const parsed = Date.parse(timestamp);
+        return Number.isFinite(parsed) &&
+          parsed <= nowMs + 5 * 60 * 1000 &&
+          parsed >= nowMs - TOMBSTONE_RETENTION_MS;
+      }).map(([id]) => id),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
 function missingNutrients(meta: unknown): Set<string> {
   if (!meta || typeof meta !== "object" || Array.isArray(meta)) return new Set();
   const value = (meta as Record<string, unknown>).missing_nutrients;
