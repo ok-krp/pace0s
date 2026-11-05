@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { shouldPersistLocalStateValue } from "./local-state-hydration.ts";
 
 test("does not persist the previous key value while the new key hydrates", () => {
-  const hydration = { pending: true, value: { account: "B" } };
+  const hydrated = { account: "B" };
+  const hydration = { pending: true, value: hydrated };
   assert.equal(
     shouldPersistLocalStateValue({ account: "A" }, hydration),
     false,
@@ -11,7 +12,7 @@ test("does not persist the previous key value while the new key hydrates", () =>
   assert.equal(hydration.pending, true);
 
   assert.equal(
-    shouldPersistLocalStateValue({ account: "B" }, hydration),
+    shouldPersistLocalStateValue(hydrated, hydration),
     false,
   );
   assert.equal(hydration.pending, false);
@@ -22,8 +23,9 @@ test("does not persist the previous key value while the new key hydrates", () =>
 });
 
 test("does not enqueue a remote value as a fresh local mutation", () => {
-  const hydration = { pending: true, value: ["server value"] };
-  assert.equal(shouldPersistLocalStateValue(["server value"], hydration), false);
+  const hydrated = ["server value"];
+  const hydration = { pending: true, value: hydrated };
+  assert.equal(shouldPersistLocalStateValue(hydrated, hydration), false);
   assert.equal(hydration.pending, false);
 });
 
