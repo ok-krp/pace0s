@@ -288,12 +288,22 @@ function NutritionLogView() {
     const rawItems = localStorage.getItem("pace.nutrition.items");
     const rawTotals = localStorage.getItem("pace.nutrition.totals");
     let currentItems: Record<string, Item[]> = {};
-    try { if (rawItems) currentItems = JSON.parse(rawItems) as Record<string, Item[]>; } catch {
+    try {
+      const parsed: unknown = rawItems ? JSON.parse(rawItems) : {};
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        currentItems = parsed as Record<string, Item[]>;
+      }
+    } catch {
       // Ignore malformed cached JSON; the canonical SQL snapshot remains authoritative.
     }
     let currentTotals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
-    try { if (rawTotals) currentTotals = JSON.parse(rawTotals) as typeof currentTotals; } catch {
-      // Ignore malformed cached JSON; the canonical SQL snapshot remains authoritative.
+    try {
+      const parsed: unknown = rawTotals ? JSON.parse(rawTotals) : {};
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        currentTotals = parsed as typeof currentTotals;
+      }
+    } catch {
+      // Ignore malformed cached JSON; totals are recomputed from validated items.
     }
 
     const merged = mergeCanonicalNutritionItems(
@@ -306,6 +316,8 @@ function NutritionLogView() {
     // back to user_state: food_log is now the cross-device source of truth.
     applyRemoteWrite("pace.nutrition.items", nextItems);
     applyRemoteWrite("pace.nutrition.totals", { ...currentTotals, ...nextTotals });
+    } catch {
+      // The next focus/online event or bounded refresh will retry transient failures.
     } finally {
       refreshInFlight.current = false;
     }
