@@ -118,6 +118,9 @@ test("nutrition cache keys are unique per account and encode special characters"
 
   assert.notEqual(alice.items, bob.items);
   assert.notEqual(alice.totals, bob.totals);
+  assert.notEqual(alice.deletedIds, bob.deletedIds);
+  assert.match(alice.deletedIds, /user%2Falice/);
+  assert.match(bob.deletedIds, /user%3Abob/);
   assert.match(alice.items, /user%2Falice/);
   assert.match(bob.totals, /user%3Abob/);
   assert.notEqual(NUTRITION_CACHE_OWNER_KEY, alice.items);
@@ -131,4 +134,12 @@ test("unowned legacy Nutrition cache is never auto-assigned to a logged-in accou
   assert.equal(mayReadGlobalNutritionCache("user-a", "user-a"), true);
   assert.equal(mayReadGlobalNutritionCache("user-a", "user-b"), false);
   assert.equal(mayReadGlobalNutritionCache("user-a", null), false);
+});
+
+
+test("rejects UUIDs without a valid version in nutrition tombstones", () => {
+  assert.throws(
+    () => queueNutritionTombstone(null, "00000000-0000-0000-8000-000000000001"),
+    RangeError,
+  );
 });
