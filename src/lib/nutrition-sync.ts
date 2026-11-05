@@ -21,6 +21,37 @@ export type CanonicalNutritionItem = NutritionItem & {
 
 const TOMBSTONE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
+export function queueNutritionTombstone(
+  raw: string | null,
+  id: string,
+  nowMs = Date.now(),
+): Record<string, string> {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ||
+    !Number.isFinite(nowMs)
+  ) {
+    throw new RangeError("A valid food-log UUID and timestamp are required");
+  }
+  const tombstones: Record<string, string> = {};
+  const active = readActiveNutritionTombstones(raw, nowMs);
+  if (raw) {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        for (const [key, value] of Object.entries(parsed)) {
+          if (active.has(key) && typeof value === "string") tombstones[key] = value;
+        }
+      }
+    } catch {
+      // A malformed tombstone map is rebuilt from the new deletion.
+    }
+  }
+  tombstones[id] = new Date(nowMs).toISOString();
+  const ordered = Object.entries(tombstones)
+    .sort((left, right) => Date.parse(left[1]) - Date.parse(right[1]));
+  return Object.fromEntries(ordered.slice(-500));
+}
+
 export function readActiveNutritionTombstones(
   raw: string | null,
   nowMs = Date.now(),
