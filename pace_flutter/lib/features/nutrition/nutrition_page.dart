@@ -182,13 +182,16 @@ class _NutritionPageState extends State<NutritionPage> {
             'sugar': row['sugar_g'],
             'sodium': row['sodium_mg'],
             'created_at': row['created_at'],
+            '__foodLogCanonical': true,
           };
         })
         .toList();
     final remoteIds = remoteItems.map((item) => item['id']?.toString()).toSet();
     final legacyOrPending = localItems.where((item) {
       final id = item['id']?.toString() ?? '';
-      return !deletedIds.contains(id) && !remoteIds.contains(id);
+      return !deletedIds.contains(id) &&
+          !remoteIds.contains(id) &&
+          item['__foodLogCanonical'] != true;
     });
     final merged = <Map<String, dynamic>>[
       ...remoteItems,
