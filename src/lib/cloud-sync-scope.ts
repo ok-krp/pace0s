@@ -1,3 +1,13 @@
+
+/**
+ * Keys under the reserved sync namespace are client bookkeeping, not user
+ * domain state. The native client already excludes this namespace; the Web
+ * queue and remote pull must enforce the same boundary.
+ */
+export function isSyncableLocalKey(key: string): boolean {
+  return key.startsWith("pace.") && !key.startsWith("pace.__sync_");
+}
+
 export type AccountSyncStorageKeys = {
   queue: string;
   metadata: string;
@@ -23,7 +33,7 @@ export function parseSyncQueue(raw: string | null): string[] {
   try {
     const value: unknown = JSON.parse(raw);
     if (!Array.isArray(value)) return [];
-    return [...new Set(value.filter((key): key is string => typeof key === "string" && key.startsWith("pace.")))];
+    return [...new Set(value.filter((key): key is string => typeof key === "string" && isSyncableLocalKey(key)))];
   } catch {
     return [];
   }
