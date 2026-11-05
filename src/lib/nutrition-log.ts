@@ -61,7 +61,9 @@ export function repairNutritionTotals(): void {
   try {
     localStorage.setItem(KEY_ITEMS, JSON.stringify(items));
     localStorage.setItem(KEY_TOTALS, JSON.stringify(recomputeNutritionTotals(items)));
-  } catch {}
+  } catch {
+    // Keep the domain-backed data usable when legacy localStorage is full.
+  }
 }
 
 repairNutritionTotals();
@@ -79,6 +81,8 @@ export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty
   try {
     localStorage.setItem(KEY_ITEMS, JSON.stringify(nextItems));
     localStorage.setItem(KEY_TOTALS, JSON.stringify(totals));
-  } catch {}
+  } catch {
+    // Keep the domain-backed data usable when legacy localStorage is full.
+  }
   window.dispatchEvent(new Event("pace.nutrition.changed"));
 }
