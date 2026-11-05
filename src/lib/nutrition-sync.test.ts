@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapFoodLogRow, mergeCanonicalNutritionItems, queueNutritionTombstone, readActiveNutritionTombstones } from "./nutrition-sync.ts";
+import { mapFoodLogRow, mergeCanonicalNutritionItems, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones } from "./nutrition-sync.ts";
 
 const canonical = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -110,4 +110,25 @@ test("queues valid bounded tombstones and replaces the same ID deterministically
   assert.deepEqual(Object.keys(second), [id]);
   assert.equal(second[id], "2026-11-05T10:00:01.000Z");
   assert.throws(() => queueNutritionTombstone(null, "not-a-uuid", now), RangeError);
+});
+
+test("nutrition cache keys are unique per account and encode special characters", () => {
+  const alice = nutritionAccountCacheKeys("user/alice");
+  const bob = nutritionAccountCacheKeys("user:bob");
+
+  assert.notEqual(alice.items, bob.items);
+  assert.notEqual(alice.totals, bob.totals);
+  assert.match(alice.items, /user%2Falice/);
+  assert.match(bob.totals, /user%3Abob/);
+  assert.notEqual(NUTRITION_CACHE_OWNER_KEY, alice.items);
+  assert.notEqual(NUTRITION_UNASSIGNED_BACKUP_KEY, alice.items);
+  assert.throws(() => nutritionAccountCacheKeys("  "));
+});
+
+test("unowned legacy Nutrition cache is never auto-assigned to a logged-in account", () => {
+  assert.equal(mayReadGlobalNutritionCache(null, null), true);
+  assert.equal(mayReadGlobalNutritionCache(null, "user-a"), false);
+  assert.equal(mayReadGlobalNutritionCache("user-a", "user-a"), true);
+  assert.equal(mayReadGlobalNutritionCache("user-a", "user-b"), false);
+  assert.equal(mayReadGlobalNutritionCache("user-a", null), false);
 });
