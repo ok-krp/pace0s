@@ -32,6 +32,8 @@ on:
       - "src/lib/user-state-pagination.test.ts"
       - "src/lib/nutrition-sync.ts"
       - "src/lib/nutrition-sync.test.ts"
+      - "src/lib/local-state-hydration.ts"
+      - "src/lib/local-state-hydration.test.ts"
       - "src/integrations/supabase/types.ts"
       - "src/lib/health-connect-bridge.ts"
       - "src/lib/push-subscriptions.functions.ts"
@@ -75,6 +77,8 @@ on:
       - "src/lib/user-state-pagination.test.ts"
       - "src/lib/nutrition-sync.ts"
       - "src/lib/nutrition-sync.test.ts"
+      - "src/lib/local-state-hydration.ts"
+      - "src/lib/local-state-hydration.test.ts"
       - "src/integrations/supabase/types.ts"
       - "src/lib/health-connect-bridge.ts"
       - "src/lib/push-subscriptions.functions.ts"
@@ -244,6 +248,8 @@ jobs:
         run: node --experimental-strip-types --test src/lib/user-state-pagination.test.ts
       - name: Test canonical Nutrition reconciliation
         run: node --experimental-strip-types --test src/lib/nutrition-sync.test.ts
+      - name: Test local-state hydration isolation
+        run: node --experimental-strip-types --test src/lib/local-state-hydration.test.ts
       - name: Test MCP input validation
         run: node --experimental-strip-types --test src/lib/mcp/validation.test.ts
       - name: Test MCP OAuth issuer resolution
@@ -277,6 +283,9 @@ jobs:
           src/lib/user-state-pagination.test.ts
           src/lib/nutrition-sync.ts
           src/lib/nutrition-sync.test.ts
+          src/lib/local-state-hydration.ts
+          src/lib/local-state-hydration.test.ts
+          src/lib/storage.ts
           src/routes/nutrition.tsx
           src/lib/nutrition-log.ts
           src/integrations/supabase/types.ts
