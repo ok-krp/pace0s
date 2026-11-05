@@ -168,10 +168,7 @@ export function useCloudSyncEngineInternal() {
               return;
             }
             markNutritionCacheOwner(key, row.value, true);
-            markNutritionCacheOwner(key, row.value, true);
-          markNutritionCacheOwner(key, row.value, true);
-      markNutritionCacheOwner(key, row.value, true);
-      applyRemoteWrite(key, row.value, row.updated_at);
+            applyRemoteWrite(key, row.value, row.updated_at);
             markLocal(userId, key, row.updated_at);
           } else if (data === true) {
             markLocal(userId, key, updatedAt);
@@ -317,8 +314,7 @@ export function useCloudSyncEngineInternal() {
           if (!shouldRecoverLegacy && remoteTime <= localTime) continue;
 
           markNutritionCacheOwner(key, row.value, true);
-          markNutritionCacheOwner(key, row.value, true);
-      applyRemoteWrite(key, row.value, row.updated_at);
+          applyRemoteWrite(key, row.value, row.updated_at);
           meta[key] = row.updated_at;
           applied++;
         }
@@ -366,6 +362,7 @@ export function useCloudSyncEngineInternal() {
       const localTime = Date.parse(readMeta(userId)[key] ?? "1970-01-01T00:00:00.000Z");
       if (remoteTime <= localTime || readQueue(userId).includes(key)) return;
 
+      markNutritionCacheOwner(key, row.value, true);
       applyRemoteWrite(key, row.value, row.updated_at);
       markLocal(userId, key, row.updated_at);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
@@ -378,9 +375,9 @@ export function useCloudSyncEngineInternal() {
       await pull();
     };
 
-    const offLocal = onLocalWrite((key) => {
+    const offLocal = onLocalWrite((key, value) => {
       if (EXCLUDED.has(key) || !isSyncableLocalKey(key)) return;
-      markNutritionCacheOwner(key, row.value, true);
+      markNutritionCacheOwner(key, value, false);
       queueKey(userId, key);
       void pushKeyNow(key);
     });
