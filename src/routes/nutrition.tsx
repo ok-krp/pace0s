@@ -288,9 +288,13 @@ function NutritionLogView() {
     const rawItems = localStorage.getItem("pace.nutrition.items");
     const rawTotals = localStorage.getItem("pace.nutrition.totals");
     let currentItems: Record<string, Item[]> = {};
-    try { if (rawItems) currentItems = JSON.parse(rawItems) as Record<string, Item[]>; } catch {}
+    try { if (rawItems) currentItems = JSON.parse(rawItems) as Record<string, Item[]>; } catch {
+      // Ignore malformed cached JSON; the canonical SQL snapshot remains authoritative.
+    }
     let currentTotals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
-    try { if (rawTotals) currentTotals = JSON.parse(rawTotals) as typeof currentTotals; } catch {}
+    try { if (rawTotals) currentTotals = JSON.parse(rawTotals) as typeof currentTotals; } catch {
+      // Ignore malformed cached JSON; the canonical SQL snapshot remains authoritative.
+    }
 
     const merged = mergeCanonicalNutritionItems(
       Array.isArray(currentItems[day]) ? currentItems[day] : [],
@@ -314,7 +318,9 @@ function NutritionLogView() {
         if (raw) setItems(JSON.parse(raw));
         const tRaw = localStorage.getItem("pace.nutrition.totals");
         if (tRaw) setTotals(JSON.parse(tRaw));
-      } catch {}
+      } catch {
+      // Ignore malformed cached JSON; the canonical SQL snapshot remains authoritative.
+    }
       void refreshCanonicalNutrition();
     };
     const refresh = () => { void refreshCanonicalNutrition(); };
