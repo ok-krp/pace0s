@@ -48,7 +48,6 @@ class _NutritionPageState extends State<NutritionPage> {
     // the dialog closes. The dialog still validates its captured account ID.
     if (_foodDialogOpen) return;
     setState(() {});
-    unawaited(_refreshFoodLog());
   }
 
   @override
@@ -58,7 +57,6 @@ class _NutritionPageState extends State<NutritionPage> {
       oldWidget.localStore.removeListener(_onLocalStoreChanged);
       _accountUserId = widget.localStore.activeUserId;
       widget.localStore.addListener(_onLocalStoreChanged);
-      unawaited(_refreshFoodLog());
     }
   }
 
@@ -105,11 +103,11 @@ class _NutritionPageState extends State<NutritionPage> {
   }
 
   Set<String> _foodLogMissingNutrients(Map<String, dynamic> row) {
-    final rawMeta = row['meta'];
-    if (rawMeta is! Map) return <String>{};
-    final rawMissing = rawMeta['missing_nutrients'];
-    if (rawMissing is! List) return <String>{};
-    return rawMissing.whereType<String>().toSet();
+    final meta = row['meta'];
+    if (meta is! Map || meta['missing_nutrients'] is! List) {
+      return <String>{};
+    }
+    return (meta['missing_nutrients'] as List).whereType<String>().toSet();
   }
 
   Future<void> _pushAndRefreshFoodLog({bool syncUserState = false}) async {
@@ -154,9 +152,8 @@ class _NutritionPageState extends State<NutritionPage> {
         _todayKey() != day) {
       return;
     }
-    // Do not replace a newer local JSON mutation that has not yet reached
-    // user_state. The next manual refresh can merge the canonical SQL rows
-    // after the existing sync outbox has been acknowledged.
+    // Retain any pre-existing legacy user_state mutation until that command
+    // is acknowledged. New additions/deletions use the relational outbox.
     if (widget.localStore.hasPendingOperationForKey('pace.nutrition.items')) {
       return;
     }
@@ -170,20 +167,23 @@ class _NutritionPageState extends State<NutritionPage> {
     final deletedIds = FoodLogSync.pendingDeletes(widget.localStore);
     final remoteItems = rows
         .where((row) => !deletedIds.contains(row['id']?.toString()))
-        .map((row) => <String, dynamic>{
-              'id': row['id'],
-              'name': row['name'],
-              'meal': row['meal'],
-              'qty': 1,
-              'kcal': _foodLogMissingNutrients(row).contains('kcal') ? null : row['kcal'],
-              'p': _foodLogMissingNutrients(row).contains('protein_g') ? null : row['protein_g'],
-              'c': _foodLogMissingNutrients(row).contains('carbs_g') ? null : row['carbs_g'],
-              'f': _foodLogMissingNutrients(row).contains('fat_g') ? null : row['fat_g'],
-              'fiber': row['fiber_g'],
-              'sugar': row['sugar_g'],
-              'sodium': row['sodium_mg'],
-              'created_at': row['created_at'],
-            })
+        .map((row) {
+          final missing = _foodLogMissingNutrients(row);
+          return <String, dynamic>{
+            'id': row['id'],
+            'name': row['name'],
+            'meal': row['meal'],
+            'qty': 1,
+            'kcal': missing.contains('kcal') ? null : row['kcal'],
+            'p': missing.contains('protein_g') ? null : row['protein_g'],
+            'c': missing.contains('carbs_g') ? null : row['carbs_g'],
+            'f': missing.contains('fat_g') ? null : row['fat_g'],
+            'fiber': row['fiber_g'],
+            'sugar': row['sugar_g'],
+            'sodium': row['sodium_mg'],
+            'created_at': row['created_at'],
+          };
+        })
         .toList();
     final remoteIds = remoteItems.map((item) => item['id']?.toString()).toSet();
     final legacyOrPending = localItems.where((item) {
@@ -195,12 +195,11 @@ class _NutritionPageState extends State<NutritionPage> {
       ...legacyOrPending,
     ];
     data[day] = merged;
-    final totals = _calculateTotals(data);
     await widget.localStore.writeBatchForAccount(
       expectedUserId,
       writes: {
         'pace.nutrition.items': data,
-        'pace.nutrition.totals': totals,
+        'pace.nutrition.totals': _calculateTotals(data),
       },
       enqueueSync: false,
     );
@@ -288,7 +287,9 @@ class _NutritionPageState extends State<NutritionPage> {
     final data = Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
     final day = _todayKey();
     final list = data[day] is List ? List<dynamic>.from(data[day] as List) : <dynamic>[];
-    final id = expectedUserId == null ? DateTime.now().microsecondsSinceEpoch.toString() : _newFoodLogId();
+    final id = expectedUserId == null
+        ? DateTime.now().microsecondsSinceEpoch.toString()
+        : _newFoodLogId();
     final item = <String, dynamic>{
       'id': id,
       'name': itemName,
@@ -305,35 +306,34 @@ class _NutritionPageState extends State<NutritionPage> {
     final localOnlyKeys = <String>{};
     if (expectedUserId != null) {
       final values = result;
-      final foodLogRow = <String, dynamic>{
-        'id': id,
-        'user_id': expectedUserId,
-        'log_date': day,
-        'meal': 'Repas',
-        'name': itemName,
-        'kcal': values['kcal'] ?? 0,
-        'protein_g': values['p'] ?? 0,
-        'carbs_g': values['c'] ?? 0,
-        'fat_g': values['f'] ?? 0,
-        'fiber_g': 0,
-        'sugar_g': 0,
-        'sodium_mg': 0,
-        'source': 'manual',
-        'meta': {
-          'client': 'pace_flutter',
-          'missing_nutrients': [
-            if (values['kcal'] == null) 'kcal',
-            if (values['p'] == null) 'protein_g',
-            if (values['c'] == null) 'carbs_g',
-            if (values['f'] == null) 'fat_g',
-          ],
-        },
-      };
       writes[FoodLogSync.outboxKey] = FoodLogSync.queueOperation(
         widget.localStore.read(FoodLogSync.outboxKey),
         operation: 'upsert',
         id: id,
-        row: foodLogRow,
+        row: {
+          'id': id,
+          'user_id': expectedUserId,
+          'log_date': day,
+          'meal': 'Repas',
+          'name': itemName,
+          'kcal': values['kcal'] ?? 0,
+          'protein_g': values['p'] ?? 0,
+          'carbs_g': values['c'] ?? 0,
+          'fat_g': values['f'] ?? 0,
+          'fiber_g': 0,
+          'sugar_g': 0,
+          'sodium_mg': 0,
+          'source': 'manual',
+          'meta': {
+            'client': 'pace_flutter',
+            'missing_nutrients': [
+              if (values['kcal'] == null) 'kcal',
+              if (values['p'] == null) 'protein_g',
+              if (values['c'] == null) 'carbs_g',
+              if (values['f'] == null) 'fat_g',
+            ],
+          },
+        },
         now: DateTime.now().toUtc(),
       );
       localOnlyKeys.addAll({
@@ -347,9 +347,6 @@ class _NutritionPageState extends State<NutritionPage> {
       writes: writes,
       localOnlyKeys: localOnlyKeys,
     );
-    if (expectedUserId != null) {
-      unawaited(_pushAndRefreshFoodLog(syncUserState: true));
-    }
     if (mounted &&
         !widget.localStore.isSwitchingAccount &&
         widget.localStore.activeUserId == expectedUserId) {
@@ -400,7 +397,6 @@ class _NutritionPageState extends State<NutritionPage> {
     final itemId = item['id']?.toString() ?? '';
     list.removeWhere((entry) => entry is Map && entry['id']?.toString() == itemId);
     if (list.length == before) return;
-
     data[day] = list;
     final writes = <String, dynamic>{
       'pace.nutrition.items': data,
@@ -415,9 +411,9 @@ class _NutritionPageState extends State<NutritionPage> {
         now: DateTime.now().toUtc(),
       );
       localOnlyKeys.addAll({
+        FoodLogSync.outboxKey,
         'pace.nutrition.items',
         'pace.nutrition.totals',
-        FoodLogSync.outboxKey,
       });
     }
     await widget.localStore.writeBatchForAccount(
@@ -445,79 +441,6 @@ class _NutritionPageState extends State<NutritionPage> {
     }
     return RefreshIndicator(
       onRefresh: _refreshFoodLog,
-      child: ListView(padding: const EdgeInsets.all(20), children: [
-        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text('Nutrition', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
-          IconButton(onPressed: _addFood, icon: const Icon(Icons.add_circle_outline), tooltip: 'Ajouter un aliment'),
-        ]),
-        const SizedBox(height: 6),
-        Text('Données réelles de ton journal Pace', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        const SizedBox(height: 18),
-        PaceGlassCard(child: Column(children: [
-          _NutritionRow('Calories', '${number('kcal')} kcal', Icons.local_fire_department_outlined),
-          _NutritionRow('Protéines', '${number('p')} g', Icons.fitness_center_outlined),
-          _NutritionRow('Glucides', '${number('c')} g', Icons.grain_outlined),
-          _NutritionRow('Lipides', '${number('f')} g', Icons.opacity_outlined),
-        ])),
-        const SizedBox(height: 14),
-        Text('Repas du jour', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        if (items.isEmpty) const PaceGlassCard(child: ListTile(title: Text('Aucun aliment enregistré aujourd’hui'))),
-        for (final item in items)
-          Padding(padding: const EdgeInsets.only(bottom: 8), child: PaceGlassCard(child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-            title: Text(item['name']?.toString() ?? 'Aliment'),
-            subtitle: Text('${item['meal'] ?? 'Repas'} · ${item['kcal'] is num ? (item['kcal'] as num).toStringAsFixed(0) : '—'} kcal · P ${item['p'] is num ? (item['p'] as num).toStringAsFixed(1) : '—'} g'),
-            trailing: IconButton(onPressed: () => _deleteItem(item), icon: const Icon(Icons.delete_outline)),
-          ))),
-      ]),
-    );
-  }
-}
-
-class _NutritionRow extends StatelessWidget {
-  const _NutritionRow(this.label, this.value, this.icon);
-  final String label;
-  final String value;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) => ListTile(contentPadding: EdgeInsets.zero, leading: Icon(icon), title: Text(label), trailing: Text(value, style: const TextStyle(fontWeight: FontWeight.w700)));
-}
-).hasMatch(itemId)) {
-      writes[SyncService.foodLogOutboxKey] = SyncService.queueFoodLogOperation(
-        widget.localStore.read(SyncService.foodLogOutboxKey),
-        operation: 'delete',
-        id: itemId,
-        now: DateTime.now().toUtc(),
-      );
-      localOnlyKeys.add(SyncService.foodLogOutboxKey);
-    }
-    await widget.localStore.writeBatchForAccount(
-      expectedUserId,
-      writes: writes,
-      localOnlyKeys: localOnlyKeys,
-    );
-    if (expectedUserId != null) {
-      unawaited(widget.sync.syncNow().then((_) => _refreshFoodLog()));
-    }
-    if (mounted &&
-        !widget.localStore.isSwitchingAccount &&
-        widget.localStore.activeUserId == expectedUserId) {
-      setState(() {});
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final totals = _totals();
-    final items = _items();
-    String number(String key) {
-      final value = totals[key];
-      return value is num ? value.toStringAsFixed(1) : '—';
-    }
-    return RefreshIndicator(
-      onRefresh: () async => setState(() {}),
       child: ListView(padding: const EdgeInsets.all(20), children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('Nutrition', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
