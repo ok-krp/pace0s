@@ -9,6 +9,9 @@ import '../storage/local_store.dart';
 class FoodLogSync {
   static const String outboxKey = 'pace.__sync_food_log_outbox';
   static const String quarantineKey = 'pace.__sync_food_log_quarantine';
+  static const String deletedIdsKey = 'pace.nutrition.deleted_ids';
+  static const Duration tombstoneRetention = Duration(days: 90);
+  static const int maximumTombstones = 500;
 
   static const String _select =
       'id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,source,meta,created_at';
@@ -247,6 +250,67 @@ class FoodLogSync {
     } catch (_) {
       return null;
     }
+  }
+
+  static Map<String, String> queueDeletedId(
+    dynamic rawTombstones, {
+    required String id,
+    required DateTime now,
+  }) {
+    if (!isUuid(id)) throw ArgumentError.value(id, 'id');
+    final cutoff = now.toUtc().subtract(tombstoneRetention);
+    final entries = <String, DateTime>{};
+    if (rawTombstones is Map) {
+      for (final entry in rawTombstones.entries) {
+        final key = entry.key;
+        final value = entry.value;
+        if (key is! String ||
+            !isUuid(key) ||
+            value is! String ||
+            !LocalStore.isValidRemoteTimestamp(value)) {
+          continue;
+        }
+        final timestamp = DateTime.tryParse(value)?.toUtc();
+        if (timestamp == null ||
+            timestamp.isBefore(cutoff) ||
+            timestamp.isAfter(now.toUtc().add(const Duration(minutes: 5)))) {
+          continue;
+        }
+        entries[key] = timestamp;
+      }
+    }
+    entries[id] = now.toUtc();
+    final ordered = entries.entries.toList()
+      ..sort((left, right) => left.value.compareTo(right.value));
+    while (ordered.length > maximumTombstones) {
+      final oldest = ordered.removeAt(0);
+      entries.remove(oldest.key);
+    }
+    return entries.map((key, value) => MapEntry(key, value.toIso8601String()));
+  }
+
+  static Set<String> activeDeletedIds(
+    dynamic rawTombstones, {
+    DateTime? now,
+  }) {
+    if (rawTombstones is! Map) return <String>{};
+    final current = (now ?? DateTime.now()).toUtc();
+    final cutoff = current.subtract(tombstoneRetention);
+    return rawTombstones.entries
+        .where((entry) {
+          if (entry.key is! String ||
+              !isUuid(entry.key as String) ||
+              entry.value is! String ||
+              !LocalStore.isValidRemoteTimestamp(entry.value as String)) {
+            return false;
+          }
+          final timestamp = DateTime.tryParse(entry.value as String)?.toUtc();
+          return timestamp != null &&
+              !timestamp.isBefore(cutoff) &&
+              !timestamp.isAfter(current.add(const Duration(minutes: 5)));
+        })
+        .map((entry) => entry.key as String)
+        .toSet();
   }
 
   static Set<String> pendingDeletes(LocalStore localStore) =>
