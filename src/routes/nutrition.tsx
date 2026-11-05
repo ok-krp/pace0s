@@ -257,11 +257,17 @@ function NutritionLogView() {
   const goal = goals.kcal;
   const today = todayKey();
   const list = items[today] ?? [];
+  const refreshInFlight = useRef(false);
 
   const refreshCanonicalNutrition = async () => {
-    const { data: authData, error: authError } = await supabase.auth.getUser();
-    const user = authData.user;
-    if (authError || !user) return;
+    if (refreshInFlight.current) return;
+    refreshInFlight.current = true;
+    try {
+      // getSession reads the authenticated local session; it avoids a network
+      // auth lookup on every lightweight Nutrition refresh.
+      const { data: authData, error: authError } = await supabase.auth.getSession();
+      const user = authData.session?.user;
+      if (authError || !user) return;
 
     const queueKey = accountSyncStorageKeys(user.id).queue;
     const pendingKeys = parseSyncQueue(localStorage.getItem(queueKey));
@@ -296,6 +302,9 @@ function NutritionLogView() {
     // back to user_state: food_log is now the cross-device source of truth.
     applyRemoteWrite("pace.nutrition.items", nextItems);
     applyRemoteWrite("pace.nutrition.totals", { ...currentTotals, ...nextTotals });
+    } finally {
+      refreshInFlight.current = false;
+    }
   };
 
   useEffect(() => {
