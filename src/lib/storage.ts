@@ -93,26 +93,29 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const [value, setValue] = useState<T>(initial);
   const [loaded, setLoaded] = useState(false);
   // Hydrating from disk or receiving a server-confirmed value is not a new
-  // user mutation. Without this guard the first render after an account switch
-  // could enqueue the previous account's global localStorage value under the
-  // newly authenticated user.
-  const skipNextPersist = useRef(true);
+  // user mutation. Keep the target until React has applied that exact value;
+  // this also handles key changes where the first effect sees the old state.
+  const hydratedValue = useRef<{ pending: boolean; value: T } | null>(null);
 
   useEffect(() => {
-    skipNextPersist.current = true;
+    let nextValue = initial;
     try {
       const raw = localStorage.getItem(key);
-      if (raw !== null) setValue(JSON.parse(raw));
+      if (raw !== null) nextValue = JSON.parse(raw) as T;
     } catch {
       // Preserve the provided initial value if the cached JSON is malformed.
     }
+    hydratedValue.current = { pending: true, value: nextValue };
+    setValue(nextValue);
     setLoaded(true);
   }, [key]);
 
   useEffect(() => {
     if (!loaded) return;
-    if (skipNextPersist.current) {
-      skipNextPersist.current = false;
+    const hydration = hydratedValue.current;
+    if (hydration?.pending) {
+      if (!Object.is(value, hydration.value)) return;
+      hydration.pending = false;
       return;
     }
     try {
@@ -127,8 +130,9 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
       if (!detail || detail.key !== key || Object.is(value, detail.value)) return;
-      skipNextPersist.current = true;
-      setValue(detail.value as T);
+      const nextValue = detail.value as T;
+      hydratedValue.current = { pending: true, value: nextValue };
+      setValue(nextValue);
     };
     window.addEventListener(REMOTE_WRITE_EVENT, onRemote);
     return () => window.removeEventListener(REMOTE_WRITE_EVENT, onRemote);
