@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { z } from "zod";
 import { Apple, Plus, Trash2, ScanBarcode, Camera, Loader2, X, AlertTriangle, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
@@ -259,7 +259,7 @@ function NutritionLogView() {
   const list = items[today] ?? [];
   const refreshInFlight = useRef(false);
 
-  const refreshCanonicalNutrition = async () => {
+  const refreshCanonicalNutrition = useCallback(async () => {
     if (refreshInFlight.current) return;
     refreshInFlight.current = true;
     try {
@@ -321,7 +321,7 @@ function NutritionLogView() {
     } finally {
       refreshInFlight.current = false;
     }
-  };
+  }, []);
 
   useEffect(() => {
     const handler = () => {
@@ -347,7 +347,7 @@ function NutritionLogView() {
       window.removeEventListener("online", refresh);
       window.clearInterval(interval);
     };
-  }, [setItems, setTotals]);
+  }, [refreshCanonicalNutrition, setItems, setTotals]);
 
   const [meal, setMeal] = useState("Petit déjeuner");
   const [name, setName] = useState("");
