@@ -92,7 +92,7 @@ const REMOTE_WRITE_EVENT = "pace.remote.write";
 
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);
-  const [loaded, setLoaded] = useState(false);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   // Hydrating from disk or receiving a server-confirmed value is not a new
   // user mutation. Keep the target until React has applied that exact value;
   // this also handles key changes where the first effect sees the old state.
@@ -108,11 +108,11 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     }
     hydratedValue.current = { pending: true, value: nextValue };
     setValue(nextValue);
-    setLoaded(true);
+    setLoadedKey(key);
   }, [key]);
 
   useEffect(() => {
-    if (!loaded) return;
+    if (loadedKey !== key) return;
     if (!shouldPersistLocalStateValue(value, hydratedValue.current)) return;
     try {
       localStorage.setItem(key, JSON.stringify(value));
@@ -120,7 +120,7 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     } catch {
       // The in-memory state remains usable when localStorage is unavailable.
     }
-  }, [key, value, loaded]);
+  }, [key, value, loadedKey]);
 
   useEffect(() => {
     const onRemote = (e: Event) => {
