@@ -98,7 +98,6 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const [value, setValue] = useState<T>(initial);
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const initialValue = useRef(initial);
-  initialValue.current = initial;
   const mutationVersion = useRef(0);
   // Hydrating from disk or receiving a server-confirmed value is not a new
   // user mutation. Keep the target until React has applied that exact value;
