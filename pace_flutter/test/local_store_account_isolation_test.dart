@@ -19,6 +19,56 @@ void main() {
     if (await directory.exists()) await directory.delete(recursive: true);
   });
 
+
+  test('batch persists local-only relational outbox beside syncable cache keys', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+
+    await store.writeBatchForAccount(
+      'user-a',
+      writes: {
+        'pace.nutrition.items': {'2026-11-05': <dynamic>[]},
+        'pace.nutrition.totals': {'2026-11-05': {'kcal': 0}},
+        'pace.__sync_food_log_outbox': [
+          {
+            'id': '00000000-0000-4000-8000-000000000001',
+            'operation': 'upsert',
+            'queuedAt': '2026-11-05T09:00:00.000Z',
+            'row': {'id': '00000000-0000-4000-8000-000000000001'},
+          },
+        ],
+      },
+      localOnlyKeys: const {'pace.__sync_food_log_outbox'},
+    );
+
+    expect(store.read('pace.__sync_food_log_outbox'), isA<List>());
+    expect(
+      store.pendingOperations().map((entry) => entry['key']).toSet(),
+      {'pace.nutrition.items', 'pace.nutrition.totals'},
+    );
+
+    final reopened = await LocalStore.open(directory: directory);
+    await reopened.activateAccount('user-a');
+    expect(reopened.read('pace.__sync_food_log_outbox'), isA<List>());
+    expect(
+      reopened.pendingOperations().map((entry) => entry['key']).toSet(),
+      {'pace.nutrition.items', 'pace.nutrition.totals'},
+    );
+  });
+
+  test('batch rejects local-only keys absent from the mutation set', () async {
+    final store = await LocalStore.open(directory: directory);
+    await store.activateAccount('user-a');
+    await expectLater(
+      store.writeBatchForAccount(
+        'user-a',
+        writes: {'pace.nutrition.items': <dynamic>[]},
+        localOnlyKeys: const {'pace.__sync_food_log_outbox'},
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('queued timestamps advance when the clock repeats or moves backwards', () {
     final latest = DateTime.utc(2026, 10, 17, 10, 0, 0, 0, 123);
     expect(
