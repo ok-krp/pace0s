@@ -6,14 +6,17 @@ import { motion } from "framer-motion";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader, StatCard } from "@/components/Stat";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useLocalState, todayKey } from "@/lib/storage";
+import { applyRemoteWrite, useLocalState, todayKey } from "@/lib/storage";
+import { supabase } from "@/integrations/supabase/client";
+import { accountSyncStorageKeys, parseSyncQueue } from "@/lib/cloud-sync-scope";
+import { mapFoodLogRow, mergeCanonicalNutritionItems, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useUserGoals } from "@/hooks/use-user-goals";
 import { useNutritionCols, NUT_COLS, type NutCol } from "@/hooks/use-nutrition-cols";
-import { addNutritionItem, type NutritionItem } from "@/lib/nutrition-log";
+import { addNutritionItem, recomputeNutritionTotals, type NutritionItem } from "@/lib/nutrition-log";
 import { WaterView } from "@/components/WaterView";
 import { RecipesView } from "@/components/RecipesView";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -255,6 +258,46 @@ function NutritionLogView() {
   const today = todayKey();
   const list = items[today] ?? [];
 
+  const refreshCanonicalNutrition = async () => {
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    const user = authData.user;
+    if (authError || !user) return;
+
+    const queueKey = accountSyncStorageKeys(user.id).queue;
+    const pendingKeys = parseSyncQueue(localStorage.getItem(queueKey));
+    // A newer local JSON write must finish its existing outbox replay before
+    // the SQL snapshot is allowed to replace this day's cache.
+    if (pendingKeys.includes("pace.nutrition.items")) return;
+
+    const day = todayKey();
+    const { data, error } = await supabase
+      .from("food_log")
+      .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta,created_at")
+      .eq("user_id", user.id)
+      .eq("log_date", day)
+      .order("created_at", { ascending: true })
+      .limit(1000);
+    if (error || !data || todayKey() !== day) return;
+
+    const rawItems = localStorage.getItem("pace.nutrition.items");
+    const rawTotals = localStorage.getItem("pace.nutrition.totals");
+    let currentItems: Record<string, Item[]> = {};
+    try { if (rawItems) currentItems = JSON.parse(rawItems) as Record<string, Item[]>; } catch {}
+    let currentTotals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
+    try { if (rawTotals) currentTotals = JSON.parse(rawTotals) as typeof currentTotals; } catch {}
+
+    const merged = mergeCanonicalNutritionItems(
+      currentItems[day] ?? [],
+      data as unknown as CanonicalFoodLogRow[],
+    );
+    const nextItems = { ...currentItems, [day]: merged };
+    const nextTotals = recomputeNutritionTotals(nextItems);
+    // These are read-side cache writes. Do not enqueue the full Nutrition JSON
+    // back to user_state: food_log is now the cross-device source of truth.
+    applyRemoteWrite("pace.nutrition.items", nextItems);
+    applyRemoteWrite("pace.nutrition.totals", { ...currentTotals, ...nextTotals });
+  };
+
   useEffect(() => {
     const handler = () => {
       try {
@@ -263,9 +306,20 @@ function NutritionLogView() {
         const tRaw = localStorage.getItem("pace.nutrition.totals");
         if (tRaw) setTotals(JSON.parse(tRaw));
       } catch {}
+      void refreshCanonicalNutrition();
     };
+    const refresh = () => { void refreshCanonicalNutrition(); };
     window.addEventListener("pace.nutrition.changed", handler);
-    return () => window.removeEventListener("pace.nutrition.changed", handler);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    const interval = window.setInterval(refresh, 60_000);
+    refresh();
+    return () => {
+      window.removeEventListener("pace.nutrition.changed", handler);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      window.clearInterval(interval);
+    };
   }, [setItems, setTotals]);
 
   const [meal, setMeal] = useState("Petit déjeuner");
