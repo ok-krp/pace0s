@@ -469,6 +469,14 @@ class FoodLogSync {
     return entries;
   }
 
+  /// Treat PostgREST's returned error as a failed write, not as an
+  /// acknowledgement. Supabase may return {data, error} without throwing.
+  static void throwIfPostgrestWriteFailed(Object? error) {
+    if (error != null) {
+      throw StateError('food_log write failed');
+    }
+  }
+
   static const int maximumRetryAttempts = 10;
   static const Duration maximumRetryDelay = Duration(minutes: 15);
 
@@ -885,17 +893,19 @@ class FoodLogSync {
             );
             continue;
           }
-          await client!.from('food_log').upsert(
-                row,
-                onConflict: 'id',
-                ignoreDuplicates: true,
-              );
+          final response = await client!.from('food_log').upsert(
+            row,
+            onConflict: 'id',
+            ignoreDuplicates: true,
+          );
+          throwIfPostgrestWriteFailed(response.error);
         } else {
-          await client!
+          final response = await client!
               .from('food_log')
               .delete()
               .eq('user_id', expectedUserId)
               .eq('id', id);
+          throwIfPostgrestWriteFailed(response.error);
         }
 
         if (!_isCurrentAccount(client, localStore, expectedUserId)) return;
