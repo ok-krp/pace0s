@@ -409,6 +409,25 @@ void main() {
     );
   });
 
+  test('treats returned PostgREST errors as failed outbox writes', () {
+    expect(
+      () => FoodLogSync.throwIfPostgrestWriteFailed(null),
+      returnsNormally,
+    );
+    expect(
+      () => FoodLogSync.throwIfPostgrestWriteFailed(
+        StateError('simulated PostgREST rejection'),
+      ),
+      throwsStateError,
+    );
+    expect(
+      () => FoodLogSync.throwIfPostgrestWriteFailed(
+        {'message': 'permission denied', 'code': '42501'},
+      ),
+      throwsStateError,
+    );
+  });
+
   test('backs off failed native food-log writes with a bounded retry delay', () {
     final now = DateTime.utc(2026, 11, 6, 12);
     final queued = FoodLogSync.queueOperation(
