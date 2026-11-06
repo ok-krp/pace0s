@@ -70,14 +70,17 @@ export function RecipesView() {
   const [query, setQuery] = useState("");
 
   const cats = [...DEFAULT_CATS, ...extraCats];
-  const all = [
-    ...SEED.filter((r) => !hiddenSeeds.includes(r.id)).map((r) => {
-      // if a customized version exists, prefer it
-      const c = custom.find((x) => x.id === r.id);
-      return c ? { ...c, custom: true } : r;
-    }),
-    ...custom.filter((c) => !SEED.some((s) => s.id === c.id)).map((c) => ({ ...c, custom: true })),
-  ];
+  const all = useMemo(
+    () => [
+      ...SEED.filter((r) => !hiddenSeeds.includes(r.id)).map((r) => {
+        // if a customized version exists, prefer it
+        const c = custom.find((x) => x.id === r.id);
+        return c ? { ...c, custom: true } : r;
+      }),
+      ...custom.filter((c) => !SEED.some((s) => s.id === c.id)).map((c) => ({ ...c, custom: true })),
+    ],
+    [hiddenSeeds, custom],
+  );
   const q = query.trim().toLowerCase();
   const filtered = useMemo(
     () => q ? all.filter((r) => (r.name + " " + r.ingredients.join(" ")).toLowerCase().includes(q)) : all,
