@@ -5,6 +5,7 @@ import type { TablesInsert } from "@/integrations/supabase/types";
 import {
   nutritionFoodLogOutboxKey,
   queueFoodLogInsert,
+  deferFoodLogOutboxInsert,
   readValidFoodLogOutbox,
   removeFoodLogOutboxInsert,
   type FoodLogInsertRow,
@@ -214,7 +215,22 @@ export async function flushNutritionFoodLogOutbox(
         );
       const { data: after, error: afterError } = await supabase.auth.getSession();
       if (isCancelled() || afterError || after.session?.user.id !== expectedUserId) return;
-      if (error) continue;
+      if (error) {
+        let current: unknown;
+        try {
+          current = JSON.parse(localStorage.getItem(key) ?? "[]");
+        } catch {
+          // Preserve unreadable pending data exactly as found on disk.
+          continue;
+        }
+        const deferred = deferFoodLogOutboxInsert(current, operation, Date.now());
+        try {
+          localStorage.setItem(key, JSON.stringify(deferred));
+        } catch {
+          // Keep the current on-disk operation; retry after storage recovers.
+        }
+        continue;
+      }
 
       // Remove only the exact queued version acknowledged by this request.
       // A user edit that replaced this UUID in flight remains queued.
