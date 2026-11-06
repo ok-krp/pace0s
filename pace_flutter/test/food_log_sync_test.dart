@@ -138,6 +138,30 @@ void main() {
     );
   });
 
+  test('rejects an upsert whose row belongs to a different account', () {
+    expect(
+      () => FoodLogSync.queueOperation(
+        const <dynamic>[],
+        operation: 'upsert',
+        id: id,
+        expectedUserId: userId,
+        row: {...row(id), 'user_id': 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'},
+        now: DateTime.utc(2026, 11, 6, 12),
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => FoodLogSync.queueOperation(
+        const <dynamic>[],
+        operation: 'delete',
+        id: id,
+        expectedUserId: 'not-a-user-id',
+        now: DateTime.utc(2026, 11, 6, 12),
+      ),
+      throwsArgumentError,
+    );
+  });
+
   test('caps native pending operations without dropping existing rows', () {
     final full = List<dynamic>.generate(
       FoodLogSync.maximumPendingOperations,
