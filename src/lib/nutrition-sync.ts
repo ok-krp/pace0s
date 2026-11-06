@@ -192,7 +192,7 @@ export async function fetchAllFoodLogKeysetPages<T extends { id: string }>(
     const page = result.data;
     if (page.length > pageSize) return null;
 
-    let lastId = cursor;
+    let lastId: string | null = cursor;
     for (const row of page) {
       if (!row || typeof row.id !== "string" || row.id.length === 0) return null;
       if (lastId !== null && row.id <= lastId) return null;
