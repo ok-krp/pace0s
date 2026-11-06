@@ -88,6 +88,12 @@ function missingNutrients(meta: unknown): Set<string> {
     : new Set();
 }
 
+function optionalMetaNutrient(meta: unknown, key: string): number | undefined {
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return undefined;
+  const value = (meta as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 export function mapFoodLogRow(row: CanonicalFoodLogRow): CanonicalNutritionItem {
   const missing = missingNutrients(row.meta);
   return {
@@ -98,9 +104,14 @@ export function mapFoodLogRow(row: CanonicalFoodLogRow): CanonicalNutritionItem 
     p: missing.has("protein_g") ? 0 : Number(row.protein_g ?? 0),
     c: missing.has("carbs_g") ? 0 : Number(row.carbs_g ?? 0),
     f: missing.has("fat_g") ? 0 : Number(row.fat_g ?? 0),
+    sat: optionalMetaNutrient(row.meta, "sat_fat_g"),
+    salt: optionalMetaNutrient(row.meta, "salt_g"),
     fiber: row.fiber_g == null ? undefined : Number(row.fiber_g),
     sugar: row.sugar_g == null ? undefined : Number(row.sugar_g),
     sodium: row.sodium_mg == null ? undefined : Number(row.sodium_mg),
+    iron: optionalMetaNutrient(row.meta, "iron_mg"),
+    calcium: optionalMetaNutrient(row.meta, "calcium_mg"),
+    vitC: optionalMetaNutrient(row.meta, "vitamin_c_mg"),
     qty: 1,
     __foodLogCanonical: true,
   };
