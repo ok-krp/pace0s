@@ -559,14 +559,22 @@ class FoodLogSync {
       });
   }
 
-  static Set<String> pendingDeleteIds(dynamic rawOutbox) {
+  static Set<String> pendingDeleteIds(
+    dynamic rawOutbox, {
+    String? expectedUserId,
+  }) {
     if (rawOutbox is! List) return <String>{};
     final ids = <String>{};
     for (final entry in rawOutbox) {
       if (entry is! Map) continue;
       try {
         final operation = Map<String, dynamic>.from(entry);
-        if (isValidOperation(operation) && operation['operation'] == 'delete') {
+        final owner = operation['user_id'];
+        if (isValidOperation(operation) &&
+            operation['operation'] == 'delete' &&
+            (expectedUserId == null ||
+                owner == null ||
+                owner == expectedUserId)) {
           ids.add(operation['id'] as String);
         }
       } on TypeError {
@@ -800,8 +808,14 @@ class FoodLogSync {
         .toSet();
   }
 
-  static Set<String> pendingDeletes(LocalStore localStore) =>
-      pendingDeleteIds(localStore.read(outboxKey));
+  static Set<String> pendingDeletes(LocalStore localStore) {
+    final expectedUserId = localStore.activeUserId;
+    if (expectedUserId == null) return <String>{};
+    return pendingDeleteIds(
+      localStore.read(outboxKey),
+      expectedUserId: expectedUserId,
+    );
+  }
 
   static Future<void> pushPending({
     required SupabaseClient? client,
