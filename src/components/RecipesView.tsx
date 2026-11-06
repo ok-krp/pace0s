@@ -101,11 +101,15 @@ export function RecipesView() {
 
   const addToLog = async (r: Recipe, meal: string) => {
     try {
-      await addNutritionItemToLog(
+      const result = await addNutritionItemToLog(
         { name: `${r.emoji} ${r.name}`, meal, kcal: r.kcal, p: r.p, c: r.c, f: r.f },
         "recipe",
       );
-      toast.success(`${r.name} ajouté à ${meal}`);
+      if (result === "saved-for-previous-account") {
+        toast.message("Recette enregistrée pour le compte précédent ; elle réapparaîtra à sa prochaine connexion.");
+      } else {
+        toast.success(`${r.name} ajouté à ${meal}`);
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer la recette.");
     }
