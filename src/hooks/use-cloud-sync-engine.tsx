@@ -266,7 +266,12 @@ export function useCloudSyncEngineInternal() {
           async (afterKey, pageSize) => {
             let query = supabase.from("user_state")
               .select("key,value,updated_at,updated_by")
-              .eq("user_id", userId);
+              .eq("user_id", userId)
+              // Client bookkeeping and account-private Nutrition caches are
+              // never domain state. Exclude them in PostgREST so stale rows
+              // cannot consume egress before the client-side key guard runs.
+              .not("key", "like", "pace.__sync_%")
+              .not("key", "like", "pace.__nutrition_cache:%");
             if (!fullReconciliation) {
               query = query.gte("updated_at", incrementalCursor!);
             }
