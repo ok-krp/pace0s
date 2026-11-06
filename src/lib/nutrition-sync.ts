@@ -339,8 +339,8 @@ function timestampMicros(value: string): number | null {
   if (!match || (match[2]?.length ?? 0) > 6) return null;
   const wholeSecond = Date.parse(`${match[1]}${match[3]}`);
   if (!Number.isFinite(wholeSecond)) return null;
-  const fraction = Number((match[2] ?? "").padEnd(6, "0"));
-  return wholeSecond * 1000 + fraction / 1000;
+  const fractionMicros = Number((match[2] ?? "").padEnd(6, "0"));
+  return wholeSecond * 1000 + fractionMicros;
 }
 
 export function compareFoodLogTupleCursor(
