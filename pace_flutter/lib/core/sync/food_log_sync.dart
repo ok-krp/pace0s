@@ -480,9 +480,9 @@ class FoodLogSync {
         if (entry is! Map ||
             entry['id'] != completed['id'] ||
             entry['operation'] != completed['operation'] ||
-            entry['queuedAt'] != completed['queuedAt'] ||
-          entry['attempts'] != completed['attempts'] ||
-          entry['nextAttemptAt'] != completed['nextAttemptAt']) {
+              entry['queuedAt'] != completed['queuedAt'] ||
+            entry['attempts'] != completed['attempts'] ||
+            entry['nextAttemptAt'] != completed['nextAttemptAt']) {
           return false;
         }
         try {
@@ -814,9 +814,7 @@ class FoodLogSync {
         final current = localStore.read(outboxKey);
         final remaining = removeOperation(current, operation);
         final quarantine = preserveQuarantineContainer(
-
           localStore.read(quarantineKey),
-
         );
         await _persistLocalOutboxes(
           localStore: localStore,
