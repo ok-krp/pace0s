@@ -34,6 +34,25 @@ test("maps canonical food_log rows into the Nutrition UI shape", () => {
   });
 });
 
+test("preserves secondary nutrients stored in canonical food_log metadata", () => {
+  const mapped = mapFoodLogRow({
+    ...canonical,
+    meta: {
+      sat_fat_g: 2.5,
+      salt_g: 0.8,
+      iron_mg: 3.2,
+      calcium_mg: 120,
+      vitamin_c_mg: 14,
+    },
+  });
+
+  assert.equal(mapped.sat, 2.5);
+  assert.equal(mapped.salt, 0.8);
+  assert.equal(mapped.iron, 3.2);
+  assert.equal(mapped.calcium, 120);
+  assert.equal(mapped.vitC, 14);
+});
+
 test("does not display stored zeroes for nutrients the user left blank", () => {
   const mapped = mapFoodLogRow({
     ...canonical,
