@@ -96,6 +96,11 @@ function optionalMetaNutrient(meta: unknown, key: string): number | undefined {
 
 export function mapFoodLogRow(row: CanonicalFoodLogRow): CanonicalNutritionItem {
   const missing = missingNutrients(row.meta);
+  const sat = optionalMetaNutrient(row.meta, "sat_fat_g");
+  const salt = optionalMetaNutrient(row.meta, "salt_g");
+  const iron = optionalMetaNutrient(row.meta, "iron_mg");
+  const calcium = optionalMetaNutrient(row.meta, "calcium_mg");
+  const vitC = optionalMetaNutrient(row.meta, "vitamin_c_mg");
   return {
     id: row.id,
     name: row.name,
@@ -104,14 +109,14 @@ export function mapFoodLogRow(row: CanonicalFoodLogRow): CanonicalNutritionItem 
     p: missing.has("protein_g") ? 0 : Number(row.protein_g ?? 0),
     c: missing.has("carbs_g") ? 0 : Number(row.carbs_g ?? 0),
     f: missing.has("fat_g") ? 0 : Number(row.fat_g ?? 0),
-    sat: optionalMetaNutrient(row.meta, "sat_fat_g"),
-    salt: optionalMetaNutrient(row.meta, "salt_g"),
-    fiber: row.fiber_g == null ? undefined : Number(row.fiber_g),
-    sugar: row.sugar_g == null ? undefined : Number(row.sugar_g),
-    sodium: row.sodium_mg == null ? undefined : Number(row.sodium_mg),
-    iron: optionalMetaNutrient(row.meta, "iron_mg"),
-    calcium: optionalMetaNutrient(row.meta, "calcium_mg"),
-    vitC: optionalMetaNutrient(row.meta, "vitamin_c_mg"),
+    ...(sat === undefined ? {} : { sat }),
+    ...(salt === undefined ? {} : { salt }),
+    ...(row.fiber_g == null ? {} : { fiber: Number(row.fiber_g) }),
+    ...(row.sugar_g == null ? {} : { sugar: Number(row.sugar_g) }),
+    ...(row.sodium_mg == null ? {} : { sodium: Number(row.sodium_mg) }),
+    ...(iron === undefined ? {} : { iron }),
+    ...(calcium === undefined ? {} : { calcium }),
+    ...(vitC === undefined ? {} : { vitC }),
     qty: 1,
     __foodLogCanonical: true,
   };
