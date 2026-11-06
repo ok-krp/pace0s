@@ -476,12 +476,20 @@ class FoodLogSync {
 
   static Set<String> pendingDeleteIds(dynamic rawOutbox) {
     if (rawOutbox is! List) return <String>{};
-    return rawOutbox
-        .whereType<Map>()
-        .map((entry) => Map<String, dynamic>.from(entry))
-        .where((entry) => isValidOperation(entry) && entry['operation'] == 'delete')
-        .map((entry) => entry['id'] as String)
-        .toSet();
+    final ids = <String>{};
+    for (final entry in rawOutbox) {
+      if (entry is! Map) continue;
+      try {
+        final operation = Map<String, dynamic>.from(entry);
+        if (isValidOperation(operation) && operation['operation'] == 'delete') {
+          ids.add(operation['id'] as String);
+        }
+      } on TypeError {
+        // A map with non-string keys is malformed; ignore it here while
+        // leaving the original durable entry available for quarantine.
+      }
+    }
+    return ids;
   }
 
   static bool _isCurrentAccount(
@@ -733,7 +741,18 @@ class FoodLogSync {
         );
         continue;
       }
-      final operation = Map<String, dynamic>.from(rawEntry);
+      Map<String, dynamic> operation;
+      try {
+        operation = Map<String, dynamic>.from(rawEntry);
+      } on TypeError {
+        await _quarantineEntry(
+          localStore: localStore,
+          expectedUserId: expectedUserId,
+          rawEntry: rawEntry,
+          reason: 'invalid-food-log-operation-map-keys',
+        );
+        continue;
+      }
       if (!isValidOperation(operation)) {
         await _quarantineEntry(
           localStore: localStore,
