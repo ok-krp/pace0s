@@ -284,10 +284,11 @@ class FoodLogSync {
             .from('food_log')
             .select(_select)
             .eq('user_id', expectedUserId)
-            .eq('log_date', logDate)
-            .order('id', ascending: true);
+            .eq('log_date', logDate);
         if (afterId != null) query = query.gt('id', afterId);
-        final page = await query.limit(pageSize);
+        final page = await query
+            .order('id', ascending: true)
+            .limit(pageSize);
         if (!_isCurrentAccount(client, localStore, expectedUserId)) return null;
         return page
             .map((row) => Map<String, dynamic>.from(row))
