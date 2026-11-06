@@ -441,7 +441,7 @@ export async function addNutritionItemToLog(
     },
   };
 
-  let insertError: unknown = null;
+  let insertError: unknown;
   try {
     const { error } = await supabase.from("food_log").insert(payload);
     insertError = error;
