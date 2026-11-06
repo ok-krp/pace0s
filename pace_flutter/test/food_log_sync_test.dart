@@ -134,6 +134,39 @@ void main() {
   });
 
 
+  test('maps optional micronutrients from canonical food-log metadata', () {
+    final mapped = FoodLogSync.mapFoodLogRowToNutritionItem({
+      ...row(id),
+      'created_at': '2026-11-06T12:00:00.000Z',
+      'meta': {
+        'sat_fat_g': 2.5,
+        'salt_g': 0.8,
+        'iron_mg': 3.2,
+        'calcium_mg': 120,
+        'vitamin_c_mg': 14,
+      },
+    });
+
+    expect(mapped['sat'], 2.5);
+    expect(mapped['salt'], 0.8);
+    expect(mapped['iron'], 3.2);
+    expect(mapped['calcium'], 120);
+    expect(mapped['vitC'], 14);
+    expect(mapped['__foodLogCanonical'], isTrue);
+  });
+
+  test('keeps deliberately missing macros null during canonical mapping', () {
+    final mapped = FoodLogSync.mapFoodLogRowToNutritionItem({
+      ...row(id),
+      'meta': {'missing_nutrients': ['kcal', 'protein_g']},
+    });
+
+    expect(mapped['kcal'], isNull);
+    expect(mapped['p'], isNull);
+    expect(mapped['c'], row(id)['carbs_g']);
+    expect(mapped['f'], row(id)['fat_g']);
+  });
+
   test('fetches every food-log UUID page beyond 1,000 rows', () async {
     String uuid(int value) =>
         '00000000-0000-4000-8000-${value.toString().padLeft(12, '0')}';
