@@ -1,6 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapFoodLogRow, mergeCanonicalNutritionItems, fetchAllFoodLogKeysetPages, mergeUnassignedNutritionSnapshots, mergeNutritionTombstoneMaps, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones } from "./nutrition-sync.ts";
+import {
+  mapFoodLogRow,
+  mergeCanonicalNutritionItems,
+  mergeCanonicalNutritionDelta,
+  fetchAllFoodLogKeysetPages,
+  fetchAllFoodLogTuplePages,
+  mergeUnassignedNutritionSnapshots,
+  mergeNutritionTombstoneMaps,
+  mayReadGlobalNutritionCache,
+  NUTRITION_CACHE_OWNER_KEY,
+  NUTRITION_UNASSIGNED_BACKUP_KEY,
+  nutritionAccountCacheKeys,
+  queueNutritionTombstone,
+  readActiveNutritionTombstones,
+  foodLogDeltaSince,
+  nextNutritionFoodLogCursor,
+  parseNutritionFoodLogCursor,
+  shouldRunFullFoodLogReconciliation,
+} from "./nutrition-sync.ts";
 
 const canonical = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -297,4 +315,189 @@ test("merges account-local and cloud tombstones without losing newer deletions",
   assert.deepEqual(Object.keys(merged).sort(), [firstId, secondId].sort());
   assert.equal(merged[firstId], new Date(now - 30_000).toISOString());
   assert.equal(merged[secondId], new Date(now - 10_000).toISOString());
+});
+
+
+test("account cache has an isolated per-day food-log cursor key", () => {
+  const alice = nutritionAccountCacheKeys("user/alice");
+  const bob = nutritionAccountCacheKeys("user:bob");
+  assert.notEqual(alice.foodLogCursor, bob.foodLogCursor);
+  assert.match(alice.foodLogCursor, /user%2Falice/);
+  assert.match(bob.foodLogCursor, /user%3Abob/);
+});
+
+test("requires a full food-log scan for a missing, stale or different-day cursor", () => {
+  const now = Date.parse("2026-11-06T12:00:00.000Z");
+  const cursor = {
+    logDate: "2026-11-06",
+    createdAt: "2026-11-06T11:59:00.000Z",
+    id: canonical.id,
+    lastFullAt: new Date(now - 60_000).toISOString(),
+  };
+  assert.equal(shouldRunFullFoodLogReconciliation(null, "2026-11-06", now), true);
+  assert.equal(shouldRunFullFoodLogReconciliation(cursor, "2026-11-07", now), true);
+  assert.equal(
+    shouldRunFullFoodLogReconciliation({
+      ...cursor,
+      lastFullAt: new Date(now - 24 * 60 * 60 * 1000).toISOString(),
+    }, "2026-11-06", now),
+    true,
+  );
+  assert.equal(shouldRunFullFoodLogReconciliation(cursor, "2026-11-06", now), false);
+});
+
+test("rejects malformed or wrong-day persisted food-log cursors", () => {
+  const cursor = {
+    logDate: "2026-11-06",
+    createdAt: "2026-11-06T11:59:00.123456Z",
+    id: canonical.id,
+    lastFullAt: "2026-11-06T11:00:00.000Z",
+  };
+  assert.deepEqual(
+    parseNutritionFoodLogCursor(JSON.stringify(cursor), "2026-11-06"),
+    cursor,
+  );
+  assert.equal(parseNutritionFoodLogCursor("{broken", "2026-11-06"), null);
+  assert.equal(parseNutritionFoodLogCursor(JSON.stringify(cursor), "2026-11-07"), null);
+  assert.equal(
+    parseNutritionFoodLogCursor(JSON.stringify({ ...cursor, id: "not-a-uuid" }), "2026-11-06"),
+    null,
+  );
+});
+
+test("uses a bounded five-minute overlap for incremental food-log pulls", () => {
+  const cursor = {
+    logDate: "2026-11-06",
+    createdAt: "2026-11-06T12:00:00.000Z",
+    id: canonical.id,
+    lastFullAt: "2026-11-06T11:00:00.000Z",
+  };
+  assert.equal(foodLogDeltaSince(cursor), "2026-11-06T11:55:00.000Z");
+});
+
+test("advances the food-log cursor only from a complete scan and keeps its full-scan time", () => {
+  const now = Date.parse("2026-11-06T12:00:00.000Z");
+  const previous = {
+    logDate: "2026-11-06",
+    createdAt: "2026-11-06T11:59:00.000Z",
+    id: canonical.id,
+    lastFullAt: "2026-11-06T10:00:00.000Z",
+  };
+  const next = nextNutritionFoodLogCursor({
+    previous,
+    rows: [{ id: otherId, created_at: "2026-11-06T12:00:00.123456Z" }],
+    logDate: "2026-11-06",
+    fullReconciliation: false,
+    nowMs: now,
+  });
+  assert.equal(next.createdAt, "2026-11-06T12:00:00.123456Z");
+  assert.equal(next.id, otherId);
+  assert.equal(next.lastFullAt, previous.lastFullAt);
+
+  const emptyFull = nextNutritionFoodLogCursor({
+    previous: null,
+    rows: [],
+    logDate: "2026-11-06",
+    fullReconciliation: true,
+    nowMs: now,
+  });
+  assert.equal(emptyFull.id, null);
+  assert.equal(emptyFull.createdAt, "2026-11-06T11:55:00.000Z");
+  assert.equal(emptyFull.lastFullAt, "2026-11-06T12:00:00.000Z");
+});
+
+test("paginates food_log by created_at then UUID, including equal timestamp rows", async () => {
+  const source = [
+    { ...canonical, created_at: "2026-11-06T12:00:00.123456Z" },
+    { ...canonical, id: otherId, created_at: "2026-11-06T12:00:00.123456Z" },
+    { ...canonical, id: "00000000-0000-4000-8000-000000000003", created_at: "2026-11-06T12:00:00.123457Z" },
+  ];
+  const cursors: Array<{ createdAt: string; id: string } | null> = [];
+  const rows = await fetchAllFoodLogTuplePages(async (after, limit) => {
+    cursors.push(after);
+    const start = after === null
+      ? 0
+      : source.findIndex((row) =>
+          row.created_at === after.createdAt && row.id === after.id,
+        ) + 1;
+    return { data: source.slice(start, start + limit), error: null };
+  }, { pageSize: 2 });
+
+  assert.deepEqual(rows, source);
+  assert.deepEqual(cursors, [
+    null,
+    { createdAt: source[1].created_at, id: source[1].id },
+  ]);
+});
+
+test("does not return a partial tuple-paginated food_log snapshot", async () => {
+  let calls = 0;
+  const rows = await fetchAllFoodLogTuplePages(async (_after, limit) => {
+    calls++;
+    if (calls === 1) {
+      return {
+        data: Array.from({ length: limit }, (_, index) => ({
+          ...canonical,
+          id: index === 0 ? canonical.id : otherId,
+          created_at: `2026-11-06T12:00:00.00000${index}Z`,
+        })),
+        error: null,
+      };
+    }
+    return { data: null, error: new Error("page unavailable") };
+  }, { pageSize: 2 });
+
+  assert.equal(rows, null);
+  assert.equal(calls, 2);
+});
+
+test("rejects a repeated or regressing created_at/UUID tuple cursor", async () => {
+  let calls = 0;
+  const rows = await fetchAllFoodLogTuplePages(async () => {
+    calls++;
+    return calls === 1
+      ? { data: [
+          { ...canonical, created_at: "2026-11-06T12:00:00.000Z" },
+          { ...canonical, id: otherId, created_at: "2026-11-06T12:00:00.000Z" },
+        ], error: null }
+      : { data: [
+          { ...canonical, id: otherId, created_at: "2026-11-06T12:00:00.000Z" },
+          { ...canonical, created_at: "2026-11-06T11:59:59.999Z" },
+        ], error: null };
+  }, { pageSize: 2 });
+
+  assert.equal(rows, null);
+  assert.equal(calls, 2);
+});
+
+test("incremental Nutrition merge retains canonical rows not present in the delta", () => {
+  const untouched = {
+    ...canonical,
+    id: "00000000-0000-4000-8000-000000000099",
+    name: "Ancien repas",
+    created_at: "2026-11-06T10:00:00.000Z",
+  };
+  const local = [
+    mapFoodLogRow(untouched),
+    { id: "legacy-row", name: "Ancienne ligne locale", meal: "Goûter", kcal: 90, p: 2, c: 10, f: 1, qty: 1 },
+  ];
+  const delta = [{ ...canonical, created_at: "2026-11-06T12:00:00.000Z" }];
+  const merged = mergeCanonicalNutritionDelta(local, delta);
+
+  assert.deepEqual(merged.map((item) => item.id), [untouched.id, "legacy-row", canonical.id]);
+  assert.equal(merged[2].name, canonical.name);
+});
+
+test("incremental Nutrition merge replaces an ID once and respects remote tombstones", () => {
+  const local = [
+    { id: canonical.id, name: "Ancienne version", meal: "Déjeuner", kcal: 1, p: 0, c: 0, f: 0, qty: 1, __foodLogCanonical: true },
+    { id: otherId, name: "À supprimer", meal: "Dîner", kcal: 50, p: 2, c: 5, f: 1, qty: 1, __foodLogCanonical: true },
+  ] as Array<{ id: string; name: string; meal: string; kcal: number; p: number; c: number; f: number; qty: number; __foodLogCanonical?: boolean }>;
+  const merged = mergeCanonicalNutritionDelta(
+    local,
+    [{ ...canonical, name: "Riz corrigé", created_at: "2026-11-06T12:00:00.000Z" }],
+    new Set([otherId]),
+  );
+  assert.deepEqual(merged.map((item) => item.id), [canonical.id]);
+  assert.equal(merged[0].name, "Riz corrigé");
 });
