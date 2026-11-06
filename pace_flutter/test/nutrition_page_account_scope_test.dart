@@ -111,9 +111,11 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          home: NutritionPage(
-            localStore: store,
-            sync: SyncService(localStore: store, client: null),
+          home: Scaffold(
+            body: NutritionPage(
+              localStore: store,
+              sync: SyncService(localStore: store, client: null),
+            ),
           ),
         ),
       );
