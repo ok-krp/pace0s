@@ -131,11 +131,23 @@ class _NutritionPageState extends State<NutritionPage> {
       return;
     }
     final day = _todayKey();
+    final previousCursor = FoodLogSync.parseFoodLogCursor(
+      widget.localStore.read(FoodLogSync.cursorKey),
+      logDate: day,
+    );
+    final fullReconciliation = FoodLogSync.shouldRunFullFoodLogReconciliation(
+      cursor: previousCursor,
+      logDate: day,
+    );
+    final deltaSince = fullReconciliation || previousCursor == null
+        ? null
+        : FoodLogSync.foodLogDeltaSince(previousCursor);
     final rows = await FoodLogSync.fetchForDay(
       client: widget.sync.client,
       localStore: widget.localStore,
       expectedUserId: expectedUserId,
       logDate: day,
+      createdAtSince: deltaSince,
     );
     if (rows == null ||
         !mounted ||
@@ -166,24 +178,42 @@ class _NutritionPageState extends State<NutritionPage> {
         .where((row) => !deletedIds.contains(row['id']?.toString()))
         .map(FoodLogSync.mapFoodLogRowToNutritionItem)
         .toList();
-    final remoteIds = remoteItems.map((item) => item['id']?.toString()).toSet();
-    final legacyOrPending = localItems.where((item) {
-      final id = item['id']?.toString() ?? '';
-      return !deletedIds.contains(id) &&
-          !remoteIds.contains(id) &&
-          item['__foodLogCanonical'] != true;
-    });
-    final merged = <Map<String, dynamic>>[
-      ...remoteItems,
-      ...legacyOrPending,
-    ];
+    final List<Map<String, dynamic>> merged;
+    if (fullReconciliation) {
+      final remoteIds = remoteItems.map((item) => item['id']?.toString()).toSet();
+      final legacyOrPending = localItems.where((item) {
+        final id = item['id']?.toString() ?? '';
+        return !deletedIds.contains(id) &&
+            !remoteIds.contains(id) &&
+            item['__foodLogCanonical'] != true;
+      });
+      merged = <Map<String, dynamic>>[
+        ...remoteItems,
+        ...legacyOrPending,
+      ];
+    } else {
+      merged = FoodLogSync.mergeCanonicalDelta(
+        localItems: localItems,
+        remoteItems: remoteItems,
+        deletedIds: deletedIds,
+      );
+    }
+
+    final nextCursor = FoodLogSync.nextFoodLogCursor(
+      previous: previousCursor,
+      rows: rows,
+      logDate: day,
+      fullReconciliation: fullReconciliation,
+    );
     data[day] = merged;
     await widget.localStore.writeBatchForAccount(
       expectedUserId,
       writes: {
         'pace.nutrition.items': data,
         'pace.nutrition.totals': _calculateTotals(data),
+        FoodLogSync.cursorKey: nextCursor,
       },
+      localOnlyKeys: const {FoodLogSync.cursorKey},
       enqueueSync: false,
     );
     if (mounted &&
