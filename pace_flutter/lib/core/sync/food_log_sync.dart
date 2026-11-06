@@ -348,10 +348,17 @@ class FoodLogSync {
     dynamic rawOutbox, {
     required String operation,
     required String id,
+    required String expectedUserId,
     Map<String, dynamic>? row,
     required DateTime now,
   }) {
     if (!isUuid(id)) throw ArgumentError.value(id, 'id');
+    if (!isUuid(expectedUserId)) {
+      throw ArgumentError.value(expectedUserId, 'expectedUserId');
+    }
+    if (operation == 'upsert' && row?['user_id'] != expectedUserId) {
+      throw ArgumentError('food_log row account does not match the outbox owner');
+    }
     if (operation != 'upsert' && operation != 'delete') {
       throw ArgumentError.value(operation, 'operation');
     }
