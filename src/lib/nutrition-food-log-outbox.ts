@@ -42,7 +42,8 @@ export function nutritionFoodLogOutboxKey(userId: string): string {
 }
 
 function isJsonSafe(value: unknown, depth = 0, ancestors = new Set<object>()): boolean {
-  if (depth > 20) return false;
+  try {
+    if (depth > 20) return false;
   if (value === null || typeof value === "string" || typeof value === "boolean") {
     return true;
   }
@@ -62,8 +63,11 @@ function isJsonSafe(value: unknown, depth = 0, ancestors = new Set<object>()): b
   const safe = Object.entries(value).every(([, child]) =>
     isJsonSafe(child, depth + 1, ancestors),
   );
-  ancestors.delete(value);
-  return safe;
+    ancestors.delete(value);
+    return safe;
+  } catch {
+    return false;
+  }
 }
 
 function isCalendarDate(value: string): boolean {
