@@ -324,6 +324,7 @@ class _NutritionPageState extends State<NutritionPage> {
           widget.localStore.read(FoodLogSync.outboxKey),
           operation: 'upsert',
           id: id,
+          expectedUserId: expectedUserId,
           row: {
             'id': id,
             'user_id': expectedUserId,
@@ -432,6 +433,7 @@ class _NutritionPageState extends State<NutritionPage> {
           widget.localStore.read(FoodLogSync.outboxKey),
           operation: 'delete',
           id: itemId,
+          expectedUserId: expectedUserId,
           now: now,
         );
         // The SQL outbox remains local and durable; the compact tombstone is a
