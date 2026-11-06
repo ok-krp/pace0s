@@ -9,7 +9,10 @@ import '../storage/local_store.dart';
 class FoodLogSync {
   static const String outboxKey = 'pace.__sync_food_log_outbox';
   static const String quarantineKey = 'pace.__sync_food_log_quarantine';
+  static const String cursorKey = 'pace.__sync_food_log_cursor';
   static const String deletedIdsKey = 'pace.nutrition.deleted_ids';
+  static const Duration cursorOverlap = Duration(minutes: 5);
+  static const Duration fullReconciliationInterval = Duration(hours: 24);
   static const Duration tombstoneRetention = Duration(days: 90);
   static const int maximumTombstones = 500;
 
@@ -70,6 +73,195 @@ class FoodLogSync {
       'created_at': row['created_at'],
       '__foodLogCanonical': true,
     };
+  }
+
+  static Map<String, dynamic>? parseFoodLogCursor(
+    dynamic raw, {
+    required String logDate,
+  }) {
+    if (raw is! Map) return null;
+    final cursor = Map<String, dynamic>.from(raw);
+    final createdAt = cursor['createdAt'];
+    final id = cursor['id'];
+    final lastFullAt = cursor['lastFullAt'];
+    if (cursor['logDate'] != logDate ||
+        createdAt is! String ||
+        !LocalStore.isValidRemoteTimestamp(createdAt) ||
+        (id != null && (id is! String || !isUuid(id))) ||
+        lastFullAt is! String ||
+        !LocalStore.isValidRemoteTimestamp(lastFullAt)) {
+      return null;
+    }
+    return <String, dynamic>{
+      'logDate': logDate,
+      'createdAt': createdAt,
+      'id': id,
+      'lastFullAt': lastFullAt,
+    };
+  }
+
+  static bool shouldRunFullFoodLogReconciliation({
+    required Map<String, dynamic>? cursor,
+    required String logDate,
+    DateTime? now,
+  }) {
+    final current = (now ?? DateTime.now()).toUtc();
+    if (cursor == null || cursor['logDate'] != logDate) return true;
+    final rawLastFull = cursor['lastFullAt'];
+    if (rawLastFull is! String || !LocalStore.isValidRemoteTimestamp(rawLastFull)) {
+      return true;
+    }
+    final lastFullAt = DateTime.tryParse(rawLastFull)?.toUtc();
+    return lastFullAt == null ||
+        lastFullAt.isAfter(current) ||
+        current.difference(lastFullAt) >= fullReconciliationInterval;
+  }
+
+  static String foodLogDeltaSince(Map<String, dynamic> cursor) {
+    final raw = cursor['createdAt'];
+    if (raw is! String || !LocalStore.isValidRemoteTimestamp(raw)) {
+      throw ArgumentError.value(raw, 'cursor.createdAt');
+    }
+    return DateTime.parse(raw).toUtc().subtract(cursorOverlap).toIso8601String();
+  }
+
+  static Map<String, dynamic> nextFoodLogCursor({
+    required Map<String, dynamic>? previous,
+    required List<Map<String, dynamic>> rows,
+    required String logDate,
+    required bool fullReconciliation,
+    DateTime? now,
+  }) {
+    final current = (now ?? DateTime.now()).toUtc();
+    if (rows.isNotEmpty) {
+      final latest = rows.last;
+      final createdAt = latest['created_at'];
+      final id = latest['id'];
+      if (createdAt is! String ||
+          !LocalStore.isValidRemoteTimestamp(createdAt) ||
+          id is! String ||
+          !isUuid(id)) {
+        throw const FormatException('Invalid last food_log cursor row');
+      }
+      return <String, dynamic>{
+        'logDate': logDate,
+        'createdAt': createdAt,
+        'id': id,
+        'lastFullAt': fullReconciliation
+            ? current.toIso8601String()
+            : previous?['lastFullAt'] ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toIso8601String(),
+      };
+    }
+    if (fullReconciliation) {
+      return <String, dynamic>{
+        'logDate': logDate,
+        'createdAt': current.subtract(cursorOverlap).toIso8601String(),
+        'id': null,
+        'lastFullAt': current.toIso8601String(),
+      };
+    }
+    return previous ??
+        <String, dynamic>{
+          'logDate': logDate,
+          'createdAt': current.subtract(cursorOverlap).toIso8601String(),
+          'id': null,
+          'lastFullAt': DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toIso8601String(),
+        };
+  }
+
+  static int? _compareFoodLogTuple(
+    Map<String, dynamic> left,
+    Map<String, dynamic> right,
+  ) {
+    final leftRaw = left['created_at'];
+    final rightRaw = right['created_at'];
+    final leftId = left['id'];
+    final rightId = right['id'];
+    if (leftRaw is! String ||
+        rightRaw is! String ||
+        leftId is! String ||
+        rightId is! String) {
+      return null;
+    }
+    final leftTime = DateTime.tryParse(leftRaw)?.toUtc();
+    final rightTime = DateTime.tryParse(rightRaw)?.toUtc();
+    if (leftTime == null || rightTime == null) return null;
+    final byTime = leftTime.microsecondsSinceEpoch.compareTo(rightTime.microsecondsSinceEpoch);
+    return byTime != 0 ? byTime : leftId.compareTo(rightId);
+  }
+
+  static Future<List<Map<String, dynamic>>?> fetchAllTuplePages({
+    required Future<List<Map<String, dynamic>>?> Function(
+      String? afterCreatedAt,
+      String? afterId,
+      int pageSize,
+    ) fetchPage,
+    int pageSize = 500,
+    bool Function()? isCancelled,
+  }) async {
+    if (pageSize < 1) throw ArgumentError.value(pageSize, 'pageSize');
+    final cancelled = isCancelled ?? () => false;
+    final rows = <Map<String, dynamic>>[];
+    String? afterCreatedAt;
+    String? afterId;
+
+    while (true) {
+      if (cancelled()) return null;
+      List<Map<String, dynamic>>? page;
+      try {
+        page = await fetchPage(afterCreatedAt, afterId, pageSize);
+      } catch (_) {
+        return null;
+      }
+      if (cancelled() || page == null || page.length > pageSize) return null;
+
+      Map<String, dynamic>? last = afterCreatedAt == null
+          ? null
+          : <String, dynamic>{'created_at': afterCreatedAt, 'id': afterId};
+      for (final row in page) {
+        final id = row['id'];
+        final createdAt = row['created_at'];
+        if (id is! String ||
+            !isUuid(id) ||
+            createdAt is! String ||
+            !LocalStore.isValidRemoteTimestamp(createdAt)) {
+          return null;
+        }
+        if (last != null) {
+          final comparison = _compareFoodLogTuple(last, row);
+          if (comparison == null || comparison >= 0) return null;
+        }
+        last = row;
+      }
+
+      rows.addAll(page);
+      if (page.length < pageSize) return rows;
+      if (last == null) return null;
+      afterCreatedAt = last['created_at'] as String;
+      afterId = last['id'] as String;
+    }
+  }
+
+  static List<Map<String, dynamic>> mergeCanonicalDelta({
+    required List<Map<String, dynamic>> localItems,
+    required List<Map<String, dynamic>> remoteItems,
+    Set<String> deletedIds = const <String>{},
+  }) {
+    final merged = <String, Map<String, dynamic>>{};
+    for (final item in localItems) {
+      final id = item['id']?.toString() ?? '';
+      if (id.isNotEmpty && !deletedIds.contains(id)) merged[id] = item;
+    }
+    for (final item in remoteItems) {
+      final id = item['id']?.toString() ?? '';
+      if (id.isEmpty) continue;
+      if (deletedIds.contains(id)) {
+        merged.remove(id);
+      } else {
+        merged[id] = item;
+      }
+    }
+    return merged.values.toList(growable: false);
   }
 
   static bool isCalendarDate(String value) {
@@ -310,20 +502,32 @@ class FoodLogSync {
     required LocalStore localStore,
     required String expectedUserId,
     required String logDate,
+    String? createdAtSince,
   }) async {
     if (!_isCurrentAccount(client, localStore, expectedUserId) ||
-        !isCalendarDate(logDate)) {
+        !isCalendarDate(logDate) ||
+        (createdAtSince != null && !LocalStore.isValidRemoteTimestamp(createdAtSince))) {
       return null;
     }
-    final rows = await fetchAllKeysetPages(
-      fetchPage: (afterId, pageSize) async {
+    return fetchAllTuplePages(
+      pageSize: 500,
+      isCancelled: () => !_isCurrentAccount(client, localStore, expectedUserId),
+      fetchPage: (afterCreatedAt, afterId, pageSize) async {
         var query = client!
             .from('food_log')
             .select(_select)
             .eq('user_id', expectedUserId)
             .eq('log_date', logDate);
-        if (afterId != null) query = query.gt('id', afterId);
+        if (createdAtSince != null) {
+          query = query.gte('created_at', createdAtSince);
+        }
+        if (afterCreatedAt != null && afterId != null) {
+          query = query.or(
+            'created_at.gt.$afterCreatedAt,and(created_at.eq.$afterCreatedAt,id.gt.$afterId)',
+          );
+        }
         final page = await query
+            .order('created_at', ascending: true)
             .order('id', ascending: true)
             .limit(pageSize);
         if (!_isCurrentAccount(client, localStore, expectedUserId)) return null;
@@ -331,22 +535,7 @@ class FoodLogSync {
             .map((row) => Map<String, dynamic>.from(row))
             .toList(growable: false);
       },
-      pageSize: 500,
-      isCancelled: () => !_isCurrentAccount(client, localStore, expectedUserId),
     );
-    if (rows == null) return null;
-    // UUID order is the pagination boundary only. Restore meal chronology
-    // after fetching the complete snapshot.
-    rows.sort((left, right) {
-      final leftTime = DateTime.tryParse(left['created_at']?.toString() ?? '');
-      final rightTime = DateTime.tryParse(right['created_at']?.toString() ?? '');
-      if (leftTime != null && rightTime != null) {
-        final byTime = leftTime.compareTo(rightTime);
-        if (byTime != 0) return byTime;
-      }
-      return (left['id'] as String).compareTo(right['id'] as String);
-    });
-    return rows;
   }
 
   static Map<String, String> queueDeletedId(
