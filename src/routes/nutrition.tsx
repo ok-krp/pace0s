@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { applyLocalWrite, applyRemoteWrite, useLocalState, todayKey } from "@/lib/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { accountSyncStorageKeys, parseSyncQueue } from "@/lib/cloud-sync-scope";
-import { mergeCanonicalNutritionItems, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, NUTRITION_LEGACY_TOMBSTONES_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
+import { fetchAllFoodLogKeysetPages, mergeCanonicalNutritionItems, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, NUTRITION_LEGACY_TOMBSTONES_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -375,16 +375,30 @@ function NutritionLogView() {
       if (pendingKeys.includes("pace.nutrition.items")) return;
 
       const day = todayKey();
-      const { data, error } = await supabase
-        .from("food_log")
-        .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta,created_at")
-        .eq("user_id", userId)
-        .eq("log_date", day)
-        .order("created_at", { ascending: true })
-        .limit(1000);
-      if (error || !data || todayKey() !== day) return;
-      const { data: confirmedSession } = await supabase.auth.getSession();
-      if (confirmedSession.session?.user.id !== userId) return;
+      const data = await fetchAllFoodLogKeysetPages<CanonicalFoodLogRow>(
+        async (afterId, pageSize) => {
+          let query = supabase
+            .from("food_log")
+            .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta,created_at")
+            .eq("user_id", userId)
+            .eq("log_date", day)
+            .order("id", { ascending: true });
+          if (afterId !== null) query = query.gt("id", afterId);
+          const { data: page, error } = await query.limit(pageSize);
+          return { data: page as CanonicalFoodLogRow[] | null, error };
+        },
+        {
+          pageSize: 500,
+          isCancelled: () =>
+            todayKey() !== day ||
+            localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) !== userId,
+        },
+      );
+      // Do not replace a visible cache from a partial or cancelled SQL scan.
+      if (data === null || todayKey() !== day) return;
+      const { data: confirmedSession, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || confirmedSession.session?.user.id !== userId ||
+          localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) !== userId) return;
 
       const deletedIds = readActiveNutritionTombstones(
         localStorage.getItem(accountKeys.deletedIds),
