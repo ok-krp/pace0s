@@ -246,7 +246,8 @@ export function removeFoodLogOutboxInsert(
     (entry as FoodLogOutboxEntry).id !== completed.id ||
     (entry as FoodLogOutboxEntry).queuedAt !== completed.queuedAt ||
     (entry as FoodLogOutboxEntry).attempts !== completed.attempts ||
-    (entry as FoodLogOutboxEntry).nextAttemptAt !== completed.nextAttemptAt,
+    (entry as FoodLogOutboxEntry).nextAttemptAt !== completed.nextAttemptAt ||
+    JSON.stringify((entry as FoodLogOutboxEntry).row) !== JSON.stringify(completed.row),
   );
 }
 
@@ -263,7 +264,8 @@ export function deferFoodLogOutboxInsert(
       entry.id !== failed.id ||
       entry.queuedAt !== failed.queuedAt ||
       entry.attempts !== failed.attempts ||
-      entry.nextAttemptAt !== failed.nextAttemptAt
+      entry.nextAttemptAt !== failed.nextAttemptAt ||
+      JSON.stringify(entry.row) !== JSON.stringify(failed.row)
     ) return entry;
 
     const attempts = Math.min(MAX_RETRY_ATTEMPTS, (entry.attempts ?? 0) + 1);
