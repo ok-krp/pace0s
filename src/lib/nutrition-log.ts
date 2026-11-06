@@ -174,8 +174,12 @@ export async function addNutritionItemToLog(
     ],
   };
   const nextTotals = recomputeNutritionTotals(nextItems);
-  localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
-  localStorage.setItem(accountKeys.totals, JSON.stringify(nextTotals));
+  try {
+    localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
+    localStorage.setItem(accountKeys.totals, JSON.stringify(nextTotals));
+  } catch {
+    // The canonical SQL row is durable; the next refresh can rebuild this cache.
+  }
   applyRemoteWrite(KEY_ITEMS, nextItems);
   applyRemoteWrite(KEY_TOTALS, nextTotals);
   window.dispatchEvent(new Event("pace.nutrition.changed"));
