@@ -102,14 +102,6 @@ class _NutritionPageState extends State<NutritionPage> {
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
   }
 
-  Set<String> _foodLogMissingNutrients(Map<String, dynamic> row) {
-    final meta = row['meta'];
-    if (meta is! Map || meta['missing_nutrients'] is! List) {
-      return <String>{};
-    }
-    return (meta['missing_nutrients'] as List).whereType<String>().toSet();
-  }
-
   Future<void> _pushAndRefreshFoodLog({bool syncUserState = false}) async {
     final expectedUserId = _accountUserId;
     if (expectedUserId == null ||
@@ -172,24 +164,7 @@ class _NutritionPageState extends State<NutritionPage> {
     };
     final remoteItems = rows
         .where((row) => !deletedIds.contains(row['id']?.toString()))
-        .map((row) {
-          final missing = _foodLogMissingNutrients(row);
-          return <String, dynamic>{
-            'id': row['id'],
-            'name': row['name'],
-            'meal': row['meal'],
-            'qty': 1,
-            'kcal': missing.contains('kcal') ? null : row['kcal'],
-            'p': missing.contains('protein_g') ? null : row['protein_g'],
-            'c': missing.contains('carbs_g') ? null : row['carbs_g'],
-            'f': missing.contains('fat_g') ? null : row['fat_g'],
-            'fiber': row['fiber_g'],
-            'sugar': row['sugar_g'],
-            'sodium': row['sodium_mg'],
-            'created_at': row['created_at'],
-            '__foodLogCanonical': true,
-          };
-        })
+        .map(FoodLogSync.mapFoodLogRowToNutritionItem)
         .toList();
     final remoteIds = remoteItems.map((item) => item['id']?.toString()).toSet();
     final legacyOrPending = localItems.where((item) {
