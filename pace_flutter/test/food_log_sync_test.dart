@@ -183,6 +183,26 @@ void main() {
     expect((queued.last as Map)['operation'], 'delete');
   });
 
+  test('preserves a malformed native quarantine container before appending', () {
+    final malformed = <String, dynamic>{'legacy': 'quarantine-payload'};
+    final preserved = FoodLogSync.preserveQuarantineContainer(
+      malformed,
+      now: DateTime.utc(2026, 11, 6, 12),
+    );
+
+    expect(preserved, hasLength(1));
+    expect(preserved.single, {
+      'reason': 'malformed-quarantine-container',
+      'quarantinedAt': '2026-11-06T12:00:00.000Z',
+      'operation': malformed,
+    });
+    expect(FoodLogSync.preserveQuarantineContainer(null), isEmpty);
+    expect(
+      FoodLogSync.preserveQuarantineContainer([{'existing': true}]),
+      [{'existing': true}],
+    );
+  });
+
   test('backs off failed native food-log writes with a bounded retry delay', () {
     final now = DateTime.utc(2026, 11, 6, 12);
     final queued = FoodLogSync.queueOperation(
