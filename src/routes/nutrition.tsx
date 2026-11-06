@@ -74,6 +74,7 @@ function NutritionPage() {
   }, [currentAccountId]);
   const currentTab = tab ?? "nutrition";
   const [scanOpen, setScanOpen] = useState(false);
+  const [scanOwnerId, setScanOwnerId] = useState<string | null>(null);
   const [recallCount] = useLocalState<number>("pace.recalls.count", 0);
   const [pending, setPending] = useState<
     | { kind: "barcode"; product: OFFProduct; grams: number; meal: string; accountUserId: string | null }
@@ -267,21 +268,21 @@ function NutritionPage() {
                     <label className="text-[11px] text-muted-foreground">Quantité (g)</label>
                     <Input
                       type="number" inputMode="numeric" min={1} value={visiblePending.grams}
-                      onChange={(e) => setPending({ ...pending, grams: Math.max(0, +e.target.value || 0) })}
+                      onChange={(e) => setPending({ ...visiblePending, grams: Math.max(0, +e.target.value || 0) })}
                     />
                   </div>
                 </>
               ) : (
                 <FoodAnalysisEditor
                   items={visiblePending.items}
-                  onChange={(items) => setPending({ ...pending, items, grams: sumItems(items).grams })}
+                  onChange={(items) => setPending({ ...visiblePending, items, grams: sumItems(items).grams })}
                   confidence={visiblePending.result.confidence}
                   confidenceNote={visiblePending.result.confidence_note || visiblePending.result.notes}
                 />
               )}
               <div>
                 <label className="text-[11px] text-muted-foreground">Repas</label>
-                <Select value={visiblePending.meal} onValueChange={(v) => setPending({ ...pending, meal: v })}>
+                <Select value={visiblePending.meal} onValueChange={(v) => setPending({ ...visiblePending, meal: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{MEALS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                 </Select>
