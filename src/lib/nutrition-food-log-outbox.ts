@@ -18,6 +18,7 @@ export type FoodLogInsertRow = {
   sugar_g: number | null;
   sodium_mg: number | null;
   source: "manual" | "barcode" | "photo" | "recipe";
+  health_score?: "green" | "orange" | "red" | null;
   meta: Record<string, unknown>;
 };
 
@@ -160,6 +161,9 @@ export function isValidFoodLogInsertRow(
     isOptionalNonNegative(row.sugar_g) &&
     isOptionalNonNegative(row.sodium_mg) &&
     ["manual", "barcode", "photo", "recipe"].includes(String(row.source)) &&
+    (row.health_score === undefined ||
+      row.health_score === null ||
+      ["green", "orange", "red"].includes(String(row.health_score))) &&
     !!row.meta &&
     typeof row.meta === "object" &&
     !Array.isArray(row.meta);
