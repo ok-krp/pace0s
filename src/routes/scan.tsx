@@ -114,14 +114,9 @@ function ScanPageContent({ userId }: { userId: string | null }) {
   const logWriteInFlight = useRef(false);
 
   useEffect(() => {
-    if (!userId) return;
-    if (search.open === "barcode") {
-      setScanning(true);
-      navigate({ to: "/scan", search: {}, replace: true });
-    } else if (search.open === "photo") {
-      fileRef.current?.click();
-      navigate({ to: "/scan", search: {}, replace: true });
-    }
+    if (!userId || search.open !== "photo") return;
+    fileRef.current?.click();
+    navigate({ to: "/scan", search: {}, replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search.open, userId]);
 
@@ -138,6 +133,9 @@ function ScanPageContent({ userId }: { userId: string | null }) {
     const expectedUserId = userId;
     if (!expectedUserId) return;
     setScanning(false);
+    if (search.open === "barcode") {
+      void navigate({ to: "/scan", search: {}, replace: true });
+    }
     setBusy(true);
     try {
       const p = await fetchProductByBarcode(code);
@@ -466,7 +464,17 @@ function ScanPageContent({ userId }: { userId: string | null }) {
         </motion.div>
       )}
 
-      {scanning && <BarcodeScanner onDetected={handleBarcode} onClose={() => setScanning(false)} />}
+      {(scanning || search.open === "barcode") && (
+        <BarcodeScanner
+          onDetected={handleBarcode}
+          onClose={() => {
+            setScanning(false);
+            if (search.open === "barcode") {
+              void navigate({ to: "/scan", search: {}, replace: true });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
