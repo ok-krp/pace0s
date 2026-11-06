@@ -154,3 +154,54 @@ export function mayReadGlobalNutritionCache(
   if (!userId) return cacheOwner === null;
   return cacheOwner === userId;
 }
+
+
+export type FoodLogPageResult<T> = {
+  data: readonly T[] | null;
+  error: unknown;
+};
+
+/**
+ * Fetch an entire food_log collection using its immutable UUID primary key.
+ * A partial/error/non-progressing page is never returned as a successful
+ * snapshot, so callers cannot replace their local cache with truncated data.
+ * PostgreSQL UUID ordering and canonical UUID string ordering use the same
+ * byte order, making the cursor deterministic across pages.
+ */
+export async function fetchAllFoodLogKeysetPages<T extends { id: string }>(
+  fetchPage: (afterId: string | null, limit: number) => Promise<FoodLogPageResult<T>>,
+  options: { pageSize: number; isCancelled?: () => boolean },
+): Promise<T[] | null> {
+  const { pageSize, isCancelled = () => false } = options;
+  if (!Number.isSafeInteger(pageSize) || pageSize < 1) {
+    throw new RangeError("pageSize must be a positive safe integer");
+  }
+
+  const rows: T[] = [];
+  let cursor: string | null = null;
+
+  while (true) {
+    if (isCancelled()) return null;
+    let result: FoodLogPageResult<T>;
+    try {
+      result = await fetchPage(cursor, pageSize);
+    } catch {
+      return null;
+    }
+    if (isCancelled() || result.error != null || result.data == null) return null;
+    const page = result.data;
+    if (page.length > pageSize) return null;
+
+    let lastId = cursor;
+    for (const row of page) {
+      if (!row || typeof row.id !== "string" || row.id.length === 0) return null;
+      if (lastId !== null && row.id <= lastId) return null;
+      lastId = row.id;
+    }
+
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+    if (lastId === null) return null;
+    cursor = lastId;
+  }
+}
