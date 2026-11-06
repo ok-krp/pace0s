@@ -498,6 +498,7 @@ class FoodLogSync {
     return List<dynamic>.from(rawOutbox).map((entry) {
       if (entry is! Map ||
           entry['id'] != failed['id'] ||
+          entry['user_id'] != failed['user_id'] ||
           entry['operation'] != failed['operation'] ||
           entry['queuedAt'] != failed['queuedAt'] ||
           entry['attempts'] != failed['attempts'] ||
@@ -542,6 +543,7 @@ class FoodLogSync {
       ..removeWhere((entry) {
         if (entry is! Map ||
             entry['id'] != completed['id'] ||
+            entry['user_id'] != completed['user_id'] ||
             entry['operation'] != completed['operation'] ||
             entry['queuedAt'] != completed['queuedAt'] ||
             entry['attempts'] != completed['attempts'] ||
