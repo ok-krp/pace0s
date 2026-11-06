@@ -249,6 +249,11 @@ export async function addNutritionItemToLog(
       iron_mg: it.iron ?? null,
       calcium_mg: it.calcium ?? null,
       vitamin_c_mg: it.vitC ?? null,
+      missing_nutrients: [
+        ...(it.fiber == null ? ["fiber_g"] : []),
+        ...(it.sugar == null ? ["sugar_g"] : []),
+        ...(it.sodium == null ? ["sodium_mg"] : []),
+      ],
     },
   };
 
