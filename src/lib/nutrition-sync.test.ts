@@ -15,6 +15,7 @@ import {
   queueNutritionTombstone,
   readActiveNutritionTombstones,
   foodLogDeltaSince,
+  compareFoodLogTupleCursor,
   nextNutritionFoodLogCursor,
   parseNutritionFoodLogCursor,
   shouldRunFullFoodLogReconciliation,
@@ -406,6 +407,23 @@ test("advances the food-log cursor only from a complete scan and keeps its full-
   assert.equal(emptyFull.id, null);
   assert.equal(emptyFull.createdAt, "2026-11-06T11:55:00.000Z");
   assert.equal(emptyFull.lastFullAt, "2026-11-06T12:00:00.000Z");
+});
+
+test("compares adjacent food_log microseconds without floating-point precision loss", () => {
+  assert.equal(
+    compareFoodLogTupleCursor(
+      { createdAt: "2026-11-06T12:00:00.123456Z", id: canonical.id },
+      { createdAt: "2026-11-06T12:00:00.123457Z", id: canonical.id },
+    ),
+    -1,
+  );
+  assert.equal(
+    compareFoodLogTupleCursor(
+      { createdAt: "2026-11-06T12:00:00.123456Z", id: canonical.id },
+      { createdAt: "2026-11-06T12:00:00.123456Z", id: otherId },
+    ),
+    -1,
+  );
 });
 
 test("paginates food_log by created_at then UUID, including equal timestamp rows", async () => {
