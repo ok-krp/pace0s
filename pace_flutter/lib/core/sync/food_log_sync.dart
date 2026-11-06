@@ -494,6 +494,23 @@ class FoodLogSync {
       !localStore.isSwitchingAccount &&
       localStore.activeUserId == expectedUserId;
 
+  /// Preserve a malformed quarantine container as a recoverable entry
+  /// instead of replacing it with an empty list during an unrelated retry.
+  static List<dynamic> preserveQuarantineContainer(
+    dynamic raw, {
+    DateTime? now,
+  }) {
+    if (raw is List) return List<dynamic>.from(raw);
+    if (raw == null) return <dynamic>[];
+    return <dynamic>[
+      <String, dynamic>{
+        'reason': 'malformed-quarantine-container',
+        'quarantinedAt': (now ?? DateTime.now()).toUtc().toIso8601String(),
+        'operation': raw,
+      },
+    ];
+  }
+
   static Future<void> _persistLocalOutboxes({
     required LocalStore localStore,
     required String expectedUserId,
@@ -529,10 +546,11 @@ class FoodLogSync {
     if (index < 0) return;
 
     final quarantined = outbox.removeAt(index);
-    final rawQuarantine = localStore.read(quarantineKey);
-    final quarantine = rawQuarantine is List
-        ? List<dynamic>.from(rawQuarantine)
-        : <dynamic>[];
+    final quarantine = preserveQuarantineContainer(
+
+      localStore.read(quarantineKey),
+
+    );
     quarantine.add({
       'reason': reason,
       'quarantinedAt': DateTime.now().toUtc().toIso8601String(),
@@ -756,10 +774,11 @@ class FoodLogSync {
         if (!_isCurrentAccount(client, localStore, expectedUserId)) return;
         final current = localStore.read(outboxKey);
         final remaining = removeOperation(current, operation);
-        final rawQuarantine = localStore.read(quarantineKey);
-        final quarantine = rawQuarantine is List
-            ? List<dynamic>.from(rawQuarantine)
-            : <dynamic>[];
+        final quarantine = preserveQuarantineContainer(
+
+          localStore.read(quarantineKey),
+
+        );
         await _persistLocalOutboxes(
           localStore: localStore,
           expectedUserId: expectedUserId,
@@ -777,10 +796,11 @@ class FoodLogSync {
             operation,
             now: DateTime.now().toUtc(),
           );
-          final rawQuarantine = localStore.read(quarantineKey);
-          final quarantine = rawQuarantine is List
-              ? List<dynamic>.from(rawQuarantine)
-              : <dynamic>[];
+          final quarantine = preserveQuarantineContainer(
+
+            localStore.read(quarantineKey),
+
+          );
           await _persistLocalOutboxes(
             localStore: localStore,
             expectedUserId: expectedUserId,
