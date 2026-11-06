@@ -2,6 +2,13 @@ import { todayKey, applyRemoteWrite } from "@/lib/storage";
 import { applyRemoteDomainWrite, readDomain, writeDomain } from "@/lib/domain-store";
 import { supabase } from "@/integrations/supabase/client";
 import {
+  nutritionFoodLogOutboxKey,
+  queueFoodLogInsert,
+  readValidFoodLogOutbox,
+  removeFoodLogOutboxInsert,
+  type FoodLogInsertRow,
+} from "@/lib/nutrition-food-log-outbox";
+import {
   mergeNutritionTombstoneMaps,
   mergeUnassignedNutritionSnapshots,
   NUTRITION_CACHE_OWNER_KEY,
@@ -158,6 +165,65 @@ export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty
 
 export type NutritionLogSource = "manual" | "barcode" | "photo" | "recipe";
 export type NutritionLogWriteResult = "cloud" | "local" | "saved-for-previous-account";
+
+/**
+ * Retry account-local food_log inserts after a network failure. The queue is
+ * deliberately stored under pace.__sync_* so it can never become a user_state
+ * payload. Upserts are idempotent by the stable row UUID.
+ */
+export async function flushNutritionFoodLogOutbox(
+  expectedUserId: string,
+  isCancelled: () => boolean = () => false,
+): Promise<void> {
+  if (!expectedUserId.trim() || isCancelled()) return;
+  try {
+    const { data: initial, error: initialError } = await supabase.auth.getSession();
+    if (initialError || initial.session?.user.id !== expectedUserId) return;
+    const key = nutritionFoodLogOutboxKey(expectedUserId);
+    const raw = localStorage.getItem(key);
+    if (!raw) return;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      // Keep malformed persisted bytes untouched for manual recovery.
+      return;
+    }
+    const pending = readValidFoodLogOutbox(parsed, expectedUserId);
+    for (const operation of pending) {
+      if (isCancelled()) return;
+      const { data: before, error: beforeError } = await supabase.auth.getSession();
+      if (beforeError || before.session?.user.id !== expectedUserId) return;
+
+      const { error } = await supabase
+        .from("food_log")
+        .upsert(operation.row, { onConflict: "id", ignoreDuplicates: true });
+      const { data: after, error: afterError } = await supabase.auth.getSession();
+      if (isCancelled() || afterError || after.session?.user.id !== expectedUserId) return;
+      if (error) continue;
+
+      // Remove only the exact queued version acknowledged by this request.
+      // A user edit that replaced this UUID in flight remains queued.
+      let current: unknown;
+      try {
+        current = JSON.parse(localStorage.getItem(key) ?? "[]");
+      } catch {
+        return;
+      }
+      const remaining = removeFoodLogOutboxInsert(current, operation);
+      try {
+        localStorage.setItem(key, JSON.stringify(remaining));
+      } catch {
+        // The upsert is idempotent; a later retry can safely acknowledge it.
+        return;
+      }
+    }
+  } catch {
+    // Offline, expired session, and transient PostgREST failures are retried
+    // by the next online event or bounded sync tick.
+  }
+}
 
 /**
  * Persist an authenticated Nutrition item in food_log so Web, Flutter and
@@ -329,8 +395,51 @@ export async function addNutritionItemToLog(
     localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === userId;
 
   if (insertError) {
-    if (stillSameAccount) appendLocalNutritionItem(it, userId, false);
-    else throw new Error("L'enregistrement a échoué après un changement de session. Réessaie après reconnexion.");
+    const outboxKey = nutritionFoodLogOutboxKey(userId);
+    let rawOutbox: unknown = [];
+    try {
+      rawOutbox = JSON.parse(localStorage.getItem(outboxKey) ?? "[]");
+    } catch {
+      // Do not silently replace corrupt pending operations with an empty queue.
+      throw new Error("La file Nutrition locale est illisible ; aucune donnée n'a été remplacée.");
+    }
+    const queued = queueFoodLogInsert(
+      rawOutbox,
+      payload as FoodLogInsertRow,
+      new Date().toISOString(),
+    );
+    try {
+      localStorage.setItem(outboxKey, JSON.stringify(queued));
+    } catch {
+      throw new Error("Stockage local saturé ; le repas n'a pas pu être mis en attente.");
+    }
+
+    if (stillSameAccount) {
+      appendLocalNutritionItem(it, userId, false);
+    } else {
+      // The network request completed after a session switch. Update only the
+      // initiating account's isolated cache; never mutate the new account's
+      // domain store or compatibility keys.
+      const scopedRaw = localStorage.getItem(accountKeys.items);
+      let scopedItems: NutritionMap = {};
+      try {
+        const parsed: unknown = scopedRaw ? JSON.parse(scopedRaw) : {};
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          scopedItems = parsed as NutritionMap;
+        }
+      } catch {
+        // Preserve the durable outbox; the next login can rebuild this cache.
+      }
+      const nextItems = {
+        ...scopedItems,
+        [today]: [
+          ...(scopedItems[today] ?? []).filter((existing) => existing.id !== it.id),
+          it,
+        ],
+      };
+      localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
+      localStorage.setItem(accountKeys.totals, JSON.stringify(recomputeNutritionTotals(nextItems)));
+    }
     return "local";
   }
 
