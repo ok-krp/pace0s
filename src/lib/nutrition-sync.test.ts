@@ -20,6 +20,8 @@ import {
   shouldRunFullFoodLogReconciliation,
 } from "./nutrition-sync.ts";
 
+const otherId = "00000000-0000-4000-8000-000000000002";
+
 const canonical = {
   id: "00000000-0000-4000-8000-000000000001",
   log_date: "2026-11-05",
