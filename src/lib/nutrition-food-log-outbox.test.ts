@@ -38,6 +38,7 @@ test("scopes the local retry key to one account", () => {
   assert.notEqual(alice, bob);
   assert.match(alice, /pace\.__sync_food_log_outbox:/);
   assert.throws(() => nutritionFoodLogOutboxKey("  "));
+  assert.throws(() => nutritionFoodLogOutboxKey("not-a-supabase-uuid"));
 });
 
 test("rejects normalized invalid calendar and timezone timestamps in outbox entries", () => {
@@ -75,6 +76,13 @@ test("validates canonical food_log rows with optional null nutrient values", () 
   assert.equal(isValidFoodLogInsertRow({ ...row, health_score: "green" }, userId), true);
   assert.equal(isValidFoodLogInsertRow({ ...row, health_score: "unknown" }, userId), false);
   assert.equal(isValidFoodLogInsertRow({ ...row, user_id: "other-user" }, userId), false);
+    assert.equal(isValidFoodLogInsertRow({ ...row, user_id: "not-a-uuid" }), false);
+    const cyclicMeta: Record<string, unknown> = {};
+    cyclicMeta.self = cyclicMeta;
+    assert.equal(isValidFoodLogInsertRow({ ...row, meta: cyclicMeta }), false);
+    let deeplyNested: unknown = "leaf";
+    for (let index = 0; index < 22; index++) deeplyNested = { child: deeplyNested };
+    assert.equal(isValidFoodLogInsertRow({ ...row, meta: { deeplyNested } }), false);
   assert.equal(isValidFoodLogInsertRow({ ...row, log_date: "2026-02-30" }, userId), false);
   assert.equal(isValidFoodLogInsertRow({ ...row, kcal: Number.NaN }, userId), false);
   assert.equal(isValidFoodLogInsertRow({ ...row, source: "unknown" }, userId), false);
