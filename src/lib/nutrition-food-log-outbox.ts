@@ -65,6 +65,41 @@ function isOptionalNonNegative(value: unknown): value is number | null {
   return value === null || isFiniteNonNegative(value);
 }
 
+const OPTIONAL_NUTRITION_FIELDS = [
+  "sat",
+  "sugar",
+  "fiber",
+  "salt",
+  "sodium",
+  "iron",
+  "calcium",
+  "vitC",
+] as const;
+
+/** Reject non-finite/negative UI values before cache mutation or network I/O. */
+export function isValidNutritionItemInput(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const item = value as Record<string, unknown>;
+  if (
+    typeof item.name !== "string" ||
+    !item.name.trim() ||
+    typeof item.meal !== "string" ||
+    !item.meal.trim() ||
+    !isFiniteNonNegative(item.kcal) ||
+    !isFiniteNonNegative(item.p) ||
+    !isFiniteNonNegative(item.c) ||
+    !isFiniteNonNegative(item.f)
+  ) return false;
+
+  if (item.qty !== undefined &&
+      (typeof item.qty !== "number" || !Number.isFinite(item.qty) || item.qty <= 0)) {
+    return false;
+  }
+  return OPTIONAL_NUTRITION_FIELDS.every((field) =>
+    item[field] === undefined || isFiniteNonNegative(item[field]),
+  );
+}
+
 export function isValidFoodLogInsertRow(
   value: unknown,
   expectedUserId?: string,
