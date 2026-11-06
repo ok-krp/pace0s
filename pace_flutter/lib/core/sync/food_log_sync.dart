@@ -15,6 +15,7 @@ class FoodLogSync {
   static const Duration fullReconciliationInterval = Duration(hours: 24);
   static const Duration tombstoneRetention = Duration(days: 90);
   static const int maximumTombstones = 500;
+  static const int maximumPendingOperations = 2000;
 
   static const String _select =
       'id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,source,meta,created_at';
@@ -365,6 +366,28 @@ class FoodLogSync {
         : rawOutbox == null
             ? <dynamic>[]
             : <dynamic>[rawOutbox];
+    var validOperationCount = 0;
+    var hasExistingOperation = false;
+    for (final entry in entries) {
+      if (entry is! Map) continue;
+      try {
+        final candidate = Map<String, dynamic>.from(entry);
+        if (!isValidOperation(candidate)) continue;
+        validOperationCount++;
+        if (candidate['id'] == id) hasExistingOperation = true;
+      } on TypeError {
+        // Retain malformed entries for quarantine; they do not count as
+        // actionable operations toward the pending-operation limit.
+      }
+    }
+    if (!hasExistingOperation &&
+        validOperationCount >= maximumPendingOperations) {
+      throw StateError(
+        'La file Nutrition locale a atteint sa limite de '
+        '$maximumPendingOperations opérations ; aucune donnée existante '
+        'n’a été supprimée.',
+      );
+    }
     DateTime? previousAt;
     for (final entry in entries) {
       if (entry is! Map || entry['id'] != id || entry['queuedAt'] is! String) {
