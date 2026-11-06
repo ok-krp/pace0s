@@ -13,6 +13,7 @@ export type CanonicalFoodLogRow = {
   sugar_g: number | null;
   sodium_mg: number | null;
   meta: unknown;
+  created_at?: string;
 };
 
 export type CanonicalNutritionItem = NutritionItem & {
