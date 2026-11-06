@@ -138,6 +138,59 @@ void main() {
     );
   });
 
+  test('does not replace or acknowledge another account outbox command', () {
+    const userBId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    final now = DateTime.utc(2026, 11, 6, 12);
+    final accountB = FoodLogSync.queueOperation(
+      const <dynamic>[],
+      operation: 'upsert',
+      id: id,
+      expectedUserId: userBId,
+      row: {...row(id), 'user_id': userBId, 'name': 'Account B food'},
+      now: now,
+    );
+    final accountA = FoodLogSync.queueOperation(
+      accountB,
+      operation: 'upsert',
+      id: id,
+      expectedUserId: userId,
+      row: {...row(id), 'name': 'Account A food'},
+      now: now,
+    );
+
+    expect(accountA, hasLength(2));
+    expect(
+      accountA.map((entry) => (entry as Map)['user_id']).toSet(),
+      {userId, userBId},
+    );
+    final completedA = Map<String, dynamic>.from(accountA.last as Map);
+    final updatedA = FoodLogSync.queueOperation(
+      accountA,
+      operation: 'upsert',
+      id: id,
+      expectedUserId: userId,
+      row: {...row(id), 'name': 'Account A updated'},
+      now: now.add(const Duration(minutes: 1)),
+    );
+    expect(updatedA, hasLength(2));
+    expect(
+      (updatedA.first as Map)['user_id'],
+      userBId,
+      reason: 'a same-ID command owned by another account must be retained',
+    );
+    expect(
+      (updatedA.last as Map)['row']['name'],
+      'Account A updated',
+    );
+
+    final afterOldAck = FoodLogSync.removeOperation(updatedA, completedA);
+    expect(afterOldAck, hasLength(2));
+    expect(
+      afterOldAck.map((entry) => (entry as Map)['user_id']).toSet(),
+      {userId, userBId},
+    );
+  });
+
   test('rejects an upsert whose row belongs to a different account', () {
     expect(
       () => FoodLogSync.queueOperation(
