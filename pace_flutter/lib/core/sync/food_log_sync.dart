@@ -225,6 +225,49 @@ class FoodLogSync {
     );
   }
 
+  /// Fetch every page before returning a snapshot. Uses the immutable UUID
+  /// primary key as its cursor so inserts/updates to created_at cannot shift an
+  /// offset and silently skip a row.
+  static Future<List<Map<String, dynamic>>?> fetchAllKeysetPages({
+    required Future<List<Map<String, dynamic>>?> Function(
+      String? afterId,
+      int pageSize,
+    ) fetchPage,
+    int pageSize = 500,
+    bool Function()? isCancelled,
+  }) async {
+    if (pageSize < 1) throw ArgumentError.value(pageSize, 'pageSize');
+    final cancelled = isCancelled ?? () => false;
+    final rows = <Map<String, dynamic>>[];
+    String? cursor;
+
+    while (true) {
+      if (cancelled()) return null;
+      List<Map<String, dynamic>>? page;
+      try {
+        page = await fetchPage(cursor, pageSize);
+      } catch (_) {
+        return null;
+      }
+      if (cancelled() || page == null || page.length > pageSize) return null;
+
+      var lastId = cursor;
+      for (final row in page) {
+        final id = row['id'];
+        if (id is! String || id.isEmpty ||
+            (lastId != null && id.compareTo(lastId) <= 0)) {
+          return null;
+        }
+        lastId = id;
+      }
+
+      rows.addAll(page);
+      if (page.length < pageSize) return rows;
+      if (lastId == null) return null;
+      cursor = lastId;
+    }
+  }
+
   static Future<List<Map<String, dynamic>>?> fetchForDay({
     required SupabaseClient? client,
     required LocalStore localStore,
@@ -235,21 +278,24 @@ class FoodLogSync {
         !isCalendarDate(logDate)) {
       return null;
     }
-    try {
-      final rows = await client!
-          .from('food_log')
-          .select(_select)
-          .eq('user_id', expectedUserId)
-          .eq('log_date', logDate)
-          .order('created_at', ascending: true)
-          .limit(1000);
-      if (!_isCurrentAccount(client, localStore, expectedUserId)) return null;
-      return rows
-          .map((row) => Map<String, dynamic>.from(row))
-          .toList(growable: false);
-    } catch (_) {
-      return null;
-    }
+    return fetchAllKeysetPages(
+      fetchPage: (afterId, pageSize) async {
+        var query = client!
+            .from('food_log')
+            .select(_select)
+            .eq('user_id', expectedUserId)
+            .eq('log_date', logDate)
+            .order('id', ascending: true);
+        if (afterId != null) query = query.gt('id', afterId);
+        final page = await query.limit(pageSize);
+        if (!_isCurrentAccount(client, localStore, expectedUserId)) return null;
+        return page
+            .map((row) => Map<String, dynamic>.from(row))
+            .toList(growable: false);
+      },
+      pageSize: 500,
+      isCancelled: () => !_isCurrentAccount(client, localStore, expectedUserId),
+    );
   }
 
   static Map<String, String> queueDeletedId(
