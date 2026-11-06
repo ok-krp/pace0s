@@ -9,7 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { applyLocalWrite, applyRemoteWrite, useLocalState, todayKey } from "@/lib/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { accountSyncStorageKeys, parseSyncQueue } from "@/lib/cloud-sync-scope";
-import { fetchAllFoodLogKeysetPages, mergeCanonicalNutritionItems, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, NUTRITION_LEGACY_TOMBSTONES_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
+import { fetchAllFoodLogKeysetPages, mergeCanonicalNutritionItems, mergeUnassignedNutritionSnapshots, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, NUTRITION_LEGACY_TOMBSTONES_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -318,13 +318,26 @@ function NutritionLogView() {
           localStorage.setItem(previousKeys.totals, globalTotals);
         }
       } else if (!owner && globalItems) {
-        // Historical global JSON has no reliable owner. Preserve it for
-        // explicit recovery, but do not silently attribute it to this login.
-        if (!localStorage.getItem(NUTRITION_UNASSIGNED_BACKUP_KEY)) {
+        // Historical/guest JSON has no reliable account owner. Merge each
+        // successive guest snapshot into the recovery backup without ever
+        // assigning those foods to the account that just signed in.
+        const mergedGuestBackup = mergeUnassignedNutritionSnapshots(
+          localStorage.getItem(NUTRITION_UNASSIGNED_BACKUP_KEY),
+          globalItems,
+        );
+        if (mergedGuestBackup) {
+          localStorage.setItem(NUTRITION_UNASSIGNED_BACKUP_KEY, JSON.stringify(mergedGuestBackup));
+          localStorage.setItem(
+            `${NUTRITION_UNASSIGNED_BACKUP_KEY}:totals`,
+            JSON.stringify(recomputeNutritionTotals(mergedGuestBackup)),
+          );
+        } else if (!localStorage.getItem(NUTRITION_UNASSIGNED_BACKUP_KEY)) {
+          // Keep an invalid legacy source for manual recovery rather than
+          // silently replacing it with a partial parsed representation.
           localStorage.setItem(NUTRITION_UNASSIGNED_BACKUP_KEY, globalItems);
-        }
-        if (globalTotals && !localStorage.getItem(`${NUTRITION_UNASSIGNED_BACKUP_KEY}:totals`)) {
-          localStorage.setItem(`${NUTRITION_UNASSIGNED_BACKUP_KEY}:totals`, globalTotals);
+          if (globalTotals) {
+            localStorage.setItem(`${NUTRITION_UNASSIGNED_BACKUP_KEY}:totals`, globalTotals);
+          }
         }
       }
 
