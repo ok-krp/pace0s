@@ -183,6 +183,11 @@ void main() {
     expect((queued.last as Map)['operation'], 'delete');
   });
 
+  test('ignores non-string-key corrupt maps when deriving pending deletes', () {
+    final malformed = <dynamic, dynamic>{1: 'not-a-json-operation'};
+    expect(FoodLogSync.pendingDeleteIds([malformed]), isEmpty);
+  });
+
   test('preserves a malformed native quarantine container before appending', () {
     final malformed = <String, dynamic>{'legacy': 'quarantine-payload'};
     final preserved = FoodLogSync.preserveQuarantineContainer(
