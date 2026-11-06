@@ -609,6 +609,10 @@ function NutritionLogView() {
 
   const add = async () => {
     if (!name.trim() || !fields.kcal.trim() || addInFlight.current) return;
+    // Bind this form submission to the account that initiated the action.
+    // If auth changes while the service checks the Supabase session, reject
+    // rather than attributing the form's data to the newly active account.
+    const expectedUserId = activeUserId;
     addInFlight.current = true;
 
     const missingNutrients = [
@@ -640,7 +644,7 @@ function NutritionLogView() {
         ...(!fields.fiber.trim() ? ["fiber_g"] : []),
         ...(!fields.sugar.trim() ? ["sugar_g"] : []),
         ...(!fields.sodium.trim() ? ["sodium_mg"] : []),
-      ]);
+      ], { expectedUserId });
 
       if (result === "saved-for-previous-account") {
         toast.message("Repas enregistré pour le compte d'origine ; il réapparaîtra à sa prochaine connexion.");
