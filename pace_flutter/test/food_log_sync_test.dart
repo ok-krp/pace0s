@@ -105,6 +105,46 @@ void main() {
     expect(FoodLogSync.pendingDeleteIds(replaced), {id});
   });
 
+  test('preserves malformed outbox roots when queueing and acknowledging', () {
+    final malformedRoot = <String, dynamic>{'legacy': 'recoverable-payload'};
+    final queued = FoodLogSync.queueOperation(
+      malformedRoot,
+      operation: 'delete',
+      id: id,
+      now: DateTime.utc(2026, 11, 5, 9),
+    );
+
+    expect(queued, hasLength(2));
+    expect(identical(queued.first, malformedRoot), isTrue);
+    expect(
+      FoodLogSync.removeOperation(malformedRoot, {
+        'id': id,
+        'operation': 'delete',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+      }),
+      [malformedRoot],
+    );
+  });
+
+  test('does not discard malformed same-ID entries when replacing an operation', () {
+    final malformed = <String, dynamic>{
+      'id': id,
+      'operation': 'upsert',
+      'queuedAt': '2026-11-05T09:00:00.000Z',
+      'row': row(otherId),
+    };
+    final queued = FoodLogSync.queueOperation(
+      [malformed],
+      operation: 'delete',
+      id: id,
+      now: DateTime.utc(2026, 11, 5, 9),
+    );
+
+    expect(queued, hasLength(2));
+    expect(identical(queued.first, malformed), isTrue);
+    expect((queued.last as Map)['operation'], 'delete');
+  });
+
   test('keeps unrelated rows independent and queues monotonic timestamps', () {
     final now = DateTime.utc(2026, 11, 5, 9);
     final first = FoodLogSync.queueOperation(
