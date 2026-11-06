@@ -542,9 +542,11 @@ function NutritionLogView() {
 
   const recompute = (arr: Item[]) =>
     arr.reduce((a, x) => ({ kcal: a.kcal + x.kcal, p: a.p + x.p, c: a.c + x.c, f: a.f + x.f }), { kcal: 0, p: 0, c: 0, f: 0 });
+  const addInFlight = useRef(false);
 
   const add = async () => {
-    if (!name || !fields.kcal) return;
+    if (!name || !fields.kcal || addInFlight.current) return;
+    addInFlight.current = true;
     const it: Item = {
       id: crypto.randomUUID(), name, meal, qty: 1,
       kcal: +fields.kcal || 0, p: +fields.protein || 0, c: +fields.carbs || 0, f: +fields.fat || 0,
@@ -561,6 +563,7 @@ function NutritionLogView() {
       const { data: authData, error: authError } = await supabase.auth.getSession();
       const user = authData.session?.user;
       if (authError || (initiatingUserId && user?.id !== initiatingUserId) || (!initiatingUserId && user)) {
+        addInFlight.current = false;
         toast.error("La session a changé. Réessaie l'ajout.");
         return;
       }
@@ -569,6 +572,7 @@ function NutritionLogView() {
         // direct SQL insert can mutate its in-memory representation.
         const cacheOwner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
         if (cacheOwner !== user.id || activeUserId !== user.id) {
+          addInFlight.current = false;
           toast.error("Cache Nutrition non initialisé pour ce compte. Recharge la page.");
           return;
         }
@@ -641,6 +645,7 @@ function NutritionLogView() {
     }
     setName("");
     setFields(Object.fromEntries(NUT_COLS.map((c) => [c.key, ""])) as Record<NutCol, string>);
+    addInFlight.current = false;
   };
 
   const remove = (id: string) => {
