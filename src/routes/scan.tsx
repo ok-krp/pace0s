@@ -84,6 +84,9 @@ const scoreColors = {
 
 function ScanPage() {
   const { user } = useAuth();
+  const accountUserId = user?.id ?? null;
+  const accountUserIdRef = useRef<string | null>(accountUserId);
+  accountUserIdRef.current = accountUserId;
   const navigate = useNavigate();
   const search = Route.useSearch();
   const analyzePhoto = useServerFn(analyzeFoodPhoto);
@@ -101,8 +104,23 @@ function ScanPage() {
   const [aiResult, setAiResult] = useState<AnalysisResult | null>(null);
   const [aiItems, setAiItems] = useState<FoodItem[]>([]);
   const [busy, setBusy] = useState(false);
+  const [scanOwnerId, setScanOwnerId] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const logWriteInFlight = useRef(false);
+
+  useEffect(() => {
+    // Discard scan results when the authenticated identity changes. An
+    // analysis started for account A must never be offered to account B.
+    setScanning(false);
+    setProduct(null);
+    setScoreInfo(null);
+    setScore100(null);
+    setRecalls([]);
+    setPhoto(null);
+    setAiResult(null);
+    setAiItems([]);
+    setScanOwnerId(null);
+  }, [accountUserId]);
 
   useEffect(() => {
     if (!user) return;
@@ -126,22 +144,29 @@ function ScanPage() {
   }
 
   const handleBarcode = async (code: string) => {
+    const expectedUserId = accountUserIdRef.current;
+    if (!expectedUserId) return;
     setScanning(false);
     setBusy(true);
     try {
       const p = await fetchProductByBarcode(code);
       if (!p) { toast.error("Produit introuvable dans OpenFoodFacts"); return; }
+      if (accountUserIdRef.current !== expectedUserId) return;
       const info = computeHealthScore(p);
       const s100 = computeScore100(p);
       setProduct(p);
       setScoreInfo(info);
       setScore100(s100);
+      setScanOwnerId(expectedUserId);
       setProductGrams(100);
       setAiResult(null);
       setPhoto(null);
       checkRecallByBarcode(code).then(setRecalls).catch(() => setRecalls([]));
+      const { data: authData, error: authError } = await supabase.auth.getSession();
+      if (authError || authData.session?.user.id !== expectedUserId ||
+          accountUserIdRef.current !== expectedUserId) return;
       await supabase.from("food_scans").insert({
-        user_id: user.id,
+        user_id: expectedUserId,
         kind: "barcode",
         barcode: code,
         product_name: p.name,
@@ -161,6 +186,8 @@ function ScanPage() {
   };
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const expectedUserId = accountUserIdRef.current;
+    if (!expectedUserId) return;
     const file = e.target.files?.[0];
     if (!file) return;
     if (!isLegalCategoryAllowed("ai")) { toast.error("Consentement Analyse IA requis."); return; }
@@ -175,6 +202,8 @@ function ScanPage() {
         const res = await analyzePhoto({ data: { imageBase64: b64 } });
         if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
         const r = res.result as AnalysisResult;
+        if (accountUserIdRef.current !== expectedUserId) return;
+        setScanOwnerId(expectedUserId);
         setAiResult(r);
         setAiItems(r.items);
       } catch (err) {
@@ -188,6 +217,11 @@ function ScanPage() {
 
   const addProductToLog = async () => {
     if (!product || !scoreInfo || productGrams <= 0 || logWriteInFlight.current) return;
+    const expectedUserId = scanOwnerId;
+    if (!expectedUserId || accountUserIdRef.current !== expectedUserId) {
+      toast.error("Le compte a changé ; relance le scan avec le compte actif.");
+      return;
+    }
     logWriteInFlight.current = true;
     const factor = productGrams / 100;
     try {
@@ -204,6 +238,7 @@ function ScanPage() {
       }, "barcode", [], {
         healthScore: scoreInfo.score,
         meta: { grams: productGrams },
+        expectedUserId,
       });
       if (result === "saved-for-previous-account") {
         toast.message("Repas enregistré pour le compte d'origine ; il réapparaîtra à sa reconnexion.");
@@ -223,6 +258,11 @@ function ScanPage() {
 
   const addAiToLog = async () => {
     if (!aiResult || aiItems.length === 0 || logWriteInFlight.current) return;
+    const expectedUserId = scanOwnerId;
+    if (!expectedUserId || accountUserIdRef.current !== expectedUserId) {
+      toast.error("Le compte a changé ; relance l'analyse avec le compte actif.");
+      return;
+    }
     logWriteInFlight.current = true;
     const totals = sumItems(aiItems);
     try {
@@ -244,6 +284,7 @@ function ScanPage() {
           items: aiItems,
           grams: Math.round(totals.grams),
         },
+        expectedUserId,
       });
       if (result === "saved-for-previous-account") {
         toast.message("Repas enregistré pour le compte d'origine ; il réapparaîtra à sa reconnexion.");
