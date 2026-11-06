@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapFoodLogRow, mergeCanonicalNutritionItems, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones } from "./nutrition-sync.ts";
+import { mapFoodLogRow, mergeCanonicalNutritionItems, fetchAllFoodLogKeysetPages, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones } from "./nutrition-sync.ts";
 
 const canonical = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -140,6 +140,75 @@ test("unowned legacy Nutrition cache is never auto-assigned to a logged-in accou
 test("rejects UUIDs without a valid version in nutrition tombstones", () => {
   assert.throws(
     () => queueNutritionTombstone(null, "00000000-0000-0000-8000-000000000001"),
+    RangeError,
+  );
+});
+
+
+test("fetches every food_log page beyond the PostgREST 1,000-row cap", async () => {
+  const source = Array.from({ length: 1207 }, (_, index) => ({
+    id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+    value: index,
+  }));
+  const cursors: Array<string | null> = [];
+  const rows = await fetchAllFoodLogKeysetPages(async (afterId, limit) => {
+    cursors.push(afterId);
+    const start = afterId === null ? 0 : source.findIndex((row) => row.id === afterId) + 1;
+    return { data: source.slice(start, start + limit), error: null };
+  }, { pageSize: 500 });
+
+  assert.deepEqual(rows, source);
+  assert.deepEqual(cursors, [null, source[499].id, source[999].id]);
+});
+
+test("does not return or apply an incomplete food_log snapshot", async () => {
+  let calls = 0;
+  const rows = await fetchAllFoodLogKeysetPages(async (_afterId, limit) => {
+    calls++;
+    if (calls === 1) {
+      return {
+        data: Array.from({ length: limit }, (_, index) => ({
+          id: `00000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`,
+        })),
+        error: null,
+      };
+    }
+    return { data: null, error: new Error("page unavailable") };
+  }, { pageSize: 2 });
+
+  assert.equal(rows, null);
+  assert.equal(calls, 2);
+});
+
+test("rejects repeated or non-advancing food_log UUID cursors", async () => {
+  let calls = 0;
+  const rows = await fetchAllFoodLogKeysetPages(async () => {
+    calls++;
+    return calls === 1
+      ? { data: [{ id: "b" }, { id: "c" }], error: null }
+      : { data: [{ id: "c" }, { id: "d" }], error: null };
+  }, { pageSize: 2 });
+
+  assert.equal(rows, null);
+  assert.equal(calls, 2);
+});
+
+test("stops food_log pagination when account scope is cancelled", async () => {
+  let cancelled = false;
+  let calls = 0;
+  const rows = await fetchAllFoodLogKeysetPages(async () => {
+    calls++;
+    cancelled = true;
+    return { data: [{ id: "a" }], error: null };
+  }, { pageSize: 2, isCancelled: () => cancelled });
+
+  assert.equal(rows, null);
+  assert.equal(calls, 1);
+});
+
+test("rejects invalid food_log page sizes", async () => {
+  await assert.rejects(
+    () => fetchAllFoodLogKeysetPages(async () => ({ data: [], error: null }), { pageSize: 0 }),
     RangeError,
   );
 });
