@@ -89,6 +89,11 @@ test("validates canonical food_log rows with optional null nutrient values", () 
   assert.equal(isValidFoodLogInsertRow({ ...row, log_date: "2026-02-30" }, userId), false);
   assert.equal(isValidFoodLogInsertRow({ ...row, kcal: Number.NaN }, userId), false);
   assert.equal(isValidFoodLogInsertRow({ ...row, source: "unknown" }, userId), false);
+  assert.equal(isValidFoodLogInsertRow({ ...row, unexpected: Number.POSITIVE_INFINITY }, userId), false);
+  const cyclicRow = { ...row } as FoodLogInsertRow & { unexpected?: unknown };
+  cyclicRow.unexpected = cyclicRow;
+  assert.equal(isValidFoodLogInsertRow(cyclicRow, userId), false);
+
 });
 
 test("queues one retry per stable row UUID without replacing unrelated entries", () => {
