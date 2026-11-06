@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { TablesInsert } from "@/integrations/supabase/types";
 import {
   nutritionFoodLogOutboxKey,
+  isValidNutritionItemInput,
   queueFoodLogInsert,
   deferFoodLogOutboxInsert,
   readValidFoodLogOutbox,
@@ -267,6 +268,9 @@ export async function addNutritionItemToLog(
 ): Promise<NutritionLogWriteResult> {
   const today = todayKey();
   const it: NutritionItem = { id: crypto.randomUUID(), qty: item.qty ?? 1, ...item };
+  if (!isValidNutritionItemInput(it)) {
+    throw new RangeError("Les valeurs Nutrition doivent être finies, positives ou nulles, avec un nom et un repas.");
+  }
   const { data: initialSession, error: initialSessionError } = await supabase.auth.getSession();
   if (initialSessionError) throw new Error("Impossible de vérifier la session Nutrition.");
   const userId = initialSession.session?.user.id ?? null;
