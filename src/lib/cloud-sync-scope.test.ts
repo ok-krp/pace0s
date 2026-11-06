@@ -139,7 +139,9 @@ test("reserved internal sync keys are never treated as user domain state", () =>
   assert.equal(isSyncableLocalKey("pace.settings.theme"), true);
   assert.equal(isSyncableLocalKey("pace.__sync_queue"), false);
   assert.equal(isSyncableLocalKey("pace.__sync_meta:user-a"), false);
+  assert.equal(isSyncableLocalKey("pace.__sync_food_log_outbox:user-a"), false);
   assert.equal(isSyncableLocalKey("pace.__nutrition_cache:user-a:items"), false);
+  assert.equal(isSyncableLocalKey("pace.__nutrition_cache:user-a:food_log_cursor"), false);
   assert.equal(isSyncableLocalKey("pace.__nutrition_cache:user-a:deleted_ids"), false);
   assert.equal(isSyncableLocalKey("lt.water"), false);
   assert.equal(isSyncableLocalKey("__outbox"), false);
