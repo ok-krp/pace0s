@@ -35,8 +35,35 @@ const MAX_RETRY_DELAY_MS = 15 * 60 * 1000;
 
 export function nutritionFoodLogOutboxKey(userId: string): string {
   const normalized = userId.trim();
-  if (!normalized) throw new Error("A user ID is required for the Nutrition outbox");
+  if (!UUID_PATTERN.test(normalized)) {
+    throw new Error("A valid Supabase user UUID is required for the Nutrition outbox");
+  }
   return `pace.__sync_food_log_outbox:${encodeURIComponent(normalized)}`;
+}
+
+function isJsonSafe(value: unknown, depth = 0, ancestors = new Set<object>()): boolean {
+  if (depth > 20) return false;
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
+    return true;
+  }
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) {
+    if (ancestors.has(value)) return false;
+    ancestors.add(value);
+    const safe = value.every((item) => isJsonSafe(item, depth + 1, ancestors));
+    ancestors.delete(value);
+    return safe;
+  }
+  if (typeof value !== "object") return false;
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) return false;
+  if (ancestors.has(value)) return false;
+  ancestors.add(value);
+  const safe = Object.entries(value).every(([, child]) =>
+    isJsonSafe(child, depth + 1, ancestors),
+  );
+  ancestors.delete(value);
+  return safe;
 }
 
 function isCalendarDate(value: string): boolean {
@@ -145,7 +172,7 @@ export function isValidFoodLogInsertRow(
   return typeof row.id === "string" &&
     UUID_PATTERN.test(row.id) &&
     typeof row.user_id === "string" &&
-    row.user_id.trim().length > 0 &&
+    UUID_PATTERN.test(row.user_id) &&
     (expectedUserId === undefined || row.user_id === expectedUserId) &&
     typeof row.log_date === "string" &&
     isCalendarDate(row.log_date) &&
@@ -166,7 +193,8 @@ export function isValidFoodLogInsertRow(
       ["green", "orange", "red"].includes(String(row.health_score))) &&
     !!row.meta &&
     typeof row.meta === "object" &&
-    !Array.isArray(row.meta);
+    !Array.isArray(row.meta) &&
+    isJsonSafe(row.meta);
 }
 
 export function isValidFoodLogOutboxEntry(
