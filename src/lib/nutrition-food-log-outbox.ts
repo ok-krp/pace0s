@@ -44,25 +44,25 @@ export function nutritionFoodLogOutboxKey(userId: string): string {
 function isJsonSafe(value: unknown, depth = 0, ancestors = new Set<object>()): boolean {
   try {
     if (depth > 20) return false;
-  if (value === null || typeof value === "string" || typeof value === "boolean") {
-    return true;
-  }
-  if (typeof value === "number") return Number.isFinite(value);
-  if (Array.isArray(value)) {
+    if (value === null || typeof value === "string" || typeof value === "boolean") {
+      return true;
+    }
+    if (typeof value === "number") return Number.isFinite(value);
+    if (Array.isArray(value)) {
+      if (ancestors.has(value)) return false;
+      ancestors.add(value);
+      const safe = value.every((item) => isJsonSafe(item, depth + 1, ancestors));
+      ancestors.delete(value);
+      return safe;
+    }
+    if (typeof value !== "object") return false;
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return false;
     if (ancestors.has(value)) return false;
     ancestors.add(value);
-    const safe = value.every((item) => isJsonSafe(item, depth + 1, ancestors));
-    ancestors.delete(value);
-    return safe;
-  }
-  if (typeof value !== "object") return false;
-  const prototype = Object.getPrototypeOf(value);
-  if (prototype !== Object.prototype && prototype !== null) return false;
-  if (ancestors.has(value)) return false;
-  ancestors.add(value);
-  const safe = Object.entries(value).every(([, child]) =>
-    isJsonSafe(child, depth + 1, ancestors),
-  );
+    const safe = Object.entries(value).every(([, child]) =>
+      isJsonSafe(child, depth + 1, ancestors),
+    );
     ancestors.delete(value);
     return safe;
   } catch {
