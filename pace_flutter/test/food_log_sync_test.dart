@@ -137,6 +137,37 @@ void main() {
     );
   });
 
+  test('caps native pending operations without dropping existing rows', () {
+    final full = List<dynamic>.generate(
+      FoodLogSync.maximumPendingOperations,
+      (index) => <String, dynamic>{
+        'id':
+            '00000000-0000-4000-8000-${(index + 1).toString().padLeft(12, '0')}',
+        'operation': 'delete',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+      },
+    );
+
+    expect(
+      () => FoodLogSync.queueOperation(
+        full,
+        operation: 'delete',
+        id: '00000000-0000-4000-8000-000000000000',
+        now: DateTime.utc(2026, 11, 5, 10),
+      ),
+      throwsStateError,
+    );
+    expect(full, hasLength(FoodLogSync.maximumPendingOperations));
+
+    final replacement = FoodLogSync.queueOperation(
+      full,
+      operation: 'delete',
+      id: id,
+      now: DateTime.utc(2026, 11, 5, 10),
+    );
+    expect(replacement, hasLength(FoodLogSync.maximumPendingOperations));
+  });
+
   test('replacing an upsert with a delete preserves the newer command', () {
     final now = DateTime.utc(2026, 11, 5, 9);
     final inserted = FoodLogSync.queueOperation(
