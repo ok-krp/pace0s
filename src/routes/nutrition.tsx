@@ -545,107 +545,54 @@ function NutritionLogView() {
   const addInFlight = useRef(false);
 
   const add = async () => {
-    if (!name || !fields.kcal || addInFlight.current) return;
+    if (!name.trim() || !fields.kcal.trim() || addInFlight.current) return;
     addInFlight.current = true;
-    const it: Item = {
-      id: crypto.randomUUID(), name, meal, qty: 1,
-      kcal: +fields.kcal || 0, p: +fields.protein || 0, c: +fields.carbs || 0, f: +fields.fat || 0,
-      sat: +fields.sat_fat || undefined, sugar: +fields.sugar || undefined, fiber: +fields.fiber || undefined,
-      salt: +fields.salt || undefined, sodium: +fields.sodium || undefined,
-      iron: +fields.iron || undefined, calcium: +fields.calcium || undefined, vitC: +fields.vit_c || undefined,
-    };
 
-    // Capture the initiating account before any asynchronous operation. Never
-    // commit a response into the compatibility cache after an account switch.
-    const initiatingUserId = activeUserId;
-    let savedToFoodLog = false;
+    const missingNutrients = [
+      ...(!fields.protein.trim() ? ["protein_g"] : []),
+      ...(!fields.carbs.trim() ? ["carbs_g"] : []),
+      ...(!fields.fat.trim() ? ["fat_g"] : []),
+    ];
+    const numberOrMissing = (value: string) =>
+      value.trim() === "" ? undefined : Number(value);
+
     try {
-      const { data: authData, error: authError } = await supabase.auth.getSession();
-      const user = authData.session?.user;
-      if (authError || (initiatingUserId && user?.id !== initiatingUserId) || (!initiatingUserId && user)) {
-        addInFlight.current = false;
-        toast.error("La session a changé. Réessaie l'ajout.");
-        return;
-      }
-      if (user) {
-        // The compatibility cache must be owned by this account before a
-        // direct SQL insert can mutate its in-memory representation.
-        const cacheOwner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
-        if (cacheOwner !== user.id || activeUserId !== user.id) {
-          addInFlight.current = false;
-          toast.error("Cache Nutrition non initialisé pour ce compte. Recharge la page.");
-          return;
-        }
-        const { error } = await supabase.from("food_log").insert({
-          id: it.id,
-          user_id: user.id,
-          log_date: today,
-          meal,
-          name,
-          kcal: it.kcal,
-          protein_g: it.p,
-          carbs_g: it.c,
-          fat_g: it.f,
-          fiber_g: it.fiber ?? 0,
-          sugar_g: it.sugar ?? 0,
-          sodium_mg: it.sodium ?? 0,
-          source: "manual",
-          meta: {
-            client: "pace_web",
-            sat_fat_g: it.sat ?? null,
-            salt_g: it.salt ?? null,
-            iron_mg: it.iron ?? null,
-            calcium_mg: it.calcium ?? null,
-            vitamin_c_mg: it.vitC ?? null,
-            missing_nutrients: [
-              ...(!fields.protein.trim() ? ["protein_g"] : []),
-              ...(!fields.carbs.trim() ? ["carbs_g"] : []),
-              ...(!fields.fat.trim() ? ["fat_g"] : []),
-              ...(!fields.fiber.trim() ? ["fiber_g"] : []),
-              ...(!fields.sugar.trim() ? ["sugar_g"] : []),
-              ...(!fields.sodium.trim() ? ["sodium_mg"] : []),
-            ],
-          },
-        });
-        if (!error) {
-          const { data: verifiedSession, error: verifyError } = await supabase.auth.getSession();
-          if (verifyError || verifiedSession.session?.user.id !== user.id || activeUserId !== user.id) {
-            // SQL insert is committed for the initiating account. Do not touch
-            // another account's local cache; its next reconciliation will find it.
-            savedToFoodLog = true;
-            toast.message("Repas enregistré. Le cache sera actualisé au prochain chargement.");
-          } else {
-          let current: Record<string, Item[]> = {};
-          try {
-            const raw = localStorage.getItem("pace.nutrition.items");
-            if (raw) current = JSON.parse(raw) as Record<string, Item[]>;
-          } catch {
-            // Rebuild the visible day's list if the local cache is malformed.
-          }
-          const nextItems = {
-            ...current,
-            [today]: [...(Array.isArray(current[today]) ? current[today] : []), { ...it, __foodLogCanonical: true }],
-          };
-          applyRemoteWrite("pace.nutrition.items", nextItems);
-          applyRemoteWrite("pace.nutrition.totals", recomputeNutritionTotals(nextItems));
-          savedToFoodLog = true;
-          }
-        }
-      }
-    } catch {
-      // Fall back to the existing local outbox path while SQL is unavailable.
-    }
+      const result = await addNutritionItemToLog({
+        name: name.trim(),
+        meal,
+        kcal: Number(fields.kcal),
+        p: Number(fields.protein || 0),
+        c: Number(fields.carbs || 0),
+        f: Number(fields.fat || 0),
+        sat: numberOrMissing(fields.sat_fat),
+        sugar: numberOrMissing(fields.sugar),
+        fiber: numberOrMissing(fields.fiber),
+        salt: numberOrMissing(fields.salt),
+        sodium: numberOrMissing(fields.sodium),
+        iron: numberOrMissing(fields.iron),
+        calcium: numberOrMissing(fields.calcium),
+        vitC: numberOrMissing(fields.vit_c),
+      }, "manual", [
+        ...missingNutrients,
+        ...(!fields.fiber.trim() ? ["fiber_g"] : []),
+        ...(!fields.sugar.trim() ? ["sugar_g"] : []),
+        ...(!fields.sodium.trim() ? ["sodium_mg"] : []),
+      ]);
 
-    if (!savedToFoodLog) {
-      setItems((prev) => {
-        const next = { ...prev, [today]: [...(prev[today] ?? []), it] };
-        setTotals((t) => ({ ...t, [today]: recompute(next[today]) }));
-        return next;
-      });
+      if (result === "saved-for-previous-account") {
+        toast.message("Repas enregistré pour le compte d'origine ; il réapparaîtra à sa prochaine connexion.");
+      } else if (result === "local") {
+        toast.message("Repas conservé localement ; synchronisation à la reconnexion.");
+      } else {
+        toast.success("Repas ajouté.");
+      }
+      setName("");
+      setFields(Object.fromEntries(NUT_COLS.map((column) => [column.key, ""])) as Record<NutCol, string>);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer le repas.");
+    } finally {
+      addInFlight.current = false;
     }
-    setName("");
-    setFields(Object.fromEntries(NUT_COLS.map((c) => [c.key, ""])) as Record<NutCol, string>);
-    addInFlight.current = false;
   };
 
   const remove = (id: string) => {
