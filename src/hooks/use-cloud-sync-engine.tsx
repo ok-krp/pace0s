@@ -6,6 +6,7 @@ import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 import { accountSyncStorageKeys, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
 import { fetchAllKeysetPages } from "@/lib/user-state-pagination";
+import { flushNutritionFoodLogOutbox } from "@/lib/nutrition-log";
 import { NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys } from "@/lib/nutrition-sync";
 
 const PACE_PREFIX = "pace.";
@@ -203,18 +204,18 @@ export function useCloudSyncEngineInternal() {
         return;
       }
       flushPending = false;
-      const queue = readQueue(userId);
-      if (!queue.length) {
-        if (pullPending || forceFullPullPending) {
-          const force = forceFullPullPending;
-          pullPending = false;
-          void pull(force);
-        }
-        return;
-      }
       running.current[userId] = true;
-      try { for (const key of queue) await pushKeyNow(key); }
-      finally {
+      try {
+        // food_log retries are account-local row operations, never user_state
+        // JSON snapshots. Keep them on the same consent-gated online worker.
+        await flushNutritionFoodLogOutbox(userId, () => cancelled);
+        if (cancelled || !navigator.onLine) return;
+        const queue = readQueue(userId);
+        for (const key of queue) {
+          if (cancelled) return;
+          await pushKeyNow(key);
+        }
+      } finally {
         running.current[userId] = false;
         if (!cancelled && navigator.onLine) {
           if (pullPending || forceFullPullPending) {
