@@ -319,36 +319,45 @@ class _NutritionPageState extends State<NutritionPage> {
     final localOnlyKeys = <String>{};
     if (expectedUserId != null) {
       final values = result;
-      writes[FoodLogSync.outboxKey] = FoodLogSync.queueOperation(
-        widget.localStore.read(FoodLogSync.outboxKey),
-        operation: 'upsert',
-        id: id,
-        row: {
-          'id': id,
-          'user_id': expectedUserId,
-          'log_date': day,
-          'meal': 'Repas',
-          'name': itemName,
-          'kcal': values['kcal'] ?? 0,
-          'protein_g': values['p'] ?? 0,
-          'carbs_g': values['c'] ?? 0,
-          'fat_g': values['f'] ?? 0,
-          'fiber_g': 0,
-          'sugar_g': 0,
-          'sodium_mg': 0,
-          'source': 'manual',
-          'meta': {
-            'client': 'pace_flutter',
-            'missing_nutrients': [
-              if (values['kcal'] == null) 'kcal',
-              if (values['p'] == null) 'protein_g',
-              if (values['c'] == null) 'carbs_g',
-              if (values['f'] == null) 'fat_g',
-            ],
+      try {
+        writes[FoodLogSync.outboxKey] = FoodLogSync.queueOperation(
+          widget.localStore.read(FoodLogSync.outboxKey),
+          operation: 'upsert',
+          id: id,
+          row: {
+            'id': id,
+            'user_id': expectedUserId,
+            'log_date': day,
+            'meal': 'Repas',
+            'name': itemName,
+            'kcal': values['kcal'] ?? 0,
+            'protein_g': values['p'] ?? 0,
+            'carbs_g': values['c'] ?? 0,
+            'fat_g': values['f'] ?? 0,
+            'fiber_g': 0,
+            'sugar_g': 0,
+            'sodium_mg': 0,
+            'source': 'manual',
+            'meta': {
+              'client': 'pace_flutter',
+              'missing_nutrients': [
+                if (values['kcal'] == null) 'kcal',
+                if (values['p'] == null) 'protein_g',
+                if (values['c'] == null) 'carbs_g',
+                if (values['f'] == null) 'fat_g',
+              ],
+            },
           },
-        },
-        now: DateTime.now().toUtc(),
-      );
+          now: DateTime.now().toUtc(),
+        );
+      } on StateError catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error.message)),
+          );
+        }
+        return;
+      }
       localOnlyKeys.addAll({
         FoodLogSync.outboxKey,
         'pace.nutrition.items',
@@ -418,20 +427,29 @@ class _NutritionPageState extends State<NutritionPage> {
     final localOnlyKeys = <String>{};
     if (expectedUserId != null && FoodLogSync.isUuid(itemId)) {
       final now = DateTime.now().toUtc();
-      writes[FoodLogSync.outboxKey] = FoodLogSync.queueOperation(
-        widget.localStore.read(FoodLogSync.outboxKey),
-        operation: 'delete',
-        id: itemId,
-        now: now,
-      );
-      // The SQL outbox remains local and durable; the compact tombstone is a
-      // normal account-scoped user_state key so other devices can hide a
-      // deleted cached item even before their next SQL reconciliation.
-      writes[FoodLogSync.deletedIdsKey] = FoodLogSync.queueDeletedId(
-        widget.localStore.read(FoodLogSync.deletedIdsKey),
-        id: itemId,
-        now: now,
-      );
+      try {
+        writes[FoodLogSync.outboxKey] = FoodLogSync.queueOperation(
+          widget.localStore.read(FoodLogSync.outboxKey),
+          operation: 'delete',
+          id: itemId,
+          now: now,
+        );
+        // The SQL outbox remains local and durable; the compact tombstone is a
+        // normal account-scoped user_state key so other devices can hide a
+        // deleted cached item even before their next SQL reconciliation.
+        writes[FoodLogSync.deletedIdsKey] = FoodLogSync.queueDeletedId(
+          widget.localStore.read(FoodLogSync.deletedIdsKey),
+          id: itemId,
+          now: now,
+        );
+      } on StateError catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(error.message)),
+          );
+        }
+        return;
+      }
       localOnlyKeys.addAll({
         FoodLogSync.outboxKey,
         'pace.nutrition.items',
