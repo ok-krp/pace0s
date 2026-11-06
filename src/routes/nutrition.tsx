@@ -669,20 +669,28 @@ function NutritionLogView() {
             return;
           }
 
+          // Re-check after the SQL await. The session may have switched while
+          // the DELETE was in flight; never publish account A's tombstone into
+          // account B's user_state key or touch B's compatibility cache.
+          const { data: verifiedAuth, error: verifyError } = await supabase.auth.getSession();
+          const sameAccount = !verifyError &&
+            verifiedAuth.session?.user.id === user.id &&
+            activeUserId === user.id &&
+            localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === user.id;
           const accountKeys = nutritionAccountCacheKeys(user.id);
           const rawTombstones = mergeNutritionTombstoneMaps(
             localStorage.getItem(accountKeys.deletedIds),
-            localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY),
+            sameAccount ? localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY) : null,
           );
           const tombstones = queueNutritionTombstone(JSON.stringify(rawTombstones), id);
-          // Keep the cache copy local and account-specific, but publish the
-          // canonical per-user key so other devices receive the tombstone.
+          // The account-local copy survives a tab/session transition. Publish
+          // to user_state only while the initiating identity is still active.
           localStorage.setItem(accountKeys.deletedIds, JSON.stringify(tombstones));
-          applyLocalWrite(NUTRITION_LEGACY_TOMBSTONES_KEY, tombstones);
 
+          const cacheKey = sameAccount ? "pace.nutrition.items" : accountKeys.items;
           let current: Record<string, Item[]> = {};
           try {
-            const raw = localStorage.getItem("pace.nutrition.items");
+            const raw = localStorage.getItem(cacheKey);
             if (raw) current = JSON.parse(raw) as Record<string, Item[]>;
           } catch {
             // Rebuild the visible day from the remaining cached entries.
@@ -691,8 +699,20 @@ function NutritionLogView() {
             ...current,
             [today]: (Array.isArray(current[today]) ? current[today] : []).filter((item) => item.id !== id),
           };
-          applyRemoteWrite("pace.nutrition.items", nextItems);
-          applyRemoteWrite("pace.nutrition.totals", recomputeNutritionTotals(nextItems));
+          const nextTotals = recomputeNutritionTotals(nextItems);
+          if (sameAccount) {
+            applyLocalWrite(NUTRITION_LEGACY_TOMBSTONES_KEY, tombstones);
+            localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
+            localStorage.setItem(accountKeys.totals, JSON.stringify(nextTotals));
+            applyRemoteWrite("pace.nutrition.items", nextItems);
+            applyRemoteWrite("pace.nutrition.totals", nextTotals);
+          } else {
+            // Only the original account's private cache is changed. It will
+            // reconcile the durable SQL deletion and tombstone on next login.
+            localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
+            localStorage.setItem(accountKeys.totals, JSON.stringify(nextTotals));
+            toast.message("Repas supprimé pour le compte d'origine ; la synchronisation reprendra à sa reconnexion.");
+          }
         } catch {
           toast.error("La suppression distante est temporairement indisponible.");
         }
