@@ -261,7 +261,7 @@ export async function addNutritionItemToLog(
   const { data: currentSession, error: currentSessionError } = await supabase.auth.getSession();
   const stillSameAccount = !currentSessionError &&
     currentSession.session?.user.id === userId &&
-    hasCurrentOwner();
+    localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === userId;
 
   if (insertError) {
     if (stillSameAccount) appendLocalNutritionItem(it);
