@@ -180,6 +180,8 @@ export type NutritionLogWriteResult = "cloud" | "local" | "saved-for-previous-ac
 export type NutritionLogWriteOptions = {
   healthScore?: "green" | "orange" | "red";
   meta?: Record<string, unknown>;
+  /** Reject a pending UI action when its initiating account is no longer active. */
+  expectedUserId?: string | null;
 };
 
 /**
@@ -287,6 +289,9 @@ export async function addNutritionItemToLog(
   const { data: initialSession, error: initialSessionError } = await supabase.auth.getSession();
   if (initialSessionError) throw new Error("Impossible de vérifier la session Nutrition.");
   const userId = initialSession.session?.user.id ?? null;
+  if (options.expectedUserId !== undefined && options.expectedUserId !== userId) {
+    throw new Error("La session a changé depuis le début de cette opération Nutrition. Recommence avec le compte actif.");
+  }
 
   if (!userId) {
     try {
