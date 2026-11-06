@@ -264,6 +264,20 @@ class FoodLogSync {
     return parsed.year == year && parsed.month == month && parsed.day == day;
   }
 
+  static bool _isJsonSafeValue(dynamic value, [int depth = 0]) {
+    if (depth > 20) return false;
+    if (value == null || value is String || value is bool) return true;
+    if (value is num) return value.isFinite;
+    if (value is List) {
+      return value.every((item) => _isJsonSafeValue(item, depth + 1));
+    }
+    if (value is Map) {
+      return value.entries.every((entry) =>
+          entry.key is String && _isJsonSafeValue(entry.value, depth + 1));
+    }
+    return false;
+  }
+
   static bool isValidOperation(Map<String, dynamic> operation) {
     final id = operation['id'];
     final queuedAt = operation['queuedAt'];
@@ -288,10 +302,15 @@ class FoodLogSync {
     if (kind == 'delete') return true;
     if (kind != 'upsert' || operation['row'] is! Map) return false;
 
-    final row = Map<String, dynamic>.from(operation['row'] as Map);
+    Map<String, dynamic> row;
+    try {
+      row = Map<String, dynamic>.from(operation['row'] as Map);
+    } on TypeError {
+      return false;
+    }
     if (row['id'] != id ||
         row['user_id'] is! String ||
-        (row['user_id'] as String).isEmpty ||
+        !isUuid(row['user_id'] as String) ||
         row['log_date'] is! String ||
         !isCalendarDate(row['log_date'] as String) ||
         row['meal'] is! String ||
@@ -299,7 +318,8 @@ class FoodLogSync {
         row['name'] is! String ||
         (row['name'] as String).trim().isEmpty ||
         !const {'manual', 'barcode', 'photo', 'recipe'}.contains(row['source']) ||
-        row['meta'] is! Map) {
+        row['meta'] is! Map ||
+        !_isJsonSafeValue(row['meta'])) {
       return false;
     }
     final healthScore = row['health_score'];
