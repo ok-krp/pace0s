@@ -40,6 +40,36 @@ test("scopes the local retry key to one account", () => {
   assert.throws(() => nutritionFoodLogOutboxKey("  "));
 });
 
+test("rejects normalized invalid calendar and timezone timestamps in outbox entries", () => {
+  const entry = {
+    id,
+    queuedAt,
+    row,
+  };
+  assert.equal(isValidFoodLogOutboxEntry(entry, userId), true);
+  assert.equal(
+    isValidFoodLogOutboxEntry({
+      ...entry,
+      queuedAt: "2026-02-30T12:00:00.000Z",
+    }, userId),
+    false,
+  );
+  assert.equal(
+    isValidFoodLogOutboxEntry({
+      ...entry,
+      queuedAt: "2026-11-06T12:00:00.000+14:01",
+    }, userId),
+    false,
+  );
+  assert.equal(
+    isValidFoodLogOutboxEntry({
+      ...entry,
+      queuedAt: "2026-11-06T12:00:00.1234567Z",
+    }, userId),
+    false,
+  );
+});
+
 test("validates canonical food_log rows with optional null nutrient values", () => {
   assert.equal(isValidFoodLogInsertRow(row, userId), true);
   assert.equal(isValidFoodLogInsertRow({ ...row, user_id: "other-user" }, userId), false);
