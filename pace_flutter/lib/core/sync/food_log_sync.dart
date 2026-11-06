@@ -274,6 +274,17 @@ class FoodLogSync {
         !LocalStore.isValidRemoteTimestamp(queuedAt)) {
       return false;
     }
+    final attempts = operation['attempts'];
+    if (attempts != null &&
+        (attempts is! int || attempts < 0 || attempts > maximumRetryAttempts)) {
+      return false;
+    }
+    final nextAttemptAt = operation['nextAttemptAt'];
+    if (nextAttemptAt != null &&
+        (nextAttemptAt is! String ||
+            !LocalStore.isValidRemoteTimestamp(nextAttemptAt))) {
+      return false;
+    }
     if (kind == 'delete') return true;
     if (kind != 'upsert' || operation['row'] is! Map) return false;
 
@@ -368,6 +379,66 @@ class FoodLogSync {
     return entries;
   }
 
+  static const int maximumRetryAttempts = 10;
+  static const Duration maximumRetryDelay = Duration(minutes: 15);
+
+  static bool isOperationDue(
+    Map<String, dynamic> operation, {
+    DateTime? now,
+  }) {
+    if (!isValidOperation(operation)) return false;
+    final nextAttemptAt = operation['nextAttemptAt'];
+    if (nextAttemptAt == null) return true;
+    final scheduled = DateTime.tryParse(nextAttemptAt as String)?.toUtc();
+    return scheduled != null &&
+        !scheduled.isAfter((now ?? DateTime.now()).toUtc());
+  }
+
+  /// Defer only the exact command that failed. A replacement for the same
+  /// UUID must not inherit the previous command's retry delay.
+  static List<dynamic> deferOperation(
+    dynamic rawOutbox,
+    Map<String, dynamic> failed, {
+    DateTime? now,
+  }) {
+    if (rawOutbox is! List) {
+      return rawOutbox == null ? <dynamic>[] : <dynamic>[rawOutbox];
+    }
+    final currentTime = (now ?? DateTime.now()).toUtc();
+    return List<dynamic>.from(rawOutbox).map((entry) {
+      if (entry is! Map ||
+          entry['id'] != failed['id'] ||
+          entry['operation'] != failed['operation'] ||
+          entry['queuedAt'] != failed['queuedAt'] ||
+          entry['attempts'] != failed['attempts'] ||
+          entry['nextAttemptAt'] != failed['nextAttemptAt']) {
+        return entry;
+      }
+      try {
+        final candidate = Map<String, dynamic>.from(entry);
+        if (!isValidOperation(candidate)) return entry;
+        final attempts = ((candidate['attempts'] as int?) ?? 0) + 1;
+        final boundedAttempts = attempts > maximumRetryAttempts
+            ? maximumRetryAttempts
+            : attempts;
+        final exponent = boundedAttempts > 5 ? 5 : boundedAttempts;
+        final rawDelaySeconds = 30 * (1 << exponent);
+        final delaySeconds = rawDelaySeconds > maximumRetryDelay.inSeconds
+            ? maximumRetryDelay.inSeconds
+            : rawDelaySeconds;
+        return <String, dynamic>{
+          ...candidate,
+          'attempts': boundedAttempts,
+          'nextAttemptAt': currentTime
+              .add(Duration(seconds: delaySeconds))
+              .toIso8601String(),
+        };
+      } on TypeError {
+        return entry;
+      }
+    }).toList(growable: false);
+  }
+
   /// Remove only the exact command whose request completed. An older in-flight
   /// acknowledgement must not delete a newer command for the same row ID.
   static List<dynamic> removeOperation(
@@ -382,11 +453,14 @@ class FoodLogSync {
         if (entry is! Map ||
             entry['id'] != completed['id'] ||
             entry['operation'] != completed['operation'] ||
-            entry['queuedAt'] != completed['queuedAt']) {
+            entry['queuedAt'] != completed['queuedAt'] ||
+          entry['attempts'] != completed['attempts'] ||
+          entry['nextAttemptAt'] != completed['nextAttemptAt']) {
           return false;
         }
         try {
-          return isValidOperation(Map<String, dynamic>.from(entry));
+          final candidate = Map<String, dynamic>.from(entry);
+          return isValidOperation(candidate);
         } on TypeError {
           return false;
         }
@@ -644,6 +718,7 @@ class FoodLogSync {
         );
         continue;
       }
+      if (!isOperationDue(operation)) continue;
 
       try {
         final id = operation['id'] as String;
@@ -685,8 +760,29 @@ class FoodLogSync {
           quarantine: quarantine,
         );
       } catch (_) {
-        // Keep the command durable after a transient network or local flush
-        // failure. A later retry is idempotent by the stable row UUID.
+        // Keep the command durable and avoid retrying it on every minute tick.
+        // A later retry is idempotent by the stable row UUID.
+        if (!_isCurrentAccount(client, localStore, expectedUserId)) return;
+        try {
+          final current = localStore.read(outboxKey);
+          final deferred = deferOperation(
+            current,
+            operation,
+            now: DateTime.now().toUtc(),
+          );
+          final rawQuarantine = localStore.read(quarantineKey);
+          final quarantine = rawQuarantine is List
+              ? List<dynamic>.from(rawQuarantine)
+              : <dynamic>[];
+          await _persistLocalOutboxes(
+            localStore: localStore,
+            expectedUserId: expectedUserId,
+            outbox: deferred,
+            quarantine: quarantine,
+          );
+        } catch (_) {
+          // A failed local flush leaves the original durable command intact.
+        }
         continue;
       }
     }
