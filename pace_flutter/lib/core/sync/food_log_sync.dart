@@ -133,43 +133,28 @@ class FoodLogSync {
     DateTime? now,
   }) {
     final current = (now ?? DateTime.now()).toUtc();
-    if (rows.isNotEmpty) {
-      final latest = rows.last;
-      final createdAt = latest['created_at'];
-      final id = latest['id'];
+    // The persisted cursor is a successful-scan watermark, not a row cursor.
+    // The next delta starts five minutes earlier; tuple cursors are used only
+    // inside each paginated request to catch late commits without full-day scans.
+    for (final row in rows) {
+      final createdAt = row['created_at'];
+      final id = row['id'];
       if (createdAt is! String ||
           !LocalStore.isValidRemoteTimestamp(createdAt) ||
           id is! String ||
           !isUuid(id)) {
-        throw const FormatException('Invalid last food_log cursor row');
+        throw const FormatException('Invalid food_log row while advancing cursor');
       }
-      final fullWatermark = current.subtract(cursorOverlap);
-      final latestAt = DateTime.parse(createdAt).toUtc();
-      final useWatermark = fullReconciliation && latestAt.isBefore(fullWatermark);
-      return <String, dynamic>{
-        'logDate': logDate,
-        'createdAt': useWatermark ? fullWatermark.toIso8601String() : createdAt,
-        'id': useWatermark ? null : id,
-        'lastFullAt': fullReconciliation
-            ? current.toIso8601String()
-            : previous?['lastFullAt'] ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toIso8601String(),
-      };
     }
-    if (fullReconciliation) {
-      return <String, dynamic>{
-        'logDate': logDate,
-        'createdAt': current.subtract(cursorOverlap).toIso8601String(),
-        'id': null,
-        'lastFullAt': current.toIso8601String(),
-      };
-    }
-    return previous ??
-        <String, dynamic>{
-          'logDate': logDate,
-          'createdAt': current.subtract(cursorOverlap).toIso8601String(),
-          'id': null,
-          'lastFullAt': DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toIso8601String(),
-        };
+    final watermark = current.toIso8601String();
+    return <String, dynamic>{
+      'logDate': logDate,
+      'createdAt': watermark,
+      'id': null,
+      'lastFullAt': fullReconciliation
+          ? watermark
+          : previous?['lastFullAt'] ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toIso8601String(),
+    };
   }
 
   static int? _compareFoodLogTuple(
