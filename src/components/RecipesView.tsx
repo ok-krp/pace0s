@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import { Heart, Clock, Flame, Plus, Trash2, Pencil, Check, X, ChefHat, Search, Image as ImageIcon, ArrowLeft, ArrowRight, BookOpen } from "lucide-react";
 import { useLocalState } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,8 @@ const emptyRecipe = (): Recipe => ({
 });
 
 export function RecipesView() {
+  const { user } = useAuth();
+  const expectedUserId = user?.id ?? null;
   const [favs, setFavs] = useLocalState<string[]>("pace.recipes.favs", []);
   const [custom, setCustom] = useLocalState<Recipe[]>("pace.recipes.custom", []);
   const [extraCats, setExtraCats] = useLocalState<string[]>("pace.recipes.cats", []);
@@ -62,6 +65,7 @@ export function RecipesView() {
   const [editOpen, setEditOpen] = useState(false);
   const [viewing, setViewing] = useState<Recipe | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [quickAddOwnerId, setQuickAddOwnerId] = useState<string | null>(null);
   const [newCat, setNewCat] = useState("");
   const [query, setQuery] = useState("");
 
@@ -104,6 +108,8 @@ export function RecipesView() {
       const result = await addNutritionItemToLog(
         { name: `${r.emoji} ${r.name}`, meal, kcal: r.kcal, p: r.p, c: r.c, f: r.f },
         "recipe",
+        [],
+        { expectedUserId },
       );
       if (result === "saved-for-previous-account") {
         toast.message("Recette enregistrée pour le compte précédent ; elle réapparaîtra à sa prochaine connexion.");
@@ -152,7 +158,14 @@ export function RecipesView() {
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher (nom, ingrédient…)" className="pl-9" />
         </div>
         <Button onClick={openNew} className="rounded-xl"><Plus className="size-4 mr-1" />Nouvelle</Button>
-        <Button variant="secondary" onClick={() => setQuickOpen(true)} className="rounded-xl">
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setQuickAddOwnerId(expectedUserId);
+            setQuickOpen(true);
+          }}
+          className="rounded-xl"
+        >
           <Plus className="size-4 mr-1" />Ajout rapide repas
         </Button>
       </div>
@@ -207,7 +220,10 @@ export function RecipesView() {
       </Dialog>
 
       <Dialog open={quickOpen} onOpenChange={setQuickOpen}>
-        <QuickAddDialog onClose={() => setQuickOpen(false)} />
+        <QuickAddDialog
+          expectedUserId={quickAddOwnerId}
+          onClose={() => setQuickOpen(false)}
+        />
       </Dialog>
 
       <Dialog open={!!viewing} onOpenChange={(v) => !v && setViewing(null)}>
@@ -311,7 +327,13 @@ function RecipeGrid({ list, favs, setFavs, onEdit, onView, onRemove, onAddToLog,
   );
 }
 
-function QuickAddDialog({ onClose }: { onClose: () => void }) {
+function QuickAddDialog({
+  onClose,
+  expectedUserId,
+}: {
+  onClose: () => void;
+  expectedUserId: string | null;
+}) {
   const [name, setName] = useState("");
   const [kcal, setKcal] = useState("");
   const [p, setP] = useState(""); const [c, setC] = useState(""); const [f, setF] = useState("");
@@ -329,7 +351,7 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
         p: +p || 0,
         c: +c || 0,
         f: +f || 0,
-      }, "manual");
+      }, "manual", [], { expectedUserId });
       toast.success(`Ajouté à ${meal}`);
       onClose();
     } catch (error) {
