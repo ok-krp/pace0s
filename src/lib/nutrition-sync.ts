@@ -416,37 +416,27 @@ export function nextNutritionFoodLogCursor({
   nowMs?: number;
 }): NutritionFoodLogCursor {
   if (!Number.isFinite(nowMs)) throw new RangeError("Invalid cursor timestamp");
-  const latest = rows.length > 0 ? rows[rows.length - 1] : null;
-  if (latest?.created_at && timestampMicros(latest.created_at) !== null) {
-    const fullWatermark = new Date(nowMs - FOOD_LOG_CURSOR_OVERLAP_MS).toISOString();
-    const latestMicros = timestampMicros(latest.created_at)!;
-    const watermarkMicros = timestampMicros(fullWatermark)!;
-    // Imported historical rows may be much older than the scan itself. Since
-    // a full snapshot already visited them, advance to a recent overlap
-    // watermark instead of rescanning the entire historical tail every minute.
-    const useWatermark = fullReconciliation && latestMicros < watermarkMicros;
-    return {
-      logDate,
-      createdAt: useWatermark ? fullWatermark : latest.created_at,
-      id: useWatermark ? null : latest.id,
-      lastFullAt: fullReconciliation
-        ? new Date(nowMs).toISOString()
-        : previous?.lastFullAt ?? new Date(0).toISOString(),
-    };
+
+  // Persist a scan watermark, not the last row timestamp. Every successful
+  // delta starts again five minutes before this watermark; the overlap catches
+  // delayed commits and equal-timestamp inserts without resending old history.
+  // The tuple cursor used to paginate within one request remains row-based.
+  for (const row of rows) {
+    if (!UUID_PATTERN.test(row.id) ||
+        typeof row.created_at !== "string" ||
+        timestampMicros(row.created_at) === null) {
+      throw new TypeError("Invalid food_log row while advancing cursor");
+    }
   }
-  if (fullReconciliation) {
-    return {
-      logDate,
-      createdAt: new Date(nowMs - FOOD_LOG_CURSOR_OVERLAP_MS).toISOString(),
-      id: null,
-      lastFullAt: new Date(nowMs).toISOString(),
-    };
-  }
-  return previous ?? {
+
+  const watermark = new Date(nowMs).toISOString();
+  return {
     logDate,
-    createdAt: new Date(nowMs - FOOD_LOG_CURSOR_OVERLAP_MS).toISOString(),
+    createdAt: watermark,
     id: null,
-    lastFullAt: new Date(0).toISOString(),
+    lastFullAt: fullReconciliation
+      ? watermark
+      : previous?.lastFullAt ?? new Date(0).toISOString(),
   };
 }
 
