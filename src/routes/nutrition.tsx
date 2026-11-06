@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useUserGoals } from "@/hooks/use-user-goals";
 import { useAuth } from "@/hooks/use-auth";
 import { useNutritionCols, NUT_COLS, type NutCol } from "@/hooks/use-nutrition-cols";
-import { addNutritionItem, recomputeNutritionTotals, type NutritionItem } from "@/lib/nutrition-log";
+import { addNutritionItemToLog, recomputeNutritionTotals, type NutritionItem } from "@/lib/nutrition-log";
 import { WaterView } from "@/components/WaterView";
 import { RecipesView } from "@/components/RecipesView";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -94,37 +94,41 @@ function NutritionPage() {
     reader.readAsDataURL(file);
   };
 
-  const confirmAdd = () => {
+  const confirmAdd = async () => {
     if (!pending) return;
-    if (pending.kind === "barcode") {
-      const f = pending.grams / 100;
-      addNutritionItem({
-        name: `${pending.product.name}${pending.product.brand ? ` · ${pending.product.brand}` : ""} (${pending.grams}g)`,
-        meal: pending.meal,
-        kcal: Math.round(pending.product.kcal * f),
-        p: +(pending.product.protein_g * f).toFixed(1),
-        c: +(pending.product.carbs_g * f).toFixed(1),
-        f: +(pending.product.fat_g * f).toFixed(1),
-        fiber: +(pending.product.fiber_g * f).toFixed(1),
-        sugar: +(pending.product.sugar_g * f).toFixed(1),
-        sodium: +(pending.product.sodium_mg * f).toFixed(1),
-      });
-    } else {
-      const t = sumItems(pending.items);
-      addNutritionItem({
-        name: `${pending.result.dish_name} (${Math.round(t.grams)}g)`,
-        meal: pending.meal,
-        kcal: t.kcal,
-        p: t.protein_g,
-        c: t.carbs_g,
-        f: t.fat_g,
-        fiber: t.fiber_g,
-        sugar: t.sugar_g,
-        sodium: t.sodium_mg,
-      });
+    try {
+      if (pending.kind === "barcode") {
+        const f = pending.grams / 100;
+        await addNutritionItemToLog({
+          name: `${pending.product.name}${pending.product.brand ? ` · ${pending.product.brand}` : ""} (${pending.grams}g)`,
+          meal: pending.meal,
+          kcal: Math.round(pending.product.kcal * f),
+          p: +(pending.product.protein_g * f).toFixed(1),
+          c: +(pending.product.carbs_g * f).toFixed(1),
+          f: +(pending.product.fat_g * f).toFixed(1),
+          fiber: +(pending.product.fiber_g * f).toFixed(1),
+          sugar: +(pending.product.sugar_g * f).toFixed(1),
+          sodium: +(pending.product.sodium_mg * f).toFixed(1),
+        }, "barcode");
+      } else {
+        const t = sumItems(pending.items);
+        await addNutritionItemToLog({
+          name: `${pending.result.dish_name} (${Math.round(t.grams)}g)`,
+          meal: pending.meal,
+          kcal: t.kcal,
+          p: t.protein_g,
+          c: t.carbs_g,
+          f: t.fat_g,
+          fiber: t.fiber_g,
+          sugar: t.sugar_g,
+          sodium: t.sodium_mg,
+        }, "photo");
+      }
+      toast.success(`Ajouté à ${pending.meal}`);
+      setPending(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer le repas.");
     }
-    toast.success(`Ajouté à ${pending.meal}`);
-    setPending(null);
   };
 
   return (
