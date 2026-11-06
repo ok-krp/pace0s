@@ -326,7 +326,7 @@ class FoodLogSync {
         (row['name'] as String).trim().isEmpty ||
         !const {'manual', 'barcode', 'photo', 'recipe'}.contains(row['source']) ||
         row['meta'] is! Map ||
-        !_isJsonSafeValue(row['meta'])) {
+        !_isJsonSafeValue(row)) {
       return false;
     }
     final healthScore = row['health_score'];
