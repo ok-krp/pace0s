@@ -66,12 +66,16 @@ const MEALS = ["Petit déjeuner", "Déjeuner", "Goûter", "Dîner", "Collation"]
 
 function NutritionPage() {
   const { tab } = Route.useSearch();
+  const { user } = useAuth();
+  const currentAccountId = user?.id ?? null;
+  const accountIdRef = useRef<string | null>(currentAccountId);
+  accountIdRef.current = currentAccountId;
   const currentTab = tab ?? "nutrition";
   const [scanOpen, setScanOpen] = useState(false);
   const [recallCount] = useLocalState<number>("pace.recalls.count", 0);
   const [pending, setPending] = useState<
-    | { kind: "barcode"; product: OFFProduct; grams: number; meal: string }
-    | { kind: "photo"; photo: string; result: FoodAnalysis; items: FoodItem[]; grams: number; meal: string }
+    | { kind: "barcode"; product: OFFProduct; grams: number; meal: string; accountUserId: string | null }
+    | { kind: "photo"; photo: string; result: FoodAnalysis; items: FoodItem[]; grams: number; meal: string; accountUserId: string | null }
     | null
   >(null);
   const [busy, setBusy] = useState(false);
@@ -79,19 +83,29 @@ function NutritionPage() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const analyzePhoto = useServerFn(analyzeFoodPhoto);
 
+  useEffect(() => {
+    // Pending scans are account-owned UI state too. Never let an analysis
+    // started under one identity become an item in the next signed-in account.
+    setPending(null);
+    setScanOpen(false);
+  }, [currentAccountId]);
+
   const handleBarcode = async (code: string) => {
+    const accountUserId = accountIdRef.current;
     setScanOpen(false);
     setBusy(true);
     try {
       const p = await fetchProductByBarcode(code);
       if (!p) { toast.error("Produit introuvable"); return; }
-      setPending({ kind: "barcode", product: p, grams: 100, meal: "Déjeuner" });
+      if (accountIdRef.current !== accountUserId) return;
+      setPending({ kind: "barcode", product: p, grams: 100, meal: "Déjeuner", accountUserId });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erreur scan");
     } finally { setBusy(false); }
   };
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const accountUserId = accountIdRef.current;
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -105,7 +119,8 @@ function NutritionPage() {
         const res = await analyzePhoto({ data: { imageBase64: b64 } });
         if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
         const r = res.result as FoodAnalysis;
-        setPending({ kind: "photo", photo: b64, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner" });
+        if (accountIdRef.current !== accountUserId) return;
+        setPending({ kind: "photo", photo: b64, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner", accountUserId });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Erreur IA");
       } finally { setBusy(false); }
@@ -115,6 +130,12 @@ function NutritionPage() {
 
   const confirmAdd = async () => {
     if (!pending || confirmAddInFlight.current) return;
+    if (accountIdRef.current !== pending.accountUserId) {
+      toast.error("Le compte a changé ; cette analyse a été annulée. Relance le scan avec le compte actif.");
+      setPending(null);
+      return;
+    }
+    const expectedUserId = pending.accountUserId;
     confirmAddInFlight.current = true;
     try {
       let writeResult: "cloud" | "local" | "saved-for-previous-account";
@@ -130,7 +151,7 @@ function NutritionPage() {
           fiber: +(pending.product.fiber_g * f).toFixed(1),
           sugar: +(pending.product.sugar_g * f).toFixed(1),
           sodium: +(pending.product.sodium_mg * f).toFixed(1),
-        }, "barcode");
+        }, "barcode", [], { expectedUserId });
       } else {
         const t = sumItems(pending.items);
         writeResult = await addNutritionItemToLog({
@@ -143,7 +164,7 @@ function NutritionPage() {
           fiber: t.fiber_g,
           sugar: t.sugar_g,
           sodium: t.sodium_mg,
-        }, "photo");
+        }, "photo", [], { expectedUserId });
       }
       if (writeResult === "saved-for-previous-account") {
         toast.message("Repas enregistré pour le compte précédent ; il réapparaîtra à sa prochaine connexion.");
