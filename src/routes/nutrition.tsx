@@ -417,8 +417,8 @@ function NutritionLogView() {
       // UUID order is only a pagination boundary; present meals in their
       // original chronological order after the complete snapshot is fetched.
       data.sort((left, right) => {
-        const leftTime = Date.parse(left.created_at);
-        const rightTime = Date.parse(right.created_at);
+        const leftTime = Date.parse(left.created_at ?? "");
+        const rightTime = Date.parse(right.created_at ?? "");
         if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
           return leftTime - rightTime;
         }
