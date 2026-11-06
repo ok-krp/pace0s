@@ -155,6 +155,19 @@ void main() {
     expect(mapped['__foodLogCanonical'], isTrue);
   });
 
+  test('keeps blank optional micronutrients null during canonical mapping', () {
+    final mapped = FoodLogSync.mapFoodLogRowToNutritionItem({
+      ...row(id),
+      'meta': {
+        'missing_nutrients': ['fiber_g', 'sugar_g', 'sodium_mg'],
+      },
+    });
+
+    expect(mapped['fiber'], isNull);
+    expect(mapped['sugar'], isNull);
+    expect(mapped['sodium'], isNull);
+  });
+
   test('keeps deliberately missing macros null during canonical mapping', () {
     final mapped = FoodLogSync.mapFoodLogRowToNutritionItem({
       ...row(id),
