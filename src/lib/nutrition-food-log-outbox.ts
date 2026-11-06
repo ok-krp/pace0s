@@ -119,6 +119,9 @@ export function queueFoodLogInsert(
     throw new TypeError("Invalid food_log outbox timestamp");
   }
 
+  if (rawOutbox !== null && !Array.isArray(rawOutbox)) {
+    throw new TypeError("Malformed Nutrition outbox container; existing data was preserved");
+  }
   const entries = Array.isArray(rawOutbox) ? [...rawOutbox] : [];
   const validEntries = entries.filter((entry) =>
     isValidFoodLogOutboxEntry(entry, row.user_id),
