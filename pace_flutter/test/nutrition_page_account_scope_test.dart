@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/storage/local_store.dart';
+import 'package:pace/core/sync/food_log_sync.dart';
 import 'package:pace/core/sync/sync_service.dart';
 import 'package:pace/features/nutrition/nutrition_page.dart';
 
@@ -67,6 +68,68 @@ void main() {
 
     // Durable file-level isolation is covered separately by LocalStore tests.
     // This widget test focuses on rejecting the stale A dialog and accepting B.
+    },
+    timeout: const Timeout(Duration(seconds: 45)),
+  );
+
+  testWidgets(
+    'outbox capacity error does not persist an item or drop pending operations',
+    (tester) async {
+      final directory = await tester.runAsync(
+        () => Directory.systemTemp.createTemp('pace-nutrition-outbox-full-'),
+      );
+      if (directory == null) throw StateError('Could not create test directory');
+      final store = await tester.runAsync(
+        () => LocalStore.open(directory: directory),
+      );
+      if (store == null) throw StateError('Could not open test local store');
+      addTearDown(() async {
+        store.dispose();
+        await tester.runAsync(() => directory.delete(recursive: true));
+      });
+
+      const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+      final pending = List<dynamic>.generate(
+        FoodLogSync.maximumPendingOperations,
+        (index) => <String, dynamic>{
+          'id':
+              '00000000-0000-4000-8000-${(index + 1).toString().padLeft(12, '0')}',
+          'operation': 'delete',
+          'queuedAt': '2026-11-06T12:00:00.000Z',
+        },
+      );
+      await tester.runAsync(() async {
+        await store.activateAccount(userId);
+        await store.writeBatchForAccount(
+          userId,
+          writes: {FoodLogSync.outboxKey: pending},
+          localOnlyKeys: const {FoodLogSync.outboxKey},
+          enqueueSync: false,
+          notify: false,
+        );
+      });
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: NutritionPage(
+            localStore: store,
+            sync: SyncService(localStore: store, client: null),
+          ),
+        ),
+      );
+      await tester.tap(find.byTooltip('Ajouter un aliment'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.enterText(find.byType(TextField).at(0), 'Not queued food');
+      await tester.enterText(find.byType(TextField).at(1), '90');
+      await tester.tap(find.widgetWithText(FilledButton, 'Ajouter'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.textContaining('2000 opérations'), findsOneWidget);
+      expect(store.read(FoodLogSync.outboxKey), hasLength(2000));
+      expect(store.read('pace.nutrition.items'), isNull);
+      expect(store.activeUserId, userId);
     },
     timeout: const Timeout(Duration(seconds: 45)),
   );
