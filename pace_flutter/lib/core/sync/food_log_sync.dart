@@ -35,6 +35,43 @@ class FoodLogSync {
     return version >= 1 && version <= 8 && variant >= 8 && variant <= 11;
   }
 
+  /// Normalize the relational row into the map consumed by NutritionPage.
+  /// Optional micronutrients live in food_log.meta and must survive refreshes.
+  static Map<String, dynamic> mapFoodLogRowToNutritionItem(
+    Map<String, dynamic> row,
+  ) {
+    final meta = row['meta'];
+    final missing = meta is Map && meta['missing_nutrients'] is List
+        ? (meta['missing_nutrients'] as List).whereType<String>().toSet()
+        : <String>{};
+
+    num? optionalMetaNumber(String key) {
+      final value = meta is Map ? meta[key] : null;
+      return value is num && value.isFinite ? value : null;
+    }
+
+    return <String, dynamic>{
+      'id': row['id'],
+      'name': row['name'],
+      'meal': row['meal'],
+      'qty': 1,
+      'kcal': missing.contains('kcal') ? null : row['kcal'],
+      'p': missing.contains('protein_g') ? null : row['protein_g'],
+      'c': missing.contains('carbs_g') ? null : row['carbs_g'],
+      'f': missing.contains('fat_g') ? null : row['fat_g'],
+      'sat': optionalMetaNumber('sat_fat_g'),
+      'salt': optionalMetaNumber('salt_g'),
+      'fiber': row['fiber_g'],
+      'sugar': row['sugar_g'],
+      'sodium': row['sodium_mg'],
+      'iron': optionalMetaNumber('iron_mg'),
+      'calcium': optionalMetaNumber('calcium_mg'),
+      'vitC': optionalMetaNumber('vitamin_c_mg'),
+      'created_at': row['created_at'],
+      '__foodLogCanonical': true,
+    };
+  }
+
   static bool isCalendarDate(String value) {
     if (value.length != 10 || value.codeUnitAt(4) != 45 || value.codeUnitAt(7) != 45) {
       return false;
