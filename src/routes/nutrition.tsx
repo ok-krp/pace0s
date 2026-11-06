@@ -69,7 +69,9 @@ function NutritionPage() {
   const { user } = useAuth();
   const currentAccountId = user?.id ?? null;
   const accountIdRef = useRef<string | null>(currentAccountId);
-  accountIdRef.current = currentAccountId;
+  useEffect(() => {
+    accountIdRef.current = currentAccountId;
+  }, [currentAccountId]);
   const currentTab = tab ?? "nutrition";
   const [scanOpen, setScanOpen] = useState(false);
   const [recallCount] = useLocalState<number>("pace.recalls.count", 0);
@@ -83,12 +85,7 @@ function NutritionPage() {
   const photoInputRef = useRef<HTMLInputElement>(null);
   const analyzePhoto = useServerFn(analyzeFoodPhoto);
 
-  useEffect(() => {
-    // Pending scans are account-owned UI state too. Never let an analysis
-    // started under one identity become an item in the next signed-in account.
-    setPending(null);
-    setScanOpen(false);
-  }, [currentAccountId]);
+  const visiblePending = pending?.accountUserId === currentAccountId ? pending : null;
 
   const handleBarcode = async (code: string) => {
     const accountUserId = accountIdRef.current;
@@ -231,7 +228,7 @@ function NutritionPage() {
             className="glass-icon size-14 text-white bg-gradient-to-br from-fuchsia-500/70 to-purple-600/70 shadow-[var(--shadow-glow)] hover:scale-105 active:scale-95 transition"
           >{busy ? <Loader2 className="size-6 animate-spin" /> : <Camera className="size-6" />}</button>
           <button
-            onClick={() => setScanOpen(true)}
+            onClick={() => { setScanOwnerId(currentAccountId); setScanOpen(true); }}
             aria-label="Scanner un code-barres"
             className="glass-icon size-14 text-white bg-gradient-to-br from-emerald-500/70 to-teal-600/70 shadow-[var(--shadow-glow)] hover:scale-105 active:scale-95 transition"
           ><ScanBarcode className="size-6" /></button>
@@ -239,7 +236,7 @@ function NutritionPage() {
         </div>
       )}
 
-      {scanOpen && (
+      {scanOpen && scanOwnerId === currentAccountId && (
         <div className="fixed inset-0 z-50 bg-black/80 grid place-items-center p-4">
           <div className="w-full max-w-md rounded-2xl bg-card overflow-hidden">
             <BarcodeScanner onDetected={handleBarcode} onClose={() => setScanOpen(false)} />
@@ -247,51 +244,51 @@ function NutritionPage() {
         </div>
       )}
 
-      <Dialog open={!!pending} onOpenChange={(v) => !v && setPending(null)}>
-        {pending && (
+      <Dialog open={!!visiblePending} onOpenChange={(v) => !v && setPending(null)}>
+        {visiblePending && (
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                {pending.kind === "barcode" ? <ScanBarcode className="size-4" /> : <Camera className="size-4" />}
-                {pending.kind === "barcode" ? pending.product.name : pending.result.dish_name}
+                {visiblePending.kind === "barcode" ? <ScanBarcode className="size-4" /> : <Camera className="size-4" />}
+                {visiblePending.kind === "barcode" ? visiblePending.product.name : visiblePending.result.dish_name}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              {pending.kind === "photo" && <img src={pending.photo} alt="Photo du repas à analyser" className="w-full aspect-video object-cover rounded-xl" />}
-              {pending.kind === "barcode" && pending.product.image_url && (
-                <img src={pending.product.image_url} alt={pending.product.name} className="size-24 rounded-xl object-cover mx-auto" />
+              {visiblePending.kind === "photo" && <img src={visiblePending.photo} alt="Photo du repas à analyser" className="w-full aspect-video object-cover rounded-xl" />}
+              {visiblePending.kind === "barcode" && visiblePending.product.image_url && (
+                <img src={visiblePending.product.image_url} alt={visiblePending.product.name} className="size-24 rounded-xl object-cover mx-auto" />
               )}
-              {pending.kind === "barcode" ? (
+              {visiblePending.kind === "barcode" ? (
                 <>
                   <div className="text-xs text-muted-foreground text-center">
-                    {`Ref 100g : ${pending.product.kcal} kcal · P ${pending.product.protein_g} · G ${pending.product.carbs_g} · L ${pending.product.fat_g}`}
+                    {`Ref 100g : ${visiblePending.product.kcal} kcal · P ${visiblePending.product.protein_g} · G ${visiblePending.product.carbs_g} · L ${visiblePending.product.fat_g}`}
                   </div>
                   <div>
                     <label className="text-[11px] text-muted-foreground">Quantité (g)</label>
                     <Input
-                      type="number" inputMode="numeric" min={1} value={pending.grams}
+                      type="number" inputMode="numeric" min={1} value={visiblePending.grams}
                       onChange={(e) => setPending({ ...pending, grams: Math.max(0, +e.target.value || 0) })}
                     />
                   </div>
                 </>
               ) : (
                 <FoodAnalysisEditor
-                  items={pending.items}
+                  items={visiblePending.items}
                   onChange={(items) => setPending({ ...pending, items, grams: sumItems(items).grams })}
-                  confidence={pending.result.confidence}
-                  confidenceNote={pending.result.confidence_note || pending.result.notes}
+                  confidence={visiblePending.result.confidence}
+                  confidenceNote={visiblePending.result.confidence_note || visiblePending.result.notes}
                 />
               )}
               <div>
                 <label className="text-[11px] text-muted-foreground">Repas</label>
-                <Select value={pending.meal} onValueChange={(v) => setPending({ ...pending, meal: v })}>
+                <Select value={visiblePending.meal} onValueChange={(v) => setPending({ ...pending, meal: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{MEALS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="ghost" onClick={() => setPending(null)}><X className="size-4 mr-1" />Annuler</Button>
-                <Button onClick={confirmAdd} disabled={pending.kind === "barcode" ? !pending.grams : pending.items.length === 0}><Plus className="size-4 mr-1" />Ajouter</Button>
+                <Button onClick={confirmAdd} disabled={visiblePending.kind === "barcode" ? !visiblePending.grams : visiblePending.items.length === 0}><Plus className="size-4 mr-1" />Ajouter</Button>
               </div>
             </div>
           </DialogContent>
