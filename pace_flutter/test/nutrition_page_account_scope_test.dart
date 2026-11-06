@@ -25,7 +25,7 @@ void main() {
       await tester.runAsync(() => directory.delete(recursive: true));
     });
 
-    await tester.runAsync(() => store.activateAccount('user-a'));
+    await tester.runAsync(() => store.activateAccount('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'));
     await tester.pumpWidget(MaterialApp(home: NutritionPage(localStore: store, sync: SyncService(localStore: store, client: null))));
 
     // A dialog opened for account A must not write its contents into account B
@@ -36,7 +36,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(0), 'A-private food');
     await tester.enterText(find.byType(TextField).at(1), '80');
 
-    await tester.runAsync(() => store.activateAccount('user-b'));
+    await tester.runAsync(() => store.activateAccount('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'));
     // Do not pump the underlying page while its modal route is still active.
     // Submit against the captured A scope first; the page refreshes after the
     // dialog closes and then exposes the B form.
@@ -63,7 +63,7 @@ void main() {
         .toList();
     expect(entries, hasLength(1));
     expect(entries.single['name'], 'B food');
-    expect(store.activeUserId, 'user-b');
+    expect(store.activeUserId, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
 
     // Durable file-level isolation is covered separately by LocalStore tests.
     // This widget test focuses on rejecting the stale A dialog and accepting B.
