@@ -168,6 +168,7 @@ export type NutritionLogWriteResult = "cloud" | "local" | "saved-for-previous-ac
 export async function addNutritionItemToLog(
   item: Omit<NutritionItem, "id" | "qty"> & { qty?: number },
   source: NutritionLogSource,
+  missingNutrients: readonly string[] = [],
 ): Promise<NutritionLogWriteResult> {
   const today = todayKey();
   const it: NutritionItem = { id: crypto.randomUUID(), qty: item.qty ?? 1, ...item };
@@ -312,11 +313,12 @@ export async function addNutritionItemToLog(
       iron_mg: it.iron ?? null,
       calcium_mg: it.calcium ?? null,
       vitamin_c_mg: it.vitC ?? null,
-      missing_nutrients: [
+      missing_nutrients: [...new Set([
+        ...missingNutrients,
         ...(it.fiber == null ? ["fiber_g"] : []),
         ...(it.sugar == null ? ["sugar_g"] : []),
         ...(it.sodium == null ? ["sodium_mg"] : []),
-      ],
+      ])],
     },
   };
 
