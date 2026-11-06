@@ -1,5 +1,5 @@
 import { todayKey, applyRemoteWrite } from "@/lib/storage";
-import { readDomain, writeDomain } from "@/lib/domain-store";
+import { applyRemoteDomainWrite, readDomain, writeDomain } from "@/lib/domain-store";
 import { supabase } from "@/integrations/supabase/client";
 import {
   mergeNutritionTombstoneMaps,
@@ -75,9 +75,48 @@ export function repairNutritionTotals(): void {
   }
 }
 
-repairNutritionTotals();
+/**
+ * A Recipes/scan entry point can remain mounted while the auth session changes,
+ * even when NutritionLogView itself is unmounted. Preserve the outgoing
+ * account's last live snapshot and clear its compatibility mirror before a
+ * guest write is allowed to read the shared domain keys.
+ */
+function isolatePreviousAccountForGuest(): void {
+  if (typeof window === "undefined") return;
+  const owner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
+  if (!owner) return;
 
-function appendLocalNutritionItem(it: NutritionItem, accountUserId?: string): void {
+  const scopedKeys = nutritionAccountCacheKeys(owner);
+  const currentItems = readNutritionItems();
+  const currentTotals = recomputeNutritionTotals(currentItems);
+  const globalTombstones = localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY);
+
+  // Do not clear the owner marker unless all recovery copies are durable.
+  localStorage.setItem(scopedKeys.items, JSON.stringify(currentItems));
+  localStorage.setItem(scopedKeys.totals, JSON.stringify(currentTotals));
+  if (globalTombstones) {
+    localStorage.setItem(
+      scopedKeys.deletedIds,
+      JSON.stringify(mergeNutritionTombstoneMaps(
+        localStorage.getItem(scopedKeys.deletedIds),
+        globalTombstones,
+      )),
+    );
+  }
+  localStorage.removeItem(NUTRITION_CACHE_OWNER_KEY);
+
+  // Domain writes are deliberately remote-shaped, not local mutations: a
+  // logout cleanup must not enqueue the previous account's empty snapshot.
+  applyRemoteDomainWrite(DOMAIN_ITEMS, {});
+  applyRemoteDomainWrite(DOMAIN_TOTALS, {});
+  applyRemoteWrite(NUTRITION_LEGACY_TOMBSTONES_KEY, {});
+}
+
+function appendLocalNutritionItem(
+  it: NutritionItem,
+  accountUserId?: string,
+  syncDomain = true,
+): void {
   const today = todayKey();
   const items = readNutritionItems();
   const nextItems = {
@@ -85,8 +124,15 @@ function appendLocalNutritionItem(it: NutritionItem, accountUserId?: string): vo
     [today]: [...(items[today] ?? []).filter((existing) => existing.id !== it.id), it],
   };
   const totals = recomputeNutritionTotals(nextItems);
-  writeDomain(DOMAIN_ITEMS, nextItems);
-  writeDomain(DOMAIN_TOTALS, totals);
+  if (syncDomain) {
+    writeDomain(DOMAIN_ITEMS, nextItems);
+    writeDomain(DOMAIN_TOTALS, totals);
+  } else {
+    // Guest and account-local fallback writes must not be pushed as a large
+    // user_state nutrition JSON snapshot.
+    applyRemoteDomainWrite(DOMAIN_ITEMS, nextItems);
+    applyRemoteDomainWrite(DOMAIN_TOTALS, totals);
+  }
   try {
     localStorage.setItem(KEY_ITEMS, JSON.stringify(nextItems));
     localStorage.setItem(KEY_TOTALS, JSON.stringify(totals));
@@ -130,7 +176,14 @@ export async function addNutritionItemToLog(
   const userId = initialSession.session?.user.id ?? null;
 
   if (!userId) {
-    appendLocalNutritionItem(it);
+    try {
+      isolatePreviousAccountForGuest();
+    } catch {
+      // Failing to isolate a previous account is not permission to reuse its
+      // shared cache as guest state.
+      throw new Error("Impossible d'isoler le cache Nutrition du compte précédent.");
+    }
+    appendLocalNutritionItem(it, undefined, false);
     return "local";
   }
 
@@ -274,7 +327,7 @@ export async function addNutritionItemToLog(
     localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === userId;
 
   if (insertError) {
-    if (stillSameAccount) appendLocalNutritionItem(it, userId);
+    if (stillSameAccount) appendLocalNutritionItem(it, userId, false);
     else throw new Error("L'enregistrement a échoué après un changement de session. Réessaie après reconnexion.");
     return "local";
   }
