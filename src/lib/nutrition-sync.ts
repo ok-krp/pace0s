@@ -342,9 +342,9 @@ function timestampMicros(value: string): number | null {
   const wholeSecond = Date.parse(`${match[1]}${match[3]}`);
   if (!Number.isFinite(wholeSecond)) return null;
   const fractionMicros = Number((match[2] ?? "").padEnd(6, "0"));
-  // Date.parse returns milliseconds; normalize the six-digit fraction from
-  // PostgreSQL microseconds before adding it to that millisecond timestamp.
-  return wholeSecond * 1000 + fractionMicros / 1000;
+  // Convert the whole-second millisecond epoch to integer microseconds,
+  // then add PostgreSQL's six-digit fractional microseconds exactly.
+  return wholeSecond * 1000 + fractionMicros;
 }
 
 export function compareFoodLogTupleCursor(
