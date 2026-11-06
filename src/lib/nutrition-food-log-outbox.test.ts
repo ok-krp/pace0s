@@ -5,6 +5,7 @@ import {
   isValidFoodLogOutboxEntry,
   nutritionFoodLogOutboxKey,
   queueFoodLogInsert,
+  deferFoodLogOutboxInsert,
   readValidFoodLogOutbox,
   removeFoodLogOutboxInsert,
   type FoodLogInsertRow,
@@ -95,4 +96,40 @@ test("does not discard a malformed outbox container during a new insert", () => 
     () => queueFoodLogInsert({ pending: "do not discard" }, row, queuedAt),
     /Malformed Nutrition outbox container/,
   );
+});
+
+
+test("backs off failed rows and makes them due only after the retry time", () => {
+  const queued = queueFoodLogInsert([], row, queuedAt);
+  const firstOperation = readValidFoodLogOutbox(
+    queued,
+    userId,
+    Date.parse(queuedAt),
+  )[0];
+  const failedAt = Date.parse(queuedAt);
+  const deferred = deferFoodLogOutboxInsert(queued, firstOperation, failedAt);
+  const stored = deferred[0] as Record<string, unknown>;
+
+  assert.equal(stored.attempts, 1);
+  assert.equal(stored.nextAttemptAt, new Date(failedAt + 60_000).toISOString());
+  assert.equal(readValidFoodLogOutbox(deferred, userId, failedAt + 59_999).length, 0);
+  assert.equal(readValidFoodLogOutbox(deferred, userId, failedAt + 60_000).length, 1);
+});
+
+test("a stale in-flight acknowledgement cannot remove an operation already deferred for retry", () => {
+  const queued = queueFoodLogInsert([], row, queuedAt);
+  const oldOperation = readValidFoodLogOutbox(
+    queued,
+    userId,
+    Date.parse(queuedAt),
+  )[0];
+  const deferred = deferFoodLogOutboxInsert(
+    queued,
+    oldOperation,
+    Date.parse(queuedAt),
+  );
+  const afterOldAck = removeFoodLogOutboxInsert(deferred, oldOperation);
+
+  assert.equal(afterOldAck.length, 1);
+  assert.equal((afterOldAck[0] as Record<string, unknown>).attempts, 1);
 });
