@@ -298,7 +298,14 @@ class FoodLogSync {
         (row['meal'] as String).trim().isEmpty ||
         row['name'] is! String ||
         (row['name'] as String).trim().isEmpty ||
-        !const {'manual', 'barcode', 'photo', 'recipe'}.contains(row['source'])) {
+        !const {'manual', 'barcode', 'photo', 'recipe'}.contains(row['source']) ||
+        row['meta'] is! Map) {
+      return false;
+    }
+    final healthScore = row['health_score'];
+    if (row.containsKey('health_score') &&
+        healthScore != null &&
+        !const {'green', 'orange', 'red'}.contains(healthScore)) {
       return false;
     }
 
