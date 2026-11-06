@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { addNutritionItem } from "@/lib/nutrition-log";
+import { addNutritionItemToLog } from "@/lib/nutrition-log";
 import { toast } from "sonner";
 
 type Recipe = {
@@ -99,9 +99,16 @@ export function RecipesView() {
     setCustom((p) => p.filter((x) => x.id !== id));
   };
 
-  const addToLog = (r: Recipe, meal: string) => {
-    addNutritionItem({ name: `${r.emoji} ${r.name}`, meal, kcal: r.kcal, p: r.p, c: r.c, f: r.f });
-    toast.success(`${r.name} ajouté à ${meal}`);
+  const addToLog = async (r: Recipe, meal: string) => {
+    try {
+      await addNutritionItemToLog(
+        { name: `${r.emoji} ${r.name}`, meal, kcal: r.kcal, p: r.p, c: r.c, f: r.f },
+        "recipe",
+      );
+      toast.success(`${r.name} ajouté à ${meal}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer la recette.");
+    }
   };
 
   const addCat = () => {
