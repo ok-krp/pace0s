@@ -88,3 +88,11 @@ test("filters malformed and foreign-account operations before replay", () => {
   assert.equal(isValidFoodLogOutboxEntry(mixed[0], userId), true);
   assert.equal(isValidFoodLogOutboxEntry(mixed[1], userId), false);
 });
+
+
+test("does not discard a malformed outbox container during a new insert", () => {
+  assert.throws(
+    () => queueFoodLogInsert({ pending: "do not discard" }, row, queuedAt),
+    /Malformed Nutrition outbox container/,
+  );
+});
