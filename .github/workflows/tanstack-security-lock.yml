@@ -283,6 +283,8 @@ jobs:
           src/lib/user-state-pagination.test.ts
           src/lib/nutrition-sync.ts
           src/lib/nutrition-sync.test.ts
+          src/lib/nutrition-food-log-outbox.ts
+          src/lib/nutrition-food-log-outbox.test.ts
           src/lib/local-state-hydration.ts
           src/lib/local-state-hydration.test.ts
           src/lib/storage.ts
