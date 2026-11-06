@@ -447,6 +447,16 @@ test("compares adjacent food_log microseconds without floating-point precision l
   );
 });
 
+test("compares equivalent UTC and offset food-log timestamps by UUID", () => {
+  assert.equal(
+    compareFoodLogTupleCursor(
+      { createdAt: "2026-11-06T12:00:00.123456Z", id: canonical.id },
+      { createdAt: "2026-11-06T13:00:00.123456+01:00", id: otherId },
+    ),
+    -1,
+  );
+});
+
 test("paginates food_log by created_at then UUID, including equal timestamp rows", async () => {
   const source = [
     { ...canonical, created_at: "2026-11-06T12:00:00.123456Z" },
