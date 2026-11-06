@@ -364,12 +364,12 @@ void main() {
       now: now,
     );
 
-    expect(cursor['createdAt'], '2026-11-06T11:55:00.000Z');
+    expect(cursor['createdAt'], '2026-11-06T12:00:00.000Z');
     expect(cursor['id'], isNull);
     expect(cursor['lastFullAt'], now.toIso8601String());
   });
 
-  test('keeps the previous cursor after an empty incremental delta', () {
+  test('advances the watermark after an empty incremental delta', () {
     final now = DateTime.utc(2026, 11, 6, 12);
     final previous = <String, dynamic>{
       'logDate': '2026-11-06',
@@ -385,7 +385,13 @@ void main() {
       now: now,
     );
 
-    expect(next, previous);
+    expect(next['createdAt'], '2026-11-06T12:00:00.000Z');
+    expect(next['id'], isNull);
+    expect(next['lastFullAt'], previous['lastFullAt']);
+    expect(
+      FoodLogSync.foodLogDeltaSince(next),
+      '2026-11-06T11:55:00.000Z',
+    );
   });
 
   test('fetches food-log tuple pages in created_at and UUID order', () async {
