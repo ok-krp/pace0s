@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   isValidFoodLogInsertRow,
+  isValidNutritionItemInput,
   isValidFoodLogOutboxEntry,
   nutritionFoodLogOutboxKey,
   queueFoodLogInsert,
@@ -132,4 +133,26 @@ test("a stale in-flight acknowledgement cannot remove an operation already defer
 
   assert.equal(afterOldAck.length, 1);
   assert.equal((afterOldAck[0] as Record<string, unknown>).attempts, 1);
+});
+
+
+test("validates manual Nutrition input before any persistence side effect", () => {
+  const valid = {
+    name: "  Riz  ",
+    meal: "Déjeuner",
+    kcal: 220,
+    p: 4,
+    c: 48,
+    f: 1,
+    qty: 1,
+    fiber: 0,
+    sodium: 0,
+  };
+  assert.equal(isValidNutritionItemInput(valid), true);
+  assert.equal(isValidNutritionItemInput({ ...valid, kcal: Number.NaN }), false);
+  assert.equal(isValidNutritionItemInput({ ...valid, p: -1 }), false);
+  assert.equal(isValidNutritionItemInput({ ...valid, fiber: Number.POSITIVE_INFINITY }), false);
+  assert.equal(isValidNutritionItemInput({ ...valid, qty: 0 }), false);
+  assert.equal(isValidNutritionItemInput({ ...valid, name: " " }), false);
+  assert.equal(isValidNutritionItemInput({ ...valid, meal: "" }), false);
 });
