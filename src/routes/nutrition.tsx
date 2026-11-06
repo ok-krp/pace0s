@@ -381,10 +381,11 @@ function NutritionLogView() {
             .from("food_log")
             .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta,created_at")
             .eq("user_id", userId)
-            .eq("log_date", day)
-            .order("id", { ascending: true });
+            .eq("log_date", day);
           if (afterId !== null) query = query.gt("id", afterId);
-          const { data: page, error } = await query.limit(pageSize);
+          const { data: page, error } = await query
+            .order("id", { ascending: true })
+            .limit(pageSize);
           return { data: page as CanonicalFoodLogRow[] | null, error };
         },
         {
