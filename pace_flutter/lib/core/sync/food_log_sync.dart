@@ -278,7 +278,7 @@ class FoodLogSync {
         !isCalendarDate(logDate)) {
       return null;
     }
-    return fetchAllKeysetPages(
+    final rows = await fetchAllKeysetPages(
       fetchPage: (afterId, pageSize) async {
         var query = client!
             .from('food_log')
@@ -297,6 +297,19 @@ class FoodLogSync {
       pageSize: 500,
       isCancelled: () => !_isCurrentAccount(client, localStore, expectedUserId),
     );
+    if (rows == null) return null;
+    // UUID order is the pagination boundary only. Restore meal chronology
+    // after fetching the complete snapshot.
+    rows.sort((left, right) {
+      final leftTime = DateTime.tryParse(left['created_at']?.toString() ?? '');
+      final rightTime = DateTime.tryParse(right['created_at']?.toString() ?? '');
+      if (leftTime != null && rightTime != null) {
+        final byTime = leftTime.compareTo(rightTime);
+        if (byTime != 0) return byTime;
+      }
+      return (left['id'] as String).compareTo(right['id'] as String);
+    });
+    return rows;
   }
 
   static Map<String, String> queueDeletedId(
