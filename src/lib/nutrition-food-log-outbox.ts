@@ -232,7 +232,11 @@ export function removeFoodLogOutboxInsert(
   rawOutbox: unknown,
   completed: FoodLogOutboxEntry,
 ): unknown[] {
-  if (!Array.isArray(rawOutbox)) return [];
+  if (!Array.isArray(rawOutbox)) {
+    // Preserve an unexpected container rather than replacing it with an
+    // empty queue after an unrelated in-flight request succeeds.
+    return rawOutbox == null ? [] : [rawOutbox];
+  }
   return rawOutbox.filter((entry) =>
     !isValidFoodLogOutboxEntry(entry, completed.row.user_id) ||
     (entry as FoodLogOutboxEntry).id !== completed.id ||
@@ -247,7 +251,8 @@ export function deferFoodLogOutboxInsert(
   failed: FoodLogOutboxEntry,
   nowMs = Date.now(),
 ): unknown[] {
-  if (!Array.isArray(rawOutbox) || !Number.isFinite(nowMs)) return Array.isArray(rawOutbox) ? [...rawOutbox] : [];
+  if (!Number.isFinite(nowMs)) return Array.isArray(rawOutbox) ? [...rawOutbox] : rawOutbox == null ? [] : [rawOutbox];
+  if (!Array.isArray(rawOutbox)) return rawOutbox == null ? [] : [rawOutbox];
   return rawOutbox.map((entry) => {
     if (
       !isValidFoodLogOutboxEntry(entry, failed.row.user_id) ||
