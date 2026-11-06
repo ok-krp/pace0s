@@ -287,6 +287,8 @@ jobs:
           src/lib/local-state-hydration.test.ts
           src/lib/storage.ts
           src/routes/nutrition.tsx
+          src/routes/scan.tsx
+          src/components/RecipesView.tsx
           src/lib/nutrition-log.ts
           src/integrations/supabase/types.ts
           src/lib/health-connect-bridge.ts
