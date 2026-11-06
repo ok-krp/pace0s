@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapFoodLogRow, mergeCanonicalNutritionItems, fetchAllFoodLogKeysetPages, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones } from "./nutrition-sync.ts";
+import { mapFoodLogRow, mergeCanonicalNutritionItems, fetchAllFoodLogKeysetPages, mergeUnassignedNutritionSnapshots, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones } from "./nutrition-sync.ts";
 
 const canonical = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -210,5 +210,37 @@ test("rejects invalid food_log page sizes", async () => {
   await assert.rejects(
     () => fetchAllFoodLogKeysetPages(async () => ({ data: [], error: null }), { pageSize: 0 }),
     RangeError,
+  );
+});
+
+
+test("merges successive guest snapshots without dropping earlier foods", () => {
+  const earlier = {
+    "2026-11-05": [
+      { id: "guest-a", name: "Toast", meal: "Matin", kcal: 100, p: 3, c: 18, f: 1, qty: 1 },
+      { id: "guest-b", name: "Pomme", meal: "Goûter", kcal: 80, p: 0, c: 20, f: 0, qty: 1 },
+    ],
+  };
+  const later = {
+    "2026-11-05": [
+      { id: "guest-b", name: "Pomme corrigée", meal: "Goûter", kcal: 95, p: 0, c: 24, f: 0, qty: 1 },
+      { id: "guest-c", name: "Yaourt", meal: "Soir", kcal: 120, p: 8, c: 12, f: 4, qty: 1 },
+    ],
+    "2026-11-06": [
+      { id: "guest-d", name: "Banane", meal: "Matin", kcal: 90, p: 1, c: 23, f: 0, qty: 1 },
+    ],
+  };
+
+  const merged = mergeUnassignedNutritionSnapshots(JSON.stringify(earlier), JSON.stringify(later));
+  assert.ok(merged);
+  assert.deepEqual(merged["2026-11-05"].map((item) => item.id), ["guest-a", "guest-b", "guest-c"]);
+  assert.equal(merged["2026-11-05"][1].name, "Pomme corrigée");
+  assert.deepEqual(merged["2026-11-06"].map((item) => item.id), ["guest-d"]);
+});
+
+test("does not replace a valid guest backup with malformed cache data", () => {
+  assert.equal(
+    mergeUnassignedNutritionSnapshots('{"2026-11-05":[]}', "{broken"),
+    null,
   );
 });
