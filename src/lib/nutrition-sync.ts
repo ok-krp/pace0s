@@ -21,6 +21,8 @@ export type CanonicalNutritionItem = NutritionItem & {
   created_at?: string;
 };
 
+const FOOD_LOG_UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const TOMBSTONE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
 export function queueNutritionTombstone(
@@ -424,7 +426,7 @@ export function nextNutritionFoodLogCursor({
   // delayed commits and equal-timestamp inserts without resending old history.
   // The tuple cursor used to paginate within one request remains row-based.
   for (const row of rows) {
-    if (!UUID_PATTERN.test(row.id) ||
+    if (!FOOD_LOG_UUID_PATTERN.test(row.id) ||
         typeof row.created_at !== "string" ||
         timestampMicros(row.created_at) === null) {
       throw new TypeError("Invalid food_log row while advancing cursor");
