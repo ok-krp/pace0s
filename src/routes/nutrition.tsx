@@ -99,9 +99,10 @@ function NutritionPage() {
     if (!pending || confirmAddInFlight.current) return;
     confirmAddInFlight.current = true;
     try {
+      let writeResult: "cloud" | "local" | "saved-for-previous-account";
       if (pending.kind === "barcode") {
         const f = pending.grams / 100;
-        await addNutritionItemToLog({
+        writeResult = await addNutritionItemToLog({
           name: `${pending.product.name}${pending.product.brand ? ` · ${pending.product.brand}` : ""} (${pending.grams}g)`,
           meal: pending.meal,
           kcal: Math.round(pending.product.kcal * f),
@@ -114,7 +115,7 @@ function NutritionPage() {
         }, "barcode");
       } else {
         const t = sumItems(pending.items);
-        await addNutritionItemToLog({
+        writeResult = await addNutritionItemToLog({
           name: `${pending.result.dish_name} (${Math.round(t.grams)}g)`,
           meal: pending.meal,
           kcal: t.kcal,
@@ -126,7 +127,11 @@ function NutritionPage() {
           sodium: t.sodium_mg,
         }, "photo");
       }
-      toast.success(`Ajouté à ${pending.meal}`);
+      if (writeResult === "saved-for-previous-account") {
+        toast.message("Repas enregistré pour le compte précédent ; il réapparaîtra à sa prochaine connexion.");
+      } else {
+        toast.success(`Ajouté à ${pending.meal}`);
+      }
       setPending(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer le repas.");
