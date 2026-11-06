@@ -77,7 +77,7 @@ export function repairNutritionTotals(): void {
 
 repairNutritionTotals();
 
-function appendLocalNutritionItem(it: NutritionItem): void {
+function appendLocalNutritionItem(it: NutritionItem, accountUserId?: string): void {
   const today = todayKey();
   const items = readNutritionItems();
   const nextItems = {
@@ -90,6 +90,16 @@ function appendLocalNutritionItem(it: NutritionItem): void {
   try {
     localStorage.setItem(KEY_ITEMS, JSON.stringify(nextItems));
     localStorage.setItem(KEY_TOTALS, JSON.stringify(totals));
+    // A SQL failure must still leave a usable local fallback even when cloud
+    // sync is disabled by consent. Never mirror it into a different owner.
+    if (
+      accountUserId &&
+      localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === accountUserId
+    ) {
+      const accountKeys = nutritionAccountCacheKeys(accountUserId);
+      localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
+      localStorage.setItem(accountKeys.totals, JSON.stringify(totals));
+    }
   } catch {
     // Keep the domain-backed data usable when legacy localStorage is full.
   }
@@ -264,7 +274,7 @@ export async function addNutritionItemToLog(
     localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === userId;
 
   if (insertError) {
-    if (stillSameAccount) appendLocalNutritionItem(it);
+    if (stillSameAccount) appendLocalNutritionItem(it, userId);
     else throw new Error("L'enregistrement a échoué après un changement de session. Réessaie après reconnexion.");
     return "local";
   }
