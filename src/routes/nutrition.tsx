@@ -276,16 +276,27 @@ function NutritionLogView() {
         const previousKeys = nutritionAccountCacheKeys(previousOwner);
         const globalItems = localStorage.getItem("pace.nutrition.items");
         const globalTotals = localStorage.getItem("pace.nutrition.totals");
+        const globalTombstones = localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY);
         if (globalItems && !localStorage.getItem(previousKeys.items)) {
           localStorage.setItem(previousKeys.items, globalItems);
         }
         if (globalTotals && !localStorage.getItem(previousKeys.totals)) {
           localStorage.setItem(previousKeys.totals, globalTotals);
         }
+        if (globalTombstones) {
+          localStorage.setItem(
+            previousKeys.deletedIds,
+            JSON.stringify(mergeNutritionTombstoneMaps(
+              localStorage.getItem(previousKeys.deletedIds),
+              globalTombstones,
+            )),
+          );
+        }
         // A signed-out guest must never see the last authenticated account's
         // data. Its scoped copy above remains available after that account logs in.
         applyRemoteWrite("pace.nutrition.items", {});
         applyRemoteWrite("pace.nutrition.totals", {});
+        applyRemoteWrite(NUTRITION_LEGACY_TOMBSTONES_KEY, {});
         // The previous account's snapshot is now isolated under its scoped
         // keys. Clear the global owner marker so subsequent guest writes are
         // not mistaken for late writes belonging to the signed-out account.
@@ -306,6 +317,7 @@ function NutritionLogView() {
       const owner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
       const globalItems = localStorage.getItem("pace.nutrition.items");
       const globalTotals = localStorage.getItem("pace.nutrition.totals");
+      const globalTombstones = localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY);
 
       // Preserve the previous authenticated owner's cache before changing the
       // global compatibility keys used by existing UI components.
@@ -316,6 +328,15 @@ function NutritionLogView() {
         }
         if (globalTotals && !localStorage.getItem(previousKeys.totals)) {
           localStorage.setItem(previousKeys.totals, globalTotals);
+        }
+        if (globalTombstones) {
+          localStorage.setItem(
+            previousKeys.deletedIds,
+            JSON.stringify(mergeNutritionTombstoneMaps(
+              localStorage.getItem(previousKeys.deletedIds),
+              globalTombstones,
+            )),
+          );
         }
       } else if (!owner && globalItems) {
         // Historical/guest JSON has no reliable account owner. Merge each
@@ -342,13 +363,31 @@ function NutritionLogView() {
       }
 
       const accountKeys = nutritionAccountCacheKeys(userId);
-      // Migrate legacy tombstones only when the compatibility cache still
-      // explicitly belongs to this same account. Never assign an unowned or
-      // previous-account deletion marker to a newly signed-in user.
-      if (owner === userId && !localStorage.getItem(accountKeys.deletedIds)) {
-        const legacyTombstones = localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY);
-        if (legacyTombstones) localStorage.setItem(accountKeys.deletedIds, legacyTombstones);
+      // Only merge the global sync key when its previous owner is still this
+      // account. On a switch, preserve the outgoing owner's markers above and
+      // hydrate the incoming account from its own cache before pulling cloud.
+      if (owner === userId && globalTombstones) {
+        localStorage.setItem(
+          accountKeys.deletedIds,
+          JSON.stringify(mergeNutritionTombstoneMaps(
+            localStorage.getItem(accountKeys.deletedIds),
+            globalTombstones,
+          )),
+        );
+      } else if (!owner && globalTombstones) {
+        localStorage.setItem(
+          `${NUTRITION_UNASSIGNED_BACKUP_KEY}:deleted_ids`,
+          JSON.stringify(mergeNutritionTombstoneMaps(
+            localStorage.getItem(`${NUTRITION_UNASSIGNED_BACKUP_KEY}:deleted_ids`),
+            globalTombstones,
+          )),
+        );
       }
+      const scopedTombstones = mergeNutritionTombstoneMaps(
+        localStorage.getItem(accountKeys.deletedIds),
+      );
+      localStorage.setItem(accountKeys.deletedIds, JSON.stringify(scopedTombstones));
+      applyRemoteWrite(NUTRITION_LEGACY_TOMBSTONES_KEY, scopedTombstones);
       let scopedItemsRaw = localStorage.getItem(accountKeys.items);
       let scopedTotalsRaw = localStorage.getItem(accountKeys.totals);
       if (owner === userId) {
@@ -428,9 +467,12 @@ function NutritionLogView() {
       if (sessionError || confirmedSession.session?.user.id !== userId ||
           localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) !== userId) return;
 
-      const deletedIds = readActiveNutritionTombstones(
+      const mergedTombstones = mergeNutritionTombstoneMaps(
         localStorage.getItem(accountKeys.deletedIds),
+        localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY),
       );
+      localStorage.setItem(accountKeys.deletedIds, JSON.stringify(mergedTombstones));
+      const deletedIds = readActiveNutritionTombstones(JSON.stringify(mergedTombstones));
       const merged = mergeCanonicalNutritionItems(
         Array.isArray(currentItems[day]) ? currentItems[day] : [],
         data as unknown as CanonicalFoodLogRow[],
@@ -602,9 +644,15 @@ function NutritionLogView() {
           }
 
           const accountKeys = nutritionAccountCacheKeys(user.id);
-          const rawTombstones = localStorage.getItem(accountKeys.deletedIds);
-          const tombstones = queueNutritionTombstone(rawTombstones, id);
-          applyLocalWrite(accountKeys.deletedIds, tombstones);
+          const rawTombstones = mergeNutritionTombstoneMaps(
+            localStorage.getItem(accountKeys.deletedIds),
+            localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY),
+          );
+          const tombstones = queueNutritionTombstone(JSON.stringify(rawTombstones), id);
+          // Keep the cache copy local and account-specific, but publish the
+          // canonical per-user key so other devices receive the tombstone.
+          localStorage.setItem(accountKeys.deletedIds, JSON.stringify(tombstones));
+          applyLocalWrite(NUTRITION_LEGACY_TOMBSTONES_KEY, tombstones);
 
           let current: Record<string, Item[]> = {};
           try {
