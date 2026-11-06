@@ -1,6 +1,7 @@
 import { todayKey, applyRemoteWrite } from "@/lib/storage";
 import { applyRemoteDomainWrite, readDomain, writeDomain } from "@/lib/domain-store";
 import { supabase } from "@/integrations/supabase/client";
+import type { TablesInsert } from "@/integrations/supabase/types";
 import {
   nutritionFoodLogOutboxKey,
   queueFoodLogInsert,
@@ -198,7 +199,10 @@ export async function flushNutritionFoodLogOutbox(
 
       const { error } = await supabase
         .from("food_log")
-        .upsert(operation.row, { onConflict: "id", ignoreDuplicates: true });
+        .upsert(
+          operation.row as unknown as TablesInsert<"food_log">,
+          { onConflict: "id", ignoreDuplicates: true },
+        );
       const { data: after, error: afterError } = await supabase.auth.getSession();
       if (isCancelled() || afterError || after.session?.user.id !== expectedUserId) return;
       if (error) continue;
