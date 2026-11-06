@@ -73,6 +73,9 @@ test("rejects normalized invalid calendar and timezone timestamps in outbox entr
 
 test("validates canonical food_log rows with optional null nutrient values", () => {
   assert.equal(isValidFoodLogInsertRow(row, userId), true);
+    assert.equal(isValidFoodLogInsertRow({ ...row, log_date: "2000-02-29" }, userId), true);
+    assert.equal(isValidFoodLogInsertRow({ ...row, log_date: "1900-02-29" }, userId), false);
+    assert.equal(isValidFoodLogInsertRow({ ...row, log_date: "0001-01-01" }, userId), true);
   assert.equal(isValidFoodLogInsertRow({ ...row, health_score: "green" }, userId), true);
   assert.equal(isValidFoodLogInsertRow({ ...row, health_score: "unknown" }, userId), false);
   assert.equal(isValidFoodLogInsertRow({ ...row, user_id: "other-user" }, userId), false);
