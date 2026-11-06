@@ -320,9 +320,13 @@ class FoodLogSync {
       throw ArgumentError('An upsert requires a food_log row');
     }
 
+    // Preserve an unexpected root value as a quarantinable entry instead
+    // of silently resetting the user's durable outbox to an empty list.
     final entries = rawOutbox is List
         ? List<dynamic>.from(rawOutbox)
-        : <dynamic>[];
+        : rawOutbox == null
+            ? <dynamic>[]
+            : <dynamic>[rawOutbox];
     DateTime? previousAt;
     for (final entry in entries) {
       if (entry is! Map || entry['id'] != id || entry['queuedAt'] is! String) {
@@ -350,7 +354,16 @@ class FoodLogSync {
     if (!isValidOperation(replacement)) {
       throw ArgumentError('Invalid food_log outbox operation');
     }
-    entries.removeWhere((entry) => entry is Map && entry['id'] == id);
+    // Only replace a fully valid command. A malformed entry may contain
+    // recoverable user data even when its ID happens to match this row.
+    entries.removeWhere((entry) {
+      if (entry is! Map || entry['id'] != id) return false;
+      try {
+        return isValidOperation(Map<String, dynamic>.from(entry));
+      } on TypeError {
+        return false;
+      }
+    });
     entries.add(replacement);
     return entries;
   }
@@ -361,13 +374,23 @@ class FoodLogSync {
     dynamic rawOutbox,
     Map<String, dynamic> completed,
   ) {
-    if (rawOutbox is! List) return <dynamic>[];
+    if (rawOutbox is! List) {
+      return rawOutbox == null ? <dynamic>[] : <dynamic>[rawOutbox];
+    }
     return List<dynamic>.from(rawOutbox)
-      ..removeWhere((entry) =>
-          entry is Map &&
-          entry['id'] == completed['id'] &&
-          entry['operation'] == completed['operation'] &&
-          entry['queuedAt'] == completed['queuedAt']);
+      ..removeWhere((entry) {
+        if (entry is! Map ||
+            entry['id'] != completed['id'] ||
+            entry['operation'] != completed['operation'] ||
+            entry['queuedAt'] != completed['queuedAt']) {
+          return false;
+        }
+        try {
+          return isValidOperation(Map<String, dynamic>.from(entry));
+        } on TypeError {
+          return false;
+        }
+      });
   }
 
   static Set<String> pendingDeleteIds(dynamic rawOutbox) {
