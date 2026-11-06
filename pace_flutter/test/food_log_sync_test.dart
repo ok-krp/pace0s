@@ -90,6 +90,27 @@ void main() {
         'id': id,
         'operation': 'upsert',
         'queuedAt': '2026-11-05T09:00:00.000Z',
+        'row': <dynamic, dynamic>{1: 'non-string row key'},
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+        'row': {
+          ...row(id),
+          'meta': <dynamic, dynamic>{1: 'non-string nested metadata key'},
+        },
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
         'attempts': null,
         'row': row(id),
       }),
