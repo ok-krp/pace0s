@@ -105,6 +105,25 @@ test("queues one retry per stable row UUID without replacing unrelated entries",
   assert.equal(entries.find((entry) => entry.id === id)?.queuedAt, "2026-11-06T12:02:00.000Z");
 });
 
+test("keeps a foreign-account row when queueing a same-ID local replacement", () => {
+  const foreignUserId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const foreignRow = { ...row, user_id: foreignUserId, name: "Account B food" };
+  const foreignQueue = queueFoodLogInsert([], foreignRow, queuedAt);
+  const mixed = queueFoodLogInsert(
+    foreignQueue,
+    { ...row, name: "Account A food" },
+    "2026-11-06T12:01:00.000Z",
+  );
+
+  assert.equal(mixed.length, 2);
+  assert.equal(readValidFoodLogOutbox(mixed, userId).length, 1);
+  assert.equal(readValidFoodLogOutbox(mixed, foreignUserId).length, 1);
+  assert.equal(
+    readValidFoodLogOutbox(mixed, foreignUserId)[0].row.name,
+    "Account B food",
+  );
+});
+
 test("does not acknowledge a different row payload even if the millisecond timestamp collides", () => {
   const original = queueFoodLogInsert([], row, queuedAt);
   const oldOperation = readValidFoodLogOutbox(original, userId, Date.parse(queuedAt))[0];
