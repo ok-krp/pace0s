@@ -18,6 +18,7 @@ export type CanonicalFoodLogRow = {
 
 export type CanonicalNutritionItem = NutritionItem & {
   __foodLogCanonical: true;
+  created_at?: string;
 };
 
 const TOMBSTONE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
@@ -117,6 +118,7 @@ export function mapFoodLogRow(row: CanonicalFoodLogRow): CanonicalNutritionItem 
     ...(iron === undefined ? {} : { iron }),
     ...(calcium === undefined ? {} : { calcium }),
     ...(vitC === undefined ? {} : { vitC }),
+    ...(row.created_at ? { created_at: row.created_at } : {}),
     qty: 1,
     __foodLogCanonical: true,
   };
@@ -153,6 +155,7 @@ export function nutritionAccountCacheKeys(userId: string): {
   items: string;
   totals: string;
   deletedIds: string;
+  foodLogCursor: string;
 } {
   if (!userId.trim()) throw new Error("A user ID is required for the Nutrition cache");
   const scope = encodeURIComponent(userId);
@@ -160,6 +163,7 @@ export function nutritionAccountCacheKeys(userId: string): {
     items: `pace.__nutrition_cache:${scope}:items`,
     totals: `pace.__nutrition_cache:${scope}:totals`,
     deletedIds: `pace.__nutrition_cache:${scope}:deleted_ids`,
+    foodLogCursor: `pace.__nutrition_cache:${scope}:food_log_cursor`,
   };
 }
 
@@ -312,4 +316,196 @@ export function mergeNutritionTombstoneMaps(
   }
   const ordered = [...latest.entries()].sort((left, right) => left[1] - right[1]).slice(-500);
   return Object.fromEntries(ordered.map(([id, timestamp]) => [id, new Date(timestamp).toISOString()]));
+}
+
+
+export type FoodLogTupleCursor = {
+  createdAt: string;
+  id: string;
+};
+
+export type NutritionFoodLogCursor = {
+  logDate: string;
+  createdAt: string;
+  id: string | null;
+  lastFullAt: string;
+};
+
+export const FOOD_LOG_RECONCILIATION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+export const FOOD_LOG_CURSOR_OVERLAP_MS = 5 * 60 * 1000;
+
+function timestampMicros(value: string): number | null {
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})$/.exec(value);
+  if (!match || (match[2]?.length ?? 0) > 6) return null;
+  const wholeSecond = Date.parse(`${match[1]}${match[3]}`);
+  if (!Number.isFinite(wholeSecond)) return null;
+  const fraction = Number((match[2] ?? "").padEnd(6, "0"));
+  return wholeSecond * 1000 + fraction / 1000;
+}
+
+export function compareFoodLogTupleCursor(
+  left: FoodLogTupleCursor,
+  right: FoodLogTupleCursor,
+): number | null {
+  const leftTime = timestampMicros(left.createdAt);
+  const rightTime = timestampMicros(right.createdAt);
+  if (leftTime === null || rightTime === null) return null;
+  if (leftTime !== rightTime) return leftTime < rightTime ? -1 : 1;
+  return left.id === right.id ? 0 : left.id < right.id ? -1 : 1;
+}
+
+export function parseNutritionFoodLogCursor(
+  raw: string | null,
+  expectedLogDate: string,
+): NutritionFoodLogCursor | null {
+  if (!raw) return null;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    const cursor = value as Record<string, unknown>;
+    if (
+      cursor.logDate !== expectedLogDate ||
+      typeof cursor.createdAt !== "string" ||
+      timestampMicros(cursor.createdAt) === null ||
+      !(cursor.id === null ||
+        (typeof cursor.id === "string" &&
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cursor.id))) ||
+      typeof cursor.lastFullAt !== "string" ||
+      !Number.isFinite(Date.parse(cursor.lastFullAt))
+    ) return null;
+    return {
+      logDate: cursor.logDate as string,
+      createdAt: cursor.createdAt,
+      id: cursor.id as string | null,
+      lastFullAt: cursor.lastFullAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function shouldRunFullFoodLogReconciliation(
+  cursor: NutritionFoodLogCursor | null,
+  logDate: string,
+  nowMs = Date.now(),
+): boolean {
+  if (!Number.isFinite(nowMs) || !cursor || cursor.logDate !== logDate) return true;
+  const lastFullAt = Date.parse(cursor.lastFullAt);
+  return !Number.isFinite(lastFullAt) ||
+    lastFullAt > nowMs ||
+    nowMs - lastFullAt >= FOOD_LOG_RECONCILIATION_INTERVAL_MS;
+}
+
+export function foodLogDeltaSince(cursor: NutritionFoodLogCursor): string {
+  const timestamp = Date.parse(cursor.createdAt);
+  if (!Number.isFinite(timestamp)) throw new RangeError("Invalid food_log cursor timestamp");
+  return new Date(timestamp - FOOD_LOG_CURSOR_OVERLAP_MS).toISOString();
+}
+
+export function nextNutritionFoodLogCursor({
+  previous,
+  rows,
+  logDate,
+  fullReconciliation,
+  nowMs = Date.now(),
+}: {
+  previous: NutritionFoodLogCursor | null;
+  rows: readonly Pick<CanonicalFoodLogRow, "id" | "created_at">[];
+  logDate: string;
+  fullReconciliation: boolean;
+  nowMs?: number;
+}): NutritionFoodLogCursor {
+  if (!Number.isFinite(nowMs)) throw new RangeError("Invalid cursor timestamp");
+  const latest = rows.length > 0 ? rows[rows.length - 1] : null;
+  if (latest?.created_at && timestampMicros(latest.created_at) !== null) {
+    return {
+      logDate,
+      createdAt: latest.created_at,
+      id: latest.id,
+      lastFullAt: fullReconciliation
+        ? new Date(nowMs).toISOString()
+        : previous?.lastFullAt ?? new Date(0).toISOString(),
+    };
+  }
+  if (fullReconciliation) {
+    return {
+      logDate,
+      createdAt: new Date(nowMs - FOOD_LOG_CURSOR_OVERLAP_MS).toISOString(),
+      id: null,
+      lastFullAt: new Date(nowMs).toISOString(),
+    };
+  }
+  return previous ?? {
+    logDate,
+    createdAt: new Date(nowMs - FOOD_LOG_CURSOR_OVERLAP_MS).toISOString(),
+    id: null,
+    lastFullAt: new Date(0).toISOString(),
+  };
+}
+
+export async function fetchAllFoodLogTuplePages<
+  T extends { id: string; created_at: string },
+>(
+  fetchPage: (
+    after: FoodLogTupleCursor | null,
+    limit: number,
+  ) => Promise<FoodLogPageResult<T>>,
+  options: { pageSize: number; isCancelled?: () => boolean },
+): Promise<T[] | null> {
+  const { pageSize, isCancelled = () => false } = options;
+  if (!Number.isSafeInteger(pageSize) || pageSize < 1) {
+    throw new RangeError("pageSize must be a positive safe integer");
+  }
+
+  const rows: T[] = [];
+  let cursor: FoodLogTupleCursor | null = null;
+  while (true) {
+    if (isCancelled()) return null;
+    let result: FoodLogPageResult<T>;
+    try {
+      result = await fetchPage(cursor, pageSize);
+    } catch {
+      return null;
+    }
+    if (isCancelled() || result.error != null || result.data == null) return null;
+    const page = result.data;
+    if (page.length > pageSize) return null;
+
+    let last: FoodLogTupleCursor | null = cursor;
+    for (const row of page) {
+      if (
+        !row ||
+        typeof row.id !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(row.id) ||
+        typeof row.created_at !== "string"
+      ) return null;
+      const next = { createdAt: row.created_at, id: row.id };
+      if (timestampMicros(next.createdAt) === null) return null;
+      if (last && (compareFoodLogTupleCursor(last, next) ?? -1) >= 0) return null;
+      last = next;
+    }
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+    if (!last) return null;
+    cursor = last;
+  }
+}
+
+export function mergeCanonicalNutritionDelta(
+  localItems: readonly NutritionItem[],
+  remoteRows: readonly CanonicalFoodLogRow[],
+  deletedIds: ReadonlySet<string> = new Set(),
+): NutritionItem[] {
+  const merged = new Map<string, NutritionItem>();
+  for (const item of localItems) {
+    if (!deletedIds.has(item.id)) merged.set(item.id, item);
+  }
+  for (const row of remoteRows) {
+    if (deletedIds.has(row.id)) {
+      merged.delete(row.id);
+      continue;
+    }
+    merged.set(row.id, mapFoodLogRow(row));
+  }
+  return [...merged.values()];
 }
