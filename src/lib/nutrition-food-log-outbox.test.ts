@@ -97,6 +97,23 @@ test("queues one retry per stable row UUID without replacing unrelated entries",
   assert.equal(entries.find((entry) => entry.id === id)?.queuedAt, "2026-11-06T12:02:00.000Z");
 });
 
+test("does not acknowledge a different row payload even if the millisecond timestamp collides", () => {
+  const original = queueFoodLogInsert([], row, queuedAt);
+  const oldOperation = readValidFoodLogOutbox(original, userId, Date.parse(queuedAt))[0];
+  const replacement = queueFoodLogInsert(
+    original,
+    { ...row, name: "Riz remplacé dans la même milliseconde" },
+    queuedAt,
+  );
+
+  const afterOldAck = removeFoodLogOutboxInsert(replacement, oldOperation);
+  assert.equal(readValidFoodLogOutbox(afterOldAck, userId, Date.parse(queuedAt)).length, 1);
+  assert.equal(
+    readValidFoodLogOutbox(afterOldAck, userId, Date.parse(queuedAt))[0].row.name,
+    "Riz remplacé dans la même milliseconde",
+  );
+});
+
 test("does not acknowledge a newer replacement after an older request completes", () => {
   const initial = queueFoodLogInsert([], row, queuedAt);
   const oldOperation = readValidFoodLogOutbox(initial, userId)[0];
