@@ -4,10 +4,11 @@ import 'package:pace/core/sync/food_log_sync.dart';
 void main() {
   const id = '00000000-0000-4000-8000-000000000001';
   const otherId = '00000000-0000-4000-8000-000000000002';
+  const userId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 
   Map<String, dynamic> row(String rowId) => <String, dynamic>{
         'id': rowId,
-        'user_id': 'user-a',
+        'user_id': userId,
         'log_date': '2026-11-05',
         'meal': 'Repas',
         'name': 'Test food',
@@ -153,6 +154,7 @@ void main() {
         full,
         operation: 'delete',
         id: '00000000-0000-4000-8000-000000000000',
+        expectedUserId: userId,
         now: DateTime.utc(2026, 11, 5, 10),
       ),
       throwsStateError,
@@ -163,6 +165,7 @@ void main() {
       full,
       operation: 'delete',
       id: id,
+      expectedUserId: userId,
       now: DateTime.utc(2026, 11, 5, 10),
     );
     expect(replacement, hasLength(FoodLogSync.maximumPendingOperations));
@@ -175,6 +178,7 @@ void main() {
       operation: 'upsert',
       id: id,
       row: row(id),
+      expectedUserId: userId,
       now: now,
     );
     final original = Map<String, dynamic>.from(inserted.single as Map);
@@ -182,6 +186,7 @@ void main() {
       inserted,
       operation: 'delete',
       id: id,
+      expectedUserId: userId,
       now: now,
     );
 
@@ -201,6 +206,7 @@ void main() {
       malformedRoot,
       operation: 'delete',
       id: id,
+      expectedUserId: userId,
       now: DateTime.utc(2026, 11, 5, 9),
     );
 
@@ -227,6 +233,7 @@ void main() {
       [malformed],
       operation: 'delete',
       id: id,
+      expectedUserId: userId,
       now: DateTime.utc(2026, 11, 5, 9),
     );
 
@@ -267,6 +274,7 @@ void main() {
       operation: 'upsert',
       id: id,
       row: row(id),
+      expectedUserId: userId,
       now: now,
     );
     final original = Map<String, dynamic>.from(queued.single as Map);
@@ -302,6 +310,7 @@ void main() {
       operation: 'upsert',
       id: id,
       row: {...row(id), 'name': 'Updated food'},
+      expectedUserId: userId,
       now: now.add(const Duration(minutes: 1)),
     );
     final current = Map<String, dynamic>.from(
@@ -318,6 +327,7 @@ void main() {
       const <dynamic>[],
       operation: 'delete',
       id: id,
+      expectedUserId: userId,
       now: now,
     );
     final firstTimestamp = (first.single as Map)['queuedAt'] as String;
@@ -325,12 +335,14 @@ void main() {
       first,
       operation: 'delete',
       id: otherId,
+      expectedUserId: userId,
       now: now,
     );
     final replaced = FoodLogSync.queueOperation(
       second,
       operation: 'delete',
       id: id,
+      expectedUserId: userId,
       now: now,
     );
 
