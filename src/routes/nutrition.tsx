@@ -57,6 +57,7 @@ function NutritionPage() {
     | null
   >(null);
   const [busy, setBusy] = useState(false);
+  const confirmAddInFlight = useRef(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const analyzePhoto = useServerFn(analyzeFoodPhoto);
 
@@ -95,7 +96,8 @@ function NutritionPage() {
   };
 
   const confirmAdd = async () => {
-    if (!pending) return;
+    if (!pending || confirmAddInFlight.current) return;
+    confirmAddInFlight.current = true;
     try {
       if (pending.kind === "barcode") {
         const f = pending.grams / 100;
@@ -128,6 +130,8 @@ function NutritionPage() {
       setPending(null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer le repas.");
+    } finally {
+      confirmAddInFlight.current = false;
     }
   };
 
