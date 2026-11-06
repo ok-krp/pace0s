@@ -72,14 +72,14 @@ export function repairNutritionTotals(): void {
   if (typeof window === "undefined") return;
   const items = readNutritionItems();
   if (!Object.keys(items).length) return;
-  writeDomain(DOMAIN_ITEMS, items);
-  writeDomain(DOMAIN_TOTALS, recomputeNutritionTotals(items));
-  // Keep the legacy keys during the migration for old screens and recovery.
+  const totals = recomputeNutritionTotals(items);
+  // Totals are derived state. Repairing them must not re-emit the entire
+  // Nutrition item JSON as a cloud mutation or inflate user_state egress.
+  applyRemoteDomainWrite(DOMAIN_TOTALS, totals);
   try {
-    localStorage.setItem(KEY_ITEMS, JSON.stringify(items));
-    localStorage.setItem(KEY_TOTALS, JSON.stringify(recomputeNutritionTotals(items)));
+    localStorage.setItem(KEY_TOTALS, JSON.stringify(totals));
   } catch {
-    // Keep the domain-backed data usable when legacy localStorage is full.
+    // The account-local domain cache remains usable when the legacy key is full.
   }
 }
 
