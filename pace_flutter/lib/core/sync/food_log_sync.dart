@@ -289,6 +289,11 @@ class FoodLogSync {
         !LocalStore.isValidRemoteTimestamp(queuedAt)) {
       return false;
     }
+    final operationUserId = operation['user_id'];
+    if (operation.containsKey('user_id') &&
+        (operationUserId is! String || !isUuid(operationUserId))) {
+      return false;
+    }
     final attempts = operation['attempts'];
     if (operation.containsKey('attempts') &&
         (attempts is! int || attempts < 0 || attempts > maximumRetryAttempts)) {
@@ -312,6 +317,7 @@ class FoodLogSync {
     if (row['id'] != id ||
         row['user_id'] is! String ||
         !isUuid(row['user_id'] as String) ||
+        (operationUserId != null && row['user_id'] != operationUserId) ||
         row['log_date'] is! String ||
         !isCalendarDate(row['log_date'] as String) ||
         row['meal'] is! String ||
@@ -373,13 +379,28 @@ class FoodLogSync {
         : rawOutbox == null
             ? <dynamic>[]
             : <dynamic>[rawOutbox];
+    bool belongsToExpectedAccount(Map<String, dynamic> candidate) {
+      final owner = candidate['user_id'];
+      if (owner is String) return owner == expectedUserId;
+      if (candidate['operation'] == 'upsert') {
+        final rawRow = candidate['row'];
+        return rawRow is Map && rawRow['user_id'] == expectedUserId;
+      }
+      // Older delete commands did not carry an explicit owner; they are
+      // retained as part of this account's already-scoped local outbox.
+      return true;
+    }
+
     var validOperationCount = 0;
     var hasExistingOperation = false;
     for (final entry in entries) {
       if (entry is! Map) continue;
       try {
         final candidate = Map<String, dynamic>.from(entry);
-        if (!isValidOperation(candidate)) continue;
+        if (!isValidOperation(candidate) ||
+            !belongsToExpectedAccount(candidate)) {
+          continue;
+        }
         validOperationCount++;
         if (candidate['id'] == id) hasExistingOperation = true;
       } on TypeError {
@@ -400,6 +421,15 @@ class FoodLogSync {
       if (entry is! Map || entry['id'] != id || entry['queuedAt'] is! String) {
         continue;
       }
+      try {
+        final candidate = Map<String, dynamic>.from(entry);
+        if (!isValidOperation(candidate) ||
+            !belongsToExpectedAccount(candidate)) {
+          continue;
+        }
+      } on TypeError {
+        continue;
+      }
       final raw = entry['queuedAt'] as String;
       if (!LocalStore.isValidIsoTimestamp(raw)) continue;
       final parsed = DateTime.tryParse(raw)?.toUtc();
@@ -415,6 +445,7 @@ class FoodLogSync {
     ).toIso8601String();
     final replacement = <String, dynamic>{
       'id': id,
+      'user_id': expectedUserId,
       'operation': operation,
       'queuedAt': queuedAt,
       if (operation == 'upsert') 'row': Map<String, dynamic>.from(row!),
@@ -427,7 +458,9 @@ class FoodLogSync {
     entries.removeWhere((entry) {
       if (entry is! Map || entry['id'] != id) return false;
       try {
-        return isValidOperation(Map<String, dynamic>.from(entry));
+        final candidate = Map<String, dynamic>.from(entry);
+        return isValidOperation(candidate) &&
+            belongsToExpectedAccount(candidate);
       } on TypeError {
         return false;
       }
@@ -807,6 +840,16 @@ class FoodLogSync {
           expectedUserId: expectedUserId,
           rawEntry: rawEntry,
           reason: 'invalid-food-log-operation-shape',
+        );
+        continue;
+      }
+      if (operation['user_id'] != null &&
+          operation['user_id'] != expectedUserId) {
+        await _quarantineEntry(
+          localStore: localStore,
+          expectedUserId: expectedUserId,
+          rawEntry: rawEntry,
+          reason: 'food-log-operation-owner-mismatch',
         );
         continue;
       }
