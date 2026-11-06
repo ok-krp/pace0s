@@ -312,11 +312,22 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
   const [kcal, setKcal] = useState("");
   const [p, setP] = useState(""); const [c, setC] = useState(""); const [f, setF] = useState("");
   const [meal, setMeal] = useState("Déjeuner");
-  const submit = () => {
-    if (!name || !kcal) { toast.error("Nom et calories obligatoires"); return; }
-    addNutritionItem({ name, meal, kcal: +kcal || 0, p: +p || 0, c: +c || 0, f: +f || 0 });
-    toast.success(`Ajouté à ${meal}`);
-    onClose();
+  const submit = async () => {
+    if (!name.trim() || !kcal.trim()) { toast.error("Nom et calories obligatoires"); return; }
+    try {
+      await addNutritionItemToLog({
+        name: name.trim(),
+        meal,
+        kcal: +kcal || 0,
+        p: +p || 0,
+        c: +c || 0,
+        f: +f || 0,
+      }, "manual");
+      toast.success(`Ajouté à ${meal}`);
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer l'aliment.");
+    }
   };
   return (
     <DialogContent className="max-w-sm">
