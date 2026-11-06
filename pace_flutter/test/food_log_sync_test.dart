@@ -132,4 +132,98 @@ void main() {
     expect(DateTime.parse(idTimestamp).isAfter(DateTime.parse(firstTimestamp)), isTrue);
     expect(FoodLogSync.pendingDeleteIds(replaced), {id, otherId});
   });
+
+
+  test('fetches every food-log UUID page beyond 1,000 rows', () async {
+    String uuid(int value) =>
+        '00000000-0000-4000-8000-${value.toString().padLeft(12, '0')}';
+    final source = List.generate(
+      1207,
+      (index) => <String, dynamic>{'id': uuid(index + 1), 'value': index},
+    );
+    final cursors = <String?>[];
+
+    final rows = await FoodLogSync.fetchAllKeysetPages(
+      pageSize: 500,
+      fetchPage: (afterId, limit) async {
+        cursors.add(afterId);
+        final start = afterId == null
+            ? 0
+            : source.indexWhere((row) => row['id'] == afterId) + 1;
+        return source.skip(start).take(limit).toList();
+      },
+    );
+
+    expect(rows, source);
+    expect(cursors, [null, source[499]['id'], source[999]['id']]);
+  });
+
+  test('rejects a partial food-log snapshot when a later page fails', () async {
+    var calls = 0;
+    final rows = await FoodLogSync.fetchAllKeysetPages(
+      pageSize: 2,
+      fetchPage: (afterId, limit) async {
+        calls++;
+        if (calls == 1) {
+          return [
+            {'id': 'a'},
+            {'id': 'b'},
+          ];
+        }
+        return null;
+      },
+    );
+
+    expect(rows, isNull);
+    expect(calls, 2);
+  });
+
+  test('rejects repeated or non-progressing food-log cursors', () async {
+    var calls = 0;
+    final rows = await FoodLogSync.fetchAllKeysetPages(
+      pageSize: 2,
+      fetchPage: (afterId, limit) async {
+        calls++;
+        return calls == 1
+            ? [
+                {'id': 'b'},
+                {'id': 'c'},
+              ]
+            : [
+                {'id': 'c'},
+                {'id': 'd'},
+              ];
+      },
+    );
+
+    expect(rows, isNull);
+    expect(calls, 2);
+  });
+
+  test('stops food-log pagination when account scope is cancelled', () async {
+    var cancelled = false;
+    var calls = 0;
+    final rows = await FoodLogSync.fetchAllKeysetPages(
+      pageSize: 2,
+      isCancelled: () => cancelled,
+      fetchPage: (afterId, limit) async {
+        calls++;
+        cancelled = true;
+        return [{'id': 'a'}];
+      },
+    );
+
+    expect(rows, isNull);
+    expect(calls, 1);
+  });
+
+  test('rejects invalid food-log pagination page sizes', () async {
+    await expectLater(
+      FoodLogSync.fetchAllKeysetPages(
+        pageSize: 0,
+        fetchPage: (afterId, limit) async => <Map<String, dynamic>>[],
+      ),
+      throwsArgumentError,
+    );
+  });
 }
