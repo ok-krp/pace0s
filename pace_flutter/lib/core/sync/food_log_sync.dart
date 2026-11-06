@@ -275,12 +275,12 @@ class FoodLogSync {
       return false;
     }
     final attempts = operation['attempts'];
-    if (attempts != null &&
+    if (operation.containsKey('attempts') &&
         (attempts is! int || attempts < 0 || attempts > maximumRetryAttempts)) {
       return false;
     }
     final nextAttemptAt = operation['nextAttemptAt'];
-    if (nextAttemptAt != null &&
+    if (operation.containsKey('nextAttemptAt') &&
         (nextAttemptAt is! String ||
             !LocalStore.isValidRemoteTimestamp(nextAttemptAt))) {
       return false;
