@@ -468,6 +468,13 @@ function NutritionLogView() {
         return;
       }
       if (user) {
+        // The compatibility cache must be owned by this account before a
+        // direct SQL insert can mutate its in-memory representation.
+        const cacheOwner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
+        if (cacheOwner !== user.id || activeUserId !== user.id) {
+          toast.error("Cache Nutrition non initialisé pour ce compte. Recharge la page.");
+          return;
+        }
         const { error } = await supabase.from("food_log").insert({
           id: it.id,
           user_id: user.id,
