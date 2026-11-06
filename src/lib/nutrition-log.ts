@@ -60,7 +60,12 @@ export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
 
 function readNutritionItems(): NutritionMap {
   const record = readDomain<NutritionMap>(DOMAIN_ITEMS, {});
-  if (Object.keys(record.value).length > 0) return record.value;
+  // An explicitly stored empty domain is authoritative (not a cache miss).
+  // Falling back to the legacy key in that case can resurrect another
+  // account's Nutrition snapshot after logout cleanup.
+  if (record.mutationId !== "empty" && record.mutationId !== "server") {
+    return record.value;
+  }
   try {
     const raw = localStorage.getItem(KEY_ITEMS);
     return raw ? JSON.parse(raw) as NutritionMap : {};
@@ -111,13 +116,17 @@ function isolatePreviousAccountForGuest(): void {
       )),
     );
   }
-  localStorage.removeItem(NUTRITION_CACHE_OWNER_KEY);
-
   // Domain writes are deliberately remote-shaped, not local mutations: a
   // logout cleanup must not enqueue the previous account's empty snapshot.
   applyRemoteDomainWrite(DOMAIN_ITEMS, {});
   applyRemoteDomainWrite(DOMAIN_TOTALS, {});
+  if (Object.keys(readNutritionItems()).length > 0) {
+    throw new Error("Le cache Nutrition précédent n'a pas pu être isolé.");
+  }
   applyRemoteWrite(NUTRITION_LEGACY_TOMBSTONES_KEY, {});
+  // Remove ownership only after both account-local copies and the cleared
+  // compatibility/domain views are durable and verified.
+  localStorage.removeItem(NUTRITION_CACHE_OWNER_KEY);
 }
 
 function appendLocalNutritionItem(
