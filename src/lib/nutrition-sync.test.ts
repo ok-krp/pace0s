@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mapFoodLogRow, mergeCanonicalNutritionItems, fetchAllFoodLogKeysetPages, mergeUnassignedNutritionSnapshots, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones } from "./nutrition-sync.ts";
+import { mapFoodLogRow, mergeCanonicalNutritionItems, fetchAllFoodLogKeysetPages, mergeUnassignedNutritionSnapshots, mergeNutritionTombstoneMaps, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones } from "./nutrition-sync.ts";
 
 const canonical = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -262,4 +262,25 @@ test("does not replace a valid guest backup with malformed cache data", () => {
     mergeUnassignedNutritionSnapshots('{"2026-11-05":[]}', "{broken"),
     null,
   );
+});
+
+
+test("merges account-local and cloud tombstones without losing newer deletions", () => {
+  const now = Date.parse("2026-11-06T12:00:00.000Z");
+  const firstId = "00000000-0000-4000-8000-000000000001";
+  const secondId = "00000000-0000-4000-8000-000000000002";
+  const merged = mergeNutritionTombstoneMaps(
+    JSON.stringify({
+      [firstId]: new Date(now - 60_000).toISOString(),
+      "not-a-uuid": new Date(now).toISOString(),
+    }),
+    JSON.stringify({
+      [firstId]: new Date(now - 30_000).toISOString(),
+      [secondId]: new Date(now - 10_000).toISOString(),
+    }),
+  );
+
+  assert.deepEqual(Object.keys(merged).sort(), [firstId, secondId].sort());
+  assert.equal(merged[firstId], new Date(now - 30_000).toISOString());
+  assert.equal(merged[secondId], new Date(now - 10_000).toISOString());
 });
