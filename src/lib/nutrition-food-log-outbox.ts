@@ -24,8 +24,13 @@ export type FoodLogInsertRow = {
 export type FoodLogOutboxEntry = {
   id: string;
   queuedAt: string;
+  attempts?: number;
+  nextAttemptAt?: string;
   row: FoodLogInsertRow;
 };
+
+const MAX_RETRY_ATTEMPTS = 10;
+const MAX_RETRY_DELAY_MS = 15 * 60 * 1000;
 
 export function nutritionFoodLogOutboxKey(userId: string): string {
   const normalized = userId.trim();
@@ -100,7 +105,12 @@ export function isValidFoodLogOutboxEntry(
     UUID_PATTERN.test(entry.id) &&
     isValidQueuedAt(entry.queuedAt) &&
     isValidFoodLogInsertRow(entry.row, expectedUserId) &&
-    entry.id === (entry.row as FoodLogInsertRow).id;
+    entry.id === (entry.row as FoodLogInsertRow).id &&
+    (entry.attempts === undefined ||
+      (Number.isInteger(entry.attempts) &&
+        Number(entry.attempts) >= 0 &&
+        Number(entry.attempts) <= MAX_RETRY_ATTEMPTS)) &&
+    (entry.nextAttemptAt === undefined || isValidQueuedAt(entry.nextAttemptAt));
 }
 
 /**
@@ -156,20 +166,57 @@ export function removeFoodLogOutboxInsert(
   return rawOutbox.filter((entry) =>
     !isValidFoodLogOutboxEntry(entry, completed.row.user_id) ||
     (entry as FoodLogOutboxEntry).id !== completed.id ||
-    (entry as FoodLogOutboxEntry).queuedAt !== completed.queuedAt,
+    (entry as FoodLogOutboxEntry).queuedAt !== completed.queuedAt ||
+    (entry as FoodLogOutboxEntry).attempts !== completed.attempts ||
+    (entry as FoodLogOutboxEntry).nextAttemptAt !== completed.nextAttemptAt,
   );
+}
+
+export function deferFoodLogOutboxInsert(
+  rawOutbox: unknown,
+  failed: FoodLogOutboxEntry,
+  nowMs = Date.now(),
+): unknown[] {
+  if (!Array.isArray(rawOutbox) || !Number.isFinite(nowMs)) return Array.isArray(rawOutbox) ? [...rawOutbox] : [];
+  return rawOutbox.map((entry) => {
+    if (
+      !isValidFoodLogOutboxEntry(entry, failed.row.user_id) ||
+      entry.id !== failed.id ||
+      entry.queuedAt !== failed.queuedAt ||
+      entry.attempts !== failed.attempts ||
+      entry.nextAttemptAt !== failed.nextAttemptAt
+    ) return entry;
+
+    const attempts = Math.min(MAX_RETRY_ATTEMPTS, (entry.attempts ?? 0) + 1);
+    const delayMs = Math.min(
+      MAX_RETRY_DELAY_MS,
+      30_000 * (2 ** Math.min(attempts, 5)),
+    );
+    return {
+      ...entry,
+      attempts,
+      nextAttemptAt: new Date(nowMs + delayMs).toISOString(),
+    } satisfies FoodLogOutboxEntry;
+  });
 }
 
 export function readValidFoodLogOutbox(
   rawOutbox: unknown,
   expectedUserId: string,
+  nowMs = Date.now(),
 ): FoodLogOutboxEntry[] {
-  if (!Array.isArray(rawOutbox)) return [];
+  if (!Array.isArray(rawOutbox) || !Number.isFinite(nowMs)) return [];
   return rawOutbox
     .filter((entry) => isValidFoodLogOutboxEntry(entry, expectedUserId))
+    .filter((entry) =>
+      entry.nextAttemptAt === undefined ||
+      Date.parse(entry.nextAttemptAt) <= nowMs,
+    )
     .map((entry) => ({
       id: entry.id,
       queuedAt: entry.queuedAt,
+      ...(entry.attempts === undefined ? {} : { attempts: entry.attempts }),
+      ...(entry.nextAttemptAt === undefined ? {} : { nextAttemptAt: entry.nextAttemptAt }),
       row: { ...entry.row, meta: { ...entry.row.meta } },
     }));
 }
