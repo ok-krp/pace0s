@@ -147,6 +147,32 @@ void main() {
     );
   });
 
+  test('does not count a foreign account queue toward the active account limit', () {
+    const userBId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    final foreign = List<dynamic>.generate(
+      FoodLogSync.maximumPendingOperations,
+      (index) => <String, dynamic>{
+        'id':
+            '00000000-0000-4000-8000-${(index + 1).toString().padLeft(12, '0')}',
+        'user_id': userBId,
+        'operation': 'delete',
+        'queuedAt': '2026-11-06T12:00:00.000Z',
+      },
+    );
+
+    final mixed = FoodLogSync.queueOperation(
+      foreign,
+      operation: 'delete',
+      id: id,
+      expectedUserId: userId,
+      now: DateTime.utc(2026, 11, 6, 12),
+    );
+
+    expect(mixed, hasLength(FoodLogSync.maximumPendingOperations + 1));
+    expect((mixed.first as Map)['user_id'], userBId);
+    expect((mixed.last as Map)['user_id'], userId);
+  });
+
   test('does not replace or acknowledge another account outbox command', () {
     const userBId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
     final now = DateTime.utc(2026, 11, 6, 12);
