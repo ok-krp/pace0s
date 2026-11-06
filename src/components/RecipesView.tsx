@@ -316,8 +316,11 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
   const [kcal, setKcal] = useState("");
   const [p, setP] = useState(""); const [c, setC] = useState(""); const [f, setF] = useState("");
   const [meal, setMeal] = useState("Déjeuner");
+  const submitInFlight = useRef(false);
   const submit = async () => {
+    if (submitInFlight.current) return;
     if (!name.trim() || !kcal.trim()) { toast.error("Nom et calories obligatoires"); return; }
+    submitInFlight.current = true;
     try {
       await addNutritionItemToLog({
         name: name.trim(),
@@ -331,6 +334,8 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
       onClose();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer l'aliment.");
+    } finally {
+      submitInFlight.current = false;
     }
   };
   return (
