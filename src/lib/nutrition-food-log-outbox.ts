@@ -52,9 +52,44 @@ function isCalendarDate(value: string): boolean {
 }
 
 function isValidQueuedAt(value: unknown): value is string {
-  return typeof value === "string" &&
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value) &&
-    Number.isFinite(Date.parse(value));
+  if (typeof value !== "string") return false;
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(Z|([+-])(\d{2}):(\d{2}))$/.exec(value);
+  if (!match || (match[7]?.length ?? 0) > 6 || !Number.isFinite(Date.parse(value))) {
+    return false;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  if (year < 1 || month < 1 || month > 12 ||
+      day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) {
+    return false;
+  }
+
+  const normalized = new Date(0);
+  normalized.setUTCFullYear(year, month - 1, day);
+  normalized.setUTCHours(hour, minute, second, 0);
+  if (normalized.getUTCFullYear() !== year ||
+      normalized.getUTCMonth() !== month - 1 ||
+      normalized.getUTCDate() !== day ||
+      normalized.getUTCHours() !== hour ||
+      normalized.getUTCMinutes() !== minute ||
+      normalized.getUTCSeconds() !== second) {
+    return false;
+  }
+
+  if (match[8] !== "Z") {
+    const offsetHours = Number(match[10]);
+    const offsetMinutes = Number(match[11]);
+    if (offsetHours > 14 || offsetMinutes > 59 ||
+        (offsetHours === 14 && offsetMinutes !== 0)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function isFiniteNonNegative(value: unknown): value is number {
