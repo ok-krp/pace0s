@@ -273,3 +273,38 @@ export function mergeUnassignedNutritionSnapshots(
   }
   return merged;
 }
+
+
+/**
+ * Merge local and cloud nutrition deletion markers. The returned compact map
+ * is safe to keep account-scoped locally and to publish as the user's
+ * pace.nutrition.deleted_ids sync key.
+ */
+export function mergeNutritionTombstoneMaps(
+  ...rawMaps: Array<string | null>
+): Record<string, string> {
+  const latest = new Map<string, number>();
+  const now = Date.now();
+  for (const raw of rawMaps) {
+    if (!raw) continue;
+    try {
+      const value: unknown = JSON.parse(raw);
+      if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+      for (const [id, timestamp] of Object.entries(value)) {
+        if (
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id) ||
+          typeof timestamp !== "string"
+        ) continue;
+        const parsed = Date.parse(timestamp);
+        if (!Number.isFinite(parsed) ||
+            parsed > now + 5 * 60 * 1000 ||
+            parsed < now - TOMBSTONE_RETENTION_MS) continue;
+        latest.set(id, Math.max(latest.get(id) ?? Number.NEGATIVE_INFINITY, parsed));
+      }
+    } catch {
+      // One corrupt source must not discard valid markers from another source.
+    }
+  }
+  const ordered = [...latest.entries()].sort((left, right) => left[1] - right[1]).slice(-500);
+  return Object.fromEntries(ordered.map(([id, timestamp]) => [id, new Date(timestamp).toISOString()]));
+}
