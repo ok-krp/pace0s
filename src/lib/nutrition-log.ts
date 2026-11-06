@@ -208,15 +208,23 @@ export async function flushNutritionFoodLogOutbox(
       const { data: before, error: beforeError } = await supabase.auth.getSession();
       if (beforeError || before.session?.user.id !== expectedUserId) return;
 
-      const { error } = await supabase
-        .from("food_log")
-        .upsert(
-          operation.row as unknown as TablesInsert<"food_log">,
-          { onConflict: "id", ignoreDuplicates: true },
-        );
+      let writeError: unknown = null;
+      try {
+        const { error } = await supabase
+          .from("food_log")
+          .upsert(
+            operation.row as unknown as TablesInsert<"food_log">,
+            { onConflict: "id", ignoreDuplicates: true },
+          );
+        writeError = error;
+      } catch (error) {
+        // Fetch/client transport failures can reject instead of returning a
+        // PostgREST { error }. Treat them as retryable writes and back off.
+        writeError = error;
+      }
       const { data: after, error: afterError } = await supabase.auth.getSession();
       if (isCancelled() || afterError || after.session?.user.id !== expectedUserId) return;
-      if (error) {
+      if (writeError) {
         let current: unknown;
         try {
           current = JSON.parse(localStorage.getItem(key) ?? "[]");
