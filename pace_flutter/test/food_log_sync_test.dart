@@ -309,7 +309,7 @@ void main() {
       hasLength(1),
       reason: 'an old in-flight acknowledgement must not remove a replacement',
     );
-    expect(FoodLogSync.pendingDeleteIds(replaced), {id});
+    expect(FoodLogSync.pendingDeleteIds(replaced, expectedUserId: userId), {id});
   });
 
   test('preserves malformed outbox roots when queueing and acknowledging', () {
@@ -383,7 +383,10 @@ void main() {
 
   test('ignores non-string-key corrupt maps when deriving pending deletes', () {
     final malformed = <dynamic, dynamic>{1: 'not-a-json-operation'};
-    expect(FoodLogSync.pendingDeleteIds([malformed]), isEmpty);
+    expect(FoodLogSync.pendingDeleteIds(
+      [malformed],
+      expectedUserId: userId,
+    ), isEmpty);
   });
 
   test('preserves a malformed native quarantine container before appending', () {
@@ -488,7 +491,7 @@ void main() {
     expect(replaced, hasLength(2));
     final idTimestamp = (replaced.firstWhere((entry) => entry['id'] == id) as Map)['queuedAt'] as String;
     expect(DateTime.parse(idTimestamp).isAfter(DateTime.parse(firstTimestamp)), isTrue);
-    expect(FoodLogSync.pendingDeleteIds(replaced), {id, otherId});
+    expect(FoodLogSync.pendingDeleteIds(replaced, expectedUserId: userId), {id, otherId});
   });
 
 
