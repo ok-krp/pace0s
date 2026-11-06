@@ -104,6 +104,7 @@ class SyncService {
   static bool isSyncableKey(String key) =>
       key.startsWith('pace.') &&
       !key.startsWith('pace.__sync_') &&
+      !key.startsWith('pace.__nutrition_cache:') &&
       !excludedSyncKeys.contains(key);
 
   /// Reject malformed persisted operations before any network request. Such
