@@ -561,8 +561,11 @@ class FoodLogSync {
 
   static Set<String> pendingDeleteIds(
     dynamic rawOutbox, {
-    String? expectedUserId,
+    required String expectedUserId,
   }) {
+    if (!isUuid(expectedUserId)) {
+      throw ArgumentError.value(expectedUserId, 'expectedUserId');
+    }
     if (rawOutbox is! List) return <String>{};
     final ids = <String>{};
     for (final entry in rawOutbox) {
@@ -572,9 +575,7 @@ class FoodLogSync {
         final owner = operation['user_id'];
         if (isValidOperation(operation) &&
             operation['operation'] == 'delete' &&
-            (expectedUserId == null ||
-                owner == null ||
-                owner == expectedUserId)) {
+            (owner == null || owner == expectedUserId)) {
           ids.add(operation['id'] as String);
         }
       } on TypeError {
