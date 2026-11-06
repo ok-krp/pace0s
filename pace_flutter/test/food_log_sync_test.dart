@@ -71,6 +71,44 @@ void main() {
       FoodLogSync.isValidOperation({
         'id': id,
         'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+        'row': {...row(id), 'health_score': 'purple'},
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+        'row': {...row(id), 'meta': 'not-an-object'},
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+        'attempts': null,
+        'row': row(id),
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+        'nextAttemptAt': null,
+        'row': row(id),
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
         'queuedAt': '2026-11-05T09:00:00',
         'row': row(id),
       }),
