@@ -450,17 +450,18 @@ export async function addNutritionItemToLog(
     // PostgREST error object. Both cases must enter the same durable outbox.
     insertError = error;
   }
-  let stillSameAccount = false;
-  try {
-    const { data: currentSession, error: currentSessionError } = await supabase.auth.getSession();
-    stillSameAccount = !currentSessionError &&
-      currentSession.session?.user.id === userId &&
-      localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === userId;
-  } catch {
-    // A failed session re-check must not redirect the write to a new account.
-    // The retry remains under the initiating user's private outbox key.
-    stillSameAccount = false;
-  }
+  const stillSameAccount = await (async () => {
+    try {
+      const { data: currentSession, error: currentSessionError } = await supabase.auth.getSession();
+      return !currentSessionError &&
+        currentSession.session?.user.id === userId &&
+        localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === userId;
+    } catch {
+      // A failed session re-check must not redirect the write to a new account.
+      // The retry remains under the initiating user's private outbox key.
+      return false;
+    }
+  })();
 
   if (insertError) {
     const outboxKey = nutritionFoodLogOutboxKey(userId);
