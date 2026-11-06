@@ -270,8 +270,8 @@ export function useCloudSyncEngineInternal() {
               // Client bookkeeping and account-private Nutrition caches are
               // never domain state. Exclude them in PostgREST so stale rows
               // cannot consume egress before the client-side key guard runs.
-              .not("key", "like", "pace.__sync_%")
-              .not("key", "like", "pace.__nutrition_cache:%");
+              .not("key", "match", "^pace\\.__sync_")
+              .not("key", "match", "^pace\\.__nutrition_cache:");
             if (!fullReconciliation) {
               query = query.gte("updated_at", incrementalCursor!);
             }
