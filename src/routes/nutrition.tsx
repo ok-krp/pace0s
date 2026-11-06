@@ -456,11 +456,18 @@ function NutritionLogView() {
       iron: +fields.iron || undefined, calcium: +fields.calcium || undefined, vitC: +fields.vit_c || undefined,
     };
 
+    // Capture the initiating account before any asynchronous operation. Never
+    // commit a response into the compatibility cache after an account switch.
+    const initiatingUserId = activeUserId;
     let savedToFoodLog = false;
     try {
       const { data: authData, error: authError } = await supabase.auth.getSession();
       const user = authData.session?.user;
-      if (!authError && user) {
+      if (authError || (initiatingUserId && user?.id !== initiatingUserId) || (!initiatingUserId && user)) {
+        toast.error("La session a changé. Réessaie l'ajout.");
+        return;
+      }
+      if (user) {
         const { error } = await supabase.from("food_log").insert({
           id: it.id,
           user_id: user.id,
@@ -485,6 +492,13 @@ function NutritionLogView() {
           },
         });
         if (!error) {
+          const { data: verifiedSession, error: verifyError } = await supabase.auth.getSession();
+          if (verifyError || verifiedSession.session?.user.id !== user.id || activeUserId !== user.id) {
+            // SQL insert is committed for the initiating account. Do not touch
+            // another account's local cache; its next reconciliation will find it.
+            savedToFoodLog = true;
+            toast.message("Repas enregistré. Le cache sera actualisé au prochain chargement.");
+          } else {
           let current: Record<string, Item[]> = {};
           try {
             const raw = localStorage.getItem("pace.nutrition.items");
@@ -499,6 +513,7 @@ function NutritionLogView() {
           applyRemoteWrite("pace.nutrition.items", nextItems);
           applyRemoteWrite("pace.nutrition.totals", recomputeNutritionTotals(nextItems));
           savedToFoodLog = true;
+          }
         }
       }
     } catch {
