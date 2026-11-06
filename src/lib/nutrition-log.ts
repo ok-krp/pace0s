@@ -1,7 +1,14 @@
 import { todayKey, applyRemoteWrite } from "@/lib/storage";
 import { readDomain, writeDomain } from "@/lib/domain-store";
 import { supabase } from "@/integrations/supabase/client";
-import { NUTRITION_CACHE_OWNER_KEY, nutritionAccountCacheKeys } from "@/lib/nutrition-sync";
+import {
+  mergeNutritionTombstoneMaps,
+  mergeUnassignedNutritionSnapshots,
+  NUTRITION_CACHE_OWNER_KEY,
+  NUTRITION_LEGACY_TOMBSTONES_KEY,
+  NUTRITION_UNASSIGNED_BACKUP_KEY,
+  nutritionAccountCacheKeys,
+} from "@/lib/nutrition-sync";
 
 export type NutritionItem = {
   id: string;
@@ -118,11 +125,108 @@ export async function addNutritionItemToLog(
   }
 
   const accountKeys = nutritionAccountCacheKeys(userId);
-  const hasCurrentOwner = () =>
-    localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === userId;
-  if (!hasCurrentOwner()) {
-    throw new Error("Le cache Nutrition de ce compte n'est pas encore initialisé.");
+  const cacheOwner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
+  const globalItems = localStorage.getItem(KEY_ITEMS);
+  const globalTotals = localStorage.getItem(KEY_TOTALS);
+  const globalTombstones = localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY);
+
+  // Preserve the outgoing account before hydrating another account's private
+  // cache. Unowned legacy/guest data is backed up, never assigned to a login.
+  if (cacheOwner && cacheOwner !== userId) {
+    const previousKeys = nutritionAccountCacheKeys(cacheOwner);
+    try {
+      if (globalItems && !localStorage.getItem(previousKeys.items)) {
+        localStorage.setItem(previousKeys.items, globalItems);
+      }
+      if (globalTotals && !localStorage.getItem(previousKeys.totals)) {
+        localStorage.setItem(previousKeys.totals, globalTotals);
+      }
+      if (globalTombstones) {
+        localStorage.setItem(
+          previousKeys.deletedIds,
+          JSON.stringify(mergeNutritionTombstoneMaps(
+            localStorage.getItem(previousKeys.deletedIds),
+            globalTombstones,
+          )),
+        );
+      }
+    } catch {
+      // The current user's independent scope remains authoritative below.
+    }
+  } else if (!cacheOwner && globalItems) {
+    const guestBackup = mergeUnassignedNutritionSnapshots(
+      localStorage.getItem(NUTRITION_UNASSIGNED_BACKUP_KEY),
+      globalItems,
+    );
+    try {
+      if (guestBackup) {
+        localStorage.setItem(NUTRITION_UNASSIGNED_BACKUP_KEY, JSON.stringify(guestBackup));
+        localStorage.setItem(
+          `${NUTRITION_UNASSIGNED_BACKUP_KEY}:totals`,
+          JSON.stringify(recomputeNutritionTotals(guestBackup)),
+        );
+      } else if (!localStorage.getItem(NUTRITION_UNASSIGNED_BACKUP_KEY)) {
+        localStorage.setItem(NUTRITION_UNASSIGNED_BACKUP_KEY, globalItems);
+        if (globalTotals) {
+          localStorage.setItem(`${NUTRITION_UNASSIGNED_BACKUP_KEY}:totals`, globalTotals);
+        }
+      }
+      if (globalTombstones) {
+        localStorage.setItem(
+          `${NUTRITION_UNASSIGNED_BACKUP_KEY}:deleted_ids`,
+          JSON.stringify(mergeNutritionTombstoneMaps(
+            localStorage.getItem(`${NUTRITION_UNASSIGNED_BACKUP_KEY}:deleted_ids`),
+            globalTombstones,
+          )),
+        );
+      }
+    } catch {
+      // Preserve existing recovery material if browser storage is constrained.
+    }
   }
+
+  let scopedItems: NutritionMap = {};
+  let scopedTotals: NutritionTotals = {};
+  try {
+    const scopedRaw = localStorage.getItem(accountKeys.items);
+    const fallbackRaw = cacheOwner === userId ? globalItems : null;
+    const parsed: unknown = scopedRaw
+      ? JSON.parse(scopedRaw)
+      : fallbackRaw ? JSON.parse(fallbackRaw) : {};
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      scopedItems = parsed as NutritionMap;
+    }
+  } catch {
+    // Do not import malformed data from another account or replace its backup.
+  }
+  try {
+    const scopedRaw = localStorage.getItem(accountKeys.totals);
+    const fallbackRaw = cacheOwner === userId ? globalTotals : null;
+    const parsed: unknown = scopedRaw
+      ? JSON.parse(scopedRaw)
+      : fallbackRaw ? JSON.parse(fallbackRaw) : {};
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      scopedTotals = parsed as NutritionTotals;
+    }
+  } catch {
+    scopedTotals = recomputeNutritionTotals(scopedItems);
+  }
+
+  const scopedTombstones = mergeNutritionTombstoneMaps(
+    localStorage.getItem(accountKeys.deletedIds),
+    cacheOwner === userId ? globalTombstones : null,
+  );
+  localStorage.setItem(NUTRITION_CACHE_OWNER_KEY, userId);
+  try {
+    localStorage.setItem(accountKeys.items, JSON.stringify(scopedItems));
+    localStorage.setItem(accountKeys.totals, JSON.stringify(scopedTotals));
+    localStorage.setItem(accountKeys.deletedIds, JSON.stringify(scopedTombstones));
+  } catch {
+    // Continue with the in-memory/compatibility state; SQL remains canonical.
+  }
+  applyRemoteWrite(KEY_ITEMS, scopedItems);
+  applyRemoteWrite(KEY_TOTALS, scopedTotals);
+  applyRemoteWrite(NUTRITION_LEGACY_TOMBSTONES_KEY, scopedTombstones);
 
   const payload = {
     id: it.id,
