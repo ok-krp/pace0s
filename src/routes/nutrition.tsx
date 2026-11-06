@@ -286,6 +286,10 @@ function NutritionLogView() {
         // data. Its scoped copy above remains available after that account logs in.
         applyRemoteWrite("pace.nutrition.items", {});
         applyRemoteWrite("pace.nutrition.totals", {});
+        // The previous account's snapshot is now isolated under its scoped
+        // keys. Clear the global owner marker so subsequent guest writes are
+        // not mistaken for late writes belonging to the signed-out account.
+        localStorage.removeItem(NUTRITION_CACHE_OWNER_KEY);
       }
       setReadyCacheOwner(null);
       setGuestCacheReady(true);
