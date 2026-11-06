@@ -9,7 +9,25 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { applyLocalWrite, applyRemoteWrite, useLocalState, todayKey } from "@/lib/storage";
 import { supabase } from "@/integrations/supabase/client";
 import { accountSyncStorageKeys, parseSyncQueue } from "@/lib/cloud-sync-scope";
-import { fetchAllFoodLogKeysetPages, mergeCanonicalNutritionItems, mergeUnassignedNutritionSnapshots, mergeNutritionTombstoneMaps, mayReadGlobalNutritionCache, NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, NUTRITION_LEGACY_TOMBSTONES_KEY, nutritionAccountCacheKeys, queueNutritionTombstone, readActiveNutritionTombstones, type CanonicalFoodLogRow } from "@/lib/nutrition-sync";
+import {
+  fetchAllFoodLogTuplePages,
+  mergeCanonicalNutritionItems,
+  mergeCanonicalNutritionDelta,
+  mergeUnassignedNutritionSnapshots,
+  mergeNutritionTombstoneMaps,
+  mayReadGlobalNutritionCache,
+  nextNutritionFoodLogCursor,
+  parseNutritionFoodLogCursor,
+  shouldRunFullFoodLogReconciliation,
+  foodLogDeltaSince,
+  NUTRITION_CACHE_OWNER_KEY,
+  NUTRITION_UNASSIGNED_BACKUP_KEY,
+  NUTRITION_LEGACY_TOMBSTONES_KEY,
+  nutritionAccountCacheKeys,
+  queueNutritionTombstone,
+  readActiveNutritionTombstones,
+  type CanonicalFoodLogRow,
+} from "@/lib/nutrition-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -444,18 +462,38 @@ function NutritionLogView() {
       if (pendingKeys.includes("pace.nutrition.items")) return;
 
       const day = todayKey();
-      const data = await fetchAllFoodLogKeysetPages<CanonicalFoodLogRow>(
-        async (afterId, pageSize) => {
+      const previousFoodLogCursor = parseNutritionFoodLogCursor(
+        localStorage.getItem(accountKeys.foodLogCursor),
+        day,
+      );
+      const fullFoodLogReconciliation = shouldRunFullFoodLogReconciliation(
+        previousFoodLogCursor,
+        day,
+      );
+      const deltaSince = fullFoodLogReconciliation || !previousFoodLogCursor
+        ? null
+        : foodLogDeltaSince(previousFoodLogCursor);
+      const data = await fetchAllFoodLogTuplePages<CanonicalFoodLogRow & { created_at: string }>(
+        async (after, pageSize) => {
           let query = supabase
             .from("food_log")
             .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta,created_at")
             .eq("user_id", userId)
             .eq("log_date", day);
-          if (afterId !== null) query = query.gt("id", afterId);
+          if (deltaSince !== null) query = query.gte("created_at", deltaSince);
+          if (after !== null) {
+            query = query.or(
+              `created_at.gt.${after.createdAt},and(created_at.eq.${after.createdAt},id.gt.${after.id})`,
+            );
+          }
           const { data: page, error } = await query
+            .order("created_at", { ascending: true })
             .order("id", { ascending: true })
             .limit(pageSize);
-          return { data: page as CanonicalFoodLogRow[] | null, error };
+          return {
+            data: page as Array<CanonicalFoodLogRow & { created_at: string }> | null,
+            error,
+          };
         },
         {
           pageSize: 500,
@@ -464,18 +502,8 @@ function NutritionLogView() {
             localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) !== userId,
         },
       );
-      // Do not replace a visible cache from a partial or cancelled SQL scan.
+      // The cursor advances only after every tuple page has been received.
       if (data === null || todayKey() !== day) return;
-      // UUID order is only a pagination boundary; present meals in their
-      // original chronological order after the complete snapshot is fetched.
-      data.sort((left, right) => {
-        const leftTime = Date.parse(left.created_at ?? "");
-        const rightTime = Date.parse(right.created_at ?? "");
-        if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
-          return leftTime - rightTime;
-        }
-        return left.id.localeCompare(right.id);
-      });
       const { data: confirmedSession, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || confirmedSession.session?.user.id !== userId ||
           localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) !== userId) return;
@@ -486,18 +514,32 @@ function NutritionLogView() {
       );
       localStorage.setItem(accountKeys.deletedIds, JSON.stringify(mergedTombstones));
       const deletedIds = readActiveNutritionTombstones(JSON.stringify(mergedTombstones));
-      const merged = mergeCanonicalNutritionItems(
-        Array.isArray(currentItems[day]) ? currentItems[day] : [],
-        data as unknown as CanonicalFoodLogRow[],
-        deletedIds,
-      );
+      const localDayItems = Array.isArray(currentItems[day]) ? currentItems[day] : [];
+      const merged = fullFoodLogReconciliation
+        ? mergeCanonicalNutritionItems(
+            localDayItems,
+            data as unknown as CanonicalFoodLogRow[],
+            deletedIds,
+          )
+        : mergeCanonicalNutritionDelta(
+            localDayItems,
+            data as unknown as CanonicalFoodLogRow[],
+            deletedIds,
+          );
       const nextItems = { ...currentItems, [day]: merged };
       const nextTotals = recomputeNutritionTotals(nextItems);
+      const nextFoodLogCursor = nextNutritionFoodLogCursor({
+        previous: previousFoodLogCursor,
+        rows: data,
+        logDate: day,
+        fullReconciliation: fullFoodLogReconciliation,
+      });
 
-      // Cache by account first, then update the compatibility keys. These
-      // read-side cache writes never enter the generic user_state outbox.
+      // Cache the complete result before persisting the cursor. If the local
+      // cache write fails, the old cursor remains and the same delta is retried.
       localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
       localStorage.setItem(accountKeys.totals, JSON.stringify({ ...currentTotals, ...nextTotals }));
+      localStorage.setItem(accountKeys.foodLogCursor, JSON.stringify(nextFoodLogCursor));
       localStorage.setItem(NUTRITION_CACHE_OWNER_KEY, userId);
       applyRemoteWrite("pace.nutrition.items", nextItems);
       applyRemoteWrite("pace.nutrition.totals", { ...currentTotals, ...nextTotals });
