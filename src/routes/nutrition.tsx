@@ -65,13 +65,18 @@ const COL_FIELD: Record<NutCol, keyof Item> = {
 const MEALS = ["Petit déjeuner", "Déjeuner", "Goûter", "Dîner", "Collation"];
 
 function NutritionPage() {
-  const { tab } = Route.useSearch();
   const { user } = useAuth();
   const currentAccountId = user?.id ?? null;
-  const accountIdRef = useRef<string | null>(currentAccountId);
-  useEffect(() => {
-    accountIdRef.current = currentAccountId;
-  }, [currentAccountId]);
+  return (
+    <NutritionPageContent
+      key={currentAccountId ?? "guest"}
+      currentAccountId={currentAccountId}
+    />
+  );
+}
+
+function NutritionPageContent({ currentAccountId }: { currentAccountId: string | null }) {
+  const { tab } = Route.useSearch();
   const currentTab = tab ?? "nutrition";
   const [scanOpen, setScanOpen] = useState(false);
   const [scanOwnerId, setScanOwnerId] = useState<string | null>(null);
@@ -89,13 +94,13 @@ function NutritionPage() {
   const visiblePending = pending?.accountUserId === currentAccountId ? pending : null;
 
   const handleBarcode = async (code: string) => {
-    const accountUserId = accountIdRef.current;
+    const accountUserId = currentAccountId;
     setScanOpen(false);
     setBusy(true);
     try {
       const p = await fetchProductByBarcode(code);
       if (!p) { toast.error("Produit introuvable"); return; }
-      if (accountIdRef.current !== accountUserId) return;
+      
       setPending({ kind: "barcode", product: p, grams: 100, meal: "Déjeuner", accountUserId });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erreur scan");
@@ -103,7 +108,7 @@ function NutritionPage() {
   };
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const accountUserId = accountIdRef.current;
+    const accountUserId = currentAccountId;
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -117,7 +122,7 @@ function NutritionPage() {
         const res = await analyzePhoto({ data: { imageBase64: b64 } });
         if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
         const r = res.result as FoodAnalysis;
-        if (accountIdRef.current !== accountUserId) return;
+        
         setPending({ kind: "photo", photo: b64, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner", accountUserId });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Erreur IA");
@@ -128,7 +133,7 @@ function NutritionPage() {
 
   const confirmAdd = async () => {
     if (!pending || confirmAddInFlight.current) return;
-    if (accountIdRef.current !== pending.accountUserId) {
+    if (currentAccountId !== pending.accountUserId) {
       toast.error("Le compte a changé ; cette analyse a été annulée. Relance le scan avec le compte actif.");
       setPending(null);
       return;
