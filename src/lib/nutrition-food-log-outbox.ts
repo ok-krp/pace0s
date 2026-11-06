@@ -175,6 +175,28 @@ export function isValidFoodLogInsertRow(
 ): value is FoodLogInsertRow {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
+  const allowedKeys = new Set([
+    "id",
+    "user_id",
+    "log_date",
+    "meal",
+    "name",
+    "kcal",
+    "protein_g",
+    "carbs_g",
+    "fat_g",
+    "fiber_g",
+    "sugar_g",
+    "sodium_mg",
+    "source",
+    "health_score",
+    "meta",
+  ]);
+  if (
+    Object.keys(row).some((key) => !allowedKeys.has(key)) ||
+    !isJsonSafe(row)
+  ) return false;
+
   return typeof row.id === "string" &&
     UUID_PATTERN.test(row.id) &&
     typeof row.user_id === "string" &&
