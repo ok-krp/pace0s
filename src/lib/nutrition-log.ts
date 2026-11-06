@@ -177,6 +177,10 @@ export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty
 
 export type NutritionLogSource = "manual" | "barcode" | "photo" | "recipe";
 export type NutritionLogWriteResult = "cloud" | "local" | "saved-for-previous-account";
+export type NutritionLogWriteOptions = {
+  healthScore?: "green" | "orange" | "red";
+  meta?: Record<string, unknown>;
+};
 
 /**
  * Retry account-local food_log inserts after a network failure. The queue is
@@ -273,6 +277,7 @@ export async function addNutritionItemToLog(
   item: Omit<NutritionItem, "id" | "qty"> & { qty?: number },
   source: NutritionLogSource,
   missingNutrients: readonly string[] = [],
+  options: NutritionLogWriteOptions = {},
 ): Promise<NutritionLogWriteResult> {
   const today = todayKey();
   const it: NutritionItem = { id: crypto.randomUUID(), qty: item.qty ?? 1, ...item };
@@ -413,7 +418,9 @@ export async function addNutritionItemToLog(
     sugar_g: it.sugar ?? 0,
     sodium_mg: it.sodium ?? 0,
     source,
+    ...(options.healthScore ? { health_score: options.healthScore } : {}),
     meta: {
+      ...(options.meta ?? {}),
       client: "pace_web",
       sat_fat_g: it.sat ?? null,
       salt_g: it.salt ?? null,
