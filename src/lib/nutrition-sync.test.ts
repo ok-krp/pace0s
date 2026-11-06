@@ -70,6 +70,20 @@ test("does not display stored zeroes for nutrients the user left blank", () => {
   assert.equal(mapped.__foodLogCanonical, true);
 });
 
+test("omits optional nutrients explicitly marked as not provided", () => {
+  const mapped = mapFoodLogRow({
+    ...canonical,
+    fiber_g: 0,
+    sugar_g: 0,
+    sodium_mg: 0,
+    meta: { missing_nutrients: ["fiber_g", "sugar_g", "sodium_mg"] },
+  });
+
+  assert.equal("fiber" in mapped, false);
+  assert.equal("sugar" in mapped, false);
+  assert.equal("sodium" in mapped, false);
+});
+
 test("merges canonical rows without duplicating or losing legacy JSON-only entries", () => {
   const remote = { ...canonical };
   const local = [
