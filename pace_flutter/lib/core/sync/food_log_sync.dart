@@ -143,10 +143,13 @@ class FoodLogSync {
           !isUuid(id)) {
         throw const FormatException('Invalid last food_log cursor row');
       }
+      final fullWatermark = current.subtract(cursorOverlap);
+      final latestAt = DateTime.parse(createdAt).toUtc();
+      final useWatermark = fullReconciliation && latestAt.isBefore(fullWatermark);
       return <String, dynamic>{
         'logDate': logDate,
-        'createdAt': createdAt,
-        'id': id,
+        'createdAt': useWatermark ? fullWatermark.toIso8601String() : createdAt,
+        'id': useWatermark ? null : id,
         'lastFullAt': fullReconciliation
             ? current.toIso8601String()
             : previous?['lastFullAt'] ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toIso8601String(),
