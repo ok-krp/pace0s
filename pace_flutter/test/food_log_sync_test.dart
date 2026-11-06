@@ -319,6 +319,33 @@ void main() {
     expect((queued.last as Map)['operation'], 'delete');
   });
 
+  test('filters pending delete tombstones to the active account', () {
+    const userBId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+    final accountA = FoodLogSync.queueOperation(
+      const <dynamic>[],
+      operation: 'delete',
+      id: id,
+      expectedUserId: userId,
+      now: DateTime.utc(2026, 11, 6, 12),
+    );
+    final mixed = FoodLogSync.queueOperation(
+      accountA,
+      operation: 'delete',
+      id: otherId,
+      expectedUserId: userBId,
+      now: DateTime.utc(2026, 11, 6, 12),
+    );
+
+    expect(
+      FoodLogSync.pendingDeleteIds(mixed, expectedUserId: userId),
+      {id},
+    );
+    expect(
+      FoodLogSync.pendingDeleteIds(mixed, expectedUserId: userBId),
+      {otherId},
+    );
+  });
+
   test('ignores non-string-key corrupt maps when deriving pending deletes', () {
     final malformed = <dynamic, dynamic>{1: 'not-a-json-operation'};
     expect(FoodLogSync.pendingDeleteIds([malformed]), isEmpty);
