@@ -400,7 +400,7 @@ export async function addNutritionItemToLog(
 
   if (insertError) {
     const outboxKey = nutritionFoodLogOutboxKey(userId);
-    let rawOutbox: unknown = [];
+    let rawOutbox: unknown;
     try {
       rawOutbox = JSON.parse(localStorage.getItem(outboxKey) ?? "[]");
     } catch {
