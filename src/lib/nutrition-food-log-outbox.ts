@@ -77,7 +77,9 @@ function isCalendarDate(value: string): boolean {
   const month = Number(match[2]);
   const day = Number(match[3]);
   if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) return false;
-  const parsed = new Date(Date.UTC(year, month - 1, day));
+  const parsed = new Date(0);
+  parsed.setUTCFullYear(year, month - 1, day);
+  parsed.setUTCHours(0, 0, 0, 0);
   return parsed.getUTCFullYear() === year &&
     parsed.getUTCMonth() === month - 1 &&
     parsed.getUTCDate() === day;
