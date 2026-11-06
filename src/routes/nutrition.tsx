@@ -593,6 +593,14 @@ function NutritionLogView() {
             iron_mg: it.iron ?? null,
             calcium_mg: it.calcium ?? null,
             vitamin_c_mg: it.vitC ?? null,
+            missing_nutrients: [
+              ...(!fields.protein.trim() ? ["protein_g"] : []),
+              ...(!fields.carbs.trim() ? ["carbs_g"] : []),
+              ...(!fields.fat.trim() ? ["fat_g"] : []),
+              ...(!fields.fiber.trim() ? ["fiber_g"] : []),
+              ...(!fields.sugar.trim() ? ["sugar_g"] : []),
+              ...(!fields.sodium.trim() ? ["sodium_mg"] : []),
+            ],
           },
         });
         if (!error) {
