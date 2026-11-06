@@ -272,4 +272,233 @@ void main() {
       throwsArgumentError,
     );
   });
+
+
+  test('requires full Nutrition reconciliation when the cursor is missing, stale or for another day', () {
+    final now = DateTime.utc(2026, 11, 6, 12);
+    final cursor = <String, dynamic>{
+      'logDate': '2026-11-06',
+      'createdAt': '2026-11-06T11:59:00.000Z',
+      'id': id,
+      'lastFullAt': now.subtract(const Duration(minutes: 1)).toIso8601String(),
+    };
+
+    expect(
+      FoodLogSync.shouldRunFullFoodLogReconciliation(
+        cursor: null,
+        logDate: '2026-11-06',
+        now: now,
+      ),
+      isTrue,
+    );
+    expect(
+      FoodLogSync.shouldRunFullFoodLogReconciliation(
+        cursor: cursor,
+        logDate: '2026-11-07',
+        now: now,
+      ),
+      isTrue,
+    );
+    expect(
+      FoodLogSync.shouldRunFullFoodLogReconciliation(
+        cursor: {
+          ...cursor,
+          'lastFullAt': now.subtract(const Duration(days: 1)).toIso8601String(),
+        },
+        logDate: '2026-11-06',
+        now: now,
+      ),
+      isTrue,
+    );
+    expect(
+      FoodLogSync.shouldRunFullFoodLogReconciliation(
+        cursor: cursor,
+        logDate: '2026-11-06',
+        now: now,
+      ),
+      isFalse,
+    );
+  });
+
+  test('parses only valid per-day food-log cursors', () {
+    final raw = <String, dynamic>{
+      'logDate': '2026-11-06',
+      'createdAt': '2026-11-06T11:59:00.123456Z',
+      'id': id,
+      'lastFullAt': '2026-11-06T11:00:00.000Z',
+    };
+    expect(
+      FoodLogSync.parseFoodLogCursor(raw, logDate: '2026-11-06'),
+      raw,
+    );
+    expect(FoodLogSync.parseFoodLogCursor(raw, logDate: '2026-11-07'), isNull);
+    expect(
+      FoodLogSync.parseFoodLogCursor({...raw, 'id': 'invalid'}, logDate: '2026-11-06'),
+      isNull,
+    );
+    expect(
+      FoodLogSync.parseFoodLogCursor({...raw, 'createdAt': 'invalid'}, logDate: '2026-11-06'),
+      isNull,
+    );
+  });
+
+  test('uses a bounded overlap when requesting a food-log delta', () {
+    final since = FoodLogSync.foodLogDeltaSince({
+      'createdAt': '2026-11-06T12:00:00.000Z',
+    });
+    expect(since, '2026-11-06T11:55:00.000Z');
+  });
+
+  test('advances a full scan past historical rows rather than rescanning them every minute', () {
+    final now = DateTime.utc(2026, 11, 6, 12);
+    final cursor = FoodLogSync.nextFoodLogCursor(
+      previous: null,
+      rows: [
+        {
+          ...row(id),
+          'created_at': '2026-10-01T10:00:00.000Z',
+        },
+      ],
+      logDate: '2026-11-06',
+      fullReconciliation: true,
+      now: now,
+    );
+
+    expect(cursor['createdAt'], '2026-11-06T11:55:00.000Z');
+    expect(cursor['id'], isNull);
+    expect(cursor['lastFullAt'], now.toIso8601String());
+  });
+
+  test('keeps the previous cursor after an empty incremental delta', () {
+    final now = DateTime.utc(2026, 11, 6, 12);
+    final previous = <String, dynamic>{
+      'logDate': '2026-11-06',
+      'createdAt': '2026-11-06T11:59:00.000Z',
+      'id': id,
+      'lastFullAt': '2026-11-06T10:00:00.000Z',
+    };
+    final next = FoodLogSync.nextFoodLogCursor(
+      previous: previous,
+      rows: const [],
+      logDate: '2026-11-06',
+      fullReconciliation: false,
+      now: now,
+    );
+
+    expect(next, previous);
+  });
+
+  test('fetches food-log tuple pages in created_at and UUID order', () async {
+    Map<String, dynamic> entry(String entryId, String createdAt) => {
+          ...row(entryId),
+          'created_at': createdAt,
+        };
+    final source = [
+      entry(id, '2026-11-06T12:00:00.123456Z'),
+      entry(otherId, '2026-11-06T12:00:00.123456Z'),
+      entry('00000000-0000-4000-8000-000000000003', '2026-11-06T12:00:00.123457Z'),
+    ];
+    final cursors = <String?>[];
+
+    final rows = await FoodLogSync.fetchAllTuplePages(
+      pageSize: 2,
+      fetchPage: (afterCreatedAt, afterId, limit) async {
+        cursors.add(afterId);
+        final start = afterId == null
+            ? 0
+            : source.indexWhere((item) =>
+                    item['created_at'] == afterCreatedAt &&
+                    item['id'] == afterId) +
+                1;
+        return source.skip(start).take(limit).toList();
+      },
+    );
+
+    expect(rows, source);
+    expect(cursors, [null, otherId]);
+  });
+
+  test('does not return a partial tuple-paginated food-log snapshot', () async {
+    var calls = 0;
+    final rows = await FoodLogSync.fetchAllTuplePages(
+      pageSize: 2,
+      fetchPage: (afterCreatedAt, afterId, limit) async {
+        calls++;
+        if (calls == 1) {
+          return [
+            {...row(id), 'created_at': '2026-11-06T12:00:00.000Z'},
+            {...row(otherId), 'created_at': '2026-11-06T12:00:00.001Z'},
+          ];
+        }
+        return null;
+      },
+    );
+
+    expect(rows, isNull);
+    expect(calls, 2);
+  });
+
+  test('rejects duplicate or regressing timestamp and UUID cursors', () async {
+    var calls = 0;
+    final rows = await FoodLogSync.fetchAllTuplePages(
+      pageSize: 2,
+      fetchPage: (afterCreatedAt, afterId, limit) async {
+        calls++;
+        return calls == 1
+            ? [
+                {...row(id), 'created_at': '2026-11-06T12:00:00.000Z'},
+                {...row(otherId), 'created_at': '2026-11-06T12:00:00.000Z'},
+              ]
+            : [
+                {...row(otherId), 'created_at': '2026-11-06T12:00:00.000Z'},
+                {...row(id), 'created_at': '2026-11-06T11:59:59.999Z'},
+              ];
+      },
+    );
+
+    expect(rows, isNull);
+    expect(calls, 2);
+  });
+
+  test('merges incremental food-log rows without discarding older canonical items', () {
+    final untouched = {
+      ...row('00000000-0000-4000-8000-000000000099'),
+      'name': 'Ancien repas',
+      '__foodLogCanonical': true,
+    };
+    final legacy = {
+      'id': 'legacy-row',
+      'name': 'Ancienne ligne JSON',
+    };
+    final incoming = {
+      ...row(id),
+      'created_at': '2026-11-06T12:00:00.000Z',
+      '__foodLogCanonical': true,
+    };
+    final merged = FoodLogSync.mergeCanonicalDelta(
+      localItems: [untouched, legacy],
+      remoteItems: [incoming],
+    );
+
+    expect(merged.map((item) => item['id']).toList(), [
+      untouched['id'],
+      legacy['id'],
+      incoming['id'],
+    ]);
+  });
+
+  test('incremental food-log merge replaces duplicate IDs and applies tombstones', () {
+    final old = {...row(id), 'name': 'Ancienne version'};
+    final deleted = {...row(otherId), 'name': 'Supprimé'};
+    final updated = {...row(id), 'name': 'Version corrigée'};
+    final merged = FoodLogSync.mergeCanonicalDelta(
+      localItems: [old, deleted],
+      remoteItems: [updated],
+      deletedIds: {otherId},
+    );
+
+    expect(merged, hasLength(1));
+    expect(merged.single['id'], id);
+    expect(merged.single['name'], 'Version corrigée');
+  });
 }
