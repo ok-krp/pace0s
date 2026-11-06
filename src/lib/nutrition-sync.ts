@@ -418,10 +418,17 @@ export function nextNutritionFoodLogCursor({
   if (!Number.isFinite(nowMs)) throw new RangeError("Invalid cursor timestamp");
   const latest = rows.length > 0 ? rows[rows.length - 1] : null;
   if (latest?.created_at && timestampMicros(latest.created_at) !== null) {
+    const fullWatermark = new Date(nowMs - FOOD_LOG_CURSOR_OVERLAP_MS).toISOString();
+    const latestMicros = timestampMicros(latest.created_at)!;
+    const watermarkMicros = timestampMicros(fullWatermark)!;
+    // Imported historical rows may be much older than the scan itself. Since
+    // a full snapshot already visited them, advance to a recent overlap
+    // watermark instead of rescanning the entire historical tail every minute.
+    const useWatermark = fullReconciliation && latestMicros < watermarkMicros;
     return {
       logDate,
-      createdAt: latest.created_at,
-      id: latest.id,
+      createdAt: useWatermark ? fullWatermark : latest.created_at,
+      id: useWatermark ? null : latest.id,
       lastFullAt: fullReconciliation
         ? new Date(nowMs).toISOString()
         : previous?.lastFullAt ?? new Date(0).toISOString(),
