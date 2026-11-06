@@ -42,6 +42,14 @@ void main() {
   });
 
 
+  test('never syncs account-private Nutrition caches or local food-log outboxes', () {
+    expect(SyncService.isSyncableKey('pace.nutrition.items'), isTrue);
+    expect(SyncService.isSyncableKey('pace.__nutrition_cache:user-a:items'), isFalse);
+    expect(SyncService.isSyncableKey('pace.__nutrition_cache:user-a:food_log_cursor'), isFalse);
+    expect(SyncService.isSyncableKey('pace.__sync_food_log_outbox:user-a'), isFalse);
+    expect(SyncService.isSyncableKey('pace.__sync_food_log_cursor'), isFalse);
+  });
+
   test('native keyset cursor rejects repeated or malformed page boundaries', () {
     expect(
       SyncService.isValidRemoteKeysetCursor(
