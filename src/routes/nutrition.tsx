@@ -414,6 +414,16 @@ function NutritionLogView() {
       );
       // Do not replace a visible cache from a partial or cancelled SQL scan.
       if (data === null || todayKey() !== day) return;
+      // UUID order is only a pagination boundary; present meals in their
+      // original chronological order after the complete snapshot is fetched.
+      data.sort((left, right) => {
+        const leftTime = Date.parse(left.created_at);
+        const rightTime = Date.parse(right.created_at);
+        if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) {
+          return leftTime - rightTime;
+        }
+        return left.id.localeCompare(right.id);
+      });
       const { data: confirmedSession, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || confirmedSession.session?.user.id !== userId ||
           localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) !== userId) return;
