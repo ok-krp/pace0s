@@ -441,7 +441,15 @@ export async function addNutritionItemToLog(
     },
   };
 
-  const { error: insertError } = await supabase.from("food_log").insert(payload);
+  let insertError: unknown = null;
+  try {
+    const { error } = await supabase.from("food_log").insert(payload);
+    insertError = error;
+  } catch (error) {
+    // The network transport may reject the promise instead of returning a
+    // PostgREST error object. Both cases must enter the same durable outbox.
+    insertError = error;
+  }
   const { data: currentSession, error: currentSessionError } = await supabase.auth.getSession();
   const stillSameAccount = !currentSessionError &&
     currentSession.session?.user.id === userId &&
