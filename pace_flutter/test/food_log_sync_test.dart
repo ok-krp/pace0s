@@ -145,6 +145,58 @@ void main() {
     expect((queued.last as Map)['operation'], 'delete');
   });
 
+  test('backs off failed native food-log writes with a bounded retry delay', () {
+    final now = DateTime.utc(2026, 11, 6, 12);
+    final queued = FoodLogSync.queueOperation(
+      const <dynamic>[],
+      operation: 'upsert',
+      id: id,
+      row: row(id),
+      now: now,
+    );
+    final original = Map<String, dynamic>.from(queued.single as Map);
+    final firstRetry = FoodLogSync.deferOperation(
+      queued,
+      original,
+      now: now,
+    );
+    final first = Map<String, dynamic>.from(firstRetry.single as Map);
+
+    expect(first['attempts'], 1);
+    expect(first['nextAttemptAt'], '2026-11-06T12:01:00.000Z');
+    expect(FoodLogSync.isOperationDue(first, now: now), isFalse);
+    expect(
+      FoodLogSync.isOperationDue(
+        first,
+        now: now.add(const Duration(minutes: 1)),
+      ),
+      isTrue,
+    );
+
+    final secondRetry = FoodLogSync.deferOperation(
+      firstRetry,
+      first,
+      now: now.add(const Duration(minutes: 1)),
+    );
+    final second = Map<String, dynamic>.from(secondRetry.single as Map);
+    expect(second['attempts'], 2);
+    expect(second['nextAttemptAt'], '2026-11-06T12:03:00.000Z');
+
+    final replacement = FoodLogSync.queueOperation(
+      secondRetry,
+      operation: 'upsert',
+      id: id,
+      row: {...row(id), 'name': 'Updated food'},
+      now: now.add(const Duration(minutes: 1)),
+    );
+    final current = Map<String, dynamic>.from(
+      replacement.singleWhere((entry) => (entry as Map)['id'] == id) as Map,
+    );
+    expect(current.containsKey('attempts'), isFalse);
+    expect(current.containsKey('nextAttemptAt'), isFalse);
+    expect(FoodLogSync.isOperationDue(current, now: now), isTrue);
+  });
+
   test('keeps unrelated rows independent and queues monotonic timestamps', () {
     final now = DateTime.utc(2026, 11, 5, 9);
     final first = FoodLogSync.queueOperation(
