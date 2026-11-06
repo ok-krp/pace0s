@@ -393,8 +393,8 @@ test("advances the food-log cursor only from a complete scan and keeps its full-
     fullReconciliation: false,
     nowMs: now,
   });
-  assert.equal(next.createdAt, "2026-11-06T12:00:00.123456Z");
-  assert.equal(next.id, otherId);
+  assert.equal(next.createdAt, "2026-11-06T12:00:00.000Z");
+  assert.equal(next.id, null);
   assert.equal(next.lastFullAt, previous.lastFullAt);
 
   const emptyFull = nextNutritionFoodLogCursor({
@@ -405,8 +405,29 @@ test("advances the food-log cursor only from a complete scan and keeps its full-
     nowMs: now,
   });
   assert.equal(emptyFull.id, null);
-  assert.equal(emptyFull.createdAt, "2026-11-06T11:55:00.000Z");
+  assert.equal(emptyFull.createdAt, "2026-11-06T12:00:00.000Z");
   assert.equal(emptyFull.lastFullAt, "2026-11-06T12:00:00.000Z");
+});
+
+test("advances an empty incremental delta so repeated polls do not rescan the same window", () => {
+  const now = Date.parse("2026-11-06T12:01:00.000Z");
+  const previous = {
+    logDate: "2026-11-06",
+    createdAt: "2026-11-06T12:00:00.000Z",
+    id: null,
+    lastFullAt: "2026-11-06T10:00:00.000Z",
+  };
+  const next = nextNutritionFoodLogCursor({
+    previous,
+    rows: [],
+    logDate: "2026-11-06",
+    fullReconciliation: false,
+    nowMs: now,
+  });
+  assert.equal(next.createdAt, "2026-11-06T12:01:00.000Z");
+  assert.equal(next.id, null);
+  assert.equal(next.lastFullAt, previous.lastFullAt);
+  assert.equal(foodLogDeltaSince(next), "2026-11-06T11:56:00.000Z");
 });
 
 test("compares adjacent food_log microseconds without floating-point precision loss", () => {
