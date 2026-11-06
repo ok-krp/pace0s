@@ -5,7 +5,9 @@
  * queue and remote pull must enforce the same boundary.
  */
 export function isSyncableLocalKey(key: string): boolean {
-  return key.startsWith("pace.") && !key.startsWith("pace.__sync_");
+  return key.startsWith("pace.") &&
+    !key.startsWith("pace.__sync_") &&
+    !key.startsWith("pace.__nutrition_cache:");
 }
 
 export type AccountSyncStorageKeys = {
