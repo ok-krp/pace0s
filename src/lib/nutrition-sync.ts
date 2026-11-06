@@ -205,3 +205,59 @@ export async function fetchAllFoodLogKeysetPages<T extends { id: string }>(
     cursor = lastId;
   }
 }
+
+
+/**
+ * Merge successive guest-only Nutrition snapshots for recovery. Items are
+ * deduplicated by their stable local ID; the incoming snapshot wins only for
+ * an ID already present. Invalid JSON is never allowed to overwrite a backup.
+ */
+export function mergeUnassignedNutritionSnapshots(
+  existingRaw: string | null,
+  incomingRaw: string | null,
+): Record<string, NutritionItem[]> | null {
+  const parse = (raw: string | null): Record<string, NutritionItem[]> | null => {
+    if (raw === null) return {};
+    try {
+      const value: unknown = JSON.parse(raw);
+      if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+      const result: Record<string, NutritionItem[]> = {};
+      for (const [day, entries] of Object.entries(value)) {
+        if (!Array.isArray(entries)) return null;
+        if (entries.some((entry) => !entry || typeof entry !== "object" || Array.isArray(entry))) {
+          return null;
+        }
+        result[day] = entries as NutritionItem[];
+      }
+      return result;
+    } catch {
+      return null;
+    }
+  };
+
+  const existing = parse(existingRaw);
+  const incoming = parse(incomingRaw);
+  if (!existing || !incoming) return null;
+
+  const merged: Record<string, NutritionItem[]> = {};
+  for (const day of new Set([...Object.keys(existing), ...Object.keys(incoming)])) {
+    const output: NutritionItem[] = [];
+    const positions = new Map<string, number>();
+    for (const item of [...(existing[day] ?? []), ...(incoming[day] ?? [])]) {
+      const id = typeof item.id === "string" ? item.id : "";
+      if (!id) {
+        output.push(item);
+        continue;
+      }
+      const previousIndex = positions.get(id);
+      if (previousIndex === undefined) {
+        positions.set(id, output.length);
+        output.push(item);
+      } else {
+        output[previousIndex] = item;
+      }
+    }
+    merged[day] = output;
+  }
+  return merged;
+}
