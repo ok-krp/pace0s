@@ -122,6 +122,20 @@ test("filters malformed and foreign-account operations before replay", () => {
 });
 
 
+test("preserves a malformed queue container when a different in-flight row is acknowledged", () => {
+  const malformed = { previousVersion: ["keep this payload"] };
+  assert.deepEqual(removeFoodLogOutboxInsert(malformed, {
+    id,
+    queuedAt,
+    row,
+  }), [malformed]);
+  assert.deepEqual(deferFoodLogOutboxInsert(malformed, {
+    id,
+    queuedAt,
+    row,
+  }, Date.parse(queuedAt)), [malformed]);
+});
+
 test("does not discard a malformed outbox container during a new insert", () => {
   assert.throws(
     () => queueFoodLogInsert({ pending: "do not discard" }, row, queuedAt),
