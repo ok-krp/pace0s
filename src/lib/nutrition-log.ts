@@ -450,10 +450,17 @@ export async function addNutritionItemToLog(
     // PostgREST error object. Both cases must enter the same durable outbox.
     insertError = error;
   }
-  const { data: currentSession, error: currentSessionError } = await supabase.auth.getSession();
-  const stillSameAccount = !currentSessionError &&
-    currentSession.session?.user.id === userId &&
-    localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === userId;
+  let stillSameAccount = false;
+  try {
+    const { data: currentSession, error: currentSessionError } = await supabase.auth.getSession();
+    stillSameAccount = !currentSessionError &&
+      currentSession.session?.user.id === userId &&
+      localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === userId;
+  } catch {
+    // A failed session re-check must not redirect the write to a new account.
+    // The retry remains under the initiating user's private outbox key.
+    stillSameAccount = false;
+  }
 
   if (insertError) {
     const outboxKey = nutritionFoodLogOutboxKey(userId);
@@ -476,7 +483,12 @@ export async function addNutritionItemToLog(
     }
 
     if (stillSameAccount) {
-      appendLocalNutritionItem(it, userId, false);
+      try {
+        appendLocalNutritionItem(it, userId, false);
+      } catch {
+        // The durable SQL outbox is already stored. A later pull reconstructs
+        // the UI cache if local domain storage is temporarily unavailable.
+      }
     } else {
       // The network request completed after a session switch. Update only the
       // initiating account's isolated cache; never mutate the new account's
@@ -498,8 +510,13 @@ export async function addNutritionItemToLog(
           it,
         ],
       };
-      localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
-      localStorage.setItem(accountKeys.totals, JSON.stringify(recomputeNutritionTotals(nextItems)));
+      try {
+        localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
+        localStorage.setItem(accountKeys.totals, JSON.stringify(recomputeNutritionTotals(nextItems)));
+      } catch {
+        // The account-scoped outbox is durable; do not mutate the active
+        // account's shared cache when this previous-account cache is full.
+      }
     }
     return "local";
   }
