@@ -43,7 +43,10 @@ export default defineTool({
       fiber_g: input.fiber_g ?? null,
       sugar_g: input.sugar_g ?? null,
       sodium_mg: input.sodium_mg ?? null,
-      source: "mcp",
+      // The deployed food_log source CHECK only accepts manual/barcode/photo/recipe.
+      // Keep the MCP provenance in JSON metadata without inserting an invalid enum.
+      source: "manual",
+      meta: { client: "pace_mcp", origin: "mcp" },
       log_date: input.log_date ?? new Date().toISOString().slice(0, 10),
     };
     const { data, error } = await sb
