@@ -207,6 +207,17 @@ const VALID_MISSING_NUTRIENTS = new Set([
   "sodium_mg",
 ]);
 
+function isValidMissingNutrientMarkers(value: unknown): boolean {
+  if (!Array.isArray(value)) return false;
+  for (const marker of value) {
+    if (
+      typeof marker !== "string" ||
+      !VALID_MISSING_NUTRIENTS.has(marker)
+    ) return false;
+  }
+  return true;
+}
+
 /** Validate caller-controlled metadata before changing local state or calling PostgREST. */
 export function isValidFoodLogWriteMetadata(
   source: unknown,
@@ -218,15 +229,9 @@ export function isValidFoodLogWriteMetadata(
     if (typeof source !== "string" || !VALID_FOOD_LOG_SOURCES.has(source)) {
       return false;
     }
-    if (!Array.isArray(missingNutrients)) return false;
     // Iterate rather than Array.some/every: sparse array holes must not be
     // skipped, otherwise they would serialize as null in the SQL payload.
-    for (const nutrient of missingNutrients) {
-      if (
-        typeof nutrient !== "string" ||
-        !VALID_MISSING_NUTRIENTS.has(nutrient)
-      ) return false;
-    }
+    if (!isValidMissingNutrientMarkers(missingNutrients)) return false;
     if (
       healthScore !== undefined &&
       healthScore !== null &&
@@ -295,7 +300,11 @@ export function isValidFoodLogInsertRow(
     !!row.meta &&
     typeof row.meta === "object" &&
     !Array.isArray(row.meta) &&
-    isJsonSafe(row.meta);
+    isJsonSafe(row.meta) &&
+    (!("missing_nutrients" in row.meta) ||
+      isValidMissingNutrientMarkers(
+        (row.meta as Record<string, unknown>).missing_nutrients,
+      ));
 }
 
 export function isValidFoodLogOutboxEntry(
