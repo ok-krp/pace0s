@@ -335,9 +335,11 @@ class _NutritionPageState extends State<NutritionPage> {
             'protein_g': values['p'] ?? 0,
             'carbs_g': values['c'] ?? 0,
             'fat_g': values['f'] ?? 0,
-            'fiber_g': 0,
-            'sugar_g': 0,
-            'sodium_mg': 0,
+            // This form does not collect optional micronutrients.
+            // Store them as unknown, not as measured zero values.
+            'fiber_g': null,
+            'sugar_g': null,
+            'sodium_mg': null,
             'source': 'manual',
             'meta': {
               'client': 'pace_flutter',
@@ -346,6 +348,9 @@ class _NutritionPageState extends State<NutritionPage> {
                 if (values['p'] == null) 'protein_g',
                 if (values['c'] == null) 'carbs_g',
                 if (values['f'] == null) 'fat_g',
+                'fiber_g',
+                'sugar_g',
+                'sodium_mg',
               ],
             },
           },
