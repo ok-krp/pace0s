@@ -279,6 +279,19 @@ test("validates source, missing nutrient markers and AI metadata before local wr
   const sparseMarkers = new Array(1);
   assert.equal(isValidFoodLogWriteMetadata("manual", sparseMarkers, undefined, {}), false);
 
+  const sparseComponents = new Array(1);
+  assert.equal(
+    isValidFoodLogWriteMetadata("photo", [], undefined, { items: sparseComponents }),
+    false,
+  );
+
+  const symbolArrayProperty = [1] as number[] & { [key: symbol]: unknown };
+  symbolArrayProperty[Symbol("hidden")] = "not serialized";
+  assert.equal(
+    isValidFoodLogWriteMetadata("photo", [], undefined, { items: symbolArrayProperty }),
+    false,
+  );
+
   const throwingProxy = new Proxy({}, {
     ownKeys() {
       throw new Error("unreadable metadata");
