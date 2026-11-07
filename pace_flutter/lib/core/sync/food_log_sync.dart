@@ -336,7 +336,7 @@ class FoodLogSync {
             !LocalStore.isValidRemoteTimestamp(nextAttemptAt))) {
       return false;
     }
-    if (kind == 'delete') return true;
+    if (kind == 'delete') return !operation.containsKey('row');
     if (kind != 'upsert' || operation['row'] is! Map) return false;
 
     Map<String, dynamic> row;
