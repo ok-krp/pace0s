@@ -329,6 +329,24 @@ class FoodLogSync {
     'meta',
   };
 
+  static const Set<String> _allowedMissingNutrientMarkers = {
+    'kcal',
+    'protein_g',
+    'carbs_g',
+    'fat_g',
+    'fiber_g',
+    'sugar_g',
+    'sodium_mg',
+  };
+
+  static const Set<String> _optionalNutrientMetaKeys = {
+    'sat_fat_g',
+    'salt_g',
+    'iron_mg',
+    'calcium_mg',
+    'vitamin_c_mg',
+  };
+
   static bool isValidOperation(Map<String, dynamic> operation) {
     if (operation.keys.any((key) => !_allowedOperationKeys.contains(key))) {
       return false;
@@ -388,6 +406,23 @@ class FoodLogSync {
         healthScore != null &&
         !const {'green', 'orange', 'red'}.contains(healthScore)) {
       return false;
+    }
+    final meta = row['meta'] as Map;
+    if (meta.containsKey('missing_nutrients')) {
+      final markers = meta['missing_nutrients'];
+      if (markers is! List ||
+          markers.any((marker) =>
+              marker is! String ||
+              !_allowedMissingNutrientMarkers.contains(marker))) {
+        return false;
+      }
+    }
+    for (final key in _optionalNutrientMetaKeys) {
+      if (!meta.containsKey(key)) continue;
+      final value = meta[key];
+      if (value != null && (value is! num || !value.isFinite || value < 0)) {
+        return false;
+      }
     }
 
     for (final key in const ['kcal', 'protein_g', 'carbs_g', 'fat_g']) {
