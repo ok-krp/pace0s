@@ -53,6 +53,15 @@ void main() {
     expect(
       FoodLogSync.isValidOperation({
         'id': id,
+        'operation': 'delete',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+        'row': row(id),
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
         'operation': 'upsert',
         'queuedAt': '2026-11-05T09:00:00.000Z',
         'row': {...row(id), 'kcal': double.nan},
