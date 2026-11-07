@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   isValidFoodLogInsertRow,
   isValidNutritionItemInput,
+  isValidFoodLogWriteMetadata,
   isValidFoodLogOutboxEntry,
   nutritionFoodLogOutboxKey,
   queueFoodLogInsert,
@@ -253,4 +254,25 @@ test("validates manual Nutrition input before any persistence side effect", () =
   assert.equal(isValidNutritionItemInput({ ...valid, qty: 0 }), false);
   assert.equal(isValidNutritionItemInput({ ...valid, name: " " }), false);
   assert.equal(isValidNutritionItemInput({ ...valid, meal: "" }), false);
+});
+
+
+test("validates source, missing nutrient markers and AI metadata before local writes", () => {
+  assert.equal(
+    isValidFoodLogWriteMetadata("photo", [], "green", {
+      quality: "good",
+      confidence: 0.92,
+      items: [{ name: "Riz", grams: 120 }],
+    }),
+    true,
+  );
+  assert.equal(isValidFoodLogWriteMetadata("unexpected", [], undefined, {}), false);
+  assert.equal(isValidFoodLogWriteMetadata("manual", ["unknown_column"], undefined, {}), false);
+  assert.equal(isValidFoodLogWriteMetadata("manual", ["fiber_g", 5], undefined, {}), false);
+  assert.equal(isValidFoodLogWriteMetadata("manual", [], "purple", {}), false);
+  assert.equal(isValidFoodLogWriteMetadata("manual", [], undefined, { confidence: Number.NaN }), false);
+
+  const cyclic: Record<string, unknown> = {};
+  cyclic.self = cyclic;
+  assert.equal(isValidFoodLogWriteMetadata("photo", [], undefined, cyclic), false);
 });
