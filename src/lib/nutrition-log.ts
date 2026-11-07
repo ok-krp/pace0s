@@ -5,6 +5,7 @@ import type { TablesInsert } from "@/integrations/supabase/types";
 import {
   nutritionFoodLogOutboxKey,
   isValidNutritionItemInput,
+  isValidFoodLogWriteMetadata,
   queueFoodLogInsert,
   deferFoodLogOutboxInsert,
   readValidFoodLogOutbox,
@@ -285,6 +286,9 @@ export async function addNutritionItemToLog(
   const it: NutritionItem = { id: crypto.randomUUID(), qty: item.qty ?? 1, ...item };
   if (!isValidNutritionItemInput(it)) {
     throw new RangeError("Les valeurs Nutrition doivent être finies, positives ou nulles, avec un nom et un repas.");
+  }
+  if (!isValidFoodLogWriteMetadata(source, missingNutrients, options.healthScore, options.meta)) {
+    throw new RangeError("Les métadonnées Nutrition sont invalides ; aucune donnée n'a été enregistrée.");
   }
   const { data: initialSession, error: initialSessionError } = await supabase.auth.getSession();
   if (initialSessionError) throw new Error("Impossible de vérifier la session Nutrition.");
