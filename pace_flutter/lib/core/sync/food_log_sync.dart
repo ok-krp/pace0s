@@ -279,7 +279,38 @@ class FoodLogSync {
     return false;
   }
 
+  static const Set<String> _allowedOperationKeys = {
+    'id',
+    'user_id',
+    'operation',
+    'queuedAt',
+    'row',
+    'attempts',
+    'nextAttemptAt',
+  };
+
+  static const Set<String> _allowedFoodLogRowKeys = {
+    'id',
+    'user_id',
+    'log_date',
+    'meal',
+    'name',
+    'kcal',
+    'protein_g',
+    'carbs_g',
+    'fat_g',
+    'fiber_g',
+    'sugar_g',
+    'sodium_mg',
+    'source',
+    'health_score',
+    'meta',
+  };
+
   static bool isValidOperation(Map<String, dynamic> operation) {
+    if (operation.keys.any((key) => !_allowedOperationKeys.contains(key))) {
+      return false;
+    }
     final id = operation['id'];
     final queuedAt = operation['queuedAt'];
     final kind = operation['operation'];
@@ -314,7 +345,8 @@ class FoodLogSync {
     } on TypeError {
       return false;
     }
-    if (row['id'] != id ||
+    if (row.keys.any((key) => !_allowedFoodLogRowKeys.contains(key)) ||
+        row['id'] != id ||
         row['user_id'] is! String ||
         !isUuid(row['user_id'] as String) ||
         (operationUserId != null && row['user_id'] != operationUserId) ||
