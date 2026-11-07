@@ -947,10 +947,12 @@ class FoodLogSync {
             );
             continue;
           }
+          // Stable-UUID retries are idempotent, but a newer queued
+          // replacement must update the row rather than be ignored as a
+          // duplicate. The row owner is checked above and RLS remains active.
           final response = await client!.from('food_log').upsert(
             row,
             onConflict: 'id',
-            ignoreDuplicates: true,
           );
           throwIfPostgrestWriteFailed(response.error);
         } else {
