@@ -116,6 +116,29 @@ void main() {
       }),
       isFalse,
     );
+    final cyclicMeta = <String, dynamic>{};
+    cyclicMeta['self'] = cyclicMeta;
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+        'row': {...row(id), 'meta': cyclicMeta},
+      }),
+      isFalse,
+    );
+
+    final cyclicList = <dynamic>[];
+    cyclicList.add(cyclicList);
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+        'row': {...row(id), 'meta': {'components': cyclicList}},
+      }),
+      isFalse,
+    );
     expect(
       FoodLogSync.isValidOperation({
         'id': id,
