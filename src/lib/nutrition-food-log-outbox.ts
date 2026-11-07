@@ -81,7 +81,10 @@ function isJsonSafe(value: unknown, depth = 0, ancestors = new Set<object>()): b
     ancestors.add(value);
     try {
       const keys = Reflect.ownKeys(value);
-      if (keys.some((key) => typeof key !== "string")) return false;
+      if (keys.some((key) => {
+        if (typeof key !== "string") return true;
+        return !Object.getOwnPropertyDescriptor(value, key)?.enumerable;
+      })) return false;
       const safe = Object.entries(value).every(([, child]) =>
         isJsonSafe(child, depth + 1, ancestors),
       );
