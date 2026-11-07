@@ -100,6 +100,42 @@ void main() {
         'id': id,
         'operation': 'upsert',
         'queuedAt': '2026-11-05T09:00:00.000Z',
+        'row': {
+          ...row(id),
+          'meta': {'missing_nutrients': ['unknown_column']},
+        },
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+        'row': {
+          ...row(id),
+          'meta': {'iron_mg': -1},
+        },
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+        'row': {
+          ...row(id),
+          'meta': {'calcium_mg': double.infinity},
+        },
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
         'row': <dynamic, dynamic>{1: 'non-string row key'},
       }),
       isFalse,
