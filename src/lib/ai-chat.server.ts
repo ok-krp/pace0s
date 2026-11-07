@@ -206,7 +206,22 @@ function coachTools(client: Client, userId: string, conversationId: string, perm
       }),
       execute: withToolLogging("add_food", async (input) => {
         if (!permissions.nutrition) return { ok: false, message: "Permission Nutrition désactivée" };
-        const { error } = await client.from("food_log").insert({ user_id: userId, name: `${input.name} (${Math.round(input.grams)} g)`, meal: input.meal, kcal: input.kcal, protein_g: input.protein_g, carbs_g: input.carbs_g, fat_g: input.fat_g, fiber_g: input.fiber_g, sugar_g: input.sugar_g, sodium_mg: input.sodium_mg, source: "coach_ai" });
+        const { error } = await client.from("food_log").insert({
+          user_id: userId,
+          name: `${input.name} (${Math.round(input.grams)} g)`,
+          meal: input.meal,
+          kcal: input.kcal,
+          protein_g: input.protein_g,
+          carbs_g: input.carbs_g,
+          fat_g: input.fat_g,
+          fiber_g: input.fiber_g,
+          sugar_g: input.sugar_g,
+          sodium_mg: input.sodium_mg,
+          // Keep the canonical source inside the existing CHECK constraint.
+          // Coach provenance is still available in meta for downstream readers.
+          source: "manual",
+          meta: { client: "pace_web", origin: "coach_ai", grams: input.grams },
+        });
         if (error) { await logAction(client, userId, conversationId, "coach", "add_food", "Ajout nutrition", input, "failed"); return { ok: false, message: "Impossible d’enregistrer cet aliment. Réessayez." }; }
         await logAction(client, userId, conversationId, "coach", "add_food", `${input.name} ajouté`, input, "executed");
         return { ok: true, message: `${input.name} ajouté au journal` };
