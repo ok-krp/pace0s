@@ -51,20 +51,44 @@ function isJsonSafe(value: unknown, depth = 0, ancestors = new Set<object>()): b
     if (Array.isArray(value)) {
       if (ancestors.has(value)) return false;
       ancestors.add(value);
-      const safe = value.every((item) => isJsonSafe(item, depth + 1, ancestors));
-      ancestors.delete(value);
-      return safe;
+      try {
+        // Array iteration helpers skip holes. JSON.stringify serializes a
+        // sparse slot as null, so require every indexed element explicitly.
+        for (let index = 0; index < value.length; index++) {
+          if (!Object.prototype.hasOwnProperty.call(value, index) ||
+              !isJsonSafe(value[index], depth + 1, ancestors)) {
+            return false;
+          }
+        }
+        // Reject extra/symbol properties which JSON.stringify would silently
+        // omit from the persisted payload.
+        const keys = Reflect.ownKeys(value);
+        if (keys.some((key) =>
+          key !== "length" &&
+          (typeof key !== "string" ||
+            !/^(0|[1-9]\d*)$/.test(key) ||
+            Number(key) >= value.length),
+        )) return false;
+        return true;
+      } finally {
+        ancestors.delete(value);
+      }
     }
     if (typeof value !== "object") return false;
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return false;
     if (ancestors.has(value)) return false;
     ancestors.add(value);
-    const safe = Object.entries(value).every(([, child]) =>
-      isJsonSafe(child, depth + 1, ancestors),
-    );
-    ancestors.delete(value);
-    return safe;
+    try {
+      const keys = Reflect.ownKeys(value);
+      if (keys.some((key) => typeof key !== "string")) return false;
+      const safe = Object.entries(value).every(([, child]) =>
+        isJsonSafe(child, depth + 1, ancestors),
+      );
+      return safe;
+    } finally {
+      ancestors.delete(value);
+    }
   } catch {
     return false;
   }
