@@ -19,7 +19,7 @@
       {
         "name": "get_profile",
         "title": "Get my profile",
-        "description": "Return the signed-in user's Pace profile row.",
+        "description": "Return the signed-in user's coaching profile fields, excluding contact identifiers.",
         "annotations": {
           "readOnlyHint": true,
           "idempotentHint": true,
@@ -46,11 +46,13 @@
           "properties": {
             "from": {
               "type": "string",
-              "description": "Start date YYYY-MM-DD (inclusive)"
+              "description": "Valid start calendar date YYYY-MM-DD (inclusive)",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
             "to": {
               "type": "string",
-              "description": "End date YYYY-MM-DD (inclusive)"
+              "description": "Valid end calendar date YYYY-MM-DD (inclusive)",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
             },
             "limit": {
               "type": "integer",
@@ -77,39 +79,55 @@
           "properties": {
             "name": {
               "type": "string",
-              "minLength": 1
+              "minLength": 1,
+              "maxLength": 200
             },
             "meal": {
               "type": "string",
+              "minLength": 1,
+              "maxLength": 40,
               "description": "breakfast | lunch | dinner | snack"
             },
             "kcal": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 100000
             },
             "protein_g": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 10000
             },
             "carbs_g": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 10000
             },
             "fat_g": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 10000
             },
             "fiber_g": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 10000
             },
             "sodium_mg": {
               "type": "number",
-              "minimum": 0
+              "minimum": 0,
+              "maximum": 1000000
             },
             "log_date": {
               "type": "string",
-              "description": "YYYY-MM-DD, defaults to today"
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "description": "Valid calendar date YYYY-MM-DD, defaults to today",
+              "format": "date"
+            },
+            "sugar_g": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 10000
             }
           },
           "required": [
@@ -136,11 +154,14 @@
           "properties": {
             "type": {
               "type": "string",
-              "description": "Sample type filter (e.g. weight, steps, hr)"
+              "description": "Sample type filter (e.g. weight, steps, hr)",
+              "minLength": 1,
+              "maxLength": 80
             },
             "since": {
               "type": "string",
-              "description": "ISO timestamp — only samples after"
+              "description": "ISO-8601 timestamp with explicit timezone; only samples after this instant.",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d{1,9})?)?(?:Z|[+-](?:[01]\\d|2[0-3]):?[0-5]\\d)$"
             },
             "limit": {
               "type": "integer",

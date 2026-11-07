@@ -8,7 +8,7 @@ import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema, validate
 
 export const analyzeFoodPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { imageBase64: string; goal?: string; hint?: string }) =>
+  .validator((d: { imageBase64: string; goal?: string; hint?: string }) =>
     z
       .object({
         imageBase64: z.string().min(20).max(8_000_000),
@@ -23,8 +23,9 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
       .select("opts")
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .eq("user_id", context.userId)
       .maybeSingle();
-    if (consentError) throw new Error(consentError.message);
+    if (consentError) throw new Error("Impossible de vérifier le consentement IA.");
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
       return { error: "Consentement Analyse IA requis", result: null };
     }
@@ -59,27 +60,28 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
 
       const parsed = foodAnalysisSchema.safeParse(extractJson(text));
       if (!parsed.success) {
-        console.error("AI JSON invalide", parsed.error, text.slice(0, 500));
+        console.error("AI JSON invalide", { issueCount: parsed.error.issues.length });
         return { error: "Réponse IA invalide", result: null };
       }
       return { error: null, result: parsed.data };
     } catch (e) {
-      console.error("analyzeFoodPhoto error", e);
-      return { error: e instanceof Error ? e.message : "Erreur IA", result: null };
+      console.error("analyzeFoodPhoto error", { errorType: e instanceof Error ? e.name : "unknown" });
+      return { error: "Le service IA est momentanément indisponible.", result: null };
     }
   });
 
 export const nutritionAdvice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { summary: string }) => z.object({ summary: z.string().min(1).max(4000) }).parse(d))
+  .validator((d: { summary: string }) => z.object({ summary: z.string().min(1).max(4000) }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: consent, error: consentError } = await context.supabase
       .from("legal_consent")
       .select("opts")
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .eq("user_id", context.userId)
       .maybeSingle();
-    if (consentError) throw new Error(consentError.message);
+    if (consentError) throw new Error("Impossible de vérifier le consentement IA.");
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
       return { advice: null, error: "Consentement Analyse IA requis" };
     }
@@ -98,6 +100,6 @@ export const nutritionAdvice = createServerFn({ method: "POST" })
       });
       return { advice: text, error: null };
     } catch (e) {
-      return { advice: null, error: e instanceof Error ? e.message : "Erreur IA" };
+      return { advice: null, error: "Le service IA est momentanément indisponible. Réessayez." };
     }
   });

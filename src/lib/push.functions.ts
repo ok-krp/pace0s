@@ -22,9 +22,10 @@ export const sendTestNotification = createServerFn({ method: "POST" })
       .select("opts")
       .eq("eula_version", LEGAL_VERSIONS.eula)
       .eq("privacy_version", LEGAL_VERSIONS.privacy)
+      .eq("user_id", context.userId)
       .maybeSingle();
     if (consentError) {
-      console.error("notification consent lookup failed", consentError);
+      console.error("notification consent lookup failed", { code: consentError.code ?? "unknown" });
       throw new Error("Impossible de vérifier le consentement aux notifications.");
     }
     if ((consent?.opts as { notifications?: boolean } | null)?.notifications !== true) {
@@ -40,12 +41,12 @@ export const sendTestNotification = createServerFn({ method: "POST" })
       .select("onesignal_subscription_id")
       .eq("user_id", context.userId);
     if (subscriptionError) {
-      console.error("push subscription lookup failed", subscriptionError);
+      console.error("push subscription lookup failed", { code: subscriptionError.code ?? "unknown" });
       throw new Error("Impossible de récupérer les appareils de notification.");
     }
 
     const subscriptionIds = (subscriptions ?? [])
-      .map((row) => (row as { onesignal_subscription_id: string }).onesignal_subscription_id)
+      .map((row) => row.onesignal_subscription_id)
       .filter(Boolean);
     if (!subscriptionIds.length) {
       throw new Error("Aucun appareil n'est actuellement inscrit aux notifications.");
@@ -71,7 +72,7 @@ export const sendTestNotification = createServerFn({ method: "POST" })
 
     const json = (await res.json()) as { id?: string; errors?: unknown; recipients?: number };
     if (!res.ok || json.errors) {
-      console.error("OneSignal API error", json);
+      console.error("OneSignal API error", { status: res.status, hasErrors: Boolean(json.errors) });
       return { ok: false, error: "Impossible d'envoyer la notification." };
     }
     return { ok: true, id: json.id, recipients: json.recipients ?? 0 };

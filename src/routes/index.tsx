@@ -55,8 +55,9 @@ function Dashboard() {
 
   useEffect(() => {
     if (!quickAdd) return;
-    setDialog(quickAdd);
-    navigate({ to: "/", search: {}, replace: true });
+    const frame = requestAnimationFrame(() => setDialog(quickAdd));
+    navigate({ to: "/", search: { quickAdd: undefined }, replace: true });
+    return () => cancelAnimationFrame(frame);
   }, [quickAdd, navigate]);
 
   const [todayLabel, setTodayLabel] = useState("");
@@ -77,10 +78,17 @@ function Dashboard() {
   const days = useMemo(() => lastNDays(7), []);
 
   useEffect(() => {
-    setNow(new Date());
-    setTodayLabel(new Date().toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }));
-    const id = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(id);
+    const refreshClock = () => {
+      const current = new Date();
+      setNow(current);
+      setTodayLabel(current.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" }));
+    };
+    const frame = requestAnimationFrame(refreshClock);
+    const id = setInterval(refreshClock, 60_000);
+    return () => {
+      cancelAnimationFrame(frame);
+      clearInterval(id);
+    };
   }, []);
 
   const intel = useMemo(

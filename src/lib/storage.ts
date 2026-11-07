@@ -1,4 +1,6 @@
-import { useEffect, useState, useCallback } from "react";
+import { applyRemoteDomainWrite } from "@/lib/domain-store";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { shouldPersistLocalStateValue } from "@/lib/local-state-hydration";
 
 const OLD_PREFIX = "lt.";
 const NEW_PREFIX = "pace.";
@@ -62,7 +64,9 @@ function recoverLegacyWaterKeys() {
     try {
       const raw = localStorage.getItem(targetKey);
       if (raw) target = JSON.parse(raw);
-    } catch {}
+    } catch {
+      // A malformed current value is replaced by the validated legacy recovery below.
+    }
 
     const candidates = ["lt.water", "lt.water_consumed", "lt.hydration", "pace.water_consumed", "pace.hydration"];
     for (const key of candidates) {
@@ -78,7 +82,9 @@ function recoverLegacyWaterKeys() {
     }
     localStorage.setItem(targetKey, JSON.stringify(target));
     localStorage.setItem(WATER_RECOVERY_FLAG, "1");
-  } catch {}
+  } catch {
+    // Retry water recovery on a later startup if storage is unavailable.
+  }
 }
 
 // Recover first, then copy legacy keys. Legacy keys remain available for future recovery.
@@ -90,43 +96,103 @@ const REMOTE_WRITE_EVENT = "pace.remote.write";
 
 export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
   const [value, setValue] = useState<T>(initial);
-  const [loaded, setLoaded] = useState(false);
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
+  const initialValue = useRef(initial);
+  const mutationVersion = useRef(0);
+  // Hydrating from disk or receiving a server-confirmed value is not a new
+  // user mutation. Keep the target until React has applied that exact value;
+  // this also handles key changes where the first effect sees the old state.
+  const hydratedValue = useRef<{ pending: boolean; value: T } | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw !== null) setValue(JSON.parse(raw));
-    } catch {}
-    setLoaded(true);
+    // Defer state hydration to the next task. This avoids a synchronous
+    // setState inside the effect while allowing the current render to expose
+    // only the new key's fallback value during an account/key transition.
+    const scheduledVersion = mutationVersion.current;
+    const timer = window.setTimeout(() => {
+      // A user edit or a remote update won the race with disk hydration.
+      // Mark this key ready without replacing the newer state.
+      if (mutationVersion.current !== scheduledVersion) {
+        setLoadedKey(key);
+        return;
+      }
+      let nextValue = initialValue.current;
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw !== null) nextValue = JSON.parse(raw) as T;
+      } catch {
+        // Preserve the provided initial value if the cached JSON is malformed.
+      }
+      hydratedValue.current = { pending: true, value: nextValue };
+      setValue(nextValue);
+      setLoadedKey(key);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [key]);
 
   useEffect(() => {
-    if (!loaded) return;
+    if (loadedKey !== key) return;
+    if (!shouldPersistLocalStateValue(value, hydratedValue.current)) return;
     try {
       localStorage.setItem(key, JSON.stringify(value));
       window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key, value } }));
-    } catch {}
-  }, [key, value, loaded]);
+    } catch {
+      // The in-memory state remains usable when localStorage is unavailable.
+    }
+  }, [key, value, loadedKey]);
 
   useEffect(() => {
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
-      if (!detail || detail.key !== key) return;
-      setValue(detail.value as T);
+      if (!detail || detail.key !== key || Object.is(value, detail.value)) return;
+      const nextValue = detail.value as T;
+      mutationVersion.current += 1;
+      hydratedValue.current = { pending: true, value: nextValue };
+      setLoadedKey(key);
+      setValue(nextValue);
     };
     window.addEventListener(REMOTE_WRITE_EVENT, onRemote);
     return () => window.removeEventListener(REMOTE_WRITE_EVENT, onRemote);
-  }, [key]);
+  }, [key, value]);
 
   const set = useCallback((next: T | ((p: T) => T)) => {
+    mutationVersion.current += 1;
+    hydratedValue.current = null;
+    setLoadedKey(key);
     setValue((prev) => (typeof next === "function" ? (next as (p: T) => T)(prev) : next));
-  }, []);
+  }, [key]);
 
-  return [value, set];
+  return [loadedKey === key ? value : initial, set];
 }
 
-export function applyRemoteWrite(key: string, value: unknown) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+export function applyLocalWrite(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Keep the caller's in-memory state even when persistence is unavailable.
+  }
+  window.dispatchEvent(new CustomEvent(LOCAL_WRITE_EVENT, { detail: { key, value } }));
+}
+
+export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // React listeners still receive the remote value when storage is unavailable.
+  }
+  // Some migrated domains keep an authoritative versioned record alongside
+  // their legacy Pace key. Update both representations on remote sync so a
+  // later domain read cannot resurrect stale local data.
+  if (key.startsWith(NEW_PREFIX)) {
+    const domain = key.slice(NEW_PREFIX.length);
+    try {
+      if (localStorage.getItem(`pace.domain.${domain}`) !== null) {
+        applyRemoteDomainWrite(domain, value, updatedAt);
+      }
+    } catch {
+      // The canonical legacy value remains written even if its domain mirror is unavailable.
+    }
+  }
   window.dispatchEvent(new CustomEvent(REMOTE_WRITE_EVENT, { detail: { key, value } }));
 }
 

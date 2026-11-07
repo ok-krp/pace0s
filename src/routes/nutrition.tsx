@@ -1,19 +1,41 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { z } from "zod";
 import { Apple, Plus, Trash2, ScanBarcode, Camera, Loader2, X, AlertTriangle, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 import { useServerFn } from "@tanstack/react-start";
 import { PageHeader, StatCard } from "@/components/Stat";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useLocalState, todayKey } from "@/lib/storage";
+import { applyLocalWrite, applyRemoteWrite, useLocalState, todayKey } from "@/lib/storage";
+import { supabase } from "@/integrations/supabase/client";
+import { accountSyncStorageKeys, parseSyncQueue } from "@/lib/cloud-sync-scope";
+import {
+  fetchAllFoodLogTuplePages,
+  mergeCanonicalNutritionItems,
+  mergeCanonicalNutritionDelta,
+  mergeUnassignedNutritionSnapshots,
+  mergeNutritionTombstoneMaps,
+  mayReadGlobalNutritionCache,
+  nextNutritionFoodLogCursor,
+  parseNutritionFoodLogCursor,
+  shouldRunFullFoodLogReconciliation,
+  foodLogDeltaSince,
+  NUTRITION_CACHE_OWNER_KEY,
+  NUTRITION_UNASSIGNED_BACKUP_KEY,
+  NUTRITION_LEGACY_TOMBSTONES_KEY,
+  nutritionAccountCacheKeys,
+  queueNutritionTombstone,
+  readActiveNutritionTombstones,
+  type CanonicalFoodLogRow,
+} from "@/lib/nutrition-sync";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useUserGoals } from "@/hooks/use-user-goals";
+import { useAuth } from "@/hooks/use-auth";
 import { useNutritionCols, NUT_COLS, type NutCol } from "@/hooks/use-nutrition-cols";
-import { addNutritionItem, type NutritionItem } from "@/lib/nutrition-log";
+import { addNutritionItemToLog, recomputeNutritionTotals, type NutritionItem } from "@/lib/nutrition-log";
 import { WaterView } from "@/components/WaterView";
 import { RecipesView } from "@/components/RecipesView";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -43,32 +65,50 @@ const COL_FIELD: Record<NutCol, keyof Item> = {
 const MEALS = ["Petit déjeuner", "Déjeuner", "Goûter", "Dîner", "Collation"];
 
 function NutritionPage() {
+  const { user } = useAuth();
+  const currentAccountId = user?.id ?? null;
+  return (
+    <NutritionPageContent
+      key={currentAccountId ?? "guest"}
+      currentAccountId={currentAccountId}
+    />
+  );
+}
+
+function NutritionPageContent({ currentAccountId }: { currentAccountId: string | null }) {
   const { tab } = Route.useSearch();
   const currentTab = tab ?? "nutrition";
   const [scanOpen, setScanOpen] = useState(false);
+  const [scanOwnerId, setScanOwnerId] = useState<string | null>(null);
   const [recallCount] = useLocalState<number>("pace.recalls.count", 0);
   const [pending, setPending] = useState<
-    | { kind: "barcode"; product: OFFProduct; grams: number; meal: string }
-    | { kind: "photo"; photo: string; result: FoodAnalysis; items: FoodItem[]; grams: number; meal: string }
+    | { kind: "barcode"; product: OFFProduct; grams: number; meal: string; accountUserId: string | null }
+    | { kind: "photo"; photo: string; result: FoodAnalysis; items: FoodItem[]; grams: number; meal: string; accountUserId: string | null }
     | null
   >(null);
   const [busy, setBusy] = useState(false);
+  const confirmAddInFlight = useRef(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const analyzePhoto = useServerFn(analyzeFoodPhoto);
 
+  const visiblePending = pending?.accountUserId === currentAccountId ? pending : null;
+
   const handleBarcode = async (code: string) => {
+    const accountUserId = currentAccountId;
     setScanOpen(false);
     setBusy(true);
     try {
       const p = await fetchProductByBarcode(code);
       if (!p) { toast.error("Produit introuvable"); return; }
-      setPending({ kind: "barcode", product: p, grams: 100, meal: "Déjeuner" });
+      
+      setPending({ kind: "barcode", product: p, grams: 100, meal: "Déjeuner", accountUserId });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erreur scan");
     } finally { setBusy(false); }
   };
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const accountUserId = currentAccountId;
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -82,7 +122,8 @@ function NutritionPage() {
         const res = await analyzePhoto({ data: { imageBase64: b64 } });
         if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
         const r = res.result as FoodAnalysis;
-        setPending({ kind: "photo", photo: b64, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner" });
+        
+        setPending({ kind: "photo", photo: b64, result: r, items: r.items, grams: sumItems(r.items).grams, meal: "Déjeuner", accountUserId });
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Erreur IA");
       } finally { setBusy(false); }
@@ -90,37 +131,55 @@ function NutritionPage() {
     reader.readAsDataURL(file);
   };
 
-  const confirmAdd = () => {
-    if (!pending) return;
-    if (pending.kind === "barcode") {
-      const f = pending.grams / 100;
-      addNutritionItem({
-        name: `${pending.product.name}${pending.product.brand ? ` · ${pending.product.brand}` : ""} (${pending.grams}g)`,
-        meal: pending.meal,
-        kcal: Math.round(pending.product.kcal * f),
-        p: +(pending.product.protein_g * f).toFixed(1),
-        c: +(pending.product.carbs_g * f).toFixed(1),
-        f: +(pending.product.fat_g * f).toFixed(1),
-        fiber: +(pending.product.fiber_g * f).toFixed(1),
-        sugar: +(pending.product.sugar_g * f).toFixed(1),
-        sodium: +(pending.product.sodium_mg * f).toFixed(1),
-      });
-    } else {
-      const t = sumItems(pending.items);
-      addNutritionItem({
-        name: `${pending.result.dish_name} (${Math.round(t.grams)}g)`,
-        meal: pending.meal,
-        kcal: t.kcal,
-        p: t.protein_g,
-        c: t.carbs_g,
-        f: t.fat_g,
-        fiber: t.fiber_g,
-        sugar: t.sugar_g,
-        sodium: t.sodium_mg,
-      });
+  const confirmAdd = async () => {
+    if (!pending || confirmAddInFlight.current) return;
+    if (currentAccountId !== pending.accountUserId) {
+      toast.error("Le compte a changé ; cette analyse a été annulée. Relance le scan avec le compte actif.");
+      setPending(null);
+      return;
     }
-    toast.success(`Ajouté à ${pending.meal}`);
-    setPending(null);
+    const expectedUserId = pending.accountUserId;
+    confirmAddInFlight.current = true;
+    try {
+      let writeResult: "cloud" | "local" | "saved-for-previous-account";
+      if (pending.kind === "barcode") {
+        const f = pending.grams / 100;
+        writeResult = await addNutritionItemToLog({
+          name: `${pending.product.name}${pending.product.brand ? ` · ${pending.product.brand}` : ""} (${pending.grams}g)`,
+          meal: pending.meal,
+          kcal: Math.round(pending.product.kcal * f),
+          p: +(pending.product.protein_g * f).toFixed(1),
+          c: +(pending.product.carbs_g * f).toFixed(1),
+          f: +(pending.product.fat_g * f).toFixed(1),
+          fiber: +(pending.product.fiber_g * f).toFixed(1),
+          sugar: +(pending.product.sugar_g * f).toFixed(1),
+          sodium: +(pending.product.sodium_mg * f).toFixed(1),
+        }, "barcode", [], { expectedUserId });
+      } else {
+        const t = sumItems(pending.items);
+        writeResult = await addNutritionItemToLog({
+          name: `${pending.result.dish_name} (${Math.round(t.grams)}g)`,
+          meal: pending.meal,
+          kcal: t.kcal,
+          p: t.protein_g,
+          c: t.carbs_g,
+          f: t.fat_g,
+          fiber: t.fiber_g,
+          sugar: t.sugar_g,
+          sodium: t.sodium_mg,
+        }, "photo", [], { expectedUserId });
+      }
+      if (writeResult === "saved-for-previous-account") {
+        toast.message("Repas enregistré pour le compte précédent ; il réapparaîtra à sa prochaine connexion.");
+      } else {
+        toast.success(`Ajouté à ${pending.meal}`);
+      }
+      setPending(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer le repas.");
+    } finally {
+      confirmAddInFlight.current = false;
+    }
   };
 
   return (
@@ -175,7 +234,7 @@ function NutritionPage() {
             className="glass-icon size-14 text-white bg-gradient-to-br from-fuchsia-500/70 to-purple-600/70 shadow-[var(--shadow-glow)] hover:scale-105 active:scale-95 transition"
           >{busy ? <Loader2 className="size-6 animate-spin" /> : <Camera className="size-6" />}</button>
           <button
-            onClick={() => setScanOpen(true)}
+            onClick={() => { setScanOwnerId(currentAccountId); setScanOpen(true); }}
             aria-label="Scanner un code-barres"
             className="glass-icon size-14 text-white bg-gradient-to-br from-emerald-500/70 to-teal-600/70 shadow-[var(--shadow-glow)] hover:scale-105 active:scale-95 transition"
           ><ScanBarcode className="size-6" /></button>
@@ -183,7 +242,7 @@ function NutritionPage() {
         </div>
       )}
 
-      {scanOpen && (
+      {scanOpen && scanOwnerId === currentAccountId && (
         <div className="fixed inset-0 z-50 bg-black/80 grid place-items-center p-4">
           <div className="w-full max-w-md rounded-2xl bg-card overflow-hidden">
             <BarcodeScanner onDetected={handleBarcode} onClose={() => setScanOpen(false)} />
@@ -191,51 +250,51 @@ function NutritionPage() {
         </div>
       )}
 
-      <Dialog open={!!pending} onOpenChange={(v) => !v && setPending(null)}>
-        {pending && (
+      <Dialog open={!!visiblePending} onOpenChange={(v) => !v && setPending(null)}>
+        {visiblePending && (
           <DialogContent className="max-w-sm">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                {pending.kind === "barcode" ? <ScanBarcode className="size-4" /> : <Camera className="size-4" />}
-                {pending.kind === "barcode" ? pending.product.name : pending.result.dish_name}
+                {visiblePending.kind === "barcode" ? <ScanBarcode className="size-4" /> : <Camera className="size-4" />}
+                {visiblePending.kind === "barcode" ? visiblePending.product.name : visiblePending.result.dish_name}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
-              {pending.kind === "photo" && <img src={pending.photo} alt="Photo du repas à analyser" className="w-full aspect-video object-cover rounded-xl" />}
-              {pending.kind === "barcode" && pending.product.image_url && (
-                <img src={pending.product.image_url} alt={pending.product.name} className="size-24 rounded-xl object-cover mx-auto" />
+              {visiblePending.kind === "photo" && <img src={visiblePending.photo} alt="Photo du repas à analyser" className="w-full aspect-video object-cover rounded-xl" />}
+              {visiblePending.kind === "barcode" && visiblePending.product.image_url && (
+                <img src={visiblePending.product.image_url} alt={visiblePending.product.name} className="size-24 rounded-xl object-cover mx-auto" />
               )}
-              {pending.kind === "barcode" ? (
+              {visiblePending.kind === "barcode" ? (
                 <>
                   <div className="text-xs text-muted-foreground text-center">
-                    {`Ref 100g : ${pending.product.kcal} kcal · P ${pending.product.protein_g} · G ${pending.product.carbs_g} · L ${pending.product.fat_g}`}
+                    {`Ref 100g : ${visiblePending.product.kcal} kcal · P ${visiblePending.product.protein_g} · G ${visiblePending.product.carbs_g} · L ${visiblePending.product.fat_g}`}
                   </div>
                   <div>
                     <label className="text-[11px] text-muted-foreground">Quantité (g)</label>
                     <Input
-                      type="number" inputMode="numeric" min={1} value={pending.grams}
-                      onChange={(e) => setPending({ ...pending, grams: Math.max(0, +e.target.value || 0) })}
+                      type="number" inputMode="numeric" min={1} value={visiblePending.grams}
+                      onChange={(e) => setPending({ ...visiblePending, grams: Math.max(0, +e.target.value || 0) })}
                     />
                   </div>
                 </>
               ) : (
                 <FoodAnalysisEditor
-                  items={pending.items}
-                  onChange={(items) => setPending({ ...pending, items, grams: sumItems(items).grams })}
-                  confidence={pending.result.confidence}
-                  confidenceNote={pending.result.confidence_note || pending.result.notes}
+                  items={visiblePending.items}
+                  onChange={(items) => setPending({ ...visiblePending, items, grams: sumItems(items).grams })}
+                  confidence={visiblePending.result.confidence}
+                  confidenceNote={visiblePending.result.confidence_note || visiblePending.result.notes}
                 />
               )}
               <div>
                 <label className="text-[11px] text-muted-foreground">Repas</label>
-                <Select value={pending.meal} onValueChange={(v) => setPending({ ...pending, meal: v })}>
+                <Select value={visiblePending.meal} onValueChange={(v) => setPending({ ...visiblePending, meal: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>{MEALS.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="ghost" onClick={() => setPending(null)}><X className="size-4 mr-1" />Annuler</Button>
-                <Button onClick={confirmAdd} disabled={pending.kind === "barcode" ? !pending.grams : pending.items.length === 0}><Plus className="size-4 mr-1" />Ajouter</Button>
+                <Button onClick={confirmAdd} disabled={visiblePending.kind === "barcode" ? !visiblePending.grams : visiblePending.items.length === 0}><Plus className="size-4 mr-1" />Ajouter</Button>
               </div>
             </div>
           </DialogContent>
@@ -247,14 +306,273 @@ function NutritionPage() {
 
 
 function NutritionLogView() {
+  const { user, loading: authLoading } = useAuth();
+  const activeUserId = user?.id ?? null;
   const [items, setItems] = useLocalState<Record<string, Item[]>>("pace.nutrition.items", {});
   const [totals, setTotals] = useLocalState<Record<string, { kcal: number; p: number; c: number; f: number }>>("pace.nutrition.totals", {});
+  const [readyCacheOwner, setReadyCacheOwner] = useState<string | null>(null);
+  const [guestCacheReady, setGuestCacheReady] = useState(false);
   const [cols] = useNutritionCols();
   const goals = useUserGoals();
   const goal = goals.kcal;
   const today = todayKey();
-  const list = items[today] ?? [];
+  const cacheReady = activeUserId ? readyCacheOwner === activeUserId : !authLoading && guestCacheReady;
+  const visibleItems = cacheReady ? items : {};
+  const visibleTotals = cacheReady ? totals : {};
+  const list = visibleItems[today] ?? [];
+  const refreshInFlight = useRef<Set<string>>(new Set());
 
+  const refreshCanonicalNutrition = useCallback(async () => {
+    if (authLoading) return;
+
+    if (!activeUserId) {
+      const previousOwner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
+      if (previousOwner && !mayReadGlobalNutritionCache(previousOwner, null)) {
+        const previousKeys = nutritionAccountCacheKeys(previousOwner);
+        const globalItems = localStorage.getItem("pace.nutrition.items");
+        const globalTotals = localStorage.getItem("pace.nutrition.totals");
+        const globalTombstones = localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY);
+        if (globalItems && !localStorage.getItem(previousKeys.items)) {
+          localStorage.setItem(previousKeys.items, globalItems);
+        }
+        if (globalTotals && !localStorage.getItem(previousKeys.totals)) {
+          localStorage.setItem(previousKeys.totals, globalTotals);
+        }
+        if (globalTombstones) {
+          localStorage.setItem(
+            previousKeys.deletedIds,
+            JSON.stringify(mergeNutritionTombstoneMaps(
+              localStorage.getItem(previousKeys.deletedIds),
+              globalTombstones,
+            )),
+          );
+        }
+        // A signed-out guest must never see the last authenticated account's
+        // data. Its scoped copy above remains available after that account logs in.
+        applyRemoteWrite("pace.nutrition.items", {});
+        applyRemoteWrite("pace.nutrition.totals", {});
+        applyRemoteWrite(NUTRITION_LEGACY_TOMBSTONES_KEY, {});
+        // The previous account's snapshot is now isolated under its scoped
+        // keys. Clear the global owner marker so subsequent guest writes are
+        // not mistaken for late writes belonging to the signed-out account.
+        localStorage.removeItem(NUTRITION_CACHE_OWNER_KEY);
+      }
+      setReadyCacheOwner(null);
+      setGuestCacheReady(true);
+      return;
+    }
+
+    const userId = activeUserId;
+    if (refreshInFlight.current.has(userId)) return;
+    refreshInFlight.current.add(userId);
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getSession();
+      if (authError || authData.session?.user.id !== userId) return;
+
+      const owner = localStorage.getItem(NUTRITION_CACHE_OWNER_KEY);
+      const globalItems = localStorage.getItem("pace.nutrition.items");
+      const globalTotals = localStorage.getItem("pace.nutrition.totals");
+      const globalTombstones = localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY);
+
+      // Preserve the previous authenticated owner's cache before changing the
+      // global compatibility keys used by existing UI components.
+      if (owner && owner !== userId) {
+        const previousKeys = nutritionAccountCacheKeys(owner);
+        if (globalItems && !localStorage.getItem(previousKeys.items)) {
+          localStorage.setItem(previousKeys.items, globalItems);
+        }
+        if (globalTotals && !localStorage.getItem(previousKeys.totals)) {
+          localStorage.setItem(previousKeys.totals, globalTotals);
+        }
+        if (globalTombstones) {
+          localStorage.setItem(
+            previousKeys.deletedIds,
+            JSON.stringify(mergeNutritionTombstoneMaps(
+              localStorage.getItem(previousKeys.deletedIds),
+              globalTombstones,
+            )),
+          );
+        }
+      } else if (!owner && globalItems) {
+        // Historical/guest JSON has no reliable account owner. Merge each
+        // successive guest snapshot into the recovery backup without ever
+        // assigning those foods to the account that just signed in.
+        const mergedGuestBackup = mergeUnassignedNutritionSnapshots(
+          localStorage.getItem(NUTRITION_UNASSIGNED_BACKUP_KEY),
+          globalItems,
+        );
+        if (mergedGuestBackup) {
+          localStorage.setItem(NUTRITION_UNASSIGNED_BACKUP_KEY, JSON.stringify(mergedGuestBackup));
+          localStorage.setItem(
+            `${NUTRITION_UNASSIGNED_BACKUP_KEY}:totals`,
+            JSON.stringify(recomputeNutritionTotals(mergedGuestBackup)),
+          );
+        } else if (!localStorage.getItem(NUTRITION_UNASSIGNED_BACKUP_KEY)) {
+          // Keep an invalid legacy source for manual recovery rather than
+          // silently replacing it with a partial parsed representation.
+          localStorage.setItem(NUTRITION_UNASSIGNED_BACKUP_KEY, globalItems);
+          if (globalTotals) {
+            localStorage.setItem(`${NUTRITION_UNASSIGNED_BACKUP_KEY}:totals`, globalTotals);
+          }
+        }
+      }
+
+      const accountKeys = nutritionAccountCacheKeys(userId);
+      // Only merge the global sync key when its previous owner is still this
+      // account. On a switch, preserve the outgoing owner's markers above and
+      // hydrate the incoming account from its own cache before pulling cloud.
+      if (owner === userId && globalTombstones) {
+        localStorage.setItem(
+          accountKeys.deletedIds,
+          JSON.stringify(mergeNutritionTombstoneMaps(
+            localStorage.getItem(accountKeys.deletedIds),
+            globalTombstones,
+          )),
+        );
+      } else if (!owner && globalTombstones) {
+        localStorage.setItem(
+          `${NUTRITION_UNASSIGNED_BACKUP_KEY}:deleted_ids`,
+          JSON.stringify(mergeNutritionTombstoneMaps(
+            localStorage.getItem(`${NUTRITION_UNASSIGNED_BACKUP_KEY}:deleted_ids`),
+            globalTombstones,
+          )),
+        );
+      }
+      const scopedTombstones = mergeNutritionTombstoneMaps(
+        localStorage.getItem(accountKeys.deletedIds),
+      );
+      localStorage.setItem(accountKeys.deletedIds, JSON.stringify(scopedTombstones));
+      applyRemoteWrite(NUTRITION_LEGACY_TOMBSTONES_KEY, scopedTombstones);
+      let scopedItemsRaw = localStorage.getItem(accountKeys.items);
+      let scopedTotalsRaw = localStorage.getItem(accountKeys.totals);
+      if (owner === userId) {
+        scopedItemsRaw ??= globalItems;
+        scopedTotalsRaw ??= globalTotals;
+      }
+
+      let currentItems: Record<string, Item[]> = {};
+      try {
+        const parsed: unknown = scopedItemsRaw ? JSON.parse(scopedItemsRaw) : {};
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          currentItems = parsed as Record<string, Item[]>;
+        }
+      } catch {
+        // A malformed account cache is ignored; it is not sent to another account.
+      }
+      let currentTotals: Record<string, { kcal: number; p: number; c: number; f: number }> = {};
+      try {
+        const parsed: unknown = scopedTotalsRaw ? JSON.parse(scopedTotalsRaw) : {};
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          currentTotals = parsed as typeof currentTotals;
+        }
+      } catch {
+        // Totals are recomputed from valid item rows below.
+      }
+
+      // Hydrate only this user's cache into the compatibility keys first. If
+      // SQL is temporarily unavailable, this account still sees its own data.
+      localStorage.setItem(NUTRITION_CACHE_OWNER_KEY, userId);
+      localStorage.setItem(accountKeys.items, JSON.stringify(currentItems));
+      localStorage.setItem(accountKeys.totals, JSON.stringify(currentTotals));
+      applyRemoteWrite("pace.nutrition.items", currentItems);
+      applyRemoteWrite("pace.nutrition.totals", currentTotals);
+      setReadyCacheOwner(userId);
+      setGuestCacheReady(false);
+
+      const queueKey = accountSyncStorageKeys(userId).queue;
+      const pendingKeys = parseSyncQueue(localStorage.getItem(queueKey));
+      // A legacy JSON write in this account's outbox must be acknowledged
+      // before SQL becomes authoritative for the cached day.
+      if (pendingKeys.includes("pace.nutrition.items")) return;
+
+      const day = todayKey();
+      const previousFoodLogCursor = parseNutritionFoodLogCursor(
+        localStorage.getItem(accountKeys.foodLogCursor),
+        day,
+      );
+      const fullFoodLogReconciliation = shouldRunFullFoodLogReconciliation(
+        previousFoodLogCursor,
+        day,
+      );
+      const deltaSince = fullFoodLogReconciliation || !previousFoodLogCursor
+        ? null
+        : foodLogDeltaSince(previousFoodLogCursor);
+      const data = await fetchAllFoodLogTuplePages<CanonicalFoodLogRow & { created_at: string }>(
+        async (after, pageSize) => {
+          let query = supabase
+            .from("food_log")
+            .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta,created_at")
+            .eq("user_id", userId)
+            .eq("log_date", day);
+          if (deltaSince !== null) query = query.gte("created_at", deltaSince);
+          if (after !== null) {
+            query = query.or(
+              `created_at.gt.${after.createdAt},and(created_at.eq.${after.createdAt},id.gt.${after.id})`,
+            );
+          }
+          const { data: page, error } = await query
+            .order("created_at", { ascending: true })
+            .order("id", { ascending: true })
+            .limit(pageSize);
+          return {
+            data: page as Array<CanonicalFoodLogRow & { created_at: string }> | null,
+            error,
+          };
+        },
+        {
+          pageSize: 500,
+          isCancelled: () =>
+            todayKey() !== day ||
+            localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) !== userId,
+        },
+      );
+      // The cursor advances only after every tuple page has been received.
+      if (data === null || todayKey() !== day) return;
+      const { data: confirmedSession, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || confirmedSession.session?.user.id !== userId ||
+          localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) !== userId) return;
+
+      const mergedTombstones = mergeNutritionTombstoneMaps(
+        localStorage.getItem(accountKeys.deletedIds),
+        localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY),
+      );
+      localStorage.setItem(accountKeys.deletedIds, JSON.stringify(mergedTombstones));
+      const deletedIds = readActiveNutritionTombstones(JSON.stringify(mergedTombstones));
+      const localDayItems = Array.isArray(currentItems[day]) ? currentItems[day] : [];
+      const merged = fullFoodLogReconciliation
+        ? mergeCanonicalNutritionItems(
+            localDayItems,
+            data as unknown as CanonicalFoodLogRow[],
+            deletedIds,
+          )
+        : mergeCanonicalNutritionDelta(
+            localDayItems,
+            data as unknown as CanonicalFoodLogRow[],
+            deletedIds,
+          );
+      const nextItems = { ...currentItems, [day]: merged };
+      const nextTotals = recomputeNutritionTotals(nextItems);
+      const nextFoodLogCursor = nextNutritionFoodLogCursor({
+        previous: previousFoodLogCursor,
+        rows: data,
+        logDate: day,
+        fullReconciliation: fullFoodLogReconciliation,
+      });
+
+      // Cache the complete result before persisting the cursor. If the local
+      // cache write fails, the old cursor remains and the same delta is retried.
+      localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
+      localStorage.setItem(accountKeys.totals, JSON.stringify({ ...currentTotals, ...nextTotals }));
+      localStorage.setItem(accountKeys.foodLogCursor, JSON.stringify(nextFoodLogCursor));
+      localStorage.setItem(NUTRITION_CACHE_OWNER_KEY, userId);
+      applyRemoteWrite("pace.nutrition.items", nextItems);
+      applyRemoteWrite("pace.nutrition.totals", { ...currentTotals, ...nextTotals });
+    } catch {
+      // The next focus/online event or bounded refresh will retry transient failures.
+    } finally {
+      refreshInFlight.current.delete(userId);
+    }
+  }, [activeUserId, authLoading]);
   useEffect(() => {
     const handler = () => {
       try {
@@ -262,11 +580,24 @@ function NutritionLogView() {
         if (raw) setItems(JSON.parse(raw));
         const tRaw = localStorage.getItem("pace.nutrition.totals");
         if (tRaw) setTotals(JSON.parse(tRaw));
-      } catch {}
+      } catch {
+      // Ignore malformed cached JSON; the canonical SQL snapshot remains authoritative.
+    }
+      void refreshCanonicalNutrition();
     };
+    const refresh = () => { void refreshCanonicalNutrition(); };
     window.addEventListener("pace.nutrition.changed", handler);
-    return () => window.removeEventListener("pace.nutrition.changed", handler);
-  }, [setItems, setTotals]);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("online", refresh);
+    const interval = window.setInterval(refresh, 60_000);
+    refresh();
+    return () => {
+      window.removeEventListener("pace.nutrition.changed", handler);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("online", refresh);
+      window.clearInterval(interval);
+    };
+  }, [activeUserId, authLoading, refreshCanonicalNutrition, setItems, setTotals]);
 
   const [meal, setMeal] = useState("Petit déjeuner");
   const [name, setName] = useState("");
@@ -277,26 +608,135 @@ function NutritionLogView() {
 
   const recompute = (arr: Item[]) =>
     arr.reduce((a, x) => ({ kcal: a.kcal + x.kcal, p: a.p + x.p, c: a.c + x.c, f: a.f + x.f }), { kcal: 0, p: 0, c: 0, f: 0 });
+  const addInFlight = useRef(false);
 
-  const add = () => {
-    if (!name || !fields.kcal) return;
-    const it: Item = {
-      id: crypto.randomUUID(), name, meal, qty: 1,
-      kcal: +fields.kcal || 0, p: +fields.protein || 0, c: +fields.carbs || 0, f: +fields.fat || 0,
-      sat: +fields.sat_fat || undefined, sugar: +fields.sugar || undefined, fiber: +fields.fiber || undefined,
-      salt: +fields.salt || undefined, sodium: +fields.sodium || undefined,
-      iron: +fields.iron || undefined, calcium: +fields.calcium || undefined, vitC: +fields.vit_c || undefined,
-    };
-    setItems((prev) => {
-      const next = { ...prev, [today]: [...(prev[today] ?? []), it] };
-      setTotals((t) => ({ ...t, [today]: recompute(next[today]) }));
-      return next;
-    });
-    setName("");
-    setFields(Object.fromEntries(NUT_COLS.map((c) => [c.key, ""])) as Record<NutCol, string>);
+  const add = async () => {
+    if (!name.trim() || !fields.kcal.trim() || addInFlight.current) return;
+    // Bind this form submission to the account that initiated the action.
+    // If auth changes while the service checks the Supabase session, reject
+    // rather than attributing the form's data to the newly active account.
+    const expectedUserId = activeUserId;
+    addInFlight.current = true;
+
+    const missingNutrients = [
+      ...(!fields.protein.trim() ? ["protein_g"] : []),
+      ...(!fields.carbs.trim() ? ["carbs_g"] : []),
+      ...(!fields.fat.trim() ? ["fat_g"] : []),
+    ];
+    const numberOrMissing = (value: string) =>
+      value.trim() === "" ? undefined : Number(value);
+
+    try {
+      const result = await addNutritionItemToLog({
+        name: name.trim(),
+        meal,
+        kcal: Number(fields.kcal),
+        p: Number(fields.protein || 0),
+        c: Number(fields.carbs || 0),
+        f: Number(fields.fat || 0),
+        sat: numberOrMissing(fields.sat_fat),
+        sugar: numberOrMissing(fields.sugar),
+        fiber: numberOrMissing(fields.fiber),
+        salt: numberOrMissing(fields.salt),
+        sodium: numberOrMissing(fields.sodium),
+        iron: numberOrMissing(fields.iron),
+        calcium: numberOrMissing(fields.calcium),
+        vitC: numberOrMissing(fields.vit_c),
+      }, "manual", [
+        ...missingNutrients,
+        ...(!fields.fiber.trim() ? ["fiber_g"] : []),
+        ...(!fields.sugar.trim() ? ["sugar_g"] : []),
+        ...(!fields.sodium.trim() ? ["sodium_mg"] : []),
+      ], { expectedUserId });
+
+      if (result === "saved-for-previous-account") {
+        toast.message("Repas enregistré pour le compte d'origine ; il réapparaîtra à sa prochaine connexion.");
+      } else if (result === "local") {
+        toast.message("Repas conservé localement ; synchronisation à la reconnexion.");
+      } else {
+        toast.success("Repas ajouté.");
+      }
+      setName("");
+      setFields(Object.fromEntries(NUT_COLS.map((column) => [column.key, ""])) as Record<NutCol, string>);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer le repas.");
+    } finally {
+      addInFlight.current = false;
+    }
   };
 
   const remove = (id: string) => {
+    const currentItem = list.find((item) => item.id === id) as (Item & { __foodLogCanonical?: boolean }) | undefined;
+    if (currentItem?.__foodLogCanonical) {
+      void (async () => {
+        try {
+          const { data: authData, error: authError } = await supabase.auth.getSession();
+          const user = authData.session?.user;
+          if (authError || !user || user.id !== activeUserId) {
+            toast.error("La session a changé. Recharge le journal avant de supprimer cet aliment.");
+            return;
+          }
+          const { error } = await supabase
+            .from("food_log")
+            .delete()
+            .eq("user_id", user.id)
+            .eq("id", id);
+          if (error) {
+            toast.error("La suppression distante a échoué. L’aliment est conservé.");
+            return;
+          }
+
+          // Re-check after the SQL await. The session may have switched while
+          // the DELETE was in flight; never publish account A's tombstone into
+          // account B's user_state key or touch B's compatibility cache.
+          const { data: verifiedAuth, error: verifyError } = await supabase.auth.getSession();
+          const sameAccount = !verifyError &&
+            verifiedAuth.session?.user.id === user.id &&
+            activeUserId === user.id &&
+            localStorage.getItem(NUTRITION_CACHE_OWNER_KEY) === user.id;
+          const accountKeys = nutritionAccountCacheKeys(user.id);
+          const rawTombstones = mergeNutritionTombstoneMaps(
+            localStorage.getItem(accountKeys.deletedIds),
+            sameAccount ? localStorage.getItem(NUTRITION_LEGACY_TOMBSTONES_KEY) : null,
+          );
+          const tombstones = queueNutritionTombstone(JSON.stringify(rawTombstones), id);
+          // The account-local copy survives a tab/session transition. Publish
+          // to user_state only while the initiating identity is still active.
+          localStorage.setItem(accountKeys.deletedIds, JSON.stringify(tombstones));
+
+          const cacheKey = sameAccount ? "pace.nutrition.items" : accountKeys.items;
+          let current: Record<string, Item[]> = {};
+          try {
+            const raw = localStorage.getItem(cacheKey);
+            if (raw) current = JSON.parse(raw) as Record<string, Item[]>;
+          } catch {
+            // Rebuild the visible day from the remaining cached entries.
+          }
+          const nextItems = {
+            ...current,
+            [today]: (Array.isArray(current[today]) ? current[today] : []).filter((item) => item.id !== id),
+          };
+          const nextTotals = recomputeNutritionTotals(nextItems);
+          if (sameAccount) {
+            applyLocalWrite(NUTRITION_LEGACY_TOMBSTONES_KEY, tombstones);
+            localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
+            localStorage.setItem(accountKeys.totals, JSON.stringify(nextTotals));
+            applyRemoteWrite("pace.nutrition.items", nextItems);
+            applyRemoteWrite("pace.nutrition.totals", nextTotals);
+          } else {
+            // Only the original account's private cache is changed. It will
+            // reconcile the durable SQL deletion and tombstone on next login.
+            localStorage.setItem(accountKeys.items, JSON.stringify(nextItems));
+            localStorage.setItem(accountKeys.totals, JSON.stringify(nextTotals));
+            toast.message("Repas supprimé pour le compte d'origine ; la synchronisation reprendra à sa reconnexion.");
+          }
+        } catch {
+          toast.error("La suppression distante est temporairement indisponible.");
+        }
+      })();
+      return;
+    }
+
     setItems((prev) => {
       const next = { ...prev, [today]: (prev[today] ?? []).filter((x) => x.id !== id) };
       setTotals((t) => ({ ...t, [today]: recompute(next[today]) }));
@@ -304,10 +744,14 @@ function NutritionLogView() {
     });
   };
 
-  const t = totals[today] ?? { kcal: 0, p: 0, c: 0, f: 0 };
+  const t = (cacheReady ? visibleTotals[today] : undefined) ?? { kcal: 0, p: 0, c: 0, f: 0 };
   const meals = ["Petit déjeuner", "Déjeuner", "Goûter", "Dîner"];
   const activeCols: NutCol[] = cols.includes("kcal") ? cols : ["kcal", ...cols];
   const sumCol = (arr: Item[], k: NutCol) => arr.reduce((s, x) => s + (Number(x[COL_FIELD[k]] as number | undefined) || 0), 0);
+
+  if (!cacheReady) {
+    return <div className="py-16 text-center text-sm text-muted-foreground">Chargement du journal nutritionnel…</div>;
+  }
 
   return (
     <div>

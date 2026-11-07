@@ -18,6 +18,7 @@ import { useNutritionCols, NUT_COLS, type NutCol } from "@/hooks/use-nutrition-c
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { isLegalCategoryAllowed } from "@/lib/legal";
+import { addNutritionItemToLog } from "@/lib/nutrition-log";
 
 const SHORT: Record<NutCol, string> = {
   kcal: "kcal", protein: "P", carbs: "G", fat: "L", sat_fat: "Sat", sugar: "Suc",
@@ -83,6 +84,15 @@ const scoreColors = {
 
 function ScanPage() {
   const { user } = useAuth();
+  return (
+    <ScanPageContent
+      key={user?.id ?? "guest"}
+      userId={user?.id ?? null}
+    />
+  );
+}
+
+function ScanPageContent({ userId }: { userId: string | null }) {
   const navigate = useNavigate();
   const search = Route.useSearch();
   const analyzePhoto = useServerFn(analyzeFoodPhoto);
@@ -101,20 +111,16 @@ function ScanPage() {
   const [aiItems, setAiItems] = useState<FoodItem[]>([]);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const logWriteInFlight = useRef(false);
 
   useEffect(() => {
-    if (!user) return;
-    if (search.open === "barcode") {
-      setScanning(true);
-      navigate({ to: "/scan", search: {}, replace: true });
-    } else if (search.open === "photo") {
-      fileRef.current?.click();
-      navigate({ to: "/scan", search: {}, replace: true });
-    }
+    if (!userId || search.open !== "photo") return;
+    fileRef.current?.click();
+    navigate({ to: "/scan", search: {}, replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search.open, user]);
+  }, [search.open, userId]);
 
-  if (!user) {
+  if (!userId) {
     return (
       <div className="text-center py-12">
         <p className="text-muted-foreground mb-4">Connectez-vous pour scanner et analyser vos repas.</p>
@@ -124,22 +130,32 @@ function ScanPage() {
   }
 
   const handleBarcode = async (code: string) => {
+    const expectedUserId = userId;
+    if (!expectedUserId) return;
     setScanning(false);
+    if (search.open === "barcode") {
+      void navigate({ to: "/scan", search: {}, replace: true });
+    }
     setBusy(true);
     try {
       const p = await fetchProductByBarcode(code);
       if (!p) { toast.error("Produit introuvable dans OpenFoodFacts"); return; }
+      if (userId !== expectedUserId) return;
       const info = computeHealthScore(p);
       const s100 = computeScore100(p);
       setProduct(p);
       setScoreInfo(info);
       setScore100(s100);
+
       setProductGrams(100);
       setAiResult(null);
       setPhoto(null);
       checkRecallByBarcode(code).then(setRecalls).catch(() => setRecalls([]));
+      const { data: authData, error: authError } = await supabase.auth.getSession();
+      if (authError || authData.session?.user.id !== expectedUserId ||
+          userId !== expectedUserId) return;
       await supabase.from("food_scans").insert({
-        user_id: user.id,
+        user_id: expectedUserId,
         kind: "barcode",
         barcode: code,
         product_name: p.name,
@@ -159,6 +175,8 @@ function ScanPage() {
   };
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const expectedUserId = userId;
+    if (!expectedUserId) return;
     const file = e.target.files?.[0];
     if (!file) return;
     if (!isLegalCategoryAllowed("ai")) { toast.error("Consentement Analyse IA requis."); return; }
@@ -173,6 +191,8 @@ function ScanPage() {
         const res = await analyzePhoto({ data: { imageBase64: b64 } });
         if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
         const r = res.result as AnalysisResult;
+        if (userId !== expectedUserId) return;
+
         setAiResult(r);
         setAiItems(r.items);
       } catch (err) {
@@ -185,45 +205,91 @@ function ScanPage() {
   };
 
   const addProductToLog = async () => {
-    if (!product || !scoreInfo) return;
-    const f = (productGrams || 0) / 100;
-    const { error } = await supabase.from("food_log").insert({
-      user_id: user.id,
-      meal,
-      name: `${product.name}${product.brand ? ` · ${product.brand}` : ""} (${productGrams}g)`,
-      kcal: +(product.kcal * f).toFixed(1),
-      protein_g: +(product.protein_g * f).toFixed(1),
-      carbs_g: +(product.carbs_g * f).toFixed(1),
-      fat_g: +(product.fat_g * f).toFixed(1),
-      fiber_g: +(product.fiber_g * f).toFixed(1),
-      sugar_g: +(product.sugar_g * f).toFixed(1),
-      sodium_mg: +(product.sodium_mg * f).toFixed(1),
-      source: "barcode", health_score: scoreInfo.score,
-      meta: { grams: productGrams },
-    });
-    if (error) toast.error(error.message);
-    else { toast.success("Ajouté au journal"); setProduct(null); setScoreInfo(null); }
+    if (!product || !scoreInfo || productGrams <= 0 || logWriteInFlight.current) return;
+    const expectedUserId = userId;
+    if (!expectedUserId) {
+      toast.error("Le compte a changé ; relance le scan avec le compte actif.");
+      return;
+    }
+    logWriteInFlight.current = true;
+    const factor = productGrams / 100;
+    try {
+      const result = await addNutritionItemToLog({
+        name: `${product.name}${product.brand ? ` · ${product.brand}` : ""} (${productGrams}g)`,
+        meal,
+        kcal: +(product.kcal * factor).toFixed(1),
+        p: +(product.protein_g * factor).toFixed(1),
+        c: +(product.carbs_g * factor).toFixed(1),
+        f: +(product.fat_g * factor).toFixed(1),
+        fiber: +(product.fiber_g * factor).toFixed(1),
+        sugar: +(product.sugar_g * factor).toFixed(1),
+        sodium: +(product.sodium_mg * factor).toFixed(1),
+      }, "barcode", [], {
+        healthScore: scoreInfo.score,
+        meta: { grams: productGrams },
+        expectedUserId,
+      });
+      if (result === "saved-for-previous-account") {
+        toast.message("Repas enregistré pour le compte d'origine ; il réapparaîtra à sa reconnexion.");
+      } else if (result === "local") {
+        toast.message("Repas conservé localement ; synchronisation à la reconnexion.");
+      } else {
+        toast.success("Ajouté au journal");
+      }
+      setProduct(null);
+      setScoreInfo(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d'ajouter ce produit au journal.");
+    } finally {
+      logWriteInFlight.current = false;
+    }
   };
 
   const addAiToLog = async () => {
-    if (!aiResult || aiItems.length === 0) return;
-    const t = sumItems(aiItems);
-    const { error } = await supabase.from("food_log").insert({
-      user_id: user.id,
-      meal,
-      name: `${aiResult.dish_name} (${Math.round(t.grams)}g)`,
-      kcal: +t.kcal.toFixed(1),
-      protein_g: +t.protein_g.toFixed(1),
-      carbs_g: +t.carbs_g.toFixed(1),
-      fat_g: +t.fat_g.toFixed(1),
-      fiber_g: +t.fiber_g.toFixed(1),
-      sugar_g: +t.sugar_g.toFixed(1),
-      sodium_mg: +t.sodium_mg.toFixed(1),
-      source: "photo", health_score: aiResult.health_score,
-      meta: { quality: aiResult.quality, confidence: aiResult.confidence, items: aiItems, grams: Math.round(t.grams) },
-    });
-    if (error) toast.error(error.message);
-    else { toast.success("Repas ajouté au journal"); setAiResult(null); setAiItems([]); setPhoto(null); }
+    if (!aiResult || aiItems.length === 0 || logWriteInFlight.current) return;
+    const expectedUserId = userId;
+    if (!expectedUserId) {
+      toast.error("Le compte a changé ; relance l'analyse avec le compte actif.");
+      return;
+    }
+    logWriteInFlight.current = true;
+    const totals = sumItems(aiItems);
+    try {
+      const result = await addNutritionItemToLog({
+        name: `${aiResult.dish_name} (${Math.round(totals.grams)}g)`,
+        meal,
+        kcal: +totals.kcal.toFixed(1),
+        p: +totals.protein_g.toFixed(1),
+        c: +totals.carbs_g.toFixed(1),
+        f: +totals.fat_g.toFixed(1),
+        fiber: +totals.fiber_g.toFixed(1),
+        sugar: +totals.sugar_g.toFixed(1),
+        sodium: +totals.sodium_mg.toFixed(1),
+      }, "photo", [], {
+        healthScore: aiResult.health_score,
+        meta: {
+          quality: aiResult.quality,
+          confidence: aiResult.confidence,
+          items: aiItems,
+          grams: Math.round(totals.grams),
+        },
+        expectedUserId,
+      });
+      if (result === "saved-for-previous-account") {
+        toast.message("Repas enregistré pour le compte d'origine ; il réapparaîtra à sa reconnexion.");
+      } else if (result === "local") {
+        toast.message("Repas conservé localement ; synchronisation à la reconnexion.");
+      } else {
+        toast.success("Repas ajouté au journal");
+      }
+      setAiResult(null);
+      setAiItems([]);
+      setPhoto(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d'ajouter ce repas au journal.");
+    } finally {
+      logWriteInFlight.current = false;
+    }
   };
 
 
@@ -398,7 +464,17 @@ function ScanPage() {
         </motion.div>
       )}
 
-      {scanning && <BarcodeScanner onDetected={handleBarcode} onClose={() => setScanning(false)} />}
+      {(scanning || search.open === "barcode") && (
+        <BarcodeScanner
+          onDetected={handleBarcode}
+          onClose={() => {
+            setScanning(false);
+            if (search.open === "barcode") {
+              void navigate({ to: "/scan", search: {}, replace: true });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

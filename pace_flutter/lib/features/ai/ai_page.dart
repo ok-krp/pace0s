@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../core/storage/local_store.dart';
@@ -18,7 +20,8 @@ class AiPage extends StatefulWidget {
 }
 
 class _AiPageState extends State<AiPage> {
-  late final PaceAiService _service = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
+  late PaceAiService _service;
+  late String? _accountUserId;
   final _input = TextEditingController();
   final _scroll = ScrollController();
   List<AiConversation> _history = const [];
@@ -26,24 +29,120 @@ class _AiPageState extends State<AiPage> {
   List<AiMessage> _messages = const [];
   bool _loading = false;
   bool _ephemeral = false;
+  bool _modalOpen = false;
+  int _openGeneration = 0;
+  int _sendGeneration = 0;
   String _search = '';
 
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    _service = PaceAiService(
+      localStore: widget.localStore,
+      sync: widget.sync,
+      auth: widget.auth,
+    );
+    widget.localStore.addListener(_onLocalStoreChanged);
     _openInitialConversation();
+  }
+
+  void _onLocalStoreChanged() {
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) {
+      // Account notifications must take precedence over the normal loading
+      // guard: otherwise a slow model response can leave the prior account's
+      // chat visible in this still-mounted widget.
+      _accountUserId = activeUserId;
+      _service = PaceAiService(
+        localStore: widget.localStore,
+        sync: widget.sync,
+        auth: widget.auth,
+      );
+      ++_openGeneration;
+      ++_sendGeneration;
+      if (_modalOpen) {
+        // The root navigator is already dismissing this route. Clear in-memory
+        // data now, but defer the rebuild until the modal overlay has detached.
+        _history = const [];
+        _conversation = null;
+        _messages = const [];
+        _loading = false;
+        _ephemeral = false;
+        return;
+      }
+      setState(() {
+        _history = const [];
+        _conversation = null;
+        _messages = const [];
+        _loading = false;
+        _ephemeral = false;
+      });
+      return;
+    }
+    if (_loading || _ephemeral || _modalOpen) return;
+    final history = _service.loadLocalConversations();
+    final currentId = _conversation?.id;
+    AiConversation? updatedCurrent;
+    for (final item in history) {
+      if (item.id == currentId) {
+        updatedCurrent = item;
+        break;
+      }
+    }
+    setState(() {
+      _history = history;
+      if (updatedCurrent != null) {
+        _conversation = updatedCurrent;
+        // Do not erase an already-loaded transcript if a metadata-only local
+        // snapshot arrives before its messages have been cached.
+        if (updatedCurrent.messages.isNotEmpty || _messages.isEmpty) {
+          _messages = updatedCurrent.messages;
+        }
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant AiPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+    if (oldWidget.localStore != widget.localStore ||
+        oldWidget.auth != widget.auth ||
+        oldWidget.sync != widget.sync) {
+      _accountUserId = widget.localStore.activeUserId;
+      _service = PaceAiService(
+        localStore: widget.localStore,
+        sync: widget.sync,
+        auth: widget.auth,
+      );
+      ++_openGeneration;
+      ++_sendGeneration;
+      _history = const [];
+      _conversation = null;
+      _messages = const [];
+      _loading = false;
+      _ephemeral = false;
+      unawaited(_openInitialConversation());
+    }
   }
 
   @override
   void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
     _input.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
   Future<void> _openInitialConversation() async {
+    final generation = ++_openGeneration;
     final history = await _service.loadConversations();
-    if (!mounted) return;
+    if (!mounted || generation != _openGeneration) return;
     setState(() => _history = history);
     if (history.isNotEmpty) {
       await _openConversation(history.first);
@@ -53,22 +152,28 @@ class _AiPageState extends State<AiPage> {
   }
 
   Future<void> _newConversation() async {
+    final generation = ++_openGeneration;
+    ++_sendGeneration;
     final conversation = await _service.createConversation(ephemeral: _ephemeral);
-    if (!mounted) return;
+    if (!mounted || generation != _openGeneration) return;
     setState(() {
       _conversation = conversation;
       _messages = const [];
+      _loading = false;
     });
     if (!_ephemeral) setState(() => _history = _service.loadLocalConversations());
   }
 
   Future<void> _openConversation(AiConversation conversation) async {
+    final generation = ++_openGeneration;
+    ++_sendGeneration;
     final messages = await _service.loadMessages(conversation.id);
-    if (!mounted) return;
+    if (!mounted || generation != _openGeneration) return;
     setState(() {
       _ephemeral = false;
       _conversation = conversation;
       _messages = messages;
+      _loading = false;
     });
     _jumpToEnd();
   }
@@ -78,6 +183,12 @@ class _AiPageState extends State<AiPage> {
     final conversation = _conversation;
     if (text.isEmpty || conversation == null || _loading) return;
     _input.clear();
+    final conversationId = conversation.id;
+    final sendGeneration = ++_sendGeneration;
+    // Ephemeral chats keep their history only in this widget's memory. Capture
+    // it before adding the optimistic message so the service can send context
+    // without persisting any ephemeral message.
+    final ephemeralHistory = List<AiMessage>.unmodifiable(_messages);
     final optimistic = AiMessage(id: 'local-${DateTime.now().microsecondsSinceEpoch}', role: 'user', text: text, createdAt: DateTime.now());
     setState(() {
       _messages = [..._messages, optimistic];
@@ -85,8 +196,16 @@ class _AiPageState extends State<AiPage> {
     });
     _jumpToEnd();
     try {
-      final response = await _service.send(conversation: conversation, text: text);
-      if (!mounted) return;
+      final response = await _service.send(
+        conversation: conversation,
+        text: text,
+        ephemeralHistory: ephemeralHistory,
+      );
+      if (!mounted ||
+          sendGeneration != _sendGeneration ||
+          _conversation?.id != conversationId) {
+        return;
+      }
       setState(() {
         _messages = [..._messages, AiMessage(id: 'assistant-${DateTime.now().microsecondsSinceEpoch}', role: 'assistant', text: response, createdAt: DateTime.now())];
         _loading = false;
@@ -94,7 +213,11 @@ class _AiPageState extends State<AiPage> {
       });
       _jumpToEnd();
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted ||
+          sendGeneration != _sendGeneration ||
+          _conversation?.id != conversationId) {
+        return;
+      }
       setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString().replaceFirst('Bad state: ', ''))));
     }
@@ -211,20 +334,86 @@ class _AiPageState extends State<AiPage> {
   }
 
   Future<void> _conversationMenu(AiConversation conversation) async {
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      builder: (_) => SafeArea(child: Column(mainAxisSize: MainAxisSize.min, children: [ListTile(leading: const Icon(Icons.edit), title: const Text('Renommer'), onTap: () => Navigator.pop(context, 'rename')), ListTile(leading: const Icon(Icons.delete_outline), title: const Text('Supprimer'), onTap: () => Navigator.pop(context, 'delete'))])),
-    );
-    if (action == 'rename' && mounted) {
-      final controller = TextEditingController(text: conversation.title);
-      final title = await showDialog<String>(context: context, builder: (_) => AlertDialog(title: const Text('Renommer'), content: TextField(controller: controller, autofocus: true), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Enregistrer'))]));
-      controller.dispose();
-      if (title != null && title.trim().isNotEmpty) await _service.renameConversation(conversation.id, title);
-    } else if (action == 'delete') {
-      await _service.deleteConversation(conversation.id);
-      if (conversation.id == _conversation?.id) await _newConversation();
+    final expectedUserId = _accountUserId;
+    var controllerTransitionFinished = false;
+    _modalOpen = true;
+    try {
+      final action = await showModalBottomSheet<String>(
+        context: context,
+        builder: (_) => SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('Renommer'),
+                onTap: () => Navigator.pop(context, 'rename'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Supprimer'),
+                onTap: () => Navigator.pop(context, 'delete'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted || widget.localStore.activeUserId != expectedUserId) return;
+
+      if (action == 'rename') {
+        final controller = TextEditingController(text: conversation.title);
+        String? title;
+        try {
+          title = await showDialog<String>(
+            context: context,
+            builder: (_) => AlertDialog(
+              title: const Text('Renommer'),
+              content: TextField(controller: controller, autofocus: true),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Annuler'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, controller.text),
+                  child: const Text('Enregistrer'),
+                ),
+              ],
+            ),
+          );
+        } finally {
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+          controller.dispose();
+          controllerTransitionFinished = true;
+        }
+        if (!mounted ||
+            widget.localStore.activeUserId != expectedUserId ||
+            title == null ||
+            title.trim().isEmpty) {
+          return;
+        }
+        await _service.renameConversation(conversation.id, title);
+      } else if (action == 'delete') {
+        if (!mounted || widget.localStore.activeUserId != expectedUserId) {
+          return;
+        }
+        await _service.deleteConversation(conversation.id);
+        if (!mounted || widget.localStore.activeUserId != expectedUserId) return;
+        if (conversation.id == _conversation?.id) await _newConversation();
+      }
+
+      if (mounted && widget.localStore.activeUserId == expectedUserId) {
+        setState(() => _history = _service.loadLocalConversations());
+      }
+    } finally {
+      if (!controllerTransitionFinished) {
+        await Future<void>.delayed(const Duration(milliseconds: 350));
+      }
+      _modalOpen = false;
+      if (mounted) {
+        setState(() => _history = _service.loadLocalConversations());
+      }
     }
-    if (mounted) setState(() => _history = _service.loadLocalConversations());
   }
 
   Future<void> _openMemory() async {
@@ -246,22 +435,99 @@ class AiMemoryPage extends StatefulWidget {
 class _AiMemoryPageState extends State<AiMemoryPage> {
   late bool _enabled = widget.service.memoryEnabled;
   List<AiMemoryItem> _items = const [];
+  bool _dialogOpen = false;
+  bool _scopeInvalidated = false;
 
   @override
   void initState() {
     super.initState();
     _items = widget.service.loadMemory();
+    widget.service.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (!mounted) return;
+    if (!widget.service.isAccountScopeCurrent) {
+      if (_dialogOpen) {
+        _scopeInvalidated = true;
+        _enabled = false;
+        _items = const [];
+        return;
+      }
+      setState(() {
+        _scopeInvalidated = true;
+        _enabled = false;
+        _items = const [];
+      });
+      return;
+    }
+    final enabled = widget.service.memoryEnabled;
+    final items = widget.service.loadMemory();
+    if (_dialogOpen) {
+      _enabled = enabled;
+      _items = items;
+      return;
+    }
+    setState(() {
+      _enabled = enabled;
+      _items = items;
+    });
+  }
+
+  @override
+  void dispose() {
+    widget.service.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
   }
 
   Future<void> _add() async {
+    if (_scopeInvalidated || !widget.service.isAccountScopeCurrent) return;
+    final expectedUserId = widget.service.localStore.activeUserId;
     final controller = TextEditingController();
-    final text = await showDialog<String>(context: context, builder: (_) => AlertDialog(title: const Text('Ajouter une mémoire'), content: TextField(controller: controller, autofocus: true, maxLines: 4), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, controller.text), child: const Text('Ajouter'))]));
-    controller.dispose();
-    if (text != null && text.trim().isNotEmpty) {
-      await widget.service.addMemory(text);
-      setState(() => _items = widget.service.loadMemory());
+    String? text;
+    _dialogOpen = true;
+    try {
+      text = await showDialog<String>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Ajouter une mémoire'),
+          content: TextField(controller: controller, autofocus: true, maxLines: 4),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: const Text('Ajouter'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      _dialogOpen = false;
+      controller.dispose();
+      if (mounted) {
+        setState(() {
+          _enabled = widget.service.memoryEnabled;
+          _items = widget.service.loadMemory();
+        });
+      }
     }
+    if (text == null ||
+        text.trim().isEmpty ||
+        widget.service.localStore.activeUserId != expectedUserId) {
+      return;
+    }
+    await widget.service.addMemory(text);
+    if (!mounted ||
+        widget.service.localStore.activeUserId != expectedUserId) {
+      return;
+    }
+    setState(() => _items = widget.service.loadMemory());
   }
+
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -269,7 +535,15 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
         body: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            SwitchListTile.adaptive(title: const Text('Mémoire IA'), subtitle: const Text('Autoriser Pace IA à conserver des souvenirs persistants.'), value: _enabled, onChanged: (value) async { await widget.service.setMemoryEnabled(value); setState(() { _enabled = value; _items = widget.service.loadMemory(); }); }),
+            if (_scopeInvalidated)
+              const Card(
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Le compte a changé. Ces réglages ne sont plus actifs ; revenez à Pace IA pour ouvrir la mémoire du compte courant.'),
+                ),
+              )
+            else
+              SwitchListTile.adaptive(title: const Text('Mémoire IA'), subtitle: const Text('Autoriser Pace IA à conserver des souvenirs persistants.'), value: _enabled, onChanged: (value) async { await widget.service.setMemoryEnabled(value); if (!mounted || _scopeInvalidated || !widget.service.isAccountScopeCurrent) return; setState(() { _enabled = value; _items = widget.service.loadMemory(); }); }),
             const SizedBox(height: 8),
             if (!_enabled)
               const Card(
@@ -278,10 +552,10 @@ class _AiMemoryPageState extends State<AiMemoryPage> {
                   child: Text('La mémoire est désactivée. Les souvenirs existants sont supprimés du stockage local.'),
                 ),
               ),
-            if (_enabled) ...[
+            if (_enabled && !_scopeInvalidated) ...[
               FilledButton.icon(onPressed: _add, icon: const Icon(Icons.add), label: const Text('Ajouter un souvenir')),
               const SizedBox(height: 12),
-              for (final item in _items) Card(child: ListTile(title: Text(item.text), subtitle: Text('Ajouté le ${item.createdAt.day}/${item.createdAt.month}/${item.createdAt.year}'), trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async { await widget.service.deleteMemory(item.id); setState(() => _items = widget.service.loadMemory()); }))),
+              for (final item in _items) Card(child: ListTile(title: Text(item.text), subtitle: Text('Ajouté le ${item.createdAt.day}/${item.createdAt.month}/${item.createdAt.year}'), trailing: IconButton(icon: const Icon(Icons.delete_outline), onPressed: () async { await widget.service.deleteMemory(item.id); if (!mounted) return; setState(() => _items = widget.service.loadMemory()); }))),
             ],
           ],
         ),

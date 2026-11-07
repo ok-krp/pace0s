@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { mcpDatabaseFailure } from "../errors";
 import { defineTool, type ToolContext } from "@lovable.dev/mcp-js";
 
 function supabaseForUser(ctx: ToolContext) {
@@ -11,7 +12,7 @@ function supabaseForUser(ctx: ToolContext) {
 export default defineTool({
   name: "get_profile",
   title: "Get my profile",
-  description: "Return the signed-in user's Pace profile row.",
+  description: "Return the signed-in user's coaching profile fields, excluding contact identifiers.",
   inputSchema: {},
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async (_input, ctx) => {
@@ -20,13 +21,13 @@ export default defineTool({
     const sb = supabaseForUser(ctx);
     const { data, error } = await sb
       .from("profiles")
-      .select("*")
-      .eq("id", ctx.getUserId())
+      .select("display_name,age,sex,height_cm,weight_kg,weight_goal_kg,daily_calorie_goal,daily_protein_goal,daily_water_ml_goal,training_goal,activity_level")
+      .eq("user_id", ctx.getUserId())
       .maybeSingle();
-    if (error) return { content: [{ type: "text", text: error.message }], isError: true };
+    if (error) return mcpDatabaseFailure("get_profile", error);
     return {
-      content: [{ type: "text", text: JSON.stringify({ email: ctx.getUserEmail(), profile: data }) }],
-      structuredContent: { email: ctx.getUserEmail(), profile: data },
+      content: [{ type: "text", text: JSON.stringify({ profile: data }) }],
+      structuredContent: { profile: data },
     };
   },
 });

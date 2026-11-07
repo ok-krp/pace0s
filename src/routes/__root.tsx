@@ -17,12 +17,12 @@ import { initHealthConnectBridge, requestHealthConnectSync } from "@/lib/health-
 import { initPwaInstallPrompt } from "@/lib/pwa-install";
 
 function NotFoundComponent() {
-  return <div className="flex min-h-screen items-center justify-center bg-background px-4"><div className="max-w-md text-center"><h1 className="font-display text-7xl font-semibold tracking-tight">404</h1><p className="mt-2 text-muted-foreground">Cette page n'existe pas.</p><Link to="/" className="mt-6 inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Retour au dashboard</Link></div></div>;
+  return <div className="flex min-h-screen items-center justify-center bg-background px-4"><div className="max-w-md text-center"><h1 className="font-display text-7xl font-semibold tracking-tight">404</h1><p className="mt-2 text-muted-foreground">Cette page n'existe pas.</p><Link to="/" search={{ quickAdd: undefined }} className="mt-6 inline-flex items-center justify-center rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Retour au dashboard</Link></div></div>;
 }
 
-function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+function ErrorComponent({ error, reset }: { error: unknown; reset: () => void }) {
   console.error(error); const router = useRouter();
-  return <div className="flex min-h-screen items-center justify-center bg-background px-4"><div className="max-w-md text-center"><h1 className="font-display text-xl font-semibold">Une erreur est survenue</h1><p className="mt-2 text-sm text-muted-foreground">{error.message}</p><button onClick={() => { router.invalidate(); reset(); }} className="mt-6 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Réessayer</button></div></div>;
+  return <div className="flex min-h-screen items-center justify-center bg-background px-4"><div className="max-w-md text-center"><h1 className="font-display text-xl font-semibold">Une erreur est survenue</h1><p className="mt-2 text-sm text-muted-foreground">{error instanceof Error ? error.message : "Une erreur inattendue est survenue."}</p><button onClick={() => { router.invalidate(); reset(); }} className="mt-6 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Réessayer</button></div></div>;
 }
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({

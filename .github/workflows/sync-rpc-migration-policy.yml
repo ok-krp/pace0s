@@ -1,0 +1,60 @@
+name: Sync RPC migration policy
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - ".github/workflows/sync-rpc-migration-policy.yml"
+  push:
+    paths:
+      - "supabase/migrations/**"
+      - ".github/workflows/sync-rpc-migration-policy.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-sync-rpc-hardening:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Verify historical and follow-up RPC security invariants
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          import sys
+
+          paths = [
+              Path("supabase/migrations/20260815000000_sync_conflict_resolution.sql"),
+              Path("supabase/migrations/20261018143000_reapply_user_state_sync_security.sql"),
+          ]
+          required = {
+              "qualified RPC definition": r"CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.upsert_user_state_if_newer",
+              "security definer": r"SECURITY\s+DEFINER",
+              "empty search path": r"SET\s+search_path\s*=\s*''",
+              "reject missing auth": r"auth\.uid\(\)\s+IS\s+NULL",
+              "enforce account ownership": r"auth\.uid\(\)\s*<>\s*p_user_id",
+              "timestamp conflict guard": r"WHERE\s+public\.user_state\.updated_at\s*<\s*EXCLUDED\.updated_at",
+              "boolean result based on affected rows": r"RETURN\s+affected_rows\s*>\s*0",
+              "revoke broad execution": r"REVOKE\s+ALL\s+ON\s+FUNCTION\s+public\.upsert_user_state_if_newer[\s\S]*?FROM\s+PUBLIC,\s*anon,\s*authenticated",
+              "grant authenticated execution": r"GRANT\s+EXECUTE\s+ON\s+FUNCTION\s+public\.upsert_user_state_if_newer[\s\S]*?TO\s+authenticated",
+          }
+
+          failed = False
+          for path in paths:
+              if not path.is_file():
+                  print(f"::error file={path}::Required migration is missing")
+                  failed = True
+                  continue
+              sql = path.read_text(encoding="utf-8")
+              missing = [name for name, pattern in required.items()
+                         if not re.search(pattern, sql, re.IGNORECASE)]
+              if missing:
+                  print(f"::error file={path}::Missing security invariant(s): {', '.join(missing)}")
+                  failed = True
+              else:
+                  print(f"Verified {path}: all {len(required)} security invariants present")
+          if failed:
+              sys.exit(1)

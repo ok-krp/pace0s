@@ -3,8 +3,12 @@ import listFoodLog from "./tools/list-food-log";
 import addFoodLog from "./tools/add-food-log";
 import listHealthSamples from "./tools/list-health-samples";
 import getProfile from "./tools/get-profile";
+import { resolveSupabaseAuthIssuer } from "./issuer";
 
-const projectRef = import.meta.env.VITE_SUPABASE_PROJECT_ID ?? "project-ref-unset";
+const issuer = resolveSupabaseAuthIssuer(
+  process.env.SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_PROJECT_ID,
+);
 
 export default defineMcp({
   name: "pace-mcp",
@@ -13,7 +17,7 @@ export default defineMcp({
   instructions:
     "Tools for the Pace personal-OS app: read the signed-in user's food log and health samples, log new meals, and read their profile. All calls act as the authenticated user via Supabase RLS.",
   auth: auth.oauth.issuer({
-    issuer: `https://${projectRef}.supabase.co/auth/v1`,
+    issuer,
     acceptedAudiences: "authenticated",
   }),
   tools: [getProfile, listFoodLog, addFoodLog, listHealthSamples],

@@ -18,12 +18,16 @@ class MorePage extends StatelessWidget {
     required this.localStore,
     required this.auth,
     required this.sync,
+    required this.offlineMode,
+    required this.onExitOffline,
     required this.themeMode,
     required this.onThemeChanged,
   });
   final LocalStore localStore;
   final PaceAuthService auth;
   final SyncService sync;
+  final bool offlineMode;
+  final VoidCallback onExitOffline;
   final ThemeMode themeMode;
   final ValueChanged<ThemeMode> onThemeChanged;
 
@@ -45,6 +49,14 @@ class MorePage extends StatelessWidget {
         Text('Pace', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
         const Text('Fonctionnalités natives Pace'),
+        if (offlineMode) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onExitOffline,
+            icon: const Icon(Icons.login_outlined),
+            label: const Text('Revenir à la connexion'),
+          ),
+        ],
         const SizedBox(height: 18),
         for (final entry in entries)
           Padding(
@@ -107,7 +119,8 @@ class SettingsPageBridge extends StatefulWidget {
 }
 
 class _SettingsPageBridgeState extends State<SettingsPageBridge> {
-  late final PaceAiService _ai = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
+  late String? _accountUserId;
+  late PaceAiService _ai;
   late bool _aiConfirmations;
   late bool _notifications;
   late bool _memory;
@@ -115,12 +128,89 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   @override
   void initState() {
     super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    _ai = PaceAiService(localStore: widget.localStore, sync: widget.sync, auth: widget.auth);
     _aiConfirmations = _ai.confirmActions;
-    _notifications = widget.localStore.read('pace.settings.notifications') as bool? ?? true;
+    final storedNotifications = widget.localStore.read('pace.settings.notifications');
+    _notifications = storedNotifications is bool ? storedNotifications : true;
     _memory = _ai.memoryEnabled;
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) {
+      // Recreate the AI facade for the newly active account. Each facade is
+      // deliberately bound to the account it was created for.
+      _accountUserId = activeUserId;
+      _ai = PaceAiService(
+        localStore: widget.localStore,
+        sync: widget.sync,
+        auth: widget.auth,
+      );
+      final storedNotifications =
+          widget.localStore.read('pace.settings.notifications');
+      setState(() {
+        _aiConfirmations = _ai.confirmActions;
+        _notifications =
+            storedNotifications is bool ? storedNotifications : true;
+        _memory = _ai.memoryEnabled;
+      });
+      return;
+    }
+    final confirmations = _ai.confirmActions;
+    final storedNotifications = widget.localStore.read('pace.settings.notifications');
+    final notifications = storedNotifications is bool ? storedNotifications : true;
+    final memory = _ai.memoryEnabled;
+    if (confirmations == _aiConfirmations &&
+        notifications == _notifications &&
+        memory == _memory) {
+      return;
+    }
+    setState(() {
+      _aiConfirmations = confirmations;
+      _notifications = notifications;
+      _memory = memory;
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant SettingsPageBridge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+    if (oldWidget.localStore != widget.localStore ||
+        oldWidget.auth != widget.auth ||
+        oldWidget.sync != widget.sync) {
+      // PaceShell can switch between authenticated and explicit offline mode
+      // while reusing this page's element. Do not retain a service that was
+      // bound to the previous auth facade or synchronizer.
+      _accountUserId = widget.localStore.activeUserId;
+      _ai = PaceAiService(
+        localStore: widget.localStore,
+        sync: widget.sync,
+        auth: widget.auth,
+      );
+      final storedNotifications =
+          widget.localStore.read('pace.settings.notifications');
+      _aiConfirmations = _ai.confirmActions;
+      _notifications =
+          storedNotifications is bool ? storedNotifications : true;
+      _memory = _ai.memoryEnabled;
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
   }
 
   Future<void> _setNotification(bool value) async {
+    final expectedUserId = _accountUserId;
     if (value) {
       final granted = await PaceNotificationService.instance.requestPermissions();
       if (!granted) {
@@ -130,9 +220,12 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     } else {
       await PaceNotificationService.instance.cancelAll();
     }
+    if (!mounted || widget.localStore.activeUserId != expectedUserId) return;
     setState(() => _notifications = value);
-    await widget.localStore.write('pace.settings.notifications', value);
-    await widget.sync.syncNow();
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.settings.notifications', value);
+    if (widget.localStore.activeUserId == expectedUserId) {
+      await widget.sync.syncNow();
+    }
   }
 
   String _themeLabel(ThemeMode mode) {
@@ -168,7 +261,10 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 trailing: DropdownButton<ThemeMode>(
                   value: widget.themeMode,
                   onChanged: (mode) {
-                    if (mode != null) widget.onThemeChanged(mode);
+                    if (mode != null &&
+                        widget.localStore.activeUserId == _accountUserId) {
+                      widget.onThemeChanged(mode);
+                    }
                   },
                   items: const [
                     DropdownMenuItem(value: ThemeMode.system, child: Text('Système')),
@@ -184,8 +280,14 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 subtitle: const Text('Demander une confirmation avant une action importante ou destructive.'),
                 value: _aiConfirmations,
                 onChanged: (value) async {
+                  final expectedUserId = _accountUserId;
                   setState(() => _aiConfirmations = value);
                   await _ai.setConfirmActions(value);
+                  if (!mounted ||
+                      widget.localStore.activeUserId != expectedUserId) {
+                    return;
+                  }
+                  setState(() => _aiConfirmations = _ai.confirmActions);
                 },
               ),
               SwitchListTile.adaptive(
@@ -193,8 +295,13 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 subtitle: const Text('Autoriser la mémoire persistante contrôlable par l’utilisateur.'),
                 value: _memory,
                 onChanged: (value) async {
+                  final expectedUserId = _accountUserId;
                   await _ai.setMemoryEnabled(value);
-                  setState(() => _memory = value);
+                  if (!mounted ||
+                      widget.localStore.activeUserId != expectedUserId) {
+                    return;
+                  }
+                  setState(() => _memory = _ai.memoryEnabled);
                 },
               ),
             ]),

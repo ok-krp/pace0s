@@ -3,14 +3,14 @@ import { Activity, Apple, CheckCircle2, ExternalLink, HeartPulse, Smartphone } f
 import { useServerFn } from "@tanstack/react-start";
 import { Button } from "@/components/ui/button";
 import { insertHealthSamples } from "@/lib/health.functions";
+import type { NativeHealthConnect } from "@/lib/health-connect-bridge";
 import { toast } from "sonner";
 
-interface HealthConnectBridge { requestSync?: () => void }
 interface AppleHealthBridge { _receive?: (payload: { ok?: boolean; status?: string; error?: string; samples?: Array<{ ts: string; type: string; value: number; source: string }> }) => void }
 
 declare global {
   interface Window {
-    PaceHealthConnect?: HealthConnectBridge;
+    PaceHealthConnect?: NativeHealthConnect;
     PaceAppleHealth?: AppleHealthBridge;
     webkit?: { messageHandlers?: { paceHealthKit?: { postMessage: (message: unknown) => void } } };
   }
@@ -27,8 +27,10 @@ export function HealthSourcesSection() {
   const platform = useMemo(() => (isAndroid() ? "android" : isIOS() ? "ios" : "web"), []);
 
   useEffect(() => {
-    setHealthConnectAvailable(!!window.PaceHealthConnect);
-    setHealthKitBridgeAvailable(!!window.webkit?.messageHandlers?.paceHealthKit);
+    const availabilityFrame = requestAnimationFrame(() => {
+      setHealthConnectAvailable(!!window.PaceHealthConnect);
+      setHealthKitBridgeAvailable(!!window.webkit?.messageHandlers?.paceHealthKit);
+    });
     const previous = window.PaceAppleHealth?._receive;
     window.PaceAppleHealth = {
       _receive: async (payload) => {
@@ -53,7 +55,11 @@ export function HealthSourcesSection() {
         }
       },
     };
-    return () => { if (previous) window.PaceAppleHealth = { _receive: previous }; else delete window.PaceAppleHealth; };
+    return () => {
+      cancelAnimationFrame(availabilityFrame);
+      if (previous) window.PaceAppleHealth = { _receive: previous };
+      else delete window.PaceAppleHealth;
+    };
   }, [insert]);
 
   const connectHealthConnect = () => {

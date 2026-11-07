@@ -12,6 +12,39 @@ class SportPage extends StatefulWidget {
 }
 
 class _SportPageState extends State<SportPage> {
+  late String? _accountUserId;
+  bool _dialogOpen = false;
+  @override
+  void initState() {
+    super.initState();
+    _accountUserId = widget.localStore.activeUserId;
+    widget.localStore.addListener(_onLocalStoreChanged);
+  }
+
+  void _onLocalStoreChanged() {
+    if (!mounted) return;
+    final activeUserId = widget.localStore.activeUserId;
+    if (activeUserId != _accountUserId) _accountUserId = activeUserId;
+    if (_dialogOpen) return;
+    setState(() {});
+  }
+
+  @override
+  void didUpdateWidget(covariant SportPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.localStore != widget.localStore) {
+      oldWidget.localStore.removeListener(_onLocalStoreChanged);
+      _accountUserId = widget.localStore.activeUserId;
+      widget.localStore.addListener(_onLocalStoreChanged);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeListener(_onLocalStoreChanged);
+    super.dispose();
+  }
+
   String _today() {
     final d = DateTime.now();
     return '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
@@ -36,6 +69,7 @@ class _SportPageState extends State<SportPage> {
   }
 
   Future<void> _startFree() async {
+    final expectedUserId = _accountUserId;
     final session = {
       'id': DateTime.now().microsecondsSinceEpoch.toString(),
       'date': _today(),
@@ -43,37 +77,94 @@ class _SportPageState extends State<SportPage> {
       'startedAt': DateTime.now().millisecondsSinceEpoch,
       'exercises': <dynamic>[],
     };
-    await widget.localStore.write('pace.sport.active', session);
+    await widget.localStore.writeForAccount(expectedUserId, 'pace.sport.active', session);
     if (mounted) setState(() {});
   }
 
   Future<void> _finish() async {
+    final expectedUserId = _accountUserId;
     final raw = widget.localStore.read('pace.sport.active');
     if (raw is! Map) return;
     final session = Map<String, dynamic>.from(raw);
     final ended = DateTime.now().millisecondsSinceEpoch;
+    final rawStartedAt = session['startedAt'];
+    final startedAt = rawStartedAt is num ? rawStartedAt.toInt() : ended;
+    final elapsedMs = ended >= startedAt ? ended - startedAt : 0;
     session['endedAt'] = ended;
-    session['durationMin'] = ((ended - ((session['startedAt'] as num?)?.toInt() ?? ended)) / 60000).round();
+    session['durationMin'] = (elapsedMs / 60000).round();
     final sessions = _sessions();
     sessions.insert(0, session);
-    await widget.localStore.write('pace.sport.sessions', sessions);
-    await widget.localStore.remove('pace.sport.active');
+    await widget.localStore.writeBatchForAccount(
+      expectedUserId,
+      writes: {'pace.sport.sessions': sessions},
+      removes: {'pace.sport.active'},
+    );
     if (mounted) setState(() {});
   }
 
   Future<void> _addExercise() async {
+    final expectedUserId = _accountUserId;
     final name = TextEditingController();
     final muscle = TextEditingController();
-    final result = await showDialog<Map<String, String>>(
-      context: context,
-      builder: (context) => AlertDialog(title: const Text('Nouvel exercice'), content: Column(mainAxisSize: MainAxisSize.min, children: [TextField(controller: name, autofocus: true, decoration: const InputDecoration(labelText: 'Nom')), TextField(controller: muscle, decoration: const InputDecoration(labelText: 'Muscle'))]), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')), FilledButton(onPressed: () => Navigator.pop(context, {'name': name.text.trim(), 'muscle': muscle.text.trim()}), child: const Text('Ajouter'))]),
-    );
-    name.dispose();
-    muscle.dispose();
-    if (result == null || result['name']!.isEmpty) return;
+    Map<String, String>? result;
+    _dialogOpen = true;
+    try {
+      result = await showDialog<Map<String, String>>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Nouvel exercice'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: name,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'Nom'),
+              ),
+              TextField(
+                controller: muscle,
+                decoration: const InputDecoration(labelText: 'Muscle'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Annuler'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, {
+                'name': name.text.trim(),
+                'muscle': muscle.text.trim(),
+              }),
+              child: const Text('Ajouter'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+      _dialogOpen = false;
+      name.dispose();
+      muscle.dispose();
+      if (mounted) setState(() {});
+    }
+    if (result == null ||
+        result['name']!.isEmpty ||
+        widget.localStore.activeUserId != expectedUserId) {
+      return;
+    }
     final exercises = _exercises();
-    exercises.add({'id': DateTime.now().microsecondsSinceEpoch.toString(), 'name': result['name'], 'muscle': result['muscle'] ?? ''});
-    await widget.localStore.write('pace.sport.exercises', exercises);
+    exercises.add({
+      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'name': result['name'],
+      'muscle': result['muscle'] ?? '',
+    });
+    await widget.localStore.writeForAccount(
+      expectedUserId,
+      'pace.sport.exercises',
+      exercises,
+    );
     if (mounted) setState(() {});
   }
 
@@ -92,7 +183,7 @@ class _SportPageState extends State<SportPage> {
       Text('Programmes', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
       const SizedBox(height: 8),
       if (programs.isEmpty) const PaceGlassCard(child: ListTile(title: Text('Aucun programme configuré'))),
-      for (final program in programs) Padding(padding: const EdgeInsets.only(bottom: 8), child: PaceGlassCard(child: ListTile(title: Text(program['name']?.toString() ?? 'Programme'), subtitle: Text('${(program['items'] as List?)?.length ?? 0} exercices')))),
+      for (final program in programs) Padding(padding: const EdgeInsets.only(bottom: 8), child: PaceGlassCard(child: ListTile(title: Text(program['name']?.toString() ?? 'Programme'), subtitle: Text('${program['items'] is List ? (program['items'] as List).length : 0} exercices')))),
       const SizedBox(height: 14),
       Text('Exercices', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
       const SizedBox(height: 8),

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { enqueueDomainWrite } from "@/lib/domain-outbox";
 
 export type DomainRecord<T> = {
   version: 1;
@@ -25,6 +24,15 @@ function compareRecords<T>(a: DomainRecord<T>, b: DomainRecord<T>) {
   const time = a.updatedAt.localeCompare(b.updatedAt);
   if (time !== 0) return time;
   return a.mutationId.localeCompare(b.mutationId);
+}
+
+/** Server sync has already validated account scope and server timestamps. */
+export function shouldApplyDomainRecord<T>(
+  incoming: DomainRecord<T>,
+  current: DomainRecord<T>,
+  remote = false,
+): boolean {
+  return remote || compareRecords(incoming, current) > 0;
 }
 
 export function readDomain<T>(domain: string, fallback: T): DomainRecord<T> {
@@ -53,6 +61,31 @@ export function readDomain<T>(domain: string, fallback: T): DomainRecord<T> {
   return { version: 1, updatedAt: new Date(0).toISOString(), mutationId: "empty", value: fallback };
 }
 
+/**
+ * Apply a server-confirmed domain value without enqueueing it as a new local
+ * mutation. This keeps domain-backed readers in sync with the legacy key while
+ * avoiding a Realtime echo/write loop.
+ */
+export function applyRemoteDomainWrite<T>(domain: string, value: T, updatedAt?: string): void {
+  if (typeof window === "undefined") return;
+  const timestamp = updatedAt && Number.isFinite(Date.parse(updatedAt))
+    ? updatedAt
+    : new Date().toISOString();
+  const record: DomainRecord<T> = {
+    version: 1,
+    updatedAt: timestamp,
+    mutationId: `remote:${timestamp}`,
+    value,
+  };
+  try {
+    localStorage.setItem(storageKey(domain), JSON.stringify(record));
+    localStorage.setItem(`pace.${domain}`, JSON.stringify(value));
+    window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record, remote: true } }));
+  } catch {
+    // The legacy storage event remains the fallback if domain storage is full.
+  }
+}
+
 export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
   const record: DomainRecord<T> = {
     version: 1,
@@ -66,8 +99,6 @@ export function writeDomain<T>(domain: string, value: T): DomainRecord<T> {
       localStorage.setItem(storageKey(domain), JSON.stringify(record));
       // Keep the old key during the progressive migration as a recovery copy.
       localStorage.setItem(`pace.${domain}`, JSON.stringify(value));
-      // Persist the mutation before asking the cloud-sync layer to process it.
-      enqueueDomainWrite(domain, value);
       window.dispatchEvent(new CustomEvent(WRITE_EVENT, { detail: { domain, record } }));
       // Reuse the existing cloud-sync event contract so domain writes are queued
       // by the current sync engine instead of creating a second sync mechanism.
@@ -89,12 +120,15 @@ export function useDomainState<T>(domain: string, fallback: T): [T, (next: T | (
 
   useEffect(() => {
     const onWrite = (event: Event) => {
-      const detail = (event as CustomEvent<{ domain: string; record: DomainRecord<T> }>).detail;
+      const detail = (event as CustomEvent<{ domain: string; record: DomainRecord<T>; remote?: boolean }>).detail;
       if (!detail || detail.domain !== domain) return;
-      setRecord((current) => {
-        if (compareRecords(detail.record, current) <= 0) return current;
-        return detail.record;
-      });
+      // The sync engine has already compared the server timestamp with this
+      // account's checkpoint and excluded locally queued keys. An accepted
+      // remote value is authoritative even if this device's wall clock was
+      // ahead when the local version was created.
+      setRecord((current) =>
+        shouldApplyDomainRecord(detail.record, current, detail.remote) ? detail.record : current,
+      );
     };
     window.addEventListener(WRITE_EVENT, onWrite);
     return () => window.removeEventListener(WRITE_EVENT, onWrite);

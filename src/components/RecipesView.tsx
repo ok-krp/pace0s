@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { useAuth } from "@/hooks/use-auth";
 import { Heart, Clock, Flame, Plus, Trash2, Pencil, Check, X, ChefHat, Search, Image as ImageIcon, ArrowLeft, ArrowRight, BookOpen } from "lucide-react";
 import { useLocalState } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { addNutritionItem } from "@/lib/nutrition-log";
+import { addNutritionItemToLog } from "@/lib/nutrition-log";
 import { toast } from "sonner";
 
 type Recipe = {
@@ -54,6 +55,8 @@ const emptyRecipe = (): Recipe => ({
 });
 
 export function RecipesView() {
+  const { user } = useAuth();
+  const expectedUserId = user?.id ?? null;
   const [favs, setFavs] = useLocalState<string[]>("pace.recipes.favs", []);
   const [custom, setCustom] = useLocalState<Recipe[]>("pace.recipes.custom", []);
   const [extraCats, setExtraCats] = useLocalState<string[]>("pace.recipes.cats", []);
@@ -62,18 +65,22 @@ export function RecipesView() {
   const [editOpen, setEditOpen] = useState(false);
   const [viewing, setViewing] = useState<Recipe | null>(null);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [quickAddOwnerId, setQuickAddOwnerId] = useState<string | null>(null);
   const [newCat, setNewCat] = useState("");
   const [query, setQuery] = useState("");
 
   const cats = [...DEFAULT_CATS, ...extraCats];
-  const all = [
-    ...SEED.filter((r) => !hiddenSeeds.includes(r.id)).map((r) => {
-      // if a customized version exists, prefer it
-      const c = custom.find((x) => x.id === r.id);
-      return c ? { ...c, custom: true } : r;
-    }),
-    ...custom.filter((c) => !SEED.some((s) => s.id === c.id)).map((c) => ({ ...c, custom: true })),
-  ];
+  const all = useMemo(
+    () => [
+      ...SEED.filter((r) => !hiddenSeeds.includes(r.id)).map((r) => {
+        // if a customized version exists, prefer it
+        const c = custom.find((x) => x.id === r.id);
+        return c ? { ...c, custom: true } : r;
+      }),
+      ...custom.filter((c) => !SEED.some((s) => s.id === c.id)).map((c) => ({ ...c, custom: true })),
+    ],
+    [hiddenSeeds, custom],
+  );
   const q = query.trim().toLowerCase();
   const filtered = useMemo(
     () => q ? all.filter((r) => (r.name + " " + r.ingredients.join(" ")).toLowerCase().includes(q)) : all,
@@ -99,9 +106,22 @@ export function RecipesView() {
     setCustom((p) => p.filter((x) => x.id !== id));
   };
 
-  const addToLog = (r: Recipe, meal: string) => {
-    addNutritionItem({ name: `${r.emoji} ${r.name}`, meal, kcal: r.kcal, p: r.p, c: r.c, f: r.f });
-    toast.success(`${r.name} ajouté à ${meal}`);
+  const addToLog = async (r: Recipe, meal: string) => {
+    try {
+      const result = await addNutritionItemToLog(
+        { name: `${r.emoji} ${r.name}`, meal, kcal: r.kcal, p: r.p, c: r.c, f: r.f },
+        "recipe",
+        [],
+        { expectedUserId },
+      );
+      if (result === "saved-for-previous-account") {
+        toast.message("Recette enregistrée pour le compte précédent ; elle réapparaîtra à sa prochaine connexion.");
+      } else {
+        toast.success(`${r.name} ajouté à ${meal}`);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer la recette.");
+    }
   };
 
   const addCat = () => {
@@ -141,7 +161,14 @@ export function RecipesView() {
           <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher (nom, ingrédient…)" className="pl-9" />
         </div>
         <Button onClick={openNew} className="rounded-xl"><Plus className="size-4 mr-1" />Nouvelle</Button>
-        <Button variant="secondary" onClick={() => setQuickOpen(true)} className="rounded-xl">
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setQuickAddOwnerId(expectedUserId);
+            setQuickOpen(true);
+          }}
+          className="rounded-xl"
+        >
           <Plus className="size-4 mr-1" />Ajout rapide repas
         </Button>
       </div>
@@ -196,7 +223,10 @@ export function RecipesView() {
       </Dialog>
 
       <Dialog open={quickOpen} onOpenChange={setQuickOpen}>
-        <QuickAddDialog onClose={() => setQuickOpen(false)} />
+        <QuickAddDialog
+          expectedUserId={quickAddOwnerId}
+          onClose={() => setQuickOpen(false)}
+        />
       </Dialog>
 
       <Dialog open={!!viewing} onOpenChange={(v) => !v && setViewing(null)}>
@@ -300,16 +330,38 @@ function RecipeGrid({ list, favs, setFavs, onEdit, onView, onRemove, onAddToLog,
   );
 }
 
-function QuickAddDialog({ onClose }: { onClose: () => void }) {
+function QuickAddDialog({
+  onClose,
+  expectedUserId,
+}: {
+  onClose: () => void;
+  expectedUserId: string | null;
+}) {
   const [name, setName] = useState("");
   const [kcal, setKcal] = useState("");
   const [p, setP] = useState(""); const [c, setC] = useState(""); const [f, setF] = useState("");
   const [meal, setMeal] = useState("Déjeuner");
-  const submit = () => {
-    if (!name || !kcal) { toast.error("Nom et calories obligatoires"); return; }
-    addNutritionItem({ name, meal, kcal: +kcal || 0, p: +p || 0, c: +c || 0, f: +f || 0 });
-    toast.success(`Ajouté à ${meal}`);
-    onClose();
+  const submitInFlight = useRef(false);
+  const submit = async () => {
+    if (submitInFlight.current) return;
+    if (!name.trim() || !kcal.trim()) { toast.error("Nom et calories obligatoires"); return; }
+    submitInFlight.current = true;
+    try {
+      await addNutritionItemToLog({
+        name: name.trim(),
+        meal,
+        kcal: +kcal || 0,
+        p: +p || 0,
+        c: +c || 0,
+        f: +f || 0,
+      }, "manual", [], { expectedUserId });
+      toast.success(`Ajouté à ${meal}`);
+      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer l'aliment.");
+    } finally {
+      submitInFlight.current = false;
+    }
   };
   return (
     <DialogContent className="max-w-sm">
