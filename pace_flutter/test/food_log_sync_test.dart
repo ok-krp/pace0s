@@ -121,6 +121,24 @@ void main() {
         'id': id,
         'operation': 'upsert',
         'queuedAt': '2026-11-05T09:00:00.000Z',
+        'row': {...row(id), 'unexpected_column': 'valid JSON but not a food_log column'},
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'delete',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
+        'unexpected_operation_field': 'must not be persisted',
+      }),
+      isFalse,
+    );
+    expect(
+      FoodLogSync.isValidOperation({
+        'id': id,
+        'operation': 'upsert',
+        'queuedAt': '2026-11-05T09:00:00.000Z',
         'attempts': null,
         'row': row(id),
       }),
