@@ -219,9 +219,12 @@ export async function flushNutritionFoodLogOutbox(
       try {
         const { error } = await supabase
           .from("food_log")
+          // Replaying a stable UUID must also apply a newer queued
+          // replacement payload. The write is idempotent because the same
+          // complete row is sent again if a local acknowledgement is lost.
           .upsert(
             operation.row as unknown as TablesInsert<"food_log">,
-            { onConflict: "id", ignoreDuplicates: true },
+            { onConflict: "id" },
           );
         writeError = error;
       } catch (error) {
