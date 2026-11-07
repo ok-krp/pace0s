@@ -169,6 +169,41 @@ export function isValidNutritionItemInput(value: unknown): boolean {
   );
 }
 
+const VALID_FOOD_LOG_SOURCES = new Set(["manual", "barcode", "photo", "recipe"]);
+const VALID_MISSING_NUTRIENTS = new Set([
+  "kcal",
+  "protein_g",
+  "carbs_g",
+  "fat_g",
+  "fiber_g",
+  "sugar_g",
+  "sodium_mg",
+]);
+
+/** Validate caller-controlled metadata before changing local state or calling PostgREST. */
+export function isValidFoodLogWriteMetadata(
+  source: unknown,
+  missingNutrients: unknown,
+  healthScore: unknown,
+  meta: unknown,
+): boolean {
+  if (!VALID_FOOD_LOG_SOURCES.has(String(source))) return false;
+  if (
+    !Array.isArray(missingNutrients) ||
+    missingNutrients.some((value) =>
+      typeof value !== "string" || !VALID_MISSING_NUTRIENTS.has(value),
+    )
+  ) return false;
+  if (
+    healthScore !== undefined &&
+    healthScore !== null &&
+    !["green", "orange", "red"].includes(String(healthScore))
+  ) return false;
+  if (meta === undefined) return true;
+  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
+  return isJsonSafe(meta);
+}
+
 export function isValidFoodLogInsertRow(
   value: unknown,
   expectedUserId?: string,
