@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../storage/local_store.dart';
@@ -265,18 +267,38 @@ class FoodLogSync {
     return parsed.year == year && parsed.month == month && parsed.day == day;
   }
 
-  static bool _isJsonSafeValue(dynamic value, [int depth = 0]) {
+  static bool _isJsonSafeValue(
+    dynamic value, [
+    int depth = 0,
+    Set<Object>? ancestors,
+  ]) {
     if (depth > 20) return false;
     if (value == null || value is String || value is bool) return true;
     if (value is num) return value.isFinite;
-    if (value is List) {
-      return value.every((item) => _isJsonSafeValue(item, depth + 1));
+    if (value is! List && value is! Map) return false;
+
+    // JSON cannot represent cycles. Use identity tracking so a cyclic Map or
+    // List is rejected without recursion overflow, while repeated non-cyclic
+    // references in separate branches remain valid.
+    final seen = ancestors ?? HashSet<Object>.identity();
+    if (!seen.add(value as Object)) return false;
+    try {
+      if (value is List) {
+        for (final item in value) {
+          if (!_isJsonSafeValue(item, depth + 1, seen)) return false;
+        }
+        return true;
+      }
+      for (final entry in (value as Map).entries) {
+        if (entry.key is! String ||
+            !_isJsonSafeValue(entry.value, depth + 1, seen)) {
+          return false;
+        }
+      }
+      return true;
+    } finally {
+      seen.remove(value as Object);
     }
-    if (value is Map) {
-      return value.entries.every((entry) =>
-          entry.key is String && _isJsonSafeValue(entry.value, depth + 1));
-    }
-    return false;
   }
 
   static const Set<String> _allowedOperationKeys = {
