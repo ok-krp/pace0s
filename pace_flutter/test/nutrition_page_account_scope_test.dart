@@ -64,6 +64,16 @@ void main() {
         .toList();
     expect(entries, hasLength(1));
     expect(entries.single['name'], 'B food');
+
+    final outbox = store.read(FoodLogSync.outboxKey) as List;
+    expect(outbox, hasLength(1));
+    final queuedRow = (outbox.single as Map)['row'] as Map;
+    expect(queuedRow['fiber_g'], isNull);
+    expect(queuedRow['sugar_g'], isNull);
+    expect(queuedRow['sodium_mg'], isNull);
+    final missing = (queuedRow['meta'] as Map)['missing_nutrients'] as List;
+    expect(missing, containsAll(['fiber_g', 'sugar_g', 'sodium_mg']));
+
     expect(store.activeUserId, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
 
     // Durable file-level isolation is covered separately by LocalStore tests.
