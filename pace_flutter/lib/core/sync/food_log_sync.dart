@@ -297,7 +297,7 @@ class FoodLogSync {
       }
       return true;
     } finally {
-      seen.remove(value as Object);
+      seen.remove(value);
     }
   }
 
