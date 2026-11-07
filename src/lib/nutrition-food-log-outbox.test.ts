@@ -292,6 +292,16 @@ test("validates source, missing nutrient markers and AI metadata before local wr
     false,
   );
 
+  const hiddenMetadata = { visible: true };
+  Object.defineProperty(hiddenMetadata, "hidden", {
+    value: "would be omitted by JSON.stringify",
+    enumerable: false,
+  });
+  assert.equal(
+    isValidFoodLogWriteMetadata("photo", [], undefined, hiddenMetadata),
+    false,
+  );
+
   const throwingProxy = new Proxy({}, {
     ownKeys() {
       throw new Error("unreadable metadata");
