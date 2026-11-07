@@ -187,21 +187,32 @@ export function isValidFoodLogWriteMetadata(
   healthScore: unknown,
   meta: unknown,
 ): boolean {
-  if (!VALID_FOOD_LOG_SOURCES.has(String(source))) return false;
-  if (
-    !Array.isArray(missingNutrients) ||
-    missingNutrients.some((value) =>
-      typeof value !== "string" || !VALID_MISSING_NUTRIENTS.has(value),
-    )
-  ) return false;
-  if (
-    healthScore !== undefined &&
-    healthScore !== null &&
-    !["green", "orange", "red"].includes(String(healthScore))
-  ) return false;
-  if (meta === undefined) return true;
-  if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
-  return isJsonSafe(meta);
+  try {
+    if (typeof source !== "string" || !VALID_FOOD_LOG_SOURCES.has(source)) {
+      return false;
+    }
+    if (!Array.isArray(missingNutrients)) return false;
+    // Iterate rather than Array.some/every: sparse array holes must not be
+    // skipped, otherwise they would serialize as null in the SQL payload.
+    for (const nutrient of missingNutrients) {
+      if (
+        typeof nutrient !== "string" ||
+        !VALID_MISSING_NUTRIENTS.has(nutrient)
+      ) return false;
+    }
+    if (
+      healthScore !== undefined &&
+      healthScore !== null &&
+      (typeof healthScore !== "string" ||
+        !["green", "orange", "red"].includes(healthScore))
+    ) return false;
+    if (meta === undefined) return true;
+    if (!meta || typeof meta !== "object" || Array.isArray(meta)) return false;
+    return isJsonSafe(meta);
+  } catch {
+    // Proxies and throwing accessors are invalid metadata, not write errors.
+    return false;
+  }
 }
 
 export function isValidFoodLogInsertRow(
