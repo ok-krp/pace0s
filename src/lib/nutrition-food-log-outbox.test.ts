@@ -281,6 +281,21 @@ test("validates source, missing nutrient markers and AI metadata before local wr
     }),
     true,
   );
+  assert.equal(
+    isValidFoodLogWriteMetadata("manual", [], undefined, {
+      client: "pace_mcp",
+      origin: "mcp",
+    }),
+    true,
+  );
+  assert.equal(
+    isValidFoodLogWriteMetadata("manual", [], undefined, {
+      client: "pace_web",
+      origin: "coach_ai",
+      grams: 180,
+    }),
+    true,
+  );
   assert.equal(isValidFoodLogWriteMetadata("unexpected", [], undefined, {}), false);
   assert.equal(isValidFoodLogWriteMetadata("manual", ["unknown_column"], undefined, {}), false);
   assert.equal(isValidFoodLogWriteMetadata("manual", ["fiber_g", 5], undefined, {}), false);
