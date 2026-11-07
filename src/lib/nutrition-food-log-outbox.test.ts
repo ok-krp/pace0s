@@ -49,6 +49,7 @@ test("rejects normalized invalid calendar and timezone timestamps in outbox entr
     row,
   };
   assert.equal(isValidFoodLogOutboxEntry(entry, userId), true);
+  assert.equal(isValidFoodLogOutboxEntry({ ...entry, ignoredField: "not allowed" }, userId), false);
   assert.equal(
     isValidFoodLogOutboxEntry({
       ...entry,
