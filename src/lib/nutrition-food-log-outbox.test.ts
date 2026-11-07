@@ -275,4 +275,14 @@ test("validates source, missing nutrient markers and AI metadata before local wr
   const cyclic: Record<string, unknown> = {};
   cyclic.self = cyclic;
   assert.equal(isValidFoodLogWriteMetadata("photo", [], undefined, cyclic), false);
+
+  const sparseMarkers = new Array(1);
+  assert.equal(isValidFoodLogWriteMetadata("manual", sparseMarkers, undefined, {}), false);
+
+  const throwingProxy = new Proxy({}, {
+    ownKeys() {
+      throw new Error("unreadable metadata");
+    },
+  });
+  assert.equal(isValidFoodLogWriteMetadata("photo", [], undefined, throwingProxy), false);
 });
