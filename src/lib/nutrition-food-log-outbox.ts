@@ -313,6 +313,11 @@ export function isValidFoodLogOutboxEntry(
 ): value is FoodLogOutboxEntry {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const entry = value as Record<string, unknown>;
+  const allowedKeys = new Set(["id", "queuedAt", "attempts", "nextAttemptAt", "row"]);
+  if (
+    Object.keys(entry).some((key) => !allowedKeys.has(key)) ||
+    !isJsonSafe(entry)
+  ) return false;
   return typeof entry.id === "string" &&
     UUID_PATTERN.test(entry.id) &&
     isValidQueuedAt(entry.queuedAt) &&
