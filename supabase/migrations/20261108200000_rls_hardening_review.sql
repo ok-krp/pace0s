@@ -42,8 +42,7 @@ declare t text;
 begin
   foreach t in array array[
     'ai_action_log','ai_conversations','ai_preferences','ai_provider_secrets',
-    'ai_tool_idempotency','billing_customers','billing_subscriptions',
-    'billing_trials','consent_records','data_deletion_requests',
+    'ai_tool_idempotency','consent_records',
     'development_tasks','food_log','food_scans','health_e2ee_devices',
     'health_e2ee_key_envelopes','health_e2ee_key_versions',
     'health_e2ee_pairing_sessions','health_e2ee_recovery_envelopes',
@@ -62,6 +61,17 @@ begin
     );
   end loop;
 end $$;
+
+-- Billing records are server-owned (plan/status must not be user-editable).
+grant select on public.billing_customers, public.billing_subscriptions, public.billing_trials to authenticated;
+create policy billing_customers_read_own on public.billing_customers for select to authenticated using (user_id = (select auth.uid()));
+create policy billing_subscriptions_read_own on public.billing_subscriptions for select to authenticated using (user_id = (select auth.uid()));
+create policy billing_trials_read_own on public.billing_trials for select to authenticated using (user_id = (select auth.uid()));
+
+-- Deletion requests may be submitted/read by the owner; status is server-managed.
+grant select, insert on public.data_deletion_requests to authenticated;
+create policy data_deletion_requests_submit_own on public.data_deletion_requests for insert to authenticated with check (user_id = (select auth.uid()));
+create policy data_deletion_requests_read_own on public.data_deletion_requests for select to authenticated using (user_id = (select auth.uid()));
 
 -- 5) Cross-account relationship guards for child tables without user_id.
 -- Parent ownership is checked at every hop; child IDs alone are never trusted.
