@@ -149,6 +149,68 @@ with check (
   )
 );
 
+-- Harden nullable/child foreign-key-like fields that currently lack SQL FKs.
+drop policy if exists ai_action_log_user_isolation on public.ai_action_log;
+create policy ai_action_log_user_isolation on public.ai_action_log for all to authenticated
+using (user_id = (select auth.uid()) and (conversation_id is null or exists (
+  select 1 from public.ai_conversations c where c.id = ai_action_log.conversation_id and c.user_id = (select auth.uid())
+)))
+with check (user_id = (select auth.uid()) and (conversation_id is null or exists (
+  select 1 from public.ai_conversations c where c.id = ai_action_log.conversation_id and c.user_id = (select auth.uid())
+)));
+
+drop policy if exists ai_tool_idempotency_user_isolation on public.ai_tool_idempotency;
+create policy ai_tool_idempotency_user_isolation on public.ai_tool_idempotency for all to authenticated
+using (user_id = (select auth.uid()) and exists (
+  select 1 from public.ai_conversations c where c.id = ai_tool_idempotency.conversation_id and c.user_id = (select auth.uid())
+))
+with check (user_id = (select auth.uid()) and exists (
+  select 1 from public.ai_conversations c where c.id = ai_tool_idempotency.conversation_id and c.user_id = (select auth.uid())
+));
+
+drop policy if exists health_e2ee_key_envelopes_user_isolation on public.health_e2ee_key_envelopes;
+create policy health_e2ee_key_envelopes_user_isolation on public.health_e2ee_key_envelopes for all to authenticated
+using (user_id = (select auth.uid()) and exists (
+  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.device_id and d.user_id = (select auth.uid())
+) and (sender_device_id is null or exists (
+  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
+)) and (pairing_session_id is null or exists (
+  select 1 from public.health_e2ee_pairing_sessions p where p.id = health_e2ee_key_envelopes.pairing_session_id and p.user_id = (select auth.uid())
+)))
+with check (user_id = (select auth.uid()) and exists (
+  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.device_id and d.user_id = (select auth.uid())
+) and (sender_device_id is null or exists (
+  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
+)) and (pairing_session_id is null or exists (
+  select 1 from public.health_e2ee_pairing_sessions p where p.id = health_e2ee_key_envelopes.pairing_session_id and p.user_id = (select auth.uid())
+)));
+
+drop policy if exists health_e2ee_pairing_sessions_user_isolation on public.health_e2ee_pairing_sessions;
+create policy health_e2ee_pairing_sessions_user_isolation on public.health_e2ee_pairing_sessions for all to authenticated
+using (user_id = (select auth.uid()) and exists (
+  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_pairing_sessions.initiator_device_id and d.user_id = (select auth.uid())
+) and (recipient_device_id is null or exists (
+  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_pairing_sessions.recipient_device_id and d.user_id = (select auth.uid())
+)))
+with check (user_id = (select auth.uid()) and exists (
+  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_pairing_sessions.initiator_device_id and d.user_id = (select auth.uid())
+) and (recipient_device_id is null or exists (
+  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_pairing_sessions.recipient_device_id and d.user_id = (select auth.uid())
+)));
+
+drop policy if exists sport_progression_targets_user_isolation on public.sport_progression_targets;
+create policy sport_progression_targets_user_isolation on public.sport_progression_targets for all to authenticated
+using (user_id = (select auth.uid()) and exists (
+  select 1 from public.sport_exercises e where e.id = sport_progression_targets.exercise_id and e.user_id = (select auth.uid())
+) and (based_on_session_id is null or exists (
+  select 1 from public.sport_workout_sessions s where s.id = sport_progression_targets.based_on_session_id and s.user_id = (select auth.uid())
+)))
+with check (user_id = (select auth.uid()) and exists (
+  select 1 from public.sport_exercises e where e.id = sport_progression_targets.exercise_id and e.user_id = (select auth.uid())
+) and (based_on_session_id is null or exists (
+  select 1 from public.sport_workout_sessions s where s.id = sport_progression_targets.based_on_session_id and s.user_id = (select auth.uid())
+)));
+
 -- 6) Backend-only tables: deliberately no API grants or policies.
 -- billing_events and audit_log are written by trusted server/service-role code.
 -- The global REVOKE above keeps anon/authenticated out.
