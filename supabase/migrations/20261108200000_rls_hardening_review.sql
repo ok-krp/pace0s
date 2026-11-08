@@ -211,6 +211,15 @@ with check (user_id = (select auth.uid()) and exists (
   select 1 from public.sport_workout_sessions s where s.id = sport_progression_targets.based_on_session_id and s.user_id = (select auth.uid())
 )));
 
+drop policy if exists health_legacy_migration_map_user_isolation on public.health_legacy_migration_map;
+create policy health_legacy_migration_map_user_isolation on public.health_legacy_migration_map for all to authenticated
+using (user_id = (select auth.uid()) and exists (
+  select 1 from public.health_samples h where h.id = health_legacy_migration_map.legacy_sample_id and h.user_id = (select auth.uid())
+))
+with check (user_id = (select auth.uid()) and exists (
+  select 1 from public.health_samples h where h.id = health_legacy_migration_map.legacy_sample_id and h.user_id = (select auth.uid())
+));
+
 -- 6) Backend-only tables: deliberately no API grants or policies.
 -- billing_events and audit_log are written by trusted server/service-role code.
 -- The global REVOKE above keeps anon/authenticated out.
