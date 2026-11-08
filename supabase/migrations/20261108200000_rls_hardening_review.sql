@@ -126,7 +126,7 @@ with check (
           where s.id = sport_workout_exercises.session_id and s.user_id = (select auth.uid()))
   and exists (select 1 from public.sport_exercises e
               where e.id = sport_workout_exercises.exercise_id and e.user_id = (select auth.uid())
-);
+));
 
 grant select, insert, update, delete on public.sport_workout_sets to authenticated;
 drop policy if exists sport_workout_sets_user_isolation on public.sport_workout_sets;
