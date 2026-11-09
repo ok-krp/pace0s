@@ -104,6 +104,26 @@ drop policy if exists data_deletion_requests_read_own on public.data_deletion_re
 create policy data_deletion_requests_submit_own on public.data_deletion_requests for insert to authenticated with check (user_id = (select auth.uid()));
 create policy data_deletion_requests_read_own on public.data_deletion_requests for select to authenticated using (user_id = (select auth.uid()));
 
+-- Tables with user_id also carry optional parent references. Direct ownership
+-- alone is not enough: ensure a supplied parent ID belongs to the same account.
+drop policy if exists development_tasks_user_isolation on public.development_tasks;
+create policy development_tasks_user_isolation on public.development_tasks for all to authenticated
+using (user_id = (select auth.uid()) and (conversation_id is null or exists (
+  select 1 from public.ai_conversations c where c.id = development_tasks.conversation_id and c.user_id = (select auth.uid())
+)))
+with check (user_id = (select auth.uid()) and (conversation_id is null or exists (
+  select 1 from public.ai_conversations c where c.id = development_tasks.conversation_id and c.user_id = (select auth.uid())
+)));
+
+drop policy if exists sport_workout_sessions_user_isolation on public.sport_workout_sessions;
+create policy sport_workout_sessions_user_isolation on public.sport_workout_sessions for all to authenticated
+using (user_id = (select auth.uid()) and (program_id is null or exists (
+  select 1 from public.sport_programs p where p.id = sport_workout_sessions.program_id and p.user_id = (select auth.uid())
+)))
+with check (user_id = (select auth.uid()) and (program_id is null or exists (
+  select 1 from public.sport_programs p where p.id = sport_workout_sessions.program_id and p.user_id = (select auth.uid())
+)));
+
 -- 5) Cross-account relationship guards for child tables without user_id.
 -- Parent ownership is checked at every hop; child IDs alone are never trusted.
 grant select, insert, update, delete on public.ai_messages to authenticated;
