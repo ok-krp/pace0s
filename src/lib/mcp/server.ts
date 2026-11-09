@@ -138,7 +138,7 @@ function createAuthenticatedServer(userId: string, accessToken: string): McpServ
     const { data, error } = await db
       .from("food_log")
       .insert(row)
-      .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,sugar_g,sodium_mg,source,meta")
+      .select("id,log_date,meal,name,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,source,meta")
       .single();
     if (error) return mcpDatabaseFailure("add_food_log", error);
     return {
