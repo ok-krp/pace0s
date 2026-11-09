@@ -23,7 +23,7 @@ export function oauthProtectedResourceMetadata(request: Request): Response {
   const resource = new URL(RESOURCE_PATH, request.url).toString();
   const authorizationServer = resolveSupabaseAuthIssuer(
     process.env.SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_PROJECT_ID,
+    import.meta.env?.VITE_SUPABASE_PROJECT_ID,
   );
 
   return jsonResponse({
@@ -76,7 +76,7 @@ function createAuthenticatedServer(userId: string, accessToken: string): McpServ
     inputSchema: {
       from: z.string().refine(isValidIsoDateOnly, "Expected a real calendar date in YYYY-MM-DD format").optional().describe("Start date YYYY-MM-DD (inclusive)"),
       to: z.string().refine(isValidIsoDateOnly, "Expected a real calendar date in YYYY-MM-DD format").optional().describe("End date YYYY-MM-DD (inclusive)"),
-      limit: z.number().int().positive().max(200).optional().describe("Max rows (default 50, max 200)"),
+      limit: z.number().int().positive().optional().describe("Max rows (default 50, max 200)"),
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   }, async ({ from, to, limit }) => {
@@ -92,7 +92,7 @@ function createAuthenticatedServer(userId: string, accessToken: string): McpServ
       .eq("user_id", userId)
       .order("log_date", { ascending: false })
       .order("created_at", { ascending: false })
-      .limit(limit ?? 50);
+      .limit(Math.min(limit ?? 50, 200));
     if (from) query = query.gte("log_date", from);
     if (to) query = query.lte("log_date", to);
     const { data, error } = await query;
@@ -153,7 +153,7 @@ function createAuthenticatedServer(userId: string, accessToken: string): McpServ
     inputSchema: {
       type: z.string().trim().min(1).max(80).optional().describe("Sample type filter (e.g. weight, steps, hr)"),
       since: z.string().refine(isValidIsoTimestamp, "Expected an ISO-8601 timestamp with an explicit timezone").optional().describe("ISO-8601 timestamp with timezone — only samples after"),
-      limit: z.number().int().positive().max(500).optional().describe("Max rows (default 100, max 500)"),
+      limit: z.number().int().positive().optional().describe("Max rows (default 100, max 500)"),
     },
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   }, async ({ type, since, limit }) => {
@@ -162,7 +162,7 @@ function createAuthenticatedServer(userId: string, accessToken: string): McpServ
       .select("id,type,value,ts,source")
       .eq("user_id", userId)
       .order("ts", { ascending: false })
-      .limit(limit ?? 100);
+      .limit(Math.min(limit ?? 100, 500));
     if (type) query = query.eq("type", type);
     if (since) query = query.gte("ts", since);
     const { data, error } = await query;
