@@ -12,7 +12,7 @@ export type McpAuthResult =
 export function extractMcpBearerToken(request: Request): string | null {
   const value = request.headers.get("authorization");
   if (!value) return null;
-  const match = /^Bearer\\s+([^\\s]+)$/i.exec(value.trim());
+  const match = /^Bearer\s+([^\s]+)$/i.exec(value.trim());
   return match?.[1] ?? null;
 }
 
