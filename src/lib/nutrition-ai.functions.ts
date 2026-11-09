@@ -1,10 +1,21 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { generateText } from "ai";
-import { createLovableAiGatewayProvider } from "./ai-gateway";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { LEGAL_VERSIONS } from "./legal";
 import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema, validateImageBase64 } from "./nutrition-ai.shared";
+
+function createGeminiModel(apiKey: string) {
+  const gemini = createOpenAICompatible({
+    name: "gemini",
+    apiKey,
+    baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+  });
+  // Pace stores provider/model identifiers as "google/<model>"; Gemini's
+  // OpenAI-compatible endpoint expects the native model ID without the prefix.
+  return gemini(AI_MODEL.replace(/^google\//, ""));
+}
 
 export const analyzeFoodPhoto = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -31,11 +42,11 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
     }
     const imageCheck = validateImageBase64(data.imageBase64);
     if (!imageCheck.ok) return { error: imageCheck.error, result: null };
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) return { error: "AI Gateway non configuré", result: null };
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) return { error: "Gemini API non configurée sur le serveur", result: null };
 
     try {
-      const gateway = createLovableAiGatewayProvider(key);
+      const model = createGeminiModel(key);
       const prompt = [
         PHOTO_INSTRUCTIONS,
         data.goal ? `Objectif de l'utilisateur : ${data.goal}.` : "",
@@ -46,13 +57,13 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
         .join("\n\n");
 
       const { text } = await generateText({
-        model: gateway(AI_MODEL),
+        model,
         messages: [
           {
             role: "user",
             content: [
               { type: "text", text: prompt },
-              { type: "image", image: data.imageBase64 },
+              { type: "image", image: imageCheck.bytes },
             ],
           },
         ],
@@ -85,12 +96,12 @@ export const nutritionAdvice = createServerFn({ method: "POST" })
     if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) {
       return { advice: null, error: "Consentement Analyse IA requis" };
     }
-    const key = process.env.LOVABLE_API_KEY;
-    if (!key) return { advice: null, error: "AI Gateway non configuré" };
+    const key = process.env.GEMINI_API_KEY;
+    if (!key) return { advice: null, error: "Gemini API non configurée sur le serveur" };
     try {
-      const gateway = createLovableAiGatewayProvider(key);
+      const model = createGeminiModel(key);
       const { text } = await generateText({
-        model: gateway(AI_MODEL),
+        model,
         messages: [
           {
             role: "user",

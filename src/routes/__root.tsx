@@ -34,8 +34,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "theme-color", content: "#f8fafc" }, { property: "og:title", content: "Pace — ton centre de contrôle quotidien" },
       { name: "twitter:title", content: "Pace — ton centre de contrôle quotidien" }, { property: "og:description", content: "Score quotidien, calories, eau, sommeil, finances, productivité — tout en un coup d'œil." },
       { name: "twitter:description", content: "Score quotidien, calories, eau, sommeil, finances, productivité — tout en un coup d'œil." }, { name: "twitter:card", content: "summary_large_image" }, { property: "og:type", content: "website" },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c5e32b18-bb82-4335-acca-3734bf96e117/id-preview-3e5bec36--7fdf2e74-b469-427a-9a0f-822afd78e57b.lovable.app-1785058212125.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/c5e32b18-bb82-4335-acca-3734bf96e117/id-preview-3e5bec36--7fdf2e74-b469-427a-9a0f-822afd78e57b.lovable.app-1785058212125.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss }, { rel: "manifest", href: "/manifest.json" }, { rel: "apple-touch-icon", href: "/icon-192.png" }, { rel: "icon", href: "/icon-192.png" },

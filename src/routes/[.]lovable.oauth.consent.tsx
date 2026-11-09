@@ -3,17 +3,19 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 
-type AuthorizationDetails = {
-  client?: { name?: string; redirect_uri?: string } | null;
-  redirect_url?: string;
-  redirect_to?: string;
-  scopes?: string[];
-} | null;
+type AuthorizationDetails =
+  | {
+      authorization_id: string;
+      client?: { name?: string; redirect_uri?: string } | null;
+      redirect_uri?: string;
+      scope?: string | null;
+    }
+  | { redirect_url: string };
 
 type OAuthNamespace = {
-  getAuthorizationDetails: (id: string) => Promise<{ data: AuthorizationDetails; error: Error | null }>;
-  approveAuthorization: (id: string) => Promise<{ data: { redirect_url?: string; redirect_to?: string } | null; error: Error | null }>;
-  denyAuthorization: (id: string) => Promise<{ data: { redirect_url?: string; redirect_to?: string } | null; error: Error | null }>;
+  getAuthorizationDetails: (id: string) => Promise<{ data: AuthorizationDetails | null; error: Error | null }>;
+  approveAuthorization: (id: string) => Promise<{ data: { redirect_url: string } | null; error: Error | null }>;
+  denyAuthorization: (id: string) => Promise<{ data: { redirect_url: string } | null; error: Error | null }>;
 };
 
 function oauthApi(): OAuthNamespace {
@@ -35,8 +37,8 @@ export const Route = createFileRoute("/.lovable/oauth/consent")({
     const authorizationId = new URLSearchParams(location.search).get("authorization_id")!;
     const { data, error } = await oauthApi().getAuthorizationDetails(authorizationId);
     if (error) throw error;
-    const immediate = data?.redirect_url ?? data?.redirect_to;
-    if (immediate && !data?.client) throw redirect({ href: immediate });
+    if (!data) throw new Error("Invalid authorization request");
+    if (!("authorization_id" in data)) throw redirect({ href: data.redirect_url });
     return data;
   },
   component: Consent,
@@ -70,7 +72,7 @@ function Consent() {
       setError(error.message);
       return;
     }
-    const target = data?.redirect_url ?? data?.redirect_to;
+    const target = data?.redirect_url;
     if (!target) {
       setBusy(false);
       setError("Aucune URL de redirection reçue.");
@@ -80,6 +82,7 @@ function Consent() {
   }
 
   const clientName = details?.client?.name ?? "une application";
+  const requestedScopes = details?.scope?.trim().split(/\s+/).filter(Boolean) ?? [];
 
   return (
     <main className="min-h-screen grid place-items-center p-6 pace-bg">
@@ -91,12 +94,12 @@ function Consent() {
           {clientName} pourra utiliser les outils Pace en votre nom, avec vos permissions.
           Vos données restent protégées par les règles d'accès (RLS) de Pace.
         </p>
-        {details?.scopes?.length ? (
+        {requestedScopes.length > 0 ? (
           <div className="mt-4 text-xs text-muted-foreground">
             <div className="font-medium mb-1">Autorisations demandées :</div>
             <ul className="list-disc pl-4 space-y-0.5">
-              {details.scopes.map((s: string) => (
-                <li key={s}>{s}</li>
+              {requestedScopes.map((scope) => (
+                <li key={scope}>{scope}</li>
               ))}
             </ul>
           </div>
