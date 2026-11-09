@@ -9,7 +9,7 @@ export type McpAuthResult =
   | { ok: true; context: McpAuthContext }
   | { ok: false; status: 401 | 503; message: string };
 
-function bearerToken(request: Request): string | null {
+export function extractMcpBearerToken(request: Request): string | null {
   const value = request.headers.get("authorization");
   if (!value) return null;
   const match = /^Bearer\\s+([^\\s]+)$/i.exec(value.trim());
@@ -21,7 +21,7 @@ function bearerToken(request: Request): string | null {
  * claims locally), then bind all database requests to this exact bearer token.
  */
 export async function authenticateMcpRequest(request: Request): Promise<McpAuthResult> {
-  const accessToken = bearerToken(request);
+  const accessToken = extractMcpBearerToken(request);
   if (!accessToken) {
     return { ok: false, status: 401, message: "A Supabase OAuth bearer token is required." };
   }
