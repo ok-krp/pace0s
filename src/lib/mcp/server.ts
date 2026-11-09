@@ -2,10 +2,10 @@ import { createClient } from "@supabase/supabase-js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
-import { authenticateMcpRequest } from "./auth";
-import { resolveSupabaseAuthIssuer } from "./issuer";
-import { mcpDatabaseFailure } from "./errors";
-import { isOrderedIsoDateRange, isValidIsoDateOnly, isValidIsoTimestamp } from "./validation";
+import { authenticateMcpRequest } from "./auth.ts";
+import { resolveSupabaseAuthIssuer } from "./issuer.ts";
+import { mcpDatabaseFailure } from "./errors.ts";
+import { isOrderedIsoDateRange, isValidIsoDateOnly, isValidIsoTimestamp } from "./validation.ts";
 
 const SERVER_NAME = "pace-mcp";
 const SERVER_VERSION = "1.0.0";
