@@ -21,7 +21,7 @@ revoke all privileges on all tables in schema public from anon, authenticated;
 revoke all privileges on all sequences in schema public from anon, authenticated;
 revoke all privileges on schema public from anon, authenticated;
 grant usage on schema public to anon, authenticated;
-grant usage, select on all sequences in schema public to authenticated;
+-- The audited schema has no public sequences. Do not grant sequence access globally.
 alter default privileges in schema public revoke all on tables from anon, authenticated;
 alter default privileges in schema public revoke all on sequences from anon, authenticated;
 
@@ -34,6 +34,32 @@ grant select on table
   public.nutrition_reference_foods,
   public.nutrition_reference_sources
 to anon, authenticated;
+
+-- RLS still applies after GRANT. Explicit read policies are required for the
+-- six immutable reference tables; otherwise every SELECT is filtered out.
+drop policy if exists nutrition_canonical_dishes_read_catalog on public.nutrition_canonical_dishes;
+create policy nutrition_canonical_dishes_read_catalog on public.nutrition_canonical_dishes
+  for select to anon, authenticated using (true);
+
+drop policy if exists nutrition_data_sources_read_catalog on public.nutrition_data_sources;
+create policy nutrition_data_sources_read_catalog on public.nutrition_data_sources
+  for select to anon, authenticated using (true);
+
+drop policy if exists nutrition_dish_references_read_catalog on public.nutrition_dish_references;
+create policy nutrition_dish_references_read_catalog on public.nutrition_dish_references
+  for select to anon, authenticated using (true);
+
+drop policy if exists nutrition_reference_dishes_read_catalog on public.nutrition_reference_dishes;
+create policy nutrition_reference_dishes_read_catalog on public.nutrition_reference_dishes
+  for select to anon, authenticated using (true);
+
+drop policy if exists nutrition_reference_foods_read_catalog on public.nutrition_reference_foods;
+create policy nutrition_reference_foods_read_catalog on public.nutrition_reference_foods
+  for select to anon, authenticated using (true);
+
+drop policy if exists nutrition_reference_sources_read_catalog on public.nutrition_reference_sources;
+create policy nutrition_reference_sources_read_catalog on public.nutrition_reference_sources
+  for select to anon, authenticated using (true);
 
 -- 4) Tables with a direct user_id owner. Policies require the JWT subject to
 -- equal user_id for reads and writes. No anon policy is created.
@@ -64,12 +90,17 @@ end $$;
 
 -- Billing records are server-owned (plan/status must not be user-editable).
 grant select on public.billing_customers, public.billing_subscriptions, public.billing_trials to authenticated;
+drop policy if exists billing_customers_read_own on public.billing_customers;
+drop policy if exists billing_subscriptions_read_own on public.billing_subscriptions;
+drop policy if exists billing_trials_read_own on public.billing_trials;
 create policy billing_customers_read_own on public.billing_customers for select to authenticated using (user_id = (select auth.uid()));
 create policy billing_subscriptions_read_own on public.billing_subscriptions for select to authenticated using (user_id = (select auth.uid()));
 create policy billing_trials_read_own on public.billing_trials for select to authenticated using (user_id = (select auth.uid()));
 
 -- Deletion requests may be submitted/read by the owner; status is server-managed.
 grant select, insert on public.data_deletion_requests to authenticated;
+drop policy if exists data_deletion_requests_submit_own on public.data_deletion_requests;
+drop policy if exists data_deletion_requests_read_own on public.data_deletion_requests;
 create policy data_deletion_requests_submit_own on public.data_deletion_requests for insert to authenticated with check (user_id = (select auth.uid()));
 create policy data_deletion_requests_read_own on public.data_deletion_requests for select to authenticated using (user_id = (select auth.uid()));
 
