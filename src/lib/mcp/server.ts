@@ -12,6 +12,19 @@ const SERVER_VERSION = "1.0.0";
 const RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource";
 const RESOURCE_PATH = "/mcp";
 
+function withMcpCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("access-control-allow-origin", "*");
+  headers.set("access-control-allow-methods", "POST, OPTIONS");
+  headers.set("access-control-allow-headers", "authorization, content-type, mcp-protocol-version, mcp-session-id");
+  headers.set("access-control-expose-headers", "www-authenticate, mcp-session-id");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 function jsonResponse(body: unknown, status = 200, headers?: HeadersInit): Response {
   const responseHeaders = new Headers(headers);
   responseHeaders.set("content-type", "application/json; charset=utf-8");
@@ -188,23 +201,19 @@ function unauthorizedResponse(request: Request): Response {
 
 export async function handleMcpRequest(request: Request): Promise<Response> {
   if (request.method === "OPTIONS") {
-    return new Response(null, {
+    return withMcpCors(new Response(null, {
       status: 204,
-      headers: {
-        allow: "POST, OPTIONS",
-        "access-control-allow-methods": "POST, OPTIONS",
-        "access-control-allow-headers": "content-type, authorization, mcp-session-id, mcp-protocol-version",
-      },
-    });
+      headers: { allow: "POST, OPTIONS" },
+    }));
   }
 
   if (request.method !== "POST") {
-    return jsonResponse({ error: "method_not_allowed", message: "Use POST for the stateless MCP endpoint." }, 405, { allow: "POST, OPTIONS" });
+    return withMcpCors(jsonResponse({ error: "method_not_allowed", message: "Use POST for the stateless MCP endpoint." }, 405, { allow: "POST, OPTIONS" }));
   }
 
   const auth = await authenticateMcpRequest(request);
   if (!auth.ok) {
-    return auth.status === 401 ? unauthorizedResponse(request) : jsonResponse({ error: "temporarily_unavailable", message: auth.message }, 503);
+    return withMcpCors(auth.status === 401 ? unauthorizedResponse(request) : jsonResponse({ error: "temporarily_unavailable", message: auth.message }, 503));
   }
 
   let server: McpServer | null = null;
@@ -216,12 +225,12 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
       enableJsonResponse: true,
     });
     await server.connect(transport);
-    return await transport.handleRequest(request);
+    return withMcpCors(await transport.handleRequest(request));
   } catch (error) {
     console.error("[pace-mcp] request failed", {
       errorType: error instanceof Error ? error.name : "unknown",
     });
-    return jsonResponse({ error: "internal_error", message: "MCP request failed." }, 500);
+    return withMcpCors(jsonResponse({ error: "internal_error", message: "MCP request failed." }, 500));
   } finally {
     await transport?.close().catch(() => undefined);
     await server?.close().catch(() => undefined);
