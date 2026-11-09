@@ -63,7 +63,7 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" })
             role: "user",
             content: [
               { type: "text", text: prompt },
-              { type: "image", image: data.imageBase64 },
+              { type: "image", image: imageCheck.bytes },
             ],
           },
         ],
