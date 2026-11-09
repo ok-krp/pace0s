@@ -19,10 +19,10 @@ on:
       - "src/lib/mcp/validation.test.ts"
       - "src/lib/mcp/errors.ts"
       - "src/lib/mcp/errors.test.ts"
-      - "src/lib/mcp/tools/add-food-log.ts"
-      - "src/lib/mcp/tools/get-profile.ts"
-      - "src/lib/mcp/tools/list-food-log.ts"
-      - "src/lib/mcp/tools/list-health-samples.ts"
+      - "src/lib/mcp/auth.ts"
+      - "src/lib/mcp/auth.test.ts"
+      - "src/lib/mcp/server.ts"
+      - "src/lib/mcp/server.test.ts"
       - ".lovable/mcp/manifest.json"
       - "src/lib/assistant.functions.ts"
       - "src/lib/nutrition-ai.functions.ts"
@@ -256,6 +256,10 @@ jobs:
         run: node --experimental-strip-types --test src/lib/mcp/issuer.test.ts
       - name: Test MCP database error redaction
         run: node --experimental-strip-types --test src/lib/mcp/errors.test.ts
+      - name: Test MCP bearer authentication
+        run: node --experimental-strip-types --test src/lib/mcp/auth.test.ts
+      - name: Test MCP HTTP transport and OAuth challenge
+        run: node --experimental-strip-types --test src/lib/mcp/server.test.ts
       - name: Lint server-side AI and Nutrition entry points
         run: >-
           npx eslint --rule 'prettier/prettier: off'
@@ -266,15 +270,14 @@ jobs:
           src/lib/ai-tool-state.test.ts
           src/lib/mcp/issuer.ts
           src/lib/mcp/issuer.test.ts
-          src/lib/mcp/index.ts
+          src/lib/mcp/auth.ts
+          src/lib/mcp/auth.test.ts
+          src/lib/mcp/server.ts
+          src/lib/mcp/server.test.ts
           src/lib/mcp/validation.ts
           src/lib/mcp/validation.test.ts
           src/lib/mcp/errors.ts
           src/lib/mcp/errors.test.ts
-          src/lib/mcp/tools/add-food-log.ts
-          src/lib/mcp/tools/get-profile.ts
-          src/lib/mcp/tools/list-food-log.ts
-          src/lib/mcp/tools/list-health-samples.ts
           src/lib/assistant.functions.ts
           src/lib/nutrition-ai.functions.ts
           src/components/HealthSourcesSection.tsx
