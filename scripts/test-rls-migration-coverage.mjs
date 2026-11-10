@@ -88,6 +88,24 @@ assert.deepEqual(duplicates, [], "A public table must belong to exactly one acce
 assert.equal(names.length, 45, "Every audited public table must be classified");
 assert.equal(new Set(names).size, 45, "The policy inventory must contain 45 unique tables");
 
+const expectedPublicTables = [
+  "ai_action_log","ai_conversations","ai_messages","ai_preferences",
+  "ai_provider_secrets","ai_tool_idempotency","audit_log",
+  "billing_customers","billing_events","billing_subscriptions","billing_trials",
+  "consent_records","data_deletion_requests","development_tasks","food_log","food_scans",
+  "health_e2ee_devices","health_e2ee_key_envelopes","health_e2ee_key_versions",
+  "health_e2ee_pairing_sessions","health_e2ee_recovery_envelopes","health_legacy_migration_map",
+  "health_samples","health_samples_e2ee","legal_consent","notification_log",
+  "nutrition_canonical_dishes","nutrition_data_sources","nutrition_dish_references",
+  "nutrition_reference_dishes","nutrition_reference_foods","nutrition_reference_sources",
+  "profiles","push_subscriptions","reminder_debug_log","reminder_settings",
+  "sport_exercises","sport_program_items","sport_programs","sport_progression_targets",
+  "sport_workout_exercises","sport_workout_sets","sport_workout_sessions",
+  "user_biometrics_e2ee","user_state",
+].sort();
+assert.deepEqual([...names].sort(), expectedPublicTables,
+  "The RLS migration classifications must match the exact audited 45-table public schema");
+
 assert.match(sql, /alter table %I\.%I enable row level security/i,
   "The migration must enable RLS for every public table");
 assert.match(sql, /from pg_policies\s+where schemaname = 'public'/i,
