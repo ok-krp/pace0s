@@ -151,9 +151,9 @@ for (const table of consentTables) {
 }
 
 for (const table of legacyHealthTables) {
-  assert.match(sql, /create policy health_samples_legacy_select_own[\\s\\S]*?for select to authenticated/i,
+  assert.match(sql, /create policy health_samples_legacy_select_own[\s\S]*?for select to authenticated/i,
     "Legacy plaintext health rows must be owner-readable");
-  assert.doesNotMatch(sql, /grant [^;]*on public\\.health_samples to authenticated[^;]*(?:insert|update|delete)/i,
+  assert.doesNotMatch(sql, /grant [^;]*on public\.health_samples to authenticated[^;]*(?:insert|update|delete)/i,
     "Legacy plaintext health rows must not grant writes");
 }
 
