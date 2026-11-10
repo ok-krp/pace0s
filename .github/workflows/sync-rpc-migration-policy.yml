@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "supabase/migrations/**"
+      - "scripts/test-rls-migration-coverage.mjs"
       - ".github/workflows/sync-rpc-migration-policy.yml"
   push:
     paths:
@@ -13,6 +14,9 @@ on:
 
 permissions:
   contents: read
+
+      - name: Verify explicit RLS coverage for all audited public tables
+        run: node scripts/test-rls-migration-coverage.mjs
 
 jobs:
   verify-sync-rpc-hardening:
