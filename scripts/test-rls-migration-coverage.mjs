@@ -128,7 +128,7 @@ for (const table of consentTables) {
 
 for (const table of readOnlyLogTables) {
   assert.match(sql, new RegExp(
-    "create policy " + table + "_select_own on public[.]" + table + " for select to authenticated",
+    "create policy " + table + "_select_own on public[.]" + table + "\\s+for select to authenticated",
     "i",
   ), "Missing read-only owner policy for " + table);
   assert.doesNotMatch(sql, new RegExp(
