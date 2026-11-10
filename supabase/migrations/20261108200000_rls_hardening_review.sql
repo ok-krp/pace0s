@@ -405,21 +405,6 @@ with check (user_id = (select auth.uid()) and (conversation_id is null or exists
   select 1 from public.ai_conversations c where c.id = ai_action_log.conversation_id and c.user_id = (select auth.uid())
 )));
 
-drop policy if exists health_e2ee_key_envelopes_user_isolation on public.health_e2ee_key_envelopes;
-create policy health_e2ee_key_envelopes_user_isolation on public.health_e2ee_key_envelopes for all to authenticated
-using (user_id = (select auth.uid()) and exists (
-  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.device_id and d.user_id = (select auth.uid())
-) and (sender_device_id is null or exists (
-  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
-)) and (pairing_session_id is null or public.owns_health_e2ee_pairing_session(pairing_session_id)))
-with check (user_id = (select auth.uid()) and exists (
-  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.device_id and d.user_id = (select auth.uid())
-) and (sender_device_id is null or exists (
-  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
-)) and (pairing_session_id is null or exists (
-  select 1 from public.health_e2ee_pairing_sessions p where p.id = health_e2ee_key_envelopes.pairing_session_id and p.user_id = (select auth.uid())
-)));
-
 drop policy if exists sport_progression_targets_user_isolation on public.sport_progression_targets;
 create policy sport_progression_targets_user_isolation on public.sport_progression_targets for all to authenticated
 using (user_id = (select auth.uid()) and exists (
