@@ -228,7 +228,7 @@ assert.doesNotMatch(sql, /^\s*as\s+\$(?:\s|$)/im,
   "Function bodies must use complete dollar-quote delimiters");
 assert.match(sql, /do \$drop_policy_cleanup\$[\s\S]*?end \$drop_policy_cleanup\$;/i,
   "The old-policy cleanup DO block must have a complete named delimiter");
-assert.doesNotMatch(directBlock, /ai_provider_secrets|ai_tool_idempotency|consent_records|health_e2ee_|health_samples_e2ee|health_legacy_migration_map|notification_log|reminder_debug_log/i,
+assert.doesNotMatch(directBlock, /ai_provider_secrets|ai_tool_idempotency|consent_records|health_e2ee_devices|health_e2ee_key_envelopes|health_e2ee_key_versions|health_e2ee_pairing_sessions|health_samples_e2ee|health_legacy_migration_map|notification_log|reminder_debug_log/i,
   "Sensitive, consent-scoped, RPC-only, and read-only log tables must not receive blanket CRUD grants");
 
 console.log("RLS migration coverage passed: all 45 public tables are classified with least-privilege access classes.");
