@@ -207,6 +207,11 @@ for (const table of rpcOnlyTables) {
 }
 assert.match(sql, /create or replace function public[.]owns_health_e2ee_pairing_session[(]p_session_id uuid[)][\s\S]*?security definer[\s\S]*?set search_path = ''/i,
   "Pairing parent ownership must be checked through a hardened SECURITY DEFINER helper");
+assert.ok(
+  sql.indexOf("create or replace function public.owns_health_e2ee_pairing_session")
+    < sql.indexOf("create policy health_e2ee_envelopes_select_own"),
+  "The pairing ownership helper must be created before envelope policies reference it",
+);
 assert.match(sql, /revoke all on function public[.]owns_health_e2ee_pairing_session[(]uuid[)] from public, anon, authenticated[\s\S]*?grant execute on function public[.]owns_health_e2ee_pairing_session[(]uuid[)] to authenticated/i,
   "Pairing helper execution must be restricted to authenticated users");
 
