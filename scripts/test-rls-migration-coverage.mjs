@@ -26,11 +26,27 @@ const deletionTables = sql.match(
   /grant select, insert on public\.data_deletion_requests to authenticated/i,
 ) ? ["data_deletion_requests"] : [];
 
+const readOnlyLogTables = sql.match(
+  /grant select on public\.notification_log,\s*public\.reminder_debug_log to authenticated/i,
+) ? ["notification_log", "reminder_debug_log"] : [];
+
+const e2eeTables = [
+  "health_e2ee_devices",
+  "health_samples_e2ee",
+  "health_e2ee_key_envelopes",
+  "health_e2ee_key_versions",
+];
+
 const backendOnlyTables = [
   "ai_provider_secrets",
   "ai_tool_idempotency",
   "audit_log",
   "billing_events",
+];
+
+const rpcOnlyTables = [
+  "health_e2ee_pairing_sessions",
+  "health_legacy_migration_map",
 ];
 
 const classes = {
@@ -40,28 +56,38 @@ const classes = {
   ownerReadOnlyBilling: billingTables,
   ownerReadInsertConsentRecords: consentTables,
   ownerReadInsertDeletionRequests: deletionTables,
+  ownerReadOnlyLogs: readOnlyLogTables,
+  consentScopedE2eeTables: e2eeTables,
   backendOnlyTables,
+  rpcOnlyTables,
 };
 
 const classified = Object.entries(classes).flatMap(([classification, tables]) =>
   tables.map((table) => ({ table, classification })),
 );
 const names = classified.map((item) => item.table);
-const duplicateNames = names.filter((name, index) => names.indexOf(name) !== index);
+const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
 
-assert.equal(directUserTables.length, 26, "Expected 26 direct user_id tables");
+assert.equal(directUserTables.length, 18, "Expected 18 direct user-owned CRUD tables");
 assert.equal(childTables.length, 4, "Expected four child tables with parent ownership checks");
 assert.equal(catalogTables.length, 6, "Expected six public read-only nutrition catalogues");
 assert.equal(billingTables.length, 3, "Expected three owner-readable billing tables");
 assert.equal(consentTables.length, 1, "Expected immutable consent records");
 assert.equal(deletionTables.length, 1, "Expected deletion requests");
+assert.equal(readOnlyLogTables.length, 2, "Expected two owner-readable, non-writable logs");
+assert.equal(e2eeTables.length, 4, "Expected four consent-scoped E2EE tables");
 assert.equal(backendOnlyTables.length, 4, "Expected four service-only tables");
-assert.deepEqual(duplicateNames, [], "A public table must belong to exactly one access class");
+assert.equal(rpcOnlyTables.length, 2, "Expected two SECURITY DEFINER RPC-only tables");
+assert.deepEqual(duplicates, [], "A public table must belong to exactly one access class");
 assert.equal(names.length, 45, "Every audited public table must be classified");
 assert.equal(new Set(names).size, 45, "The policy inventory must contain 45 unique tables");
 
 assert.match(sql, /alter table %I\.%I enable row level security/i,
   "The migration must enable RLS for every public table");
+assert.match(sql, /from pg_policies\s+where schemaname = 'public'/i,
+  "Existing permissive policies must be removed before applying the reviewed policy set");
+assert.match(sql, /drop policy %I on %I\.%I/i,
+  "The migration must drop existing policies by their actual names");
 assert.match(sql, /revoke all privileges on all tables in schema public from anon, authenticated/i,
   "Existing API-role table grants must be removed before minimal grants are added");
 assert.match(sql, /revoke all privileges on schema public from anon, authenticated[\s\S]*?grant usage on schema public to anon, authenticated/i,
@@ -73,14 +99,14 @@ assert.match(sql, /alter default privileges in schema public revoke all on seque
 
 for (const table of catalogTables) {
   assert.match(sql, new RegExp(
-    "create policy " + table + "_read_catalog on public\\." + table + "\\s+for select to anon, authenticated using \\(true\\)",
+    "create policy " + table + "_read_catalog on public[.]" + table + "\\s+for select to anon, authenticated using [(]true[)]",
     "i",
   ), "Missing explicit public read-only policy for " + table);
 }
 
 for (const table of billingTables) {
   assert.match(sql, new RegExp(
-    "create policy " + table + "_read_own on public\\." + table + " for select to authenticated using \\(user_id = \\(select auth\\.uid\\(\\)\\)\\)",
+    "create policy " + table + "_read_own on public[.]" + table + " for select to authenticated using [(]user_id = [(]select auth[.]uid[(][)][)][)]",
     "i",
   ), "Missing owner-only SELECT policy for " + table);
 }
@@ -94,9 +120,38 @@ for (const table of consentTables) {
     "Consent records must not grant UPDATE or DELETE");
 }
 
+for (const table of readOnlyLogTables) {
+  assert.match(sql, new RegExp(
+    "create policy " + table + "_select_own on public[.]" + table + " for select to authenticated",
+    "i",
+  ), "Missing read-only owner policy for " + table);
+  assert.doesNotMatch(sql, new RegExp(
+    "grant [^;]*on public[.]" + table + " to authenticated[^;]*(?:insert|update|delete)",
+    "i",
+  ), table + " must not grant writes to authenticated");
+}
+
+assert.match(sql, /create or replace function public[.]has_current_health_e2ee_consent[(][)]/,
+  "The current health/cloud-sync consent helper must exist");
+assert.match(sql, /revoke all on function public[.]has_current_health_e2ee_consent[(][)] from public, anon, authenticated[\s\S]*?grant execute on function public[.]has_current_health_e2ee_consent[(][)] to authenticated/i,
+  "The E2EE consent helper must be executable by authenticated users only");
+
+for (const table of e2eeTables) {
+  assert.match(sql, new RegExp("public[.]" + table + "\\b", "i"),
+    "Missing explicit handling for E2EE table " + table);
+}
+assert.match(sql, /health_samples_e2ee_update_own[\s\S]*?for update to authenticated/i,
+  "Encrypted samples require owner-only UPDATE for conflict-safe upserts");
+assert.match(sql, /health_e2ee_devices_update_own[\s\S]*?for update to authenticated/i,
+  "Device revocation must be an owner-only UPDATE");
+assert.match(sql, /health_e2ee_envelopes_delete_own[\s\S]*?for delete to authenticated/i,
+  "Envelopes must be deletable only by their owner");
+assert.match(sql, /health_e2ee_key_versions_select_own[\s\S]*?for select to authenticated/i,
+  "Key versions must be read-only through direct API access");
+
 for (const table of backendOnlyTables) {
   assert.doesNotMatch(sql, new RegExp(
-    "grant [^;]*public\\." + table + "\\b[^;]*to (?:anon|authenticated)",
+    "grant [^;]*public[.]" + table + "\\b[^;]*to (?:anon|authenticated)",
     "i",
   ), "Backend-only table " + table + " must not be granted to API roles");
   assert.match(sql, new RegExp(
@@ -105,6 +160,19 @@ for (const table of backendOnlyTables) {
   ), "Backend-only table " + table + " must have an explicit deny policy");
 }
 
+for (const table of rpcOnlyTables) {
+  assert.doesNotMatch(directBlock, new RegExp("'" + table + "'"), 
+    "RPC-only table " + table + " must not receive blanket CRUD grants");
+  assert.match(sql, new RegExp(
+    "create policy " + table + "_deny_client on public[.]" + table + " for all to anon, authenticated using [(]false[)] with check [(]false[)]",
+    "i",
+  ), "RPC-only table " + table + " must have an explicit deny policy");
+}
+assert.match(sql, /create or replace function public[.]owns_health_e2ee_pairing_session[(]p_session_id uuid[)][\s\S]*?security definer[\s\S]*?set search_path = ''/i,
+  "Pairing parent ownership must be checked through a hardened SECURITY DEFINER helper");
+assert.match(sql, /revoke all on function public[.]owns_health_e2ee_pairing_session[(]uuid[)] from public, anon, authenticated[\s\S]*?grant execute on function public[.]owns_health_e2ee_pairing_session[(]uuid[)] to authenticated/i,
+  "Pairing helper execution must be restricted to authenticated users");
+
 for (const table of [
   "development_tasks",
   "sport_workout_sessions",
@@ -112,17 +180,16 @@ for (const table of [
   "health_e2ee_key_envelopes",
   "health_e2ee_pairing_sessions",
   "sport_progression_targets",
-  "health_legacy_migration_map",
 ]) {
   assert.match(sql, new RegExp(
-    "create policy " + table + "_user_isolation on public\\." + table,
+    "create policy " + table + "_user_isolation on public[.]" + table,
     "i",
   ), "Missing relationship-aware policy for " + table);
 }
 
-assert.doesNotMatch(sql, /ai_tool_idempotency_user_isolation/i,
-  "AI tool idempotency must remain service-only");
-assert.doesNotMatch(directBlock, /ai_provider_secrets|ai_tool_idempotency|consent_records/i,
-  "Secrets, idempotency internals and consent records must not receive blanket CRUD grants");
+assert.doesNotMatch(sql, /ai_tool_idempotency_user_isolation|health_legacy_migration_map_user_isolation|health_e2ee_pairing_sessions_user_isolation/i,
+  "Service/RPC-only tables must not regain direct user isolation policies");
+assert.doesNotMatch(directBlock, /ai_provider_secrets|ai_tool_idempotency|consent_records|health_e2ee_|health_samples_e2ee|health_legacy_migration_map|notification_log|reminder_debug_log/i,
+  "Sensitive, consent-scoped, RPC-only, and read-only log tables must not receive blanket CRUD grants");
 
-console.log("RLS migration coverage passed: 45/45 public tables are classified with least-privilege access classes.");
+console.log("RLS migration coverage passed: all 45 public tables are classified with least-privilege access classes.");
