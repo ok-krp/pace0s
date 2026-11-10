@@ -67,8 +67,8 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'ai_action_log','ai_conversations','ai_preferences','ai_provider_secrets',
-    'ai_tool_idempotency','consent_records',
+    'ai_action_log','ai_conversations','ai_preferences',
+    'consent_records',
     'development_tasks','food_log','food_scans','health_e2ee_devices',
     'health_e2ee_key_envelopes','health_e2ee_key_versions',
     'health_e2ee_pairing_sessions','health_e2ee_recovery_envelopes',
@@ -126,6 +126,15 @@ with check (user_id = (select auth.uid()) and (program_id is null or exists (
 
 -- 5) Cross-account relationship guards for child tables without user_id.
 -- Parent ownership is checked at every hop; child IDs alone are never trusted.
+-- Consent records are immutable audit evidence: owner SELECT/INSERT only.
+grant select, insert on public.consent_records to authenticated;
+drop policy if exists consent_records_select_own on public.consent_records;
+drop policy if exists consent_records_insert_own on public.consent_records;
+create policy consent_records_select_own on public.consent_records
+  for select to authenticated using (user_id = (select auth.uid()));
+create policy consent_records_insert_own on public.consent_records
+  for insert to authenticated with check (user_id = (select auth.uid()));
+
 grant select, insert, update, delete on public.ai_messages to authenticated;
 drop policy if exists ai_messages_user_isolation on public.ai_messages;
 create policy ai_messages_user_isolation on public.ai_messages
@@ -210,15 +219,6 @@ with check (user_id = (select auth.uid()) and (conversation_id is null or exists
   select 1 from public.ai_conversations c where c.id = ai_action_log.conversation_id and c.user_id = (select auth.uid())
 )));
 
-drop policy if exists ai_tool_idempotency_user_isolation on public.ai_tool_idempotency;
-create policy ai_tool_idempotency_user_isolation on public.ai_tool_idempotency for all to authenticated
-using (user_id = (select auth.uid()) and exists (
-  select 1 from public.ai_conversations c where c.id = ai_tool_idempotency.conversation_id and c.user_id = (select auth.uid())
-))
-with check (user_id = (select auth.uid()) and exists (
-  select 1 from public.ai_conversations c where c.id = ai_tool_idempotency.conversation_id and c.user_id = (select auth.uid())
-));
-
 drop policy if exists health_e2ee_key_envelopes_user_isolation on public.health_e2ee_key_envelopes;
 create policy health_e2ee_key_envelopes_user_isolation on public.health_e2ee_key_envelopes for all to authenticated
 using (user_id = (select auth.uid()) and exists (
@@ -271,8 +271,22 @@ with check (user_id = (select auth.uid()) and exists (
   select 1 from public.health_samples h where h.id = health_legacy_migration_map.legacy_sample_id and h.user_id = (select auth.uid())
 ));
 
--- 6) Backend-only tables: deliberately no API grants or policies.
--- billing_events and audit_log are written by trusted server/service-role code.
--- The global REVOKE above keeps anon/authenticated out.
+-- 6) Service-only tables: no API grants; explicit deny policies defend against
+-- a later accidental GRANT. These contain secrets, idempotency internals, or
+-- backend-generated event/audit records and are accessed with trusted server code.
+do $
+declare t text;
+begin
+  foreach t in array array[
+    'ai_provider_secrets','ai_tool_idempotency','audit_log','billing_events'
+  ]
+  loop
+    execute format('drop policy if exists %I on public.%I', t || '_deny_client', t);
+    execute format(
+      'create policy %I on public.%I for all to anon, authenticated using (false) with check (false)',
+      t || '_deny_client', t
+    );
+  end loop;
+end $;
 
 commit;
