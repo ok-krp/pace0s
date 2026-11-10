@@ -18,18 +18,28 @@ const billingTables = sql.match(
   /grant select on public\.billing_customers,\s*public\.billing_subscriptions,\s*public\.billing_trials to authenticated/i,
 ) ? ["billing_customers", "billing_subscriptions", "billing_trials"] : [];
 
-const deletionTables = sql.includes(
-  "grant select, insert on public.data_deletion_requests to authenticated",
+const consentTables = sql.match(
+  /grant select, insert on public\.consent_records to authenticated/i,
+) ? ["consent_records"] : [];
+
+const deletionTables = sql.match(
+  /grant select, insert on public\.data_deletion_requests to authenticated/i,
 ) ? ["data_deletion_requests"] : [];
 
-const backendOnlyTables = ["audit_log", "billing_events"];
+const backendOnlyTables = [
+  "ai_provider_secrets",
+  "ai_tool_idempotency",
+  "audit_log",
+  "billing_events",
+];
 
 const classes = {
   directUserTables,
   childTables,
   publicReadOnlyCatalogues: catalogTables,
   ownerReadOnlyBilling: billingTables,
-  ownerSubmitReadOnlyDeletionRequests: deletionTables,
+  ownerReadInsertConsentRecords: consentTables,
+  ownerReadInsertDeletionRequests: deletionTables,
   backendOnlyTables,
 };
 
@@ -39,12 +49,13 @@ const classified = Object.entries(classes).flatMap(([classification, tables]) =>
 const names = classified.map((item) => item.table);
 const duplicateNames = names.filter((name, index) => names.indexOf(name) !== index);
 
-assert.equal(directUserTables.length, 29, "Expected 29 direct user_id tables");
+assert.equal(directUserTables.length, 26, "Expected 26 direct user_id tables");
 assert.equal(childTables.length, 4, "Expected four child tables with parent ownership checks");
 assert.equal(catalogTables.length, 6, "Expected six public read-only nutrition catalogues");
 assert.equal(billingTables.length, 3, "Expected three owner-readable billing tables");
-assert.equal(deletionTables.length, 1, "Expected the deletion request table");
-assert.equal(backendOnlyTables.length, 2, "Expected audit_log and billing_events as backend-only");
+assert.equal(consentTables.length, 1, "Expected immutable consent records");
+assert.equal(deletionTables.length, 1, "Expected deletion requests");
+assert.equal(backendOnlyTables.length, 4, "Expected four service-only tables");
 assert.deepEqual(duplicateNames, [], "A public table must belong to exactly one access class");
 assert.equal(names.length, 45, "Every audited public table must be classified");
 assert.equal(new Set(names).size, 45, "The policy inventory must contain 45 unique tables");
@@ -74,18 +85,30 @@ for (const table of billingTables) {
   ), "Missing owner-only SELECT policy for " + table);
 }
 
+for (const table of consentTables) {
+  assert.match(sql, /create policy consent_records_select_own[\s\S]*?for select to authenticated/i,
+    "Consent records must be owner-readable");
+  assert.match(sql, /create policy consent_records_insert_own[\s\S]*?for insert to authenticated/i,
+    "Consent records must be owner-insert-only");
+  assert.doesNotMatch(sql, /grant [^;]*on public\.consent_records to authenticated[^;]*update|grant [^;]*on public\.consent_records to authenticated[^;]*delete/i,
+    "Consent records must not grant UPDATE or DELETE");
+}
+
 for (const table of backendOnlyTables) {
   assert.doesNotMatch(sql, new RegExp(
     "grant [^;]*public\\." + table + "\\b[^;]*to (?:anon|authenticated)",
     "i",
   ), "Backend-only table " + table + " must not be granted to API roles");
+  assert.match(sql, new RegExp(
+    "create policy " + table + "_deny_client on public\\." + table + " for all to anon, authenticated using \\\\(false\\\\) with check \\\\(false\\\\)",
+    "i",
+  ), "Backend-only table " + table + " must have an explicit deny policy");
 }
 
 for (const table of [
   "development_tasks",
   "sport_workout_sessions",
   "ai_action_log",
-  "ai_tool_idempotency",
   "health_e2ee_key_envelopes",
   "health_e2ee_pairing_sessions",
   "sport_progression_targets",
@@ -97,4 +120,9 @@ for (const table of [
   ), "Missing relationship-aware policy for " + table);
 }
 
-console.log("RLS migration coverage passed: 45/45 public tables are classified.");
+assert.doesNotMatch(sql, /ai_tool_idempotency_user_isolation/i,
+  "AI tool idempotency must remain service-only");
+assert.doesNotMatch(directBlock, /ai_provider_secrets|ai_tool_idempotency|consent_records/i,
+  "Secrets, idempotency internals and consent records must not receive blanket CRUD grants");
+
+console.log("RLS migration coverage passed: 45/45 public tables are classified with least-privilege access classes.");
