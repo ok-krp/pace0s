@@ -92,6 +92,13 @@ assert.equal(backendOnlyTables.length, 4, "Expected four service-only tables");
 assert.equal(rpcOnlyTables.length, 2, "Expected two SECURITY DEFINER RPC-only tables");
 assert.deepEqual(duplicates, [], "A public table must belong to exactly one access class");
 assert.equal(names.length, 45, "Every audited public table must be classified");
+
+const policyNames = [...sql.matchAll(/create policy\\s+([a-zA-Z0-9_]+)/gi)].map((match) => match[1]);
+assert.deepEqual(
+  policyNames.filter((name, index) => policyNames.indexOf(name) !== index),
+  [],
+  "A migration must not create the same policy name twice on the same target inventory",
+);
 assert.equal(new Set(names).size, 45, "The policy inventory must contain 45 unique tables");
 
 const expectedPublicTables = [
