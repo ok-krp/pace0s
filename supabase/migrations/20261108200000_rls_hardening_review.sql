@@ -273,19 +273,19 @@ with check (user_id = (select auth.uid()) and exists (
 -- 6) Service-only tables: no API grants; explicit deny policies defend against
 -- a later accidental GRANT. These contain secrets, idempotency internals, or
 -- backend-generated event/audit records and are accessed with trusted server code.
-do $
-declare t text;
-begin
-  foreach t in array array[
-    'ai_provider_secrets','ai_tool_idempotency','audit_log','billing_events'
-  ]
-  loop
-    execute format('drop policy if exists %I on public.%I', t || '_deny_client', t);
-    execute format(
-      'create policy %I on public.%I for all to anon, authenticated using (false) with check (false)',
-      t || '_deny_client', t
-    );
-  end loop;
-end $;
+drop policy if exists ai_provider_secrets_deny_client on public.ai_provider_secrets;
+create policy ai_provider_secrets_deny_client on public.ai_provider_secrets
+  for all to anon, authenticated using (false) with check (false);
 
+drop policy if exists ai_tool_idempotency_deny_client on public.ai_tool_idempotency;
+create policy ai_tool_idempotency_deny_client on public.ai_tool_idempotency
+  for all to anon, authenticated using (false) with check (false);
+
+drop policy if exists audit_log_deny_client on public.audit_log;
+create policy audit_log_deny_client on public.audit_log
+  for all to anon, authenticated using (false) with check (false);
+
+drop policy if exists billing_events_deny_client on public.billing_events;
+create policy billing_events_deny_client on public.billing_events
+  for all to anon, authenticated using (false) with check (false);
 commit;
