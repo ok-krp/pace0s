@@ -9,14 +9,12 @@ on:
   push:
     paths:
       - "supabase/migrations/**"
+      - "scripts/test-rls-migration-coverage.mjs"
       - ".github/workflows/sync-rpc-migration-policy.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-
-      - name: Verify explicit RLS coverage for all audited public tables
-        run: node scripts/test-rls-migration-coverage.mjs
 
 jobs:
   verify-sync-rpc-hardening:
@@ -62,3 +60,5 @@ jobs:
                   print(f"Verified {path}: all {len(required)} security invariants present")
           if failed:
               sys.exit(1)
+      - name: Verify explicit RLS coverage for all audited public tables
+        run: node scripts/test-rls-migration-coverage.mjs
