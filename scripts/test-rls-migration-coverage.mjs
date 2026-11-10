@@ -179,6 +179,11 @@ assert.match(sql, /create or replace function public[.]has_current_health_e2ee_c
   "The current health/cloud-sync consent helper must exist");
 assert.match(sql, /revoke all on function public[.]has_current_health_e2ee_consent[(][)] from public, anon, authenticated[\s\S]*?grant execute on function public[.]has_current_health_e2ee_consent[(][)] to authenticated/i,
   "The E2EE consent helper must be executable by authenticated users only");
+assert.equal(
+  (sql.match(/order by c[.]created_at desc, c[.]id desc\\s+limit 1/gi) ?? []).length,
+  2,
+  "Each granular health consent must use a deterministic latest-decision order",
+);
 
 for (const table of e2eeTables) {
   assert.match(sql, new RegExp("public[.]" + table + "\\b", "i"),
