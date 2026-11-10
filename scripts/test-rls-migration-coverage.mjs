@@ -36,6 +36,10 @@ const readOnlyLogTables = sql.match(
   /grant select on public\.notification_log,\s*public\.reminder_debug_log to authenticated/i,
 ) ? ["notification_log", "reminder_debug_log"] : [];
 
+const legacyHealthTables = sql.match(
+  /grant select on public\.health_samples to authenticated/i,
+) ? ["health_samples"] : [];
+
 const e2eeTables = [
   "health_e2ee_devices",
   "health_samples_e2ee",
@@ -63,6 +67,7 @@ const classes = {
   ownerReadInsertConsentRecords: consentTables,
   ownerReadInsertDeletionRequests: deletionTables,
   ownerReadOnlyLogs: readOnlyLogTables,
+  legacyHealthReadOnly: legacyHealthTables,
   consentScopedE2eeTables: e2eeTables,
   backendOnlyTables,
   rpcOnlyTables,
@@ -74,13 +79,14 @@ const classified = Object.entries(classes).flatMap(([classification, tables]) =>
 const names = classified.map((item) => item.table);
 const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
 
-assert.equal(directUserTables.length, 18, "Expected 18 direct user-owned CRUD tables");
+assert.equal(directUserTables.length, 17, "Expected 17 direct user-owned CRUD tables");
 assert.equal(childTables.length, 4, "Expected four child tables with parent ownership checks");
 assert.equal(catalogTables.length, 6, "Expected six public read-only nutrition catalogues");
 assert.equal(billingTables.length, 3, "Expected three owner-readable billing tables");
 assert.equal(consentTables.length, 1, "Expected immutable consent records");
 assert.equal(deletionTables.length, 1, "Expected deletion requests");
 assert.equal(readOnlyLogTables.length, 2, "Expected two owner-readable, non-writable logs");
+assert.equal(legacyHealthTables.length, 1, "Expected one read-only legacy health table");
 assert.equal(e2eeTables.length, 4, "Expected four consent-scoped E2EE tables");
 assert.equal(backendOnlyTables.length, 4, "Expected four service-only tables");
 assert.equal(rpcOnlyTables.length, 2, "Expected two SECURITY DEFINER RPC-only tables");
@@ -142,6 +148,13 @@ for (const table of consentTables) {
     "Consent records must be owner-insert-only");
   assert.doesNotMatch(sql, /grant [^;]*on public\.consent_records to authenticated[^;]*update|grant [^;]*on public\.consent_records to authenticated[^;]*delete/i,
     "Consent records must not grant UPDATE or DELETE");
+}
+
+for (const table of legacyHealthTables) {
+  assert.match(sql, /create policy health_samples_legacy_select_own[\\s\\S]*?for select to authenticated/i,
+    "Legacy plaintext health rows must be owner-readable");
+  assert.doesNotMatch(sql, /grant [^;]*on public\\.health_samples to authenticated[^;]*(?:insert|update|delete)/i,
+    "Legacy plaintext health rows must not grant writes");
 }
 
 for (const table of readOnlyLogTables) {
