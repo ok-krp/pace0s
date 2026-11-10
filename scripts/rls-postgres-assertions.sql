@@ -325,6 +325,41 @@ $post_user_a_e2ee_check$;
 INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
   VALUES ('72000000-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000001');
 
+-- Simulate the user revoking health-data consent. This row has the same
+-- transaction timestamp but a higher UUID tie-breaker than the earlier grant.
+INSERT INTO public.consent_records(id,user_id,consent_type,granted,created_at)
+  VALUES ('b0000000-0000-0000-0000-000000000003',
+          'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','health_data',false,now());
+
+DO $health_consent_revoked$
+DECLARE n integer;
+BEGIN
+  IF public.has_current_health_e2ee_consent() THEN
+    RAISE EXCEPTION 'latest false health consent did not revoke E2EE access';
+  END IF;
+
+  SELECT count(*) INTO n FROM public.health_samples_e2ee;
+  IF n <> 0 THEN RAISE EXCEPTION 'encrypted samples remain visible after consent revocation'; END IF;
+  SELECT count(*) INTO n FROM public.health_e2ee_key_envelopes;
+  IF n <> 0 THEN RAISE EXCEPTION 'key envelopes remain visible after consent revocation'; END IF;
+
+  BEGIN
+    INSERT INTO public.health_samples_e2ee(id,user_id)
+      VALUES ('a0000000-0000-0000-0000-000000000003','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+    RAISE EXCEPTION 'E2EE sample insert succeeded after consent revocation';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
+      VALUES ('72000000-0000-0000-0000-000000000003','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000001');
+    RAISE EXCEPTION 'E2EE envelope insert succeeded after consent revocation';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END;
+$health_consent_revoked$;
+
+
 ROLLBACK;
 
 SELECT 'RLS PostgreSQL integration assertions passed' AS result;
