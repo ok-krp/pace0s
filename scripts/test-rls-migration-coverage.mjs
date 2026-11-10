@@ -183,7 +183,6 @@ for (const table of [
   "development_tasks",
   "sport_workout_sessions",
   "ai_action_log",
-  "health_e2ee_key_envelopes",
   "sport_progression_targets",
 ]) {
   assert.match(sql, new RegExp(
@@ -194,6 +193,23 @@ for (const table of [
 
 assert.doesNotMatch(sql, /ai_tool_idempotency_user_isolation|health_legacy_migration_map_user_isolation|health_e2ee_pairing_sessions_user_isolation/i,
   "Service/RPC-only tables must not regain direct user isolation policies");
+assert.match(sql, /owns_health_e2ee_pairing_session\(pairing_session_id\)/i,
+  "Envelope policies must validate pairing-session ownership without direct table access");
+
+const dollarTags = [...sql.matchAll(/\$[A-Za-z_0-9]*\$/g)].map((match) => match[0]);
+const dollarTagCounts = new Map();
+for (const tag of dollarTags) dollarTagCounts.set(tag, (dollarTagCounts.get(tag) ?? 0) + 1);
+assert.deepEqual(
+  [...dollarTagCounts.entries()].filter(([, count]) => count % 2 !== 0),
+  [],
+  "Every SQL dollar-quote tag must have a matching closing delimiter",
+);
+assert.doesNotMatch(sql, /^\s*do\s+\$(?:\s|$)/im,
+  "DO blocks must use complete dollar-quote delimiters");
+assert.doesNotMatch(sql, /^\s*as\s+\$(?:\s|$)/im,
+  "Function bodies must use complete dollar-quote delimiters");
+assert.match(sql, /do \$drop_policy_cleanup\$[\s\S]*?end \$drop_policy_cleanup\$;/i,
+  "The old-policy cleanup DO block must have a complete named delimiter");
 assert.doesNotMatch(directBlock, /ai_provider_secrets|ai_tool_idempotency|consent_records|health_e2ee_|health_samples_e2ee|health_legacy_migration_map|notification_log|reminder_debug_log/i,
   "Sensitive, consent-scoped, RPC-only, and read-only log tables must not receive blanket CRUD grants");
 
