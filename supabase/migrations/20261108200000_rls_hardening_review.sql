@@ -220,11 +220,6 @@ create policy health_legacy_migration_map_deny_client on public.health_legacy_mi
   for all to anon, authenticated using (false) with check (false);
 
 
-
-revoke all on public.health_e2ee_pairing_sessions from anon, authenticated;
-create policy health_e2ee_pairing_sessions_deny_client on public.health_e2ee_pairing_sessions
-  for all to anon, authenticated using (false) with check (false);
-
 -- Reminder diagnostics and notification history are visible, never mutable,
 -- through the authenticated API. Server hooks write them with service_role.
 grant select on public.notification_log, public.reminder_debug_log to authenticated;
