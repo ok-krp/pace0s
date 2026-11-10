@@ -221,6 +221,35 @@ BEGIN
     RAISE EXCEPTION 'cross-user pairing envelope INSERT unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
+  DO $envelope_diagnostics$
+  DECLARE
+    consent_ok boolean;
+    device_ok boolean;
+    pairing_ok boolean;
+    uid_ok boolean;
+    policy_snapshot text;
+  BEGIN
+    consent_ok := public.has_current_health_e2ee_consent();
+    device_ok := EXISTS (
+      SELECT 1 FROM public.health_e2ee_devices d
+      WHERE d.id='70000000-0000-0000-0000-000000000001'
+        AND d.user_id=(SELECT auth.uid())
+    );
+    pairing_ok := public.owns_health_e2ee_pairing_session('80000000-0000-0000-0000-000000000001');
+    uid_ok := (SELECT auth.uid())='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    SELECT string_agg(policyname || ':' || cmd || ':check=' || coalesce(with_check,'<null>'), ' | ')
+      INTO policy_snapshot
+      FROM pg_policies
+      WHERE schemaname='public' AND tablename='health_e2ee_key_envelopes';
+    RAISE NOTICE 'envelope diagnostics consent=% device=% pairing=% uid=% policies=%',
+      consent_ok,device_ok,pairing_ok,uid_ok,policy_snapshot;
+    IF NOT consent_ok OR NOT device_ok OR NOT pairing_ok OR NOT uid_ok THEN
+      RAISE EXCEPTION 'envelope predicate false: consent=% device=% pairing=% uid=%',
+        consent_ok,device_ok,pairing_ok,uid_ok;
+    END IF;
+  END;
+  $envelope_diagnostics$;
+
   INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
     VALUES ('72000000-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000001');
 
