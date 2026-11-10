@@ -243,7 +243,6 @@ begin
     'food_log',
     'food_scans',
     'health_e2ee_recovery_envelopes',
-    'health_samples',
     'legal_consent',
     'profiles',
     'push_subscriptions',
@@ -264,6 +263,12 @@ begin
   end loop;
 end $$;
 
+-- Legacy plaintext health rows are read-only. New writes go to consent-scoped
+-- health_samples_e2ee; legacy migration is performed through its SECURITY DEFINER RPC.
+grant select on public.health_samples to authenticated;
+create policy health_samples_legacy_select_own on public.health_samples
+  for select to authenticated using (user_id = (select auth.uid()));
+
 -- Billing records are server-owned (plan/status must not be user-editable).
 grant select on public.billing_customers, public.billing_subscriptions, public.billing_trials to authenticated;
 drop policy if exists billing_customers_read_own on public.billing_customers;
@@ -277,7 +282,14 @@ create policy billing_trials_read_own on public.billing_trials for select to aut
 grant select, insert on public.data_deletion_requests to authenticated;
 drop policy if exists data_deletion_requests_submit_own on public.data_deletion_requests;
 drop policy if exists data_deletion_requests_read_own on public.data_deletion_requests;
-create policy data_deletion_requests_submit_own on public.data_deletion_requests for insert to authenticated with check (user_id = (select auth.uid()));
+create policy data_deletion_requests_submit_own on public.data_deletion_requests
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and status = 'pending'
+    and completed_at is null
+    and error_code is null
+  );
 create policy data_deletion_requests_read_own on public.data_deletion_requests for select to authenticated using (user_id = (select auth.uid()));
 
 -- Tables with user_id also carry optional parent references. Direct ownership
