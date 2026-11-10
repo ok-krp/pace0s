@@ -188,7 +188,7 @@ for (const table of rpcOnlyTables) {
   assert.doesNotMatch(directBlock, new RegExp("'" + table + "'"), 
     "RPC-only table " + table + " must not receive blanket CRUD grants");
   assert.match(sql, new RegExp(
-    "create policy " + table + "_deny_client on public[.]" + table + " for all to anon, authenticated using [(]false[)] with check [(]false[)]",
+    "create policy " + table + "_deny_client on public[.]" + table + "\\s+for all to anon, authenticated using [(]false[)] with check [(]false[)]",
     "i",
   ), "RPC-only table " + table + " must have an explicit deny policy");
 }
