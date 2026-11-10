@@ -147,6 +147,25 @@ create policy health_e2ee_devices_update_own on public.health_e2ee_devices
   using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()))
   with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
 
+-- Create the helper before policies that invoke it. The function is SECURITY
+-- DEFINER so it can validate the RPC-only pairing table without exposing it.
+create or replace function public.owns_health_e2ee_pairing_session(p_session_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $owns_pairing_session$
+  select exists (
+    select 1
+    from public.health_e2ee_pairing_sessions s
+    where s.id = p_session_id
+      and s.user_id = auth.uid()
+  );
+$owns_pairing_session$;
+revoke all on function public.owns_health_e2ee_pairing_session(uuid) from public, anon, authenticated;
+grant execute on function public.owns_health_e2ee_pairing_session(uuid) to authenticated;
+
 -- Key envelopes are immutable: owner SELECT/INSERT/DELETE only, with every
 -- referenced device/session checked against the same account.
 grant select, insert, delete on public.health_e2ee_key_envelopes to authenticated;
@@ -200,22 +219,6 @@ create policy health_e2ee_pairing_sessions_deny_client on public.health_e2ee_pai
 create policy health_legacy_migration_map_deny_client on public.health_legacy_migration_map
   for all to anon, authenticated using (false) with check (false);
 
-create or replace function public.owns_health_e2ee_pairing_session(p_session_id uuid)
-returns boolean
-language sql
-stable
-security definer
-set search_path = ''
-as $owns_pairing_session$
-  select exists (
-    select 1
-    from public.health_e2ee_pairing_sessions s
-    where s.id = p_session_id
-      and s.user_id = auth.uid()
-  );
-$owns_pairing_session$;
-revoke all on function public.owns_health_e2ee_pairing_session(uuid) from public, anon, authenticated;
-grant execute on function public.owns_health_e2ee_pairing_session(uuid) to authenticated;
 
 
 revoke all on public.health_e2ee_pairing_sessions from anon, authenticated;
