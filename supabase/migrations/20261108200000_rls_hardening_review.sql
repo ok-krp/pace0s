@@ -19,7 +19,7 @@ end $$;
 -- Remove all pre-existing permissive policies in public before creating the
 -- reviewed policy set below. PostgreSQL ORs permissive policies together: a
 -- stale permissive policy would otherwise bypass a newly-added restrictive one.
-do $
+do $drop_policy_cleanup$
 declare p record;
 begin
   for p in
@@ -29,7 +29,7 @@ begin
   loop
     execute format('drop policy %I on %I.%I', p.policyname, p.schemaname, p.tablename);
   end loop;
-end $;
+end $drop_policy_cleanup$;
 
 -- 2) Remove inherited API-role privileges. Service role remains owner/bypass-RLS.
 revoke all privileges on all tables in schema public from anon, authenticated;
@@ -84,7 +84,7 @@ language sql
 stable
 security invoker
 set search_path = public
-as $
+as $health_consent$
   select
     exists (
       select 1
@@ -112,7 +112,7 @@ as $
             and c2.consent_type = 'health_cloud_sync'
         )
     );
-$;
+$health_consent$;
 revoke all on function public.has_current_health_e2ee_consent() from public, anon, authenticated;
 grant execute on function public.has_current_health_e2ee_consent() to authenticated;
 
@@ -206,14 +206,14 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $owns_pairing_session$
   select exists (
     select 1
     from public.health_e2ee_pairing_sessions s
     where s.id = p_session_id
       and s.user_id = auth.uid()
   );
-$;
+$owns_pairing_session$;
 revoke all on function public.owns_health_e2ee_pairing_session(uuid) from public, anon, authenticated;
 grant execute on function public.owns_health_e2ee_pairing_session(uuid) to authenticated;
 
