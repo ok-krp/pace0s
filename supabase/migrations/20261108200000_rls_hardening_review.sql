@@ -85,33 +85,22 @@ stable
 security invoker
 set search_path = public
 as $health_consent$
-  select
-    exists (
-      select 1
-      from public.consent_records c
-      where c.user_id = (select auth.uid())
-        and c.consent_type = 'health_data'
-        and c.granted = true
-        and c.created_at = (
-          select max(c2.created_at)
-          from public.consent_records c2
-          where c2.user_id = (select auth.uid())
-            and c2.consent_type = 'health_data'
-        )
-    )
-    and exists (
-      select 1
-      from public.consent_records c
-      where c.user_id = (select auth.uid())
-        and c.consent_type = 'health_cloud_sync'
-        and c.granted = true
-        and c.created_at = (
-          select max(c2.created_at)
-          from public.consent_records c2
-          where c2.user_id = (select auth.uid())
-            and c2.consent_type = 'health_cloud_sync'
-        )
-    );
+  coalesce((
+    select c.granted
+    from public.consent_records c
+    where c.user_id = (select auth.uid())
+      and c.consent_type = 'health_data'
+    order by c.created_at desc, c.id desc
+    limit 1
+  ), false)
+  and coalesce((
+    select c.granted
+    from public.consent_records c
+    where c.user_id = (select auth.uid())
+      and c.consent_type = 'health_cloud_sync'
+    order by c.created_at desc, c.id desc
+    limit 1
+  ), false);
 $health_consent$;
 revoke all on function public.has_current_health_e2ee_consent() from public, anon, authenticated;
 grant execute on function public.has_current_health_e2ee_consent() to authenticated;
