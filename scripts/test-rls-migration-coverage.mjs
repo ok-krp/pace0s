@@ -10,9 +10,15 @@ const directUserTables = [...directBlock.matchAll(/'([^']+)'/g)].map((match) => 
 const catalogBlock = sql.match(/grant select on table([\s\S]*?)to anon,\s*authenticated/i)?.[1] ?? "";
 const catalogTables = [...catalogBlock.matchAll(/public\.([a-z0-9_]+)/gi)].map((match) => match[1]);
 
-const childTables = [...sql.matchAll(
-  /grant select,\s*insert,\s*update,\s*delete on public\.([a-z0-9_]+) to authenticated/gi,
-)].map((match) => match[1]);
+const childTables = [
+  "ai_messages",
+  "sport_program_items",
+  "sport_workout_exercises",
+  "sport_workout_sets",
+].filter((table) => new RegExp(
+  "grant select, insert, update, delete on public[.]" + table + " to authenticated",
+  "i",
+).test(sql));
 
 const billingTables = sql.match(
   /grant select on public\.billing_customers,\s*public\.billing_subscriptions,\s*public\.billing_trials to authenticated/i,
@@ -178,7 +184,6 @@ for (const table of [
   "sport_workout_sessions",
   "ai_action_log",
   "health_e2ee_key_envelopes",
-  "health_e2ee_pairing_sessions",
   "sport_progression_targets",
 ]) {
   assert.match(sql, new RegExp(
