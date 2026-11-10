@@ -100,7 +100,7 @@ for (const table of backendOnlyTables) {
     "i",
   ), "Backend-only table " + table + " must not be granted to API roles");
   assert.match(sql, new RegExp(
-    "create policy " + table + "_deny_client on public\\." + table + " for all to anon, authenticated using \\\\(false\\\\) with check \\\\(false\\\\)",
+    "create policy " + table + "_deny_client on public[.]" + table + " for all to anon, authenticated using [(]false[)] with check [(]false[)]",
     "i",
   ), "Backend-only table " + table + " must have an explicit deny policy");
 }
