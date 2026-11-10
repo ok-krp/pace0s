@@ -85,7 +85,8 @@ stable
 security invoker
 set search_path = public
 as $health_consent$
-  coalesce((
+  select
+    coalesce((
     select c.granted
     from public.consent_records c
     where c.user_id = (select auth.uid())
