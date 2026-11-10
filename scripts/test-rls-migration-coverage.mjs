@@ -236,6 +236,11 @@ for (const table of [
 
 assert.doesNotMatch(sql, /ai_tool_idempotency_user_isolation|health_legacy_migration_map_user_isolation|health_e2ee_pairing_sessions_user_isolation/i,
   "Service/RPC-only tables must not regain direct user isolation policies");
+assert.doesNotMatch(sql, /health_e2ee_key_envelopes_user_isolation/i,
+  "The old broad envelope policy must not be recreated after consent-scoped E2EE policies");
+assert.doesNotMatch(sql.slice(sql.indexOf("create policy health_e2ee_envelopes_select_own")),
+  /from public[.]health_e2ee_pairing_sessions/i,
+  "Envelope policies must not directly query the RPC-only pairing table");
 assert.match(sql, /owns_health_e2ee_pairing_session\(pairing_session_id\)/i,
   "Envelope policies must validate pairing-session ownership without direct table access");
 
