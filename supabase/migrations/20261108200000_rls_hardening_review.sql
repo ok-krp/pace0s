@@ -68,7 +68,7 @@ declare t text;
 begin
   foreach t in array array[
     'ai_action_log','ai_conversations','ai_preferences',
-    'consent_records',
+    
     'development_tasks','food_log','food_scans','health_e2ee_devices',
     'health_e2ee_key_envelopes','health_e2ee_key_versions',
     'health_e2ee_pairing_sessions','health_e2ee_recovery_envelopes',
@@ -77,8 +77,7 @@ begin
     'reminder_debug_log','reminder_settings','sport_exercises','sport_programs',
     'sport_progression_targets','sport_workout_sessions','user_biometrics_e2ee',
     'user_state'
-  ]
-  loop
+  ] loop
     execute format('grant select, insert, update, delete on public.%I to authenticated', t);
     execute format('drop policy if exists %I on public.%I', t || '_user_isolation', t);
     execute format(
