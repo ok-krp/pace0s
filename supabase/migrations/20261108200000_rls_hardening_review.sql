@@ -161,10 +161,7 @@ create policy health_e2ee_envelopes_select_own on public.health_e2ee_key_envelop
       select 1 from public.health_e2ee_devices d
       where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
     ))
-    and (pairing_session_id is null or exists (
-      select 1 from public.health_e2ee_pairing_sessions p
-      where p.id = health_e2ee_key_envelopes.pairing_session_id and p.user_id = (select auth.uid())
-    ))
+    and (pairing_session_id is null or public.owns_health_e2ee_pairing_session(pairing_session_id))
   );
 create policy health_e2ee_envelopes_insert_own on public.health_e2ee_key_envelopes
   for insert to authenticated
@@ -177,10 +174,7 @@ create policy health_e2ee_envelopes_insert_own on public.health_e2ee_key_envelop
       select 1 from public.health_e2ee_devices d
       where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
     ))
-    and (pairing_session_id is null or exists (
-      select 1 from public.health_e2ee_pairing_sessions p
-      where p.id = health_e2ee_key_envelopes.pairing_session_id and p.user_id = (select auth.uid())
-    ))
+    and (pairing_session_id is null or public.owns_health_e2ee_pairing_session(pairing_session_id))
   );
 create policy health_e2ee_envelopes_delete_own on public.health_e2ee_key_envelopes
   for delete to authenticated
@@ -197,8 +191,33 @@ grant select on public.health_e2ee_key_versions to authenticated;
 create policy health_e2ee_key_versions_select_own on public.health_e2ee_key_versions
   for select to authenticated using (user_id = (select auth.uid()));
 
--- Pairing-session rows are RPC-only. SECURITY DEFINER RPCs validate both
--- devices and auth.uid(); direct PostgREST table access remains unavailable.
+-- Pairing sessions and the legacy migration map are RPC-only. Their
+-- SECURITY DEFINER RPCs perform auth.uid() ownership checks; direct table
+-- grants and policies are intentionally denied.
+revoke all on public.health_e2ee_pairing_sessions, public.health_legacy_migration_map from anon, authenticated;
+create policy health_e2ee_pairing_sessions_deny_client on public.health_e2ee_pairing_sessions
+  for all to anon, authenticated using (false) with check (false);
+create policy health_legacy_migration_map_deny_client on public.health_legacy_migration_map
+  for all to anon, authenticated using (false) with check (false);
+
+create or replace function public.owns_health_e2ee_pairing_session(p_session_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1
+    from public.health_e2ee_pairing_sessions s
+    where s.id = p_session_id
+      and s.user_id = auth.uid()
+  );
+$;
+revoke all on function public.owns_health_e2ee_pairing_session(uuid) from public, anon, authenticated;
+grant execute on function public.owns_health_e2ee_pairing_session(uuid) to authenticated;
+
+
 revoke all on public.health_e2ee_pairing_sessions from anon, authenticated;
 create policy health_e2ee_pairing_sessions_deny_client on public.health_e2ee_pairing_sessions
   for all to anon, authenticated using (false) with check (false);
@@ -217,15 +236,23 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'ai_action_log','ai_conversations','ai_preferences',
-    
-    'development_tasks','food_log','food_scans',,
-    ,,
-    ,'health_e2ee_recovery_envelopes',
-    'health_legacy_migration_map','health_samples',,
-    'legal_consent',,'profiles','push_subscriptions',
-    ,'reminder_settings','sport_exercises','sport_programs',
-    'sport_progression_targets','sport_workout_sessions','user_biometrics_e2ee',
+    'ai_action_log',
+    'ai_conversations',
+    'ai_preferences',
+    'development_tasks',
+    'food_log',
+    'food_scans',
+    'health_e2ee_recovery_envelopes',
+    'health_samples',
+    'legal_consent',
+    'profiles',
+    'push_subscriptions',
+    'reminder_settings',
+    'sport_exercises',
+    'sport_programs',
+    'sport_progression_targets',
+    'sport_workout_sessions',
+    'user_biometrics_e2ee',
     'user_state'
   ] loop
     execute format('grant select, insert, update, delete on public.%I to authenticated', t);
@@ -374,28 +401,13 @@ using (user_id = (select auth.uid()) and exists (
   select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.device_id and d.user_id = (select auth.uid())
 ) and (sender_device_id is null or exists (
   select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
-)) and (pairing_session_id is null or exists (
-  select 1 from public.health_e2ee_pairing_sessions p where p.id = health_e2ee_key_envelopes.pairing_session_id and p.user_id = (select auth.uid())
-)))
+)) and (pairing_session_id is null or public.owns_health_e2ee_pairing_session(pairing_session_id)))
 with check (user_id = (select auth.uid()) and exists (
   select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.device_id and d.user_id = (select auth.uid())
 ) and (sender_device_id is null or exists (
   select 1 from public.health_e2ee_devices d where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
 )) and (pairing_session_id is null or exists (
   select 1 from public.health_e2ee_pairing_sessions p where p.id = health_e2ee_key_envelopes.pairing_session_id and p.user_id = (select auth.uid())
-)));
-
-drop policy if exists health_e2ee_pairing_sessions_user_isolation on public.health_e2ee_pairing_sessions;
-create policy health_e2ee_pairing_sessions_user_isolation on public.health_e2ee_pairing_sessions for all to authenticated
-using (user_id = (select auth.uid()) and exists (
-  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_pairing_sessions.initiator_device_id and d.user_id = (select auth.uid())
-) and (recipient_device_id is null or exists (
-  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_pairing_sessions.recipient_device_id and d.user_id = (select auth.uid())
-)))
-with check (user_id = (select auth.uid()) and exists (
-  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_pairing_sessions.initiator_device_id and d.user_id = (select auth.uid())
-) and (recipient_device_id is null or exists (
-  select 1 from public.health_e2ee_devices d where d.id = health_e2ee_pairing_sessions.recipient_device_id and d.user_id = (select auth.uid())
 )));
 
 drop policy if exists sport_progression_targets_user_isolation on public.sport_progression_targets;
@@ -410,15 +422,6 @@ with check (user_id = (select auth.uid()) and exists (
 ) and (based_on_session_id is null or exists (
   select 1 from public.sport_workout_sessions s where s.id = sport_progression_targets.based_on_session_id and s.user_id = (select auth.uid())
 )));
-
-drop policy if exists health_legacy_migration_map_user_isolation on public.health_legacy_migration_map;
-create policy health_legacy_migration_map_user_isolation on public.health_legacy_migration_map for all to authenticated
-using (user_id = (select auth.uid()) and exists (
-  select 1 from public.health_samples h where h.id = health_legacy_migration_map.legacy_sample_id and h.user_id = (select auth.uid())
-))
-with check (user_id = (select auth.uid()) and exists (
-  select 1 from public.health_samples h where h.id = health_legacy_migration_map.legacy_sample_id and h.user_id = (select auth.uid())
-));
 
 -- 6) Service-only tables: no API grants; explicit deny policies defend against
 -- a later accidental GRANT. These contain secrets, idempotency internals, or
