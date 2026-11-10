@@ -16,6 +16,21 @@ begin
   end loop;
 end $$;
 
+-- Remove all pre-existing permissive policies in public before creating the
+-- reviewed policy set below. PostgreSQL ORs permissive policies together: a
+-- stale permissive policy would otherwise bypass a newly-added restrictive one.
+do $
+declare p record;
+begin
+  for p in
+    select schemaname, tablename, policyname
+    from pg_policies
+    where schemaname = 'public'
+  loop
+    execute format('drop policy %I on %I.%I', p.policyname, p.schemaname, p.tablename);
+  end loop;
+end $;
+
 -- 2) Remove inherited API-role privileges. Service role remains owner/bypass-RLS.
 revoke all privileges on all tables in schema public from anon, authenticated;
 revoke all privileges on all sequences in schema public from anon, authenticated;
@@ -61,7 +76,142 @@ drop policy if exists nutrition_reference_sources_read_catalog on public.nutriti
 create policy nutrition_reference_sources_read_catalog on public.nutrition_reference_sources
   for select to anon, authenticated using (true);
 
--- 4) Tables with a direct user_id owner. Policies require the JWT subject to
+-- 4) Consent-scoped E2EE data and read-only user logs.
+-- Keep this helper aligned with the canonical health/cloud-sync consent contract.
+create or replace function public.has_current_health_e2ee_consent()
+returns boolean
+language sql
+stable
+security invoker
+set search_path = public
+as $
+  select
+    exists (
+      select 1
+      from public.consent_records c
+      where c.user_id = (select auth.uid())
+        and c.consent_type = 'health_data'
+        and c.granted = true
+        and c.created_at = (
+          select max(c2.created_at)
+          from public.consent_records c2
+          where c2.user_id = (select auth.uid())
+            and c2.consent_type = 'health_data'
+        )
+    )
+    and exists (
+      select 1
+      from public.consent_records c
+      where c.user_id = (select auth.uid())
+        and c.consent_type = 'health_cloud_sync'
+        and c.granted = true
+        and c.created_at = (
+          select max(c2.created_at)
+          from public.consent_records c2
+          where c2.user_id = (select auth.uid())
+            and c2.consent_type = 'health_cloud_sync'
+        )
+    );
+$;
+revoke all on function public.has_current_health_e2ee_consent() from public, anon, authenticated;
+grant execute on function public.has_current_health_e2ee_consent() to authenticated;
+
+-- Encrypted health samples can be read, inserted, updated for conflict-safe
+-- upserts, or deleted only by their owner while both required consents are live.
+grant select, insert, update, delete on public.health_samples_e2ee to authenticated;
+create policy health_samples_e2ee_select_own on public.health_samples_e2ee
+  for select to authenticated
+  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+create policy health_samples_e2ee_insert_own on public.health_samples_e2ee
+  for insert to authenticated
+  with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+create policy health_samples_e2ee_update_own on public.health_samples_e2ee
+  for update to authenticated
+  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()))
+  with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+create policy health_samples_e2ee_delete_own on public.health_samples_e2ee
+  for delete to authenticated
+  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+
+-- Devices are user-managed but cannot be physically deleted through the API;
+-- revocation uses revoked_at and remains consent-gated.
+grant select, insert, update on public.health_e2ee_devices to authenticated;
+create policy health_e2ee_devices_select_own on public.health_e2ee_devices
+  for select to authenticated
+  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+create policy health_e2ee_devices_insert_own on public.health_e2ee_devices
+  for insert to authenticated
+  with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+create policy health_e2ee_devices_update_own on public.health_e2ee_devices
+  for update to authenticated
+  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()))
+  with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+
+-- Key envelopes are immutable: owner SELECT/INSERT/DELETE only, with every
+-- referenced device/session checked against the same account.
+grant select, insert, delete on public.health_e2ee_key_envelopes to authenticated;
+create policy health_e2ee_envelopes_select_own on public.health_e2ee_key_envelopes
+  for select to authenticated
+  using (
+    user_id = (select auth.uid())
+    and (select public.has_current_health_e2ee_consent())
+    and exists (select 1 from public.health_e2ee_devices d
+                where d.id = health_e2ee_key_envelopes.device_id and d.user_id = (select auth.uid()))
+    and (sender_device_id is null or exists (
+      select 1 from public.health_e2ee_devices d
+      where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
+    ))
+    and (pairing_session_id is null or exists (
+      select 1 from public.health_e2ee_pairing_sessions p
+      where p.id = health_e2ee_key_envelopes.pairing_session_id and p.user_id = (select auth.uid())
+    ))
+  );
+create policy health_e2ee_envelopes_insert_own on public.health_e2ee_key_envelopes
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and (select public.has_current_health_e2ee_consent())
+    and exists (select 1 from public.health_e2ee_devices d
+                where d.id = health_e2ee_key_envelopes.device_id and d.user_id = (select auth.uid()))
+    and (sender_device_id is null or exists (
+      select 1 from public.health_e2ee_devices d
+      where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
+    ))
+    and (pairing_session_id is null or exists (
+      select 1 from public.health_e2ee_pairing_sessions p
+      where p.id = health_e2ee_key_envelopes.pairing_session_id and p.user_id = (select auth.uid())
+    ))
+  );
+create policy health_e2ee_envelopes_delete_own on public.health_e2ee_key_envelopes
+  for delete to authenticated
+  using (
+    user_id = (select auth.uid())
+    and (select public.has_current_health_e2ee_consent())
+    and exists (select 1 from public.health_e2ee_devices d
+                where d.id = health_e2ee_key_envelopes.device_id and d.user_id = (select auth.uid()))
+  );
+
+-- The current key version is readable directly; writes are performed only by
+-- the authenticated SECURITY DEFINER rotation RPC.
+grant select on public.health_e2ee_key_versions to authenticated;
+create policy health_e2ee_key_versions_select_own on public.health_e2ee_key_versions
+  for select to authenticated using (user_id = (select auth.uid()));
+
+-- Pairing-session rows are RPC-only. SECURITY DEFINER RPCs validate both
+-- devices and auth.uid(); direct PostgREST table access remains unavailable.
+revoke all on public.health_e2ee_pairing_sessions from anon, authenticated;
+create policy health_e2ee_pairing_sessions_deny_client on public.health_e2ee_pairing_sessions
+  for all to anon, authenticated using (false) with check (false);
+
+-- Reminder diagnostics and notification history are visible, never mutable,
+-- through the authenticated API. Server hooks write them with service_role.
+grant select on public.notification_log, public.reminder_debug_log to authenticated;
+create policy notification_log_select_own on public.notification_log
+  for select to authenticated using (user_id = (select auth.uid()));
+create policy reminder_debug_log_select_own on public.reminder_debug_log
+  for select to authenticated using (user_id = (select auth.uid()));
+
+-- 5) Tables with a direct user_id owner. Policies require the JWT subject to
 -- equal user_id for reads and writes. No anon policy is created.
 do $$
 declare t text;
@@ -69,12 +219,12 @@ begin
   foreach t in array array[
     'ai_action_log','ai_conversations','ai_preferences',
     
-    'development_tasks','food_log','food_scans','health_e2ee_devices',
-    'health_e2ee_key_envelopes','health_e2ee_key_versions',
-    'health_e2ee_pairing_sessions','health_e2ee_recovery_envelopes',
-    'health_legacy_migration_map','health_samples','health_samples_e2ee',
-    'legal_consent','notification_log','profiles','push_subscriptions',
-    'reminder_debug_log','reminder_settings','sport_exercises','sport_programs',
+    'development_tasks','food_log','food_scans',,
+    ,,
+    ,'health_e2ee_recovery_envelopes',
+    'health_legacy_migration_map','health_samples',,
+    'legal_consent',,'profiles','push_subscriptions',
+    ,'reminder_settings','sport_exercises','sport_programs',
     'sport_progression_targets','sport_workout_sessions','user_biometrics_e2ee',
     'user_state'
   ] loop
