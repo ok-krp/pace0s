@@ -1,0 +1,60 @@
+name: RLS PostgreSQL preflight
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - "scripts/rls-postgres-*.sql"
+      - ".github/workflows/rls-postgres-preflight.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-rls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: paceos_rls_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d paceos_rls_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Create disposable 45-table schema fixture
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
+            --set=ON_ERROR_STOP=1 --file=scripts/rls-postgres-fixture.sql
+
+      - name: Apply review-only RLS migration to disposable PostgreSQL
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
+            --set=ON_ERROR_STOP=1 --file=supabase/migrations/20261108200000_rls_hardening_review.sql
+
+      - name: Assert tenant isolation, consent gates, and least privilege
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
+            --set=ON_ERROR_STOP=1 --file=scripts/rls-postgres-assertions.sql
