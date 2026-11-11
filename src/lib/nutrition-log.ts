@@ -227,7 +227,7 @@ export function refreshNutritionFromFoodLog(
   const legacyRows = currentRows.filter((item) => !isFoodLogUuid(item.id) && !deletedIds.has(item.id));
   const canonicalIds = new Set(rows.map((item) => item.id));
   const pendingRows = currentRows.filter((item) =>
-    isFoodLogUuid(item.id) && item.pendingFoodLog === true &&
+    isFoodLogUuid(item.id) && (item as NutritionItem & { pendingFoodLog?: boolean }).pendingFoodLog === true &&
     !canonicalIds.has(item.id) && !deletedIds.has(item.id)
   );
   const mergedRows = [
