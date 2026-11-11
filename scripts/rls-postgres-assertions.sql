@@ -1,6 +1,39 @@
 -- Integration assertions. Migration is applied before this file.
 \set ON_ERROR_STOP on
 
+-- A function created after the migration must not inherit PUBLIC or API-role
+-- EXECUTE. The two RLS helpers retain only their explicit authenticated grant.
+create function public.rls_default_execute_probe()
+returns boolean
+language sql
+as $rls_default_probe$
+  select true;
+$rls_default_probe$;
+
+DO $function_privileges$
+BEGIN
+  IF has_function_privilege('anon', 'public.rls_default_execute_probe()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'new public function inherited EXECUTE for anon';
+  END IF;
+  IF has_function_privilege('authenticated', 'public.rls_default_execute_probe()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'new public function inherited EXECUTE for authenticated';
+  END IF;
+  IF has_function_privilege('anon', 'public.has_current_health_e2ee_consent()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'health consent helper is executable by anon';
+  END IF;
+  IF NOT has_function_privilege('authenticated', 'public.has_current_health_e2ee_consent()', 'EXECUTE') THEN
+    RAISE EXCEPTION 'authenticated cannot execute the app health consent RPC';
+  END IF;
+  IF has_function_privilege('anon', 'pace_private.owns_health_e2ee_pairing_session(uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'pairing ownership helper is executable by anon';
+  END IF;
+  IF NOT has_function_privilege('authenticated', 'pace_private.owns_health_e2ee_pairing_session(uuid)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'authenticated cannot call the pairing ownership helper from RLS';
+  END IF;
+END;
+$function_privileges$;
+DROP FUNCTION public.rls_default_execute_probe();
+
 DO $fixture_seed$
 BEGIN
   INSERT INTO public.profiles (id,user_id) VALUES
@@ -275,10 +308,10 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
-  IF NOT public.owns_health_e2ee_pairing_session('80000000-0000-0000-0000-000000000001') THEN
+  IF NOT pace_private.owns_health_e2ee_pairing_session('80000000-0000-0000-0000-000000000001') THEN
     RAISE EXCEPTION 'pairing ownership helper rejected the owner';
   END IF;
-  IF public.owns_health_e2ee_pairing_session('80000000-0000-0000-0000-000000000002') THEN
+  IF pace_private.owns_health_e2ee_pairing_session('80000000-0000-0000-0000-000000000002') THEN
     RAISE EXCEPTION 'pairing ownership helper accepted another user';
   END IF;
 
@@ -311,7 +344,7 @@ BEGIN
     WHERE d.id='70000000-0000-0000-0000-000000000001'
       AND d.user_id=(SELECT auth.uid())
   );
-  pairing_ok := public.owns_health_e2ee_pairing_session('80000000-0000-0000-0000-000000000001');
+  pairing_ok := pace_private.owns_health_e2ee_pairing_session('80000000-0000-0000-0000-000000000001');
   uid_ok := (SELECT auth.uid())='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
   RAISE NOTICE 'post-DО envelope predicates consent=% device=% pairing=% uid=%',
     consent_ok,device_ok,pairing_ok,uid_ok;
