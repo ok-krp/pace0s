@@ -64,6 +64,24 @@ void main() {
       expect(store.pendingOperations(), isEmpty);
     });
 
+    test('fails closed and preserves an unreadable existing local file', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-corrupt-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final file = File('${directory.path}/pace_local.json');
+      const corrupted = '{invalid-json';
+      await file.writeAsString(corrupted);
+
+      await expectLater(
+        LocalStore.openAt(file),
+        throwsA(isA<StateError>()),
+      );
+      expect(await file.readAsString(), corrupted);
+    });
+
     test('keeps account outboxes isolated when a late acknowledgement arrives', () async {
       final directory = await Directory.systemTemp.createTemp('pace-local-v2-');
       addTearDown(() async {
