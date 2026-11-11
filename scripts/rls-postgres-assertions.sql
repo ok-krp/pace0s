@@ -375,6 +375,12 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
+  BEGIN
+    INSERT INTO public.health_e2ee_devices(user_id,device_name,public_key,algorithm)
+      VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','without-consent','{}'::jsonb,'ECDH-P256');
+    RAISE EXCEPTION 'E2EE device registration succeeded without required consent';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   SELECT count(*) INTO n FROM public.health_e2ee_recovery_envelopes;
   IF n <> 0 THEN RAISE EXCEPTION 'E2EE recovery envelope visible without consent'; END IF;
   BEGIN
@@ -401,6 +407,13 @@ BEGIN
     AND consent_type IN ('health_data','health_cloud_sync')
     AND created_at=(SELECT now());
   IF n <> 2 THEN RAISE EXCEPTION 'database timestamp default not applied to consent records: %',n; END IF;
+
+  INSERT INTO public.health_e2ee_devices(user_id,device_name,public_key,algorithm)
+    VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','consented-device','{}'::jsonb,'ECDH-P256');
+  SELECT count(*) INTO n FROM public.health_e2ee_devices
+    WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+      AND device_name='consented-device' AND id IS NOT NULL AND created_at IS NOT NULL AND revoked_at IS NULL;
+  IF n <> 1 THEN RAISE EXCEPTION 'database-generated E2EE device registration failed'; END IF;
 
   INSERT INTO public.health_e2ee_recovery_envelopes(user_id,envelope,nonce,algorithm,key_version)
     VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','wrapped-key','wrapped-nonce','PBKDF2-SHA-256/AES-256-GCM',1)
@@ -502,6 +515,10 @@ INSERT INTO public.health_e2ee_key_envelopes(user_id,device_id,sender_device_id,
   VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001',
           '70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000001',
           'valid-envelope','nonce','ECDH-P256/AES-256-GCM',1);
+SELECT count(*) INTO n FROM public.health_e2ee_key_envelopes
+WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+  AND id IS NOT NULL AND created_at IS NOT NULL;
+IF n <> 1 THEN RAISE EXCEPTION 'database-generated E2EE envelope ID/timestamp failed'; END IF;
 
 -- Commit the initial granted decisions. The withdrawal is a separate request
 -- transaction, so PostgreSQL's now() default is strictly later, as in PostgREST.
