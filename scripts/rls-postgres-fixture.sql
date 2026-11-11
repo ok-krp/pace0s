@@ -87,7 +87,19 @@ CREATE TABLE public.health_samples_e2ee (
   nonce text NOT NULL DEFAULT 'nonce', algorithm text NOT NULL DEFAULT 'AES-256-GCM',
   key_version integer NOT NULL DEFAULT 1, dedupe_hash text
 );
-CREATE TABLE public.legal_consent (id uuid PRIMARY KEY, user_id uuid NOT NULL);
+CREATE TABLE public.legal_consent (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  region text NOT NULL CHECK (region IN ('EU','CA-US','BR','UK','CH','OTHER')),
+  eula_version text NOT NULL,
+  privacy_version text NOT NULL,
+  consented_at timestamptz NOT NULL DEFAULT now(),
+  ip_country text,
+  opts jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, eula_version, privacy_version)
+);
 CREATE TABLE public.notification_log (id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.nutrition_canonical_dishes (id uuid PRIMARY KEY);
 CREATE TABLE public.nutrition_data_sources (id text PRIMARY KEY);
