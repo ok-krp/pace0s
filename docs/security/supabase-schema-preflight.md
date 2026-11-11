@@ -78,3 +78,19 @@ There are also no foreign keys in the inspected `PaceOS-Migrated` schema, so RLS
 ## Safety status
 
 No Supabase migration was applied, no branch/project was created, no production data was modified, no Vercel environment variable or DNS record was changed, and no paid resource was created.
+
+## 6. Follow-up ACL review — 2026-11-11
+
+A read-only catalog query on the connected `PaceOS-Migrated` project confirmed that the `postgres` owner has schema-level default ACL entries granting `EXECUTE` on future public functions to `anon` and `authenticated`. PostgreSQL also grants function execution to `PUBLIC` by default. The original review migration closed default table and sequence grants but did not close these function defaults.
+
+The PR #316 review migration has now been amended to:
+
+- revoke the global default `EXECUTE` privilege from `PUBLIC` for functions created by the migration role;
+- revoke the `anon` and `authenticated` default `EXECUTE` grants for new functions in `public`;
+- keep the app-called `public.has_current_health_e2ee_consent()` RPC available only to `authenticated`;
+- move the policy-only `SECURITY DEFINER` ownership helper into `pace_private`, outside the standard exposed `public` API schema;
+- add PostgreSQL integration assertions proving the defaults are closed and the two helpers retain only their intended authenticated execution path.
+
+The connected database reports that the executing `postgres` role is not a member of `supabase_admin` (which is a separate superuser role); the migration therefore does not claim to rewrite that role's independent default ACL entries. Application migrations are expected to execute as `postgres`; this assumption must be checked against the confirmed Vercel target before deployment.
+
+**This is still a draft preflight change.** The configured Vercel project points to the inaccessible `cduyjejftorfuxuwhbqt` ref. No SQL was executed against Supabase, no environment variable was changed, and no Production deployment or merge was performed.
