@@ -214,6 +214,15 @@ assert.match(definerHardeningSql, /revoke create on schema public from public, a
 const definerFunctions = [
   "sync_sport_user_state()",
   "upsert_profile_if_newer(uuid,jsonb,timestamptz,text)",
+  "sport_update_exercise(uuid,text,text,text,text,integer,integer,numeric,integer)",
+  "sport_delete_exercise(uuid)",
+  "sport_update_program(uuid,text,text,integer[])",
+  "sport_delete_program(uuid)",
+  "sport_finish_workout(uuid,timestamptz,integer,text)",
+  "sport_delete_workout(uuid)",
+  "has_current_health_e2ee_consent()",
+  "touch_updated_at()",
+  "update_updated_at_column()",
   "delete_temporary_workout_after_finish()",
   "touch_ai_provider_secret_updated_at()",
   "prevent_audit_log_mutation()",
@@ -236,6 +245,33 @@ assert.match(definerHardeningSql, /alter function public\.upsert_profile_if_newe
   "The profile sync RPC must be SECURITY DEFINER after checking auth.uid()");
 assert.match(definerHardeningSql, /grant execute on function public\.upsert_profile_if_newer\(uuid, jsonb, timestamptz, text\)\s+to authenticated/i,
   "The profile sync RPC must remain callable by authenticated users");
+for (const fn of [
+  "sport_delete_workout(uuid)",
+  "sport_delete_program(uuid)",
+  "sport_delete_exercise(uuid)",
+]) {
+  assert.match(definerHardeningSql, new RegExp(
+    "grant execute on function public\\." + fn.replace(/[()]/g, "\\\\assert.match(definerHardeningSql, /grant execute on function public\.upsert_profile_if_newer\(uuid, jsonb, timestamptz, text\)\s+to authenticated/i,
+  "The profile sync RPC must remain callable by authenticated users");") +
+      "\\\\s+to authenticated", "i"),
+    "Authenticated owner must retain the intended Sport deletion RPC: " + fn);
+}
+assert.match(definerHardeningSql, /revoke all on function public\.touch_updated_at\(\) from public, anon, authenticated/i,
+  "Timestamp trigger helper must not be directly callable by API roles");
+assert.match(definerHardeningSql, /revoke all on function public\.update_updated_at_column\(\) from public, anon, authenticated/i,
+  "Legacy timestamp trigger helper must not be directly callable by API roles");
+const invokerAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+for (const assertion of [
+  "Sport table RPC unexpectedly bypasses caller RLS as SECURITY DEFINER",
+  "user A deleted user B workout via invoker RPC",
+  "user A deleted user B program via invoker RPC",
+  "user A deleted user B exercise via invoker RPC",
+  "timestamp trigger helpers remain directly executable by API roles",
+  "revoked timestamp trigger helper did not run for owner UPDATE",
+]) {
+  assert.ok(invokerAssertions.includes(assertion),
+    "PostgreSQL must verify invoker RPC/trigger security: " + assertion);
+}
 assert.match(definerHardeningSql, /revoke all on function public\.sync_sport_user_state\(\)\s+from public, anon, authenticated/i,
   "Sport sync trigger function must not be directly callable by API roles");
 assert.match(definerHardeningSql, /revoke all on function public\.delete_temporary_workout_after_finish\(\)\s+from public, anon, authenticated/i,
