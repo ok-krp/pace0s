@@ -458,8 +458,17 @@ assert.match(syncAssertions, /user B can read user A user_state/,
 assert.doesNotMatch(directBlock, /'user_state'/,
   "user_state must not receive blanket CRUD privileges");
 
-assert.match(sql, /revoke all privileges on all tables in schema public from anon, authenticated/i,
+assert.match(sql, /revoke all privileges on all tables in schema public from public, anon, authenticated/i,
   "Existing API-role table grants must be removed before minimal grants are added");
+assert.match(sql, /revoke all privileges on all sequences in schema public from public, anon, authenticated/i,
+  "PUBLIC-inherited sequence grants must be removed before minimal grants are added");
+assert.match(sql, /alter default privileges for role postgres revoke all on tables from public, anon, authenticated/i,
+  "Global default table ACLs for PUBLIC/API roles must be cleared");
+assert.match(sql, /alter default privileges for role postgres revoke all on sequences from public, anon, authenticated/i,
+  "Global default sequence ACLs for PUBLIC/API roles must be cleared");
+const inheritedAclAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.match(inheritedAclAssertions, /PUBLIC-inherited table or sequence privileges survived the RLS privilege reset/,
+  "PostgreSQL must verify table and sequence PUBLIC inheritance is removed");
 assert.match(sql, /revoke all privileges \(%I\) on table %I\.%I from public, anon, authenticated/i,
   "Legacy column-level privileges must be removed separately from table-level grants");
 const columnAclAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
