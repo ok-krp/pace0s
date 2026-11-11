@@ -398,11 +398,25 @@ export function useCloudSyncEngineInternal() {
           "pace.watch.last_metrics",
           "pace.dark",
           "pace.visual-theme",
+          "pace.privacy.pin.hash",
+          "pace.privacy.unlocked",
+          "pace.privacy.lockOnEnter",
+          "pace.privacy.bioCredentialId",
+          "pace.finance.pin.hash",
+          "pace.finance.unlocked",
+          "pace.ai.debug",
+          "pace.local-ai.ready.v2",
+          "pace.ai.local.enabled",
+          "pace.ble.seen",
+          "pace.import.log",
+          "pace.ble.devices",
+          "pace.ble.mapping",
         ]);
+        const localOnlyPrefixes = ["pace.ai.pending:", "pace.privacy.", "pace.ble."];
         try {
           for (const key of Object.keys(localStorage)) {
             if (!key.startsWith(PACE_PREFIX) || key.startsWith(INTERNAL_PREFIX) || key.startsWith(DOMAIN_PREFIX)) continue;
-            if (!isSyncableKey(key) || localOnlyKeys.has(key) || grouped.has(key) || getQueued(key) || readDomainRecord(key)) continue;
+            if (!isSyncableKey(key) || localOnlyKeys.has(key) || localOnlyPrefixes.some((prefix) => key.startsWith(prefix)) || grouped.has(key) || getQueued(key) || readDomainRecord(key)) continue;
             let value: unknown;
             try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { continue; }
             if (isEmptyRecoveredValue(value)) continue;
