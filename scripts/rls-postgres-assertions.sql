@@ -400,8 +400,15 @@ $post_user_a_e2ee_check$;
 INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
   VALUES ('72000000-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000001');
 
--- Simulate the user revoking health-data consent. This row has the same
--- transaction timestamp but a higher UUID tie-breaker than the earlier grant.
+-- Commit the initial granted decisions. The withdrawal is a separate request
+-- transaction, so PostgreSQL's now() default is strictly later, as in PostgREST.
+COMMIT;
+
+BEGIN;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',true);
+
+-- Simulate the user revoking health-data consent in a later database transaction.
 INSERT INTO public.consent_records(user_id,consent_type,granted,legal_version,policy_version)
   VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','health_data',false,'2026-07-10','2026-07-10');
 
