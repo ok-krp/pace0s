@@ -92,13 +92,19 @@ async function bridgeLocalNutritionToFoodLog(value: unknown) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     const nextRows = nutritionRows(value);
-    const previousRows = nutritionRows(lastBridgedNutrition);
-    const previousIds = new Set(previousRows.map((row) => row.id));
-    const nextIds = new Set(nextRows.map((row) => row.id));
-    const { data: existing, error: selectError } = await supabase.from("food_log").select("id").eq("user_id", user.id);
+    const previousById = new Map(nutritionRows(lastBridgedNutrition).map((row) => [row.id, row.item]));
+    // Query only IDs present in this snapshot. A missing ID is not a delete
+    // instruction: snapshots can be partial, stale, or still hydrating.
+    const requestedIds = [...new Set(nextRows.map((row) => row.id))];
+    const { data: existing, error: selectError } = requestedIds.length
+      ? await supabase.from("food_log").select("id").eq("user_id", user.id).in("id", requestedIds)
+      : { data: [], error: null };
     if (selectError) throw selectError;
     const existingIds = new Set((existing ?? []).map((row) => row.id));
     for (const { id, day, item } of nextRows) {
+      const previous = previousById.get(id);
+      const changed = previous !== undefined && JSON.stringify(previous) !== JSON.stringify(item);
+      if (existingIds.has(id) && !changed) continue;
       const payload = { id, user_id: user.id, log_date: day, meal: item.meal, name: item.name, kcal: Number(item.kcal || 0), protein_g: Number(item.p || 0), carbs_g: Number(item.c || 0), fat_g: Number(item.f || 0), fiber_g: Number(item.fiber || 0), sugar_g: Number(item.sugar || 0), sodium_mg: Number(item.sodium || 0), source: existingIds.has(id) ? undefined : "manual", meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } } };
       if (existingIds.has(id)) {
         const { source: _source, ...update } = payload;
@@ -109,11 +115,8 @@ async function bridgeLocalNutritionToFoodLog(value: unknown) {
         if (error) throw error;
       }
     }
-    for (const id of previousIds) {
-      if (nextIds.has(id)) continue;
-      const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
-      if (error) throw error;
-    }
+    // Deliberately no DELETE here. Only an explicit delete action may remove
+    // a food_log row; absence from a local snapshot must never erase cloud data.
     lastBridgedNutrition = value && typeof value === "object" && !Array.isArray(value) ? value as NutritionMap : {};
   } catch (error) {
     console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
