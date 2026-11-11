@@ -221,3 +221,8 @@ Do not infer effective target ACLs from source migrations alone. The target audi
 ### Default ACL nuance added after review
 
 The function default-privilege hardening now revokes `EXECUTE` from `PUBLIC` both globally for `postgres` and specifically in schema `public`. Per-schema default ACL entries are additive to global defaults; a pre-existing schema-scoped PUBLIC grant must not survive a global revoke. The PostgreSQL integration test inspects `aclexplode(proacl)` for the new probe function and fails if a direct PUBLIC EXECUTE entry is present, in addition to checking effective `anon` and `authenticated` execution.
+
+
+### E2EE device revocation is now RPC-only
+
+The RLS proposal no longer grants `UPDATE` on `health_e2ee_devices` to `authenticated`, and removes the direct update policy. The tracked app rotates keys and revokes a device through `rotate_health_e2ee_key(p_new_key_version, p_revoked_device_id)`; no direct table-update callsite was found in the web or Flutter implementations. PostgreSQL assertions now fail if the role has table UPDATE or attempts to set a revoked device's `revoked_at` back to NULL. The privileged rotation RPC remains separately subject to the target routine ACL/search-path audit.
