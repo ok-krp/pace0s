@@ -226,3 +226,8 @@ The function default-privilege hardening now revokes `EXECUTE` from `PUBLIC` bot
 ### E2EE device revocation is now RPC-only
 
 The RLS proposal no longer grants `UPDATE` on `health_e2ee_devices` to `authenticated`, and removes the direct update policy. The tracked app rotates keys and revokes a device through `rotate_health_e2ee_key(p_new_key_version, p_revoked_device_id)`; no direct table-update callsite was found in the web or Flutter implementations. PostgreSQL assertions now fail if the role has table UPDATE or attempts to set a revoked device's `revoked_at` back to NULL. The privileged rotation RPC remains separately subject to the target routine ACL/search-path audit.
+
+
+### Cloud synchronization is now RPC-write-only
+
+The RLS proposal removes `user_state` from the generic owner CRUD loop. Authenticated users retain owner-scoped `SELECT`, but do not receive table `INSERT`, `UPDATE` or `DELETE`; all mutations must use `upsert_user_state_if_newer`, whose database-side timestamp comparison prevents stale-device writes from replacing newer state. The PostgreSQL fixture seeds one row per test account and tests all three direct-write denials. Static coverage also requires the generated public RPC type to remain present.
