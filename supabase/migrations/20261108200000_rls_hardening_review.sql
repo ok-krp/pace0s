@@ -48,6 +48,9 @@ alter default privileges for role postgres in schema public revoke all on sequen
 -- paths for functions created by postgres; each required RPC must explicitly
 -- GRANT EXECUTE to its intended caller in its canonical migration.
 alter default privileges for role postgres revoke execute on functions from public;
+-- Schema-specific default ACL entries are additive to global defaults; close
+-- a stale PUBLIC grant on public explicitly as well.
+alter default privileges for role postgres in schema public revoke execute on functions from public;
 alter default privileges for role postgres in schema public revoke execute on functions from anon, authenticated;
 
 -- 3) Public, immutable nutrition/reference catalogues: read only.
