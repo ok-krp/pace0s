@@ -2,6 +2,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
+  group('Flutter cross-device sync consent', () {
+    test('does not sync without an authenticated account', () {
+      expect(shouldRunCloudSync(userId: null, consentGranted: true), isFalse);
+    });
+
+    test('does not sync when functional cloud consent is disabled', () {
+      expect(shouldRunCloudSync(userId: 'user-a', consentGranted: false), isFalse);
+    });
+
+    test('allows sync only when the account explicitly granted consent', () {
+      expect(shouldRunCloudSync(userId: 'user-a', consentGranted: true), isTrue);
+    });
+  });
+
   group('Flutter cloud outbox acknowledgement', () {
     test('does not acknowledge a rejected server mutation', () {
       expect(shouldAcknowledgeSyncOperation(accepted: false), isFalse);
