@@ -366,8 +366,11 @@ CREATE TRIGGER fixture_legal_consent_timestamp_trigger
 BEFORE UPDATE ON public.legal_consent
 FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- Simulate broad legacy grants and a stale permissive policy.
+-- Simulate broad legacy grants, including PUBLIC-inherited grants.
+CREATE SEQUENCE public.fixture_public_sequence;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+GRANT ALL PRIVILEGES ON public.ai_provider_secrets TO PUBLIC;
+GRANT ALL PRIVILEGES ON public.fixture_public_sequence TO PUBLIC;
 -- A column-only grant survives a table-level REVOKE unless it is handled
 -- explicitly by the RLS migration.
 GRANT SELECT (user_id), INSERT (user_id), UPDATE (user_id)
