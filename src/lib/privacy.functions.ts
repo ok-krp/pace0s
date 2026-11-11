@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 // Only rows with an owner column are queried through this allowlist. The
@@ -139,6 +140,27 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     const userId = context.userId;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
+
+    // Revoke every refresh-token session before destructive cleanup. Supabase
+    // access JWTs remain valid until exp, so this prevents refresh/re-entry but
+    // does not claim immediate invalidation of already-issued access tokens.
+    const authorization = getRequest()?.headers.get("authorization");
+    const accessToken = authorization?.match(/^Bearer\\s+(.+)$/i)?.[1];
+    if (!accessToken) {
+      throw new Error("Impossible de révoquer les sessions du compte.");
+    }
+
+    const { error: sessionRevocationError } = await supabaseAdmin.auth.admin.signOut(
+      accessToken,
+      "global",
+    );
+    if (sessionRevocationError) {
+      console.error("account deletion session revocation failed", {
+        status: sessionRevocationError.status ?? "unknown",
+        code: sessionRevocationError.code ?? "unknown",
+      });
+      throw new Error("Impossible de révoquer les sessions du compte.");
+    }
 
     // Remove relationship-only Sport rows before deleting their parents. This
     // also works on older databases where the expected foreign keys are absent.
