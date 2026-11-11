@@ -2,6 +2,16 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
+  group('Flutter cloud outbox acknowledgement', () {
+    test('does not acknowledge a rejected server mutation', () {
+      expect(shouldAcknowledgeSyncOperation(accepted: false), isFalse);
+    });
+
+    test('acknowledges only a server-accepted mutation', () {
+      expect(shouldAcknowledgeSyncOperation(accepted: true), isTrue);
+    });
+  });
+
   group('CloudSyncWriteResponse', () {
     test('accepts the ordered RPC response contract', () {
       final result = CloudSyncWriteResponse.fromRpc({
