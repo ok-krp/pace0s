@@ -41,14 +41,27 @@ function withToolLogging<Input, Output extends { ok: boolean; message: string }>
 async function readUserState(client: Client, userId: string, key: string): Promise<{ id?: string; value: unknown } | null> { const { data, error } = await client.from("user_state").select("id,value").eq("user_id", userId).eq("key", key).maybeSingle(); if (error) throw error; return data ? { id: data.id, value: data.value } : null; }
 async function writeUserState(client: Client, userId: string, key: string, value: unknown) { const updatedAt = new Date().toISOString(); const current = await readUserState(client, userId, key); if (current) { const { error } = await client.from("user_state").update({ value: value as Json, updated_at: updatedAt, updated_by: "coach_ai" }).eq("user_id", userId).eq("key", key); if (error) throw error; } else { const { error } = await client.from("user_state").insert({ user_id: userId, key, value: value as Json, updated_at: updatedAt, updated_by: "coach_ai" }); if (error) throw error; } }
 function recomputeNutritionTotals(itemsByDay: Record<string, Array<Record<string, unknown>>>) { const totals: Record<string, { kcal: number; p: number; c: number; f: number }> = {}; for (const [day, list] of Object.entries(itemsByDay)) { const total = { kcal: 0, p: 0, c: 0, f: 0 }; for (const item of list) { total.kcal += Number(item.kcal ?? 0); total.p += Number(item.p ?? 0); total.c += Number(item.c ?? 0); total.f += Number(item.f ?? 0); } totals[day] = total; } return totals; }
-async function syncNutritionStateFromDb(client: Client, userId: string, day: string) {
-  const current = await readUserState(client, userId, "pace.nutrition.items");
-  const raw = current?.value;
-  const itemsByDay: Record<string, Array<Record<string, unknown>>> =
-    raw && typeof raw === "object" && !Array.isArray(raw)
-      ? { ...(raw as Record<string, Array<Record<string, unknown>>>) }
-      : {};
+async function writeNutritionStateSnapshot(client: Client, userId: string, key: string, value: unknown): Promise<boolean> {
+  const rpc = client.rpc as unknown as (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ data: unknown; error: unknown | null }>;
+  const result = await rpc("upsert_user_state_if_newer", {
+    p_user_id: userId,
+    p_key: key,
+    p_value: value,
+    p_updated_at: new Date().toISOString(),
+    p_updated_by: "coach_ai",
+  });
+  if (result.error) throw result.error;
+  const payload = result.data as { accepted?: unknown; updated_at?: unknown } | null;
+  if (!payload || typeof payload.accepted !== "boolean" || typeof payload.updated_at !== "string") {
+    throw new Error("Réponse de synchronisation Nutrition invalide.");
+  }
+  return payload.accepted;
+}
 
+async function syncNutritionStateFromDb(client: Client, userId: string, day: string) {
   const { data, error } = await client.from("food_log")
     .select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,created_at")
     .eq("user_id", userId).eq("log_date", day).order("created_at");
@@ -63,17 +76,36 @@ async function syncNutritionStateFromDb(client: Client, userId: string, day: str
   }));
   const canonicalIds = new Set(canonicalRows.map((row) => row.id));
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  // Native Flutter versions before the food_log bridge stored manual meals
-  // only in user_state with timestamp IDs. Keep these legacy rows when an AI
-  // action rebuilds the projection from food_log, otherwise the rebuild
-  // silently deletes the user's manual entries.
-  const legacyRows = (itemsByDay[day] ?? []).filter((item) =>
-    item && typeof item === "object" && typeof item.id === "string" &&
-    !uuidPattern.test(item.id) && !canonicalIds.has(String(item.id))
-  );
-  itemsByDay[day] = [...canonicalRows, ...legacyRows];
-  await writeUserState(client, userId, "pace.nutrition.items", itemsByDay);
-  await writeUserState(client, userId, "pace.nutrition.totals", recomputeNutritionTotals(itemsByDay));
+
+  // Retry the canonical projection if another device commits a newer
+  // user_state snapshot while the AI operation is running. Each retry reads
+  // that newer snapshot first, preserving its legacy native manual meals.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const current = await readUserState(client, userId, "pace.nutrition.items");
+    const raw = current?.value;
+    const itemsByDay: Record<string, Array<Record<string, unknown>>> =
+      raw && typeof raw === "object" && !Array.isArray(raw)
+        ? { ...(raw as Record<string, Array<Record<string, unknown>>>) }
+        : {};
+    const existingDay = Array.isArray(itemsByDay[day]) ? itemsByDay[day] : [];
+    const legacyRows = existingDay.filter((item) =>
+      item && typeof item === "object" && typeof item.id === "string" &&
+      !uuidPattern.test(item.id) && !canonicalIds.has(String(item.id))
+    );
+    itemsByDay[day] = [...canonicalRows, ...legacyRows];
+
+    const itemsAccepted = await writeNutritionStateSnapshot(
+      client, userId, "pace.nutrition.items", itemsByDay,
+    );
+    if (!itemsAccepted) continue;
+
+    const totalsAccepted = await writeNutritionStateSnapshot(
+      client, userId, "pace.nutrition.totals", recomputeNutritionTotals(itemsByDay),
+    );
+    if (totalsAccepted) return;
+  }
+
+  throw new Error("La synchronisation Nutrition a détecté des modifications concurrentes ; les données existantes ont été conservées.");
 }
 async function mirrorAiFoodToNutritionState(client: Client, userId: string, input: { id: string; log_date: string; name: string; meal: string; kcal: number; protein_g: number; carbs_g: number; fat_g: number; fiber_g: number; sugar_g: number; sodium_mg: number; grams: number }) { await syncNutritionStateFromDb(client, userId, input.log_date); }
 async function createSportExercise(client: Client, userId: string, input: SportExercise) { const current = await readUserState(client, userId, "pace.sport.exercises"); const list = Array.isArray(current?.value) ? current!.value as SportExercise[] : []; if (list.some((x) => x.id === input.id || x.name.trim().toLowerCase() === input.name.trim().toLowerCase())) return { created: false, id: list.find((x) => x.name.trim().toLowerCase() === input.name.trim().toLowerCase())?.id ?? input.id }; await writeUserState(client, userId, "pace.sport.exercises", [...list, input]); return { created: true, id: input.id }; }
