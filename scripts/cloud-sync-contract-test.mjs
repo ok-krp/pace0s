@@ -29,7 +29,7 @@ assert.match(nutritionAi, /Une demande d’ajout est toujours un ajout append-on
 
 // A local cache snapshot may be partial or stale. Only explicit UI deletion
 // is allowed to issue DELETE; the compatibility bridge is insert/update only.
-const bridgeStart = nutritionLog.indexOf("function bridgeLocalNutritionToFoodLog(value: unknown): Promise<void>");
+const bridgeStart = nutritionLog.indexOf("async function bridgeNutritionSnapshot(value: unknown, userId: string)");
 const bridgeEnd = nutritionLog.indexOf('\nif (typeof window !== "undefined")', bridgeStart);
 assert.ok(bridgeStart >= 0 && bridgeEnd > bridgeStart, "Nutrition bridge must remain identifiable");
 const bridge = nutritionLog.slice(bridgeStart, bridgeEnd);
