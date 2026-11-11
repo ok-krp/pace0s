@@ -342,7 +342,8 @@ end $$;
 -- health_samples_e2ee; legacy migration is performed through its SECURITY DEFINER RPC.
 grant select on public.health_samples to authenticated;
 create policy health_samples_legacy_select_own on public.health_samples
-  for select to authenticated using (user_id = (select auth.uid()));
+  for select to authenticated
+  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
 
 -- Billing records are server-owned (plan/status must not be user-editable).
 grant select on public.billing_customers, public.billing_subscriptions, public.billing_trials to authenticated;
