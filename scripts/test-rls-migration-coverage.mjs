@@ -270,6 +270,10 @@ assert.ok(joinCryptoSql.includes("as $pair_join$") &&
   joinCryptoSql.includes("%I.digest(") &&
   joinCryptoSql.includes("pg_catalog.convert_to("),
   "Pairing join must use a valid body and resolve pgcrypto.digest using the installed extension schema");
+assert.match(joinCryptoSql, /is distinct from v_secret_hash|v_secret_hash is distinct from v_session[.]secret_hash/i,
+  "Pairing join must reject NULL secrets instead of allowing SQL three-valued logic to bypass comparison");
+assert.ok(rotationAssertions.includes("pairing join accepted a NULL secret"),
+  "PostgreSQL integration tests must reject a NULL pairing secret");
 assert.ok(completeCryptoSql.includes("as $pair_complete$") &&
   completeCryptoSql.includes("$pair_complete$;") &&
   completeCryptoSql.includes("pg_catalog.pg_extension") &&
