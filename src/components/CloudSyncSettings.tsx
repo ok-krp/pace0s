@@ -6,7 +6,7 @@ import { isLegalCategoryAllowed } from "@/lib/legal";
 
 export function CloudSyncSettings() {
   const { user } = useAuth();
-  const { status } = useCloudSyncStatus();
+  const { status, queuedCount, conflicts } = useCloudSyncStatus();
   const [online, setOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
   const [syncAllowed, setSyncAllowed] = useState(() => isLegalCategoryAllowed("sync_cloud"));
 
@@ -32,13 +32,17 @@ export function CloudSyncSettings() {
     ? "Connecte-toi pour activer la synchronisation."
     : !syncAllowed
       ? "Désactivée — active « Fonctionnel — Synchronisation » dans les consentements"
-      : !online || status === "offline"
-        ? "Hors ligne — modifications conservées localement"
-        : status === "syncing"
-          ? "Synchronisation…"
+      : conflicts.length > 0
+        ? `${conflicts.length} conflit(s) à résoudre`
+        : !online || status === "offline"
+          ? "Hors ligne — modifications conservées localement"
           : status === "error"
             ? "Synchronisation impossible — nouvelle tentative automatique"
-            : "Synchronisation automatique active";
+            : queuedCount > 0 || status === "syncing"
+              ? `${queuedCount} modification(s) en attente de synchronisation`
+              : status === "idle"
+                ? "Synchronisation activée — connexion en cours"
+                : "Synchronisation cloud active";
 
   return (
     <div className="rounded-2xl glass-card p-4 space-y-3">
@@ -52,7 +56,7 @@ export function CloudSyncSettings() {
         </div>
         {user && <span className={`size-2 rounded-full ${!syncAllowed ? "bg-muted-foreground" : online && status !== "error" ? "bg-emerald-500" : "bg-amber-500"}`} aria-label={!syncAllowed ? "Synchronisation désactivée" : online ? "En ligne" : "Hors ligne"} />}
       </div>
-      {user && <div className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{syncAllowed ? "Les modifications sont enregistrées localement puis envoyées vers le cloud. En cas de coupure, elles restent en file d'attente sur cet appareil puis sont envoyées au retour de la connexion." : "Les modifications restent enregistrées localement. La synchronisation entre appareils est désactivée tant que le consentement « Fonctionnel — Synchronisation » n'est pas activé."}</div>}
+      {user && <div className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{!syncAllowed ? "Les modifications restent enregistrées localement. La synchronisation entre appareils est désactivée tant que le consentement « Fonctionnel — Synchronisation » n'est pas activé." : conflicts.length > 0 ? "Des versions différentes existent entre les appareils. Résous les conflits pour reprendre une synchronisation fiable." : queuedCount > 0 ? `${queuedCount} modification(s) attendent leur envoi vers le cloud.` : "Les modifications sont enregistrées localement puis envoyées vers le cloud. En cas de coupure, elles restent en file d'attente sur cet appareil puis sont envoyées au retour de la connexion."}</div>}
     </div>
   );
 }
