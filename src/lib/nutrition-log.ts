@@ -324,6 +324,14 @@ export function subscribeNutritionFoodLogChanges(onChange: () => void): () => vo
         schema: "public",
         table: "food_log",
         filter: `user_id=eq.${user.id}`,
+      }, () => onChange())
+      // DELETE needs REPLICA IDENTITY FULL for its user_id filter. The
+      // additive migration enables it so deletions stay account-scoped.
+      .on("postgres_changes", {
+        event: "DELETE",
+        schema: "public",
+        table: "food_log",
+        filter: `user_id=eq.${user.id}`,
       }, () => onChange());
 
     channel = nextChannel;
