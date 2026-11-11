@@ -40,6 +40,14 @@ assert.match(nutritionLog, /DELETED_IDS_KEY = "pace\.__nutrition_deleted_ids_v1"
 assert.match(nutritionLog, /rememberDeletedNutritionId\(user\.id, id\)/, "A successful SQL deletion must tombstone the deleted UUID");
 assert.match(nutritionLog, /nutritionRows\(value\)\.filter\(\(\{ id \}\) => !deletedIds\.has\(id\)\)/, "A queued stale browser snapshot must not reinsert an explicitly deleted UUID");
 assert.match(nutritionLog, /raw\?\.userId === userId/, "Nutrition tombstones must be isolated to the signed-in account");
+const explicitNutritionDeleteStart = nutritionLog.indexOf("export async function deletePersistedNutritionItem");
+const explicitNutritionDeleteEnd = nutritionLog.indexOf("\nfunction nutritionRows", explicitNutritionDeleteStart);
+assert.ok(explicitNutritionDeleteStart >= 0 && explicitNutritionDeleteEnd > explicitNutritionDeleteStart, "Explicit nutrition deletion must remain identifiable");
+const explicitNutritionDelete = nutritionLog.slice(explicitNutritionDeleteStart, explicitNutritionDeleteEnd);
+assert.ok(explicitNutritionDelete.indexOf("rememberDeletedNutritionId(user.id, id)") < explicitNutritionDelete.indexOf("await nutritionBridgeChain.catch"), "Deletion tombstone must be registered before draining the bridge");
+assert.ok(explicitNutritionDelete.indexOf("await nutritionBridgeChain.catch") < explicitNutritionDelete.indexOf('from("food_log").delete()'), "SQL deletion must run after queued legacy bridge writes finish");
+assert.match(explicitNutritionDelete, /forgetDeletedNutritionId\(user\.id, id\)/, "A failed explicit SQL deletion must roll back its tombstone");
+
 
 assert.match(nutritionLog, /await persistNutritionItem\(item, source\)/, "All nutrition additions must persist to food_log before updating local state");
 assert.doesNotMatch(domainStore, /MAX_IDENTICAL_NUTRITION_ITEMS_PER_DAY|MAX_NUTRITION_ITEMS_PER_DAY|count >=/, "Nutrition sanitization must not silently deduplicate or truncate valid meal entries");
