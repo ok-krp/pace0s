@@ -288,7 +288,7 @@ class SyncService {
 
   Future<void> _syncAiPreferences({required bool pushLocal}) async {
     final user = client!.auth.currentUser;
-    if (user == null) return;
+    if (user == null || !_hasCachedCloudSyncConsent(user.id)) return;
 
     try {
       if (pushLocal) {
