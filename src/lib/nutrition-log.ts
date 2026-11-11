@@ -34,16 +34,28 @@ function readDeletedNutritionIds(userId: string): Set<string> {
   } catch { return new Set(); }
 }
 
-function rememberDeletedNutritionId(userId: string, id: string) {
-  if (typeof window === "undefined" || !id) return;
-  const ids = readDeletedNutritionIds(userId);
-  ids.add(id);
+function writeDeletedNutritionIds(userId: string, ids: Set<string>) {
+  if (typeof window === "undefined") return;
   // IDs are opaque UUIDs; cap the local tombstone list to bound device storage.
   localStorage.setItem(DELETED_IDS_KEY, JSON.stringify({ userId, ids: [...ids].slice(-5000) } satisfies DeletedNutritionIds));
+}
+
+function rememberDeletedNutritionId(userId: string, id: string) {
+  if (!id) return;
+  const ids = readDeletedNutritionIds(userId);
+  ids.add(id);
+  writeDeletedNutritionIds(userId, ids);
+}
+
+function forgetDeletedNutritionId(userId: string, id: string) {
+  const ids = readDeletedNutritionIds(userId);
+  ids.delete(id);
+  writeDeletedNutritionIds(userId, ids);
 }
 type NutritionTotals = Record<string, { kcal: number; p: number; c: number; f: number }>;
 type NutritionMap = Record<string, NutritionItem[]>;
 const completedOperations = new Map<string, number>();
+let nutritionBridgeChain: Promise<void> = Promise.resolve();
 
 export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
   const totals: NutritionTotals = {};
@@ -78,11 +90,15 @@ export async function persistNutritionItem(item: Omit<NutritionItem, "id" | "qty
 export async function deletePersistedNutritionItem(id: string): Promise<void> {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Session utilisateur indisponible.");
-  const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
-  if (error) throw new Error(error.message);
-  // Keep an account-scoped local tombstone so a queued stale browser snapshot
-  // cannot reinsert this exact UUID after the explicit SQL deletion.
+  // Tombstone first, then drain any bridge snapshot already in flight. This
+  // makes the explicit SQL DELETE the final operation for this UUID.
   rememberDeletedNutritionId(user.id, id);
+  await nutritionBridgeChain.catch(() => undefined);
+  const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
+  if (error) {
+    forgetDeletedNutritionId(user.id, id);
+    throw new Error(error.message);
+  }
 }
 
 function nutritionRows(value: unknown) {
@@ -101,8 +117,6 @@ function nutritionRows(value: unknown) {
 
 let lastBridgedNutrition = readNutritionItems();
 let lastBridgedUserId: string | null = null;
-let nutritionBridgeChain: Promise<void> = Promise.resolve();
-
 async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<void> {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
