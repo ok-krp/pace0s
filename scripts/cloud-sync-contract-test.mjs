@@ -141,6 +141,7 @@ assert.match(nutritionLog, /event: "INSERT"[\s\S]*table: "food_log"[\s\S]*filter
 assert.match(nutritionLog, /event: "UPDATE"[\s\S]*table: "food_log"/, "Web Nutrition must refresh when canonical meals are edited by AI or another device");
 assert.match(nutritionLog, /nutritionRefreshChain = nutritionRefreshChain\.then\(task, task\)/, "Concurrent Nutrition hydration requests must be serialized");
 assert.match(nutritionLog, /lastBridgedNutrition = nextSnapshot;[\s\S]*writeDomain\(DOMAIN_ITEMS, nextSnapshot\)/, "A Realtime refresh must not echo stale local rows back into food_log");
+assert.match(nutritionLog, /const changed = JSON\.stringify\(current\[day\] \?\? \[\]\) !== JSON\.stringify\(mergedRows\);[\s\S]*if \(changed\) \{[\s\S]*writeDomain/, "A Realtime refresh must not enqueue identical full Nutrition snapshots");
 assert.match(nutritionRoute, /subscribeNutritionFoodLogChanges\(refresh\)/, "The Nutrition route must bind its lifecycle to the Realtime subscription");
 assert.match(nutritionRoute, /setInterval\(refresh, 60_000\)/, "Nutrition must retain a bounded fallback when Realtime is unavailable");
 assert.match(flutterSync, /table: 'food_log'[\s\S]*callback: \(_\) => unawaited\(_handleFoodLogRealtime\(userId\)\)/, "Flutter must reconcile food_log INSERT and UPDATE events");
