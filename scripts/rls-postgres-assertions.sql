@@ -190,6 +190,9 @@ BEGIN
 
   SELECT count(*) INTO n FROM public.user_state;
   IF n <> 1 THEN RAISE EXCEPTION 'user_state owner SELECT isolation failed: expected 1 row, got %',n; END IF;
+  SELECT count(*) INTO n FROM public.user_state
+    WHERE user_id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+  IF n <> 0 THEN RAISE EXCEPTION 'user A can read user B user_state'; END IF;
   BEGIN
     INSERT INTO public.user_state(user_id,key,value)
       VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','rpc-bypass-insert','{}'::jsonb);
@@ -522,6 +525,9 @@ BEGIN
   SELECT count(*) INTO n FROM public.profiles
   WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
   IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A profile'; END IF;
+  SELECT count(*) INTO n FROM public.user_state
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A user_state'; END IF;
 
   BEGIN
     UPDATE public.profiles
