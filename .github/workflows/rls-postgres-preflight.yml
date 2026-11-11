@@ -33,42 +33,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v5
 
-      - name: Install PostgreSQL client
+      - name: Verify psql in the PostgreSQL 16 service container
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes postgresql-client
+          PG_CONTAINER_ID="$(docker ps --filter "ancestor=postgres:16" --format "{{.ID}}" | head -n 1)"
+          test -n "$PG_CONTAINER_ID"
+          docker exec "$PG_CONTAINER_ID" psql --version
 
       - name: Create disposable 45-table schema fixture
-        env:
-          PGPASSWORD: postgres
         run: |
-          psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
-            --set=ON_ERROR_STOP=1 --file=scripts/rls-postgres-fixture.sql
+          PG_CONTAINER_ID="$(docker ps --filter "ancestor=postgres:16" --format "{{.ID}}" | head -n 1)"
+          test -n "$PG_CONTAINER_ID"
+          docker exec -i "$PG_CONTAINER_ID" psql --username=postgres --dbname=paceos_rls_test \
+            --set=ON_ERROR_STOP=1 < scripts/rls-postgres-fixture.sql
 
       - name: Apply review-only RLS migration to disposable PostgreSQL
-        env:
-          PGPASSWORD: postgres
         run: |
-          psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
-            --set=ON_ERROR_STOP=1 --file=supabase/migrations/20261108200000_rls_hardening_review.sql
+          PG_CONTAINER_ID="$(docker ps --filter "ancestor=postgres:16" --format "{{.ID}}" | head -n 1)"
+          test -n "$PG_CONTAINER_ID"
+          docker exec -i "$PG_CONTAINER_ID" psql --username=postgres --dbname=paceos_rls_test \
+            --set=ON_ERROR_STOP=1 < supabase/migrations/20261108200000_rls_hardening_review.sql
 
       - name: Apply nullable AES Key Wrap envelope nonce migration
-        env:
-          PGPASSWORD: postgres
         run: |
-          psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
-            --set=ON_ERROR_STOP=1 --file=supabase/migrations/20261111140000_allow_nullable_health_e2ee_envelope_nonce.sql
+          PG_CONTAINER_ID="$(docker ps --filter "ancestor=postgres:16" --format "{{.ID}}" | head -n 1)"
+          test -n "$PG_CONTAINER_ID"
+          docker exec -i "$PG_CONTAINER_ID" psql --username=postgres --dbname=paceos_rls_test \
+            --set=ON_ERROR_STOP=1 < supabase/migrations/20261111140000_allow_nullable_health_e2ee_envelope_nonce.sql
 
       - name: Assert tenant isolation, consent gates, and least privilege
-        env:
-          PGPASSWORD: postgres
         run: |
-          psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
-            --set=ON_ERROR_STOP=1 --file=scripts/rls-postgres-assertions.sql
+          PG_CONTAINER_ID="$(docker ps --filter "ancestor=postgres:16" --format "{{.ID}}" | head -n 1)"
+          test -n "$PG_CONTAINER_ID"
+          docker exec -i "$PG_CONTAINER_ID" psql --username=postgres --dbname=paceos_rls_test \
+            --set=ON_ERROR_STOP=1 < scripts/rls-postgres-assertions.sql
 
       - name: Audit function ACLs and default privileges
-        env:
-          PGPASSWORD: postgres
         run: |
-          psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
-            --set=ON_ERROR_STOP=1 --file=scripts/rls-postgres-function-acl-audit.sql
+          PG_CONTAINER_ID="$(docker ps --filter "ancestor=postgres:16" --format "{{.ID}}" | head -n 1)"
+          test -n "$PG_CONTAINER_ID"
+          docker exec -i "$PG_CONTAINER_ID" psql --username=postgres --dbname=paceos_rls_test \
+            --set=ON_ERROR_STOP=1 < scripts/rls-postgres-function-acl-audit.sql
