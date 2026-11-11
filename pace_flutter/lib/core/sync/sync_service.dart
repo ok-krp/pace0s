@@ -88,7 +88,7 @@ class SyncService {
 
   Future<void> setCloudSyncConsent(bool granted) async {
     final userId = client?.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null || localStore.currentAccountId != userId) return;
     _cloudSyncConsentUserId = userId;
     _cloudSyncConsent = granted;
     _cloudSyncConsentCheckedAt = DateTime.now();
@@ -127,7 +127,12 @@ class SyncService {
       do {
         _syncRequested = false;
         final user = client?.auth.currentUser;
-        if (user == null || user.id != initialUserId || !_hasCachedCloudSyncConsent(initialUserId)) break;
+        if (user == null ||
+            user.id != initialUserId ||
+            localStore.currentAccountId != initialUserId ||
+            !_hasCachedCloudSyncConsent(initialUserId)) {
+          break;
+        }
 
         await _ensureRealtimeSubscription(user.id);
         final hadNutritionMutation = localStore.pendingOperations().any(
@@ -162,6 +167,11 @@ class SyncService {
   }
 
   Future<void> _ensureRealtimeSubscription(String userId) async {
+    if (client?.auth.currentUser?.id != userId ||
+        localStore.currentAccountId != userId ||
+        !_hasCachedCloudSyncConsent(userId)) {
+      return;
+    }
     if (_realtimeUserId == userId && _realtimeChannel != null) return;
 
     if (_realtimeChannel != null) {
@@ -302,7 +312,11 @@ class SyncService {
     for (final operation in List<Map<String, dynamic>>.from(
       localStore.pendingOperations(),
     )) {
-      if (!_hasCachedCloudSyncConsent(userId)) return;
+      if (client?.auth.currentUser?.id != userId ||
+          localStore.currentAccountId != userId ||
+          !_hasCachedCloudSyncConsent(userId)) {
+        return;
+      }
       try {
         final result = await _push(operation);
         if (!shouldAcknowledgeSyncOperation(accepted: result.accepted)) {
@@ -328,6 +342,9 @@ class SyncService {
 
   Future<_PushResult> _push(Map<String, dynamic> operation) async {
     final userId = client!.auth.currentUser!.id;
+    if (localStore.currentAccountId != userId) {
+      throw StateError('Espace local différent du compte authentifié.');
+    }
     final key = operation['key'] as String;
     final updatedAt = (operation['queuedAt'] as String?) ??
         DateTime.now().toUtc().toIso8601String();
@@ -356,7 +373,10 @@ class SyncService {
 
   Future<void> _syncAiPreferences({required bool pushLocal}) async {
     final user = client!.auth.currentUser;
-    if (user == null || !_hasCachedCloudSyncConsent(user.id)) return;
+    if (user == null ||
+        localStore.currentAccountId != user.id ||
+        client?.auth.currentUser?.id != user.id ||
+        !_hasCachedCloudSyncConsent(user.id)) return;
 
     try {
       if (pushLocal) {
@@ -546,8 +566,9 @@ class SyncService {
     required double sodiumMg,
   }) async {
     final user = client?.auth.currentUser;
-    if (client == null || user == null) {
-      throw StateError('Session utilisateur indisponible.');
+    if (client == null || user == null ||
+        localStore.currentAccountId != user.id) {
+      throw StateError('Session ou espace local utilisateur indisponible.');
     }
     await client!.from('food_log').upsert({
       'id': id,
