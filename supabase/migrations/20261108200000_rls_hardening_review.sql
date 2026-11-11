@@ -173,6 +173,20 @@ $owns_pairing_session$;
 revoke all on function pace_private.owns_health_e2ee_pairing_session(uuid) from public, anon, authenticated;
 grant execute on function pace_private.owns_health_e2ee_pairing_session(uuid) to authenticated;
 
+-- Recovery envelopes contain the wrapped health master key. Treat them as
+-- consent-scoped E2EE material, not a generic owner CRUD record.
+grant select, insert, update on public.health_e2ee_recovery_envelopes to authenticated;
+create policy health_e2ee_recovery_select_own on public.health_e2ee_recovery_envelopes
+  for select to authenticated
+  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+create policy health_e2ee_recovery_insert_own on public.health_e2ee_recovery_envelopes
+  for insert to authenticated
+  with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+create policy health_e2ee_recovery_update_own on public.health_e2ee_recovery_envelopes
+  for update to authenticated
+  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()))
+  with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+
 -- Key envelopes are immutable: owner SELECT/INSERT/DELETE only, with every
 -- referenced device/session checked against the same account.
 grant select, insert, delete on public.health_e2ee_key_envelopes to authenticated;
@@ -260,7 +274,6 @@ begin
     'development_tasks',
     'food_log',
     'food_scans',
-    'health_e2ee_recovery_envelopes',
     'legal_consent',
     'profiles',
     'push_subscriptions',
