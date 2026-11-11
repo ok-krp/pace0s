@@ -172,5 +172,9 @@ EXECUTE FUNCTION public.delete_temporary_workout_after_finish();
 
 -- Simulate broad legacy grants and a stale permissive policy.
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO anon, authenticated;
+-- A column-only grant survives a table-level REVOKE unless it is handled
+-- explicitly by the RLS migration.
+GRANT SELECT (user_id), INSERT (user_id), UPDATE (user_id)
+  ON public.ai_provider_secrets TO PUBLIC, anon, authenticated;
 CREATE POLICY fixture_stale_profiles_select ON public.profiles
   FOR SELECT TO authenticated USING (true);
