@@ -165,6 +165,11 @@ BEGIN
   IF has_table_privilege('authenticated','public.health_e2ee_devices','UPDATE') THEN
     RAISE EXCEPTION 'authenticated can directly UPDATE device revocation state';
   END IF;
+  IF has_column_privilege('authenticated','public.health_e2ee_devices','id','INSERT')
+     OR has_column_privilege('authenticated','public.health_e2ee_devices','created_at','INSERT')
+     OR has_column_privilege('authenticated','public.health_e2ee_devices','revoked_at','INSERT') THEN
+    RAISE EXCEPTION 'authenticated can choose E2EE device ID, timestamp or revocation state';
+  END IF;
   IF has_table_privilege('authenticated','public.user_state','INSERT')
      OR has_table_privilege('authenticated','public.user_state','UPDATE')
      OR has_table_privilege('authenticated','public.user_state','DELETE') THEN
@@ -172,6 +177,13 @@ BEGIN
   END IF;
   IF has_table_privilege('authenticated','public.health_e2ee_recovery_envelopes','DELETE') THEN
     RAISE EXCEPTION 'authenticated can directly delete an E2EE recovery envelope';
+  END IF;
+  IF has_column_privilege('authenticated','public.health_e2ee_key_envelopes','id','INSERT')
+     OR has_column_privilege('authenticated','public.health_e2ee_key_envelopes','created_at','INSERT') THEN
+    RAISE EXCEPTION 'authenticated can choose E2EE envelope ID or timestamp';
+  END IF;
+  IF has_table_privilege('authenticated','public.health_e2ee_key_envelopes','DELETE') THEN
+    RAISE EXCEPTION 'authenticated can directly delete E2EE key envelopes';
   END IF;
   IF has_column_privilege('authenticated','public.consent_records','id','INSERT') THEN
     RAISE EXCEPTION 'authenticated can choose consent record identifiers';
@@ -405,22 +417,24 @@ BEGIN
   END;
 
   BEGIN
-    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
-      VALUES ('72000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000002');
+    INSERT INTO public.health_e2ee_key_envelopes(user_id,device_id,sender_device_id,pairing_session_id,envelope,nonce,algorithm,key_version)
+      VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001',
+              '70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000002',
+              'cross-account-pairing','nonce','ECDH-P256/AES-256-GCM',1);
     RAISE EXCEPTION 'cross-user pairing envelope INSERT unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
   BEGIN
-    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id)
-      VALUES ('72000000-0000-0000-0000-000000000010','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-              '70000000-0000-0000-0000-000000000003','70000000-0000-0000-0000-000000000001');
+    INSERT INTO public.health_e2ee_key_envelopes(user_id,device_id,sender_device_id,envelope,nonce,algorithm,key_version)
+      VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000003',
+              '70000000-0000-0000-0000-000000000001','revoked-recipient','nonce','ECDH-P256/AES-256-GCM',1);
     RAISE EXCEPTION 'envelope for revoked recipient device unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
   BEGIN
-    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id)
-      VALUES ('72000000-0000-0000-0000-000000000011','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-              '70000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000003');
+    INSERT INTO public.health_e2ee_key_envelopes(user_id,device_id,sender_device_id,envelope,nonce,algorithm,key_version)
+      VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001',
+              '70000000-0000-0000-0000-000000000003','revoked-sender','nonce','ECDH-P256/AES-256-GCM',1);
     RAISE EXCEPTION 'envelope from revoked sender device unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
@@ -484,10 +498,10 @@ BEGIN
 END;
 $post_user_a_e2ee_check$;
 
-INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id,pairing_session_id)
-  VALUES ('72000000-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-          '70000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000001',
-          '80000000-0000-0000-0000-000000000001');
+INSERT INTO public.health_e2ee_key_envelopes(user_id,device_id,sender_device_id,pairing_session_id,envelope,nonce,algorithm,key_version)
+  VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001',
+          '70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000001',
+          'valid-envelope','nonce','ECDH-P256/AES-256-GCM',1);
 
 -- Commit the initial granted decisions. The withdrawal is a separate request
 -- transaction, so PostgreSQL's now() default is strictly later, as in PostgREST.
@@ -536,8 +550,10 @@ BEGIN
   END;
 
   BEGIN
-    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
-      VALUES ('72000000-0000-0000-0000-000000000003','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000001');
+    INSERT INTO public.health_e2ee_key_envelopes(user_id,device_id,sender_device_id,pairing_session_id,envelope,nonce,algorithm,key_version)
+      VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001',
+              '70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000001',
+              'after-revoke','nonce','ECDH-P256/AES-256-GCM',1);
     RAISE EXCEPTION 'E2EE envelope insert succeeded after consent revocation';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
