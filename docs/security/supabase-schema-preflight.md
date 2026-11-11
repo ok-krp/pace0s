@@ -91,6 +91,9 @@ The PR #316 review migration has now been amended to:
 - move the policy-only `SECURITY DEFINER` ownership helper into `pace_private`, outside the standard exposed `public` API schema;
 - add PostgreSQL integration assertions proving the defaults are closed and the two helpers retain only their intended authenticated execution path.
 
+
+
+Before applying the revised migration, inspect the confirmed project's Data API configuration (Project Settings → API → Exposed schemas) and verify that `pace_private` is **not** exposed. The connected audit project returned no existing `pace_private` schema, but the configured `cduy...` project is inaccessible to this connection, so its API exposure configuration has not been verified. If the helper schema is exposed, this must be corrected before the helper can be considered private.
 The connected database reports that the executing `postgres` role is not a member of `supabase_admin` (which is a separate superuser role); the migration therefore does not claim to rewrite that role's independent default ACL entries. Application migrations are expected to execute as `postgres`; this assumption must be checked against the confirmed Vercel target before deployment.
 
 **This is still a draft preflight change.** The configured Vercel project points to the inaccessible `cduyjejftorfuxuwhbqt` ref. No SQL was executed against Supabase, no environment variable was changed, and no Production deployment or merge was performed.
