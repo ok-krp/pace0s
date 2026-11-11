@@ -42,20 +42,19 @@ async function readUserState(client: Client, userId: string, key: string): Promi
 async function writeUserState(client: Client, userId: string, key: string, value: unknown) { const updatedAt = new Date().toISOString(); const current = await readUserState(client, userId, key); if (current) { const { error } = await client.from("user_state").update({ value: value as Json, updated_at: updatedAt, updated_by: "coach_ai" }).eq("user_id", userId).eq("key", key); if (error) throw error; } else { const { error } = await client.from("user_state").insert({ user_id: userId, key, value: value as Json, updated_at: updatedAt, updated_by: "coach_ai" }); if (error) throw error; } }
 function recomputeNutritionTotals(itemsByDay: Record<string, Array<Record<string, unknown>>>) { const totals: Record<string, { kcal: number; p: number; c: number; f: number }> = {}; for (const [day, list] of Object.entries(itemsByDay)) { const total = { kcal: 0, p: 0, c: 0, f: 0 }; for (const item of list) { total.kcal += Number(item.kcal ?? 0); total.p += Number(item.p ?? 0); total.c += Number(item.c ?? 0); total.f += Number(item.f ?? 0); } totals[day] = total; } return totals; }
 async function writeNutritionStateSnapshot(client: Client, userId: string, key: string, value: unknown): Promise<boolean> {
-  const rpc = client.rpc as unknown as (
-    fn: string,
-    args: Record<string, unknown>,
-  ) => Promise<{ data: unknown; error: unknown | null }>;
-  const result = await rpc("upsert_user_state_if_newer", {
+  const { data, error } = await client.rpc("upsert_user_state_if_newer", {
     p_user_id: userId,
     p_key: key,
-    p_value: value,
+    p_value: value as Json,
     p_updated_at: new Date().toISOString(),
     p_updated_by: "coach_ai",
   });
-  if (result.error) throw result.error;
-  const payload = result.data as { accepted?: unknown; updated_at?: unknown } | null;
-  if (!payload || typeof payload.accepted !== "boolean" || typeof payload.updated_at !== "string") {
+  if (error) throw error;
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Réponse de synchronisation Nutrition invalide.");
+  }
+  const payload = data as { accepted?: unknown; updated_at?: unknown };
+  if (typeof payload.accepted !== "boolean" || typeof payload.updated_at !== "string") {
     throw new Error("Réponse de synchronisation Nutrition invalide.");
   }
   return payload.accepted;
