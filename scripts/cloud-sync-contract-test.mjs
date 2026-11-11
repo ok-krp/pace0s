@@ -43,6 +43,20 @@ assert.doesNotMatch(engine, /readConflicts\(\)/, "No Web sync path may read anot
 assert.match(engine, /running\.current\[user\.id\]/, "Concurrent sync locks must be isolated per authenticated account");
 assert.match(engine, /const writeKey = user\.id \+ ':' \+ item\.key/, "In-flight key writes must be isolated per authenticated account");
 
+const accountScope = read("src/lib/account-scope.ts");
+const authProvider = read("src/hooks/use-auth.tsx");
+assert.match(accountScope, /function accountSnapshotKey\(scope: string\)/, "Web local state must be stored in a separate snapshot for each account");
+assert.match(accountScope, /function isAccountLocalKey\(key: string\)/, "Web account switching must explicitly define which app data follows a user");
+assert.match(accountScope, /previousScope === null[\s\S]*if \(!userId\) return false[\s\S]*accountSnapshotKey\(nextScope\)/, "The first authenticated account must adopt legacy local data without deleting it");
+assert.match(accountScope, /localStorage\.setItem\(accountSnapshotKey\(previousScope\), JSON\.stringify\(currentSnapshot\)\)[\s\S]*clearCurrentAccountState\(\)[\s\S]*restoreAccountSnapshot\(nextSnapshot\)/, "Switching accounts must save the previous user's state before restoring the next user's state");
+assert.match(accountScope, /nextScope = userId \?\? "__guest__"/, "Signed-out browser state must use a distinct guest namespace");
+assert.match(accountScope, /localStorage\.setItem\(ACCOUNT_SCOPE_KEY, previousScope\)/, "A failed restore must roll back to the previous account namespace");
+assert.match(authProvider, /switchLocalAccountScope\(nextSession\?\.user\.id \?\? null\)/, "Every auth session transition must switch the local data namespace");
+assert.match(authProvider, /<Ctx\.Provider[\s\S]*key=\{session\?\.user\.id \?\? "__guest__"\}/, "React state hooks must remount after switching local account namespaces");
+assert.match(authProvider, /authEventVersion[\s\S]*authEventVersion === initialVersion/, "A delayed initial session lookup must not reverse a newer authentication event");
+assert.match(authProvider, /scopeError/, "The app must not render account data if namespace restoration fails");
+
+
 
 
 
