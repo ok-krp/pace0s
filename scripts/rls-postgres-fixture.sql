@@ -84,7 +84,16 @@ CREATE TABLE public.sport_workout_exercises (id uuid PRIMARY KEY, session_id uui
 CREATE TABLE public.sport_workout_sets (id uuid PRIMARY KEY, workout_exercise_id uuid NOT NULL);
 CREATE TABLE public.sport_workout_sessions (id uuid PRIMARY KEY, user_id uuid NOT NULL, program_id uuid);
 CREATE TABLE public.user_biometrics_e2ee (id uuid PRIMARY KEY, user_id uuid NOT NULL);
-CREATE TABLE public.user_state (id uuid PRIMARY KEY, user_id uuid NOT NULL);
+CREATE TABLE public.user_state (
+  id uuid PRIMARY KEY,
+  user_id uuid NOT NULL,
+  key text NOT NULL,
+  value jsonb,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  updated_by text,
+  UNIQUE (user_id, key)
+);
 
 -- Simulate broad legacy grants and a stale permissive policy.
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO anon, authenticated;
