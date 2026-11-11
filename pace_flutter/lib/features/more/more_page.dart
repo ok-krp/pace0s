@@ -112,6 +112,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   late bool _aiConfirmations;
   late bool _notifications;
   late bool _memory;
+  bool _syncCloudConsent = false;
   bool _healthConsent = false;
   bool _healthCloudConsent = false;
   bool _financialConsent = false;
@@ -147,12 +148,15 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       }
       if (!mounted) return;
       setState(() {
+        _syncCloudConsent = latest['sync_cloud'] ?? false;
         _healthConsent = latest['health_data'] ?? false;
         _healthCloudConsent = latest['health_cloud_sync'] ?? false;
         _financialConsent = latest['financial_data'] ?? false;
         _aiConsent = latest['ai_processing'] ?? false;
         _marketingConsent = latest['marketing'] ?? false;
       });
+      await widget.sync.setCloudSyncConsent(_syncCloudConsent);
+      if (_syncCloudConsent) await widget.sync.syncNow();
     } catch (_) {}
   }
 
@@ -167,12 +171,17 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       );
       if (!mounted) return;
       setState(() {
+        if (type == 'sync_cloud') _syncCloudConsent = value;
         if (type == 'health_data') _healthConsent = value;
         if (type == 'health_cloud_sync') _healthCloudConsent = value;
         if (type == 'financial_data') _financialConsent = value;
         if (type == 'ai_processing') _aiConsent = value;
         if (type == 'marketing') _marketingConsent = value;
       });
+      if (type == 'sync_cloud') {
+        await widget.sync.setCloudSyncConsent(value);
+        if (value) await widget.sync.syncNow();
+      }
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
     }
@@ -282,6 +291,12 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
               ),
             ]),
             _section('Données & confidentialité', [
+              SwitchListTile.adaptive(
+                title: const Text('Synchronisation entre appareils'),
+                subtitle: const Text('Autoriser la sauvegarde des préférences et données fonctionnelles sur les autres appareils Pace. Les opérations locales restent en attente tant que cette option est désactivée.'),
+                value: _syncCloudConsent,
+                onChanged: (value) => _setConsent('sync_cloud', value),
+              ),
               SwitchListTile.adaptive(title: const Text('Accès aux données de santé'), subtitle: const Text('Autoriser Pace à lire les données Santé / Health Connect sélectionnées.'), value: _healthConsent, onChanged: (value) => _setConsent('health_data', value)),
               SwitchListTile.adaptive(title: const Text('Synchronisation santé cloud'), subtitle: const Text('Autoriser l’envoi des données de santé vers votre compte Pace.'), value: _healthCloudConsent, onChanged: _healthConsent ? (value) => _setConsent('health_cloud_sync', value) : null),
               SwitchListTile.adaptive(title: const Text('Données financières'), subtitle: const Text('Autoriser le traitement des données financières connectées.'), value: _financialConsent, onChanged: (value) => _setConsent('financial_data', value)),
