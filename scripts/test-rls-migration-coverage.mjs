@@ -344,6 +344,11 @@ assert.doesNotMatch(directBlock, /'user_state'/,
 
 assert.match(sql, /revoke all privileges on all tables in schema public from anon, authenticated/i,
   "Existing API-role table grants must be removed before minimal grants are added");
+assert.match(sql, /revoke all privileges \(%I\) on table %I\.%I from public, anon, authenticated/i,
+  "Legacy column-level privileges must be removed separately from table-level grants");
+const columnAclAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.match(columnAclAssertions, /legacy column-level grants survived the RLS privilege reset/,
+  "PostgreSQL must verify that old column-only grants do not survive");
 assert.match(sql, /revoke all privileges on schema public from anon, authenticated[\s\S]*?grant usage on schema public to anon, authenticated/i,
   "Schema usage must be re-established explicitly after revocation");
 assert.match(sql, /alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated/i,
