@@ -137,6 +137,29 @@ if (typeof window !== "undefined") {
 async function refreshNutritionFromFoodLog(day: string) {
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Session utilisateur indisponible.");
+  // Recover entries created by older app versions that existed only in the
+  // device's local domain snapshot. Keep their original IDs and never delete.
+  const localSnapshot = readNutritionItems();
+  const localRows = localSnapshot[day] ?? [];
+  const localIds = [...new Set(localRows.map((item) => item.id).filter(Boolean))];
+  if (localIds.length) {
+    const { data: existing, error: lookupError } = await supabase.from("food_log")
+      .select("id").eq("user_id", user.id).in("id", localIds);
+    if (lookupError) throw new Error(lookupError.message);
+    const existingIds = new Set((existing ?? []).map((row) => row.id));
+    for (const item of localRows) {
+      if (existingIds.has(item.id)) continue;
+      const { error: insertError } = await supabase.from("food_log").insert({
+        id: item.id, user_id: user.id, log_date: day, meal: item.meal, name: item.name,
+        kcal: Number(item.kcal || 0), protein_g: Number(item.p || 0),
+        carbs_g: Number(item.c || 0), fat_g: Number(item.f || 0),
+        fiber_g: Number(item.fiber || 0), sugar_g: Number(item.sugar || 0),
+        sodium_mg: Number(item.sodium || 0), source: "manual",
+        meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } },
+      });
+      if (insertError) throw new Error(insertError.message);
+    }
+  }
   const { data, error } = await supabase.from("food_log")
     .select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta")
     .eq("user_id", user.id).eq("log_date", day).order("created_at", { ascending: true });
