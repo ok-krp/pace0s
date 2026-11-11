@@ -34,6 +34,18 @@ BEGIN
   IF NOT has_function_privilege('authenticated', 'public.has_current_health_e2ee_consent()', 'EXECUTE') THEN
     RAISE EXCEPTION 'authenticated cannot execute the app health consent RPC';
   END IF;
+  IF has_function_privilege('anon','public.upsert_profile_if_newer(uuid,jsonb,timestamptz,text)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.upsert_profile_if_newer(uuid,jsonb,timestamptz,text)','EXECUTE') THEN
+    RAISE EXCEPTION 'profile sync RPC EXECUTE grants are not least-privilege';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid='public.upsert_profile_if_newer(uuid,jsonb,timestamptz,text)'::regprocedure
+      AND p.prosecdef
+      AND p.proconfig @> ARRAY['search_path=""']
+  ) THEN
+    RAISE EXCEPTION 'authenticated profile sync RPC must use SECURITY DEFINER with empty search_path';
+  END IF;
   IF has_function_privilege('anon', 'pace_private.owns_health_e2ee_pairing_session(uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'pairing ownership helper is executable by anon';
   END IF;
@@ -57,6 +69,7 @@ BEGIN
     SELECT 1
     FROM pg_proc p
     WHERE p.oid = ANY (ARRAY[
+      'public.upsert_profile_if_newer(uuid,jsonb,timestamptz,text)'::regprocedure,
       'public.sync_sport_user_state()'::regprocedure,
       'public.delete_temporary_workout_after_finish()'::regprocedure,
       'public.touch_ai_provider_secret_updated_at()'::regprocedure,
@@ -90,7 +103,8 @@ BEGIN
     RAISE EXCEPTION 'a trigger-only or dormant SECURITY DEFINER routine has unexpected API/service EXECUTE';
   END IF;
 
-  IF has_function_privilege('anon','public.rotate_health_e2ee_key(integer,uuid)','EXECUTE')
+  IF has_function_privilege('anon','public.upsert_profile_if_newer(uuid,jsonb,timestamptz,text)','EXECUTE')
+     OR has_function_privilege('anon','public.rotate_health_e2ee_key(integer,uuid)','EXECUTE')
      OR NOT has_function_privilege('authenticated','public.rotate_health_e2ee_key(integer,uuid)','EXECUTE')
      OR has_function_privilege('anon','public.upsert_user_state_if_newer(uuid,text,jsonb,timestamptz,text)','EXECUTE')
      OR NOT has_function_privilege('authenticated','public.upsert_user_state_if_newer(uuid,text,jsonb,timestamptz,text)','EXECUTE') THEN
@@ -221,6 +235,18 @@ SELECT set_config('request.jwt.claim.sub','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 DO $user_a$
 DECLARE n integer;
 BEGIN
+  IF has_table_privilege('authenticated','public.profiles','INSERT')
+     OR has_table_privilege('authenticated','public.profiles','UPDATE')
+     OR has_table_privilege('authenticated','public.profiles','DELETE')
+     OR has_column_privilege('authenticated','public.profiles','id','UPDATE')
+     OR has_column_privilege('authenticated','public.profiles','user_id','UPDATE')
+     OR has_column_privilege('authenticated','public.profiles','email','UPDATE') THEN
+    RAISE EXCEPTION 'authenticated has broad profile write privileges';
+  END IF;
+  IF NOT has_column_privilege('authenticated','public.profiles','weight_kg','UPDATE')
+     OR NOT has_column_privilege('authenticated','public.profiles','training_goal','UPDATE') THEN
+    RAISE EXCEPTION 'AI Coach profile update fields are not granted';
+  END IF;
   IF has_table_privilege('authenticated','public.health_e2ee_devices','UPDATE') THEN
     RAISE EXCEPTION 'authenticated can directly UPDATE device revocation state';
   END IF;
@@ -331,6 +357,23 @@ BEGIN
 
   SELECT count(*) INTO n FROM public.profiles;
   IF n <> 1 THEN RAISE EXCEPTION 'profile isolation failed: expected 1 row, got %', n; END IF;
+  UPDATE public.profiles SET weight_kg=54.5, training_goal='hypertrophy'
+    WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  SELECT count(*) INTO n FROM public.profiles
+    WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+      AND weight_kg=54.5 AND training_goal='hypertrophy';
+  IF n <> 1 THEN RAISE EXCEPTION 'AI Coach profile field update failed'; END IF;
+  BEGIN
+    UPDATE public.profiles SET user_id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+      WHERE id='10000000-0000-0000-0000-000000000001';
+    RAISE EXCEPTION 'direct profile owner column update unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    DELETE FROM public.profiles WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    RAISE EXCEPTION 'direct profile delete unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   SELECT count(*) INTO n FROM public.health_samples;
   IF n <> 0 THEN RAISE EXCEPTION 'legacy health rows visible without consent'; END IF;
 
