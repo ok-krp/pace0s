@@ -21,6 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let disposed = false;
     let authEventVersion = 0;
+    let hasAuthEvent = false;
 
     const applySession = (nextSession: Session | null) => {
       if (disposed) return;
@@ -40,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      hasAuthEvent = true;
       authEventVersion++;
       applySession(nextSession);
     });
@@ -48,11 +50,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data }) => {
       // A delayed initial getSession response must not overwrite a more recent
       // account transition delivered by onAuthStateChange.
-      if (!disposed && authEventVersion === initialVersion) {
+      if (!disposed && !hasAuthEvent && authEventVersion === initialVersion) {
         applySession(data.session);
       }
     }).catch((error) => {
-      if (!disposed && authEventVersion === initialVersion) {
+      if (!disposed && !hasAuthEvent && authEventVersion === initialVersion) {
         setScopeError(error instanceof Error ? error.message : "Session indisponible.");
         setScopeReady(false);
         setLoading(false);
