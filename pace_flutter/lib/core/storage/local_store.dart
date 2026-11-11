@@ -48,13 +48,21 @@ class LocalStore {
           store._data = Map<String, dynamic>.from(
             store._accounts[store._scope] ?? <String, dynamic>{},
           );
-        } else if (decoded is Map<String, dynamic>) {
+        } else if (decoded is Map<String, dynamic> &&
+            decoded['__local_store_version'] == null) {
           // Version 1 was a single unscoped snapshot. Keep every value and
           // its outbox untouched until the first authenticated account claims it.
           store._data = decoded;
+        } else {
+          throw const FormatException('Unsupported or malformed local store format.');
         }
       } catch (_) {
-        store._data = <String, dynamic>{};
+        // Never turn an unreadable existing file into an empty store: a later
+        // write would overwrite the only recoverable copy of the user's data.
+        // Let the app fail closed and leave pace_local.json untouched.
+        throw StateError(
+          'Le stockage local pace_local.json est illisible. Le fichier original a été conservé pour récupération.',
+        );
       }
     }
     return store;
