@@ -38,7 +38,7 @@ CREATE TABLE public.consent_records (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE public.data_deletion_requests (
-  id uuid PRIMARY KEY, user_id uuid NOT NULL, status text NOT NULL DEFAULT 'pending',
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL, status text NOT NULL DEFAULT 'pending',
   completed_at timestamptz, error_code text, requested_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(), updated_at timestamptz NOT NULL DEFAULT now()
 );
