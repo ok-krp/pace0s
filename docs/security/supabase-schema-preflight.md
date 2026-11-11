@@ -319,3 +319,8 @@ The shared `touch_updated_at()` and legacy `update_updated_at_column()` function
 ### All E2EE SECURITY DEFINER RPCs use explicit API-role ACLs
 
 The final routine inventory also includes `create_pairing_session`, `join_pairing_session`, `confirm_pairing_session`, `complete_pairing_session`, `create_pairing_envelope`, `get_pairing_session`, `migrate_health_legacy_chunk` and `backfill_health_e2ee_dedupe_hashes`. Their canonical migrations use `SECURITY DEFINER` and an empty search path, but some historical ACL statements revoked only `PUBLIC` before granting `authenticated`. The follow-up hardening migration now explicitly revokes from `PUBLIC`, `anon` and `authenticated`, then restores EXECUTE only to `authenticated` for these user-facing flows. Integration assertions verify all eight effective anon/authenticated privileges and each function's stored `prosecdef`/empty `search_path`.
+
+
+### pgcrypto calls under an empty search path
+
+Supabase installs most extensions in the `extensions` schema, while older projects can have an extension in a different schema. The E2EE pairing join/completion RPCs previously called `digest()` and `gen_random_bytes()` unqualified despite using `search_path = ''`. The follow-up migration now resolves the installed `pgcrypto` namespace from `pg_catalog.pg_extension` and schema-quotes those function calls dynamically; it does not widen the privileged function's search path. PostgreSQL preflight installs `pgcrypto` into `extensions` and executes both the valid/invalid pairing-secret paths and one-time secret rotation during completion.
