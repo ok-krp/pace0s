@@ -157,6 +157,44 @@ class LocalStore {
     await _flush();
   }
 
+  /// Acknowledge a server-accepted mutation in the owner's namespace, even
+  /// when the UI has already switched to a different account.
+  Future<void> acknowledgeOperationForAccount(
+    String userId,
+    Map<String, dynamic> operation,
+    String updatedAt,
+  ) async {
+    final scope = 'account:$userId';
+    final snapshot = _scope == scope
+        ? _data
+        : _accounts[scope];
+    if (snapshot == null) return;
+
+    final rawMeta = snapshot['__sync_meta'];
+    final meta = rawMeta is Map
+        ? Map<String, dynamic>.from(rawMeta)
+        : <String, dynamic>{};
+    meta[operation['key'] as String] = updatedAt;
+    snapshot['__sync_meta'] = meta;
+
+    final rawOutbox = (snapshot['__outbox'] as List?) ?? const [];
+    final outbox = rawOutbox
+        .whereType<Map>()
+        .map((entry) => Map<String, dynamic>.from(entry))
+        .toList();
+    final queuedAt = operation['queuedAt'];
+    outbox.removeWhere((entry) {
+      if (entry['key'] != operation['key']) return false;
+      if (queuedAt != null) return entry['queuedAt'] == queuedAt;
+      return entry['operation'] == operation['operation'] &&
+          entry['value'] == operation['value'];
+    });
+    snapshot['__outbox'] = outbox;
+
+    if (_scope != scope) _accounts[scope] = snapshot;
+    await _flush();
+  }
+
   Future<void> _flush() {
     // Network sync can overlap with a user write. Serializing filesystem
     // replacement prevents an older flush from racing a newer one.
