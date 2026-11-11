@@ -87,7 +87,8 @@ class _NutritionPageState extends State<NutritionPage> {
     final day = _todayKey();
     final list = data[day] is List ? List<dynamic>.from(data[day] as List) : <dynamic>[];
     list.add({
-      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'id': newFoodLogUuid(),
+      'pendingFoodLog': true,
       'name': itemName,
       'meal': 'Repas',
       'qty': 1,
