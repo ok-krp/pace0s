@@ -54,6 +54,10 @@ assert.match(flutterSync, /Future<void> deleteNutritionFoodLogItem\(String id\)[
 assert.match(flutterNutrition, /deleteNutritionFoodLogItem\(item\['id'\]\?\.toString\(\) \?\? ''\)/, "Flutter Nutrition UI must request explicit canonical deletion before removing an item");
 assert.match(flutterNutrition, /Suppression impossible ; le repas a été conservé\./, "A failed canonical deletion must leave the meal visible");
 
+assert.match(flutterNutrition, /cloudSyncConsentGranted/, "Flutter Nutrition must not silently imply cross-device sync when explicit consent is disabled");
+assert.match(flutterNutrition, /Active « Synchronisation entre appareils » dans Plus → Paramètres/, "Flutter Nutrition must tell the user how to enable the one-time functional sync consent");
+
+
 
 
 // AI meal additions are append-only. Replaying the same tool call is handled
