@@ -5,6 +5,9 @@ CREATE ROLE anon NOLOGIN;
 CREATE ROLE authenticated NOLOGIN;
 CREATE ROLE service_role NOLOGIN BYPASSRLS;
 
+CREATE SCHEMA extensions;
+CREATE EXTENSION pgcrypto WITH SCHEMA extensions;
+
 CREATE SCHEMA auth;
 GRANT USAGE ON SCHEMA auth TO anon, authenticated;
 CREATE FUNCTION auth.uid()
@@ -73,7 +76,25 @@ CREATE TABLE public.health_e2ee_key_versions (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE public.health_e2ee_pairing_sessions (
-  id uuid PRIMARY KEY, user_id uuid NOT NULL, initiator_device_id uuid NOT NULL, recipient_device_id uuid
+  id uuid PRIMARY KEY,
+  user_id uuid NOT NULL,
+  initiator_device_id uuid NOT NULL,
+  recipient_device_id uuid,
+  protocol_version text NOT NULL DEFAULT 'pace-health-pairing-v1',
+  status text NOT NULL DEFAULT 'pending',
+  secret_hash text NOT NULL DEFAULT repeat('a',64),
+  challenge text NOT NULL DEFAULT 'fixture-challenge',
+  initiator_ephemeral_public_key jsonb NOT NULL DEFAULT '{"kty":"EC","crv":"P-256","x":"x","y":"y"}'::jsonb,
+  recipient_ephemeral_public_key jsonb,
+  attempt_count integer NOT NULL DEFAULT 0,
+  max_attempts integer NOT NULL DEFAULT 5,
+  locked_until timestamptz,
+  expires_at timestamptz NOT NULL DEFAULT now() + interval '5 minutes',
+  confirmed_at timestamptz,
+  completed_at timestamptz,
+  rejected_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE public.health_e2ee_recovery_envelopes (
   user_id uuid PRIMARY KEY,
