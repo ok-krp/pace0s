@@ -40,6 +40,54 @@ BEGIN
   IF NOT has_function_privilege('authenticated', 'pace_private.owns_health_e2ee_pairing_session(uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'authenticated cannot call the pairing ownership helper from RLS';
   END IF;
+  IF has_schema_privilege('anon','public','CREATE')
+     OR has_schema_privilege('authenticated','public','CREATE') THEN
+    RAISE EXCEPTION 'API roles can CREATE objects in exposed public schema';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    WHERE p.oid = ANY (ARRAY[
+      'public.sync_sport_user_state()'::regprocedure,
+      'public.delete_temporary_workout_after_finish()'::regprocedure,
+      'public.touch_ai_provider_secret_updated_at()'::regprocedure,
+      'public.prevent_audit_log_mutation()'::regprocedure,
+      'public.prevent_consent_mutation()'::regprocedure,
+      'public.set_deletion_request_updated_at()'::regprocedure,
+      'public.delete_user_data(uuid)'::regprocedure,
+      'public.sync_sport_program_archive_state()'::regprocedure,
+      'public.enforce_daily_nutrition_chat()'::regprocedure
+    ])
+    AND (p.proconfig IS NULL OR NOT p.proconfig @> ARRAY['search_path=""'])
+  ) THEN
+    RAISE EXCEPTION 'an existing SECURITY DEFINER routine does not have an empty search_path';
+  END IF;
+
+  IF has_function_privilege('anon','public.sync_sport_user_state()','EXECUTE')
+     OR has_function_privilege('authenticated','public.sync_sport_user_state()','EXECUTE')
+     OR has_function_privilege('anon','public.delete_temporary_workout_after_finish()','EXECUTE')
+     OR has_function_privilege('authenticated','public.delete_temporary_workout_after_finish()','EXECUTE')
+     OR has_function_privilege('anon','public.touch_ai_provider_secret_updated_at()','EXECUTE')
+     OR has_function_privilege('authenticated','public.touch_ai_provider_secret_updated_at()','EXECUTE')
+     OR has_function_privilege('anon','public.prevent_audit_log_mutation()','EXECUTE')
+     OR has_function_privilege('authenticated','public.prevent_audit_log_mutation()','EXECUTE')
+     OR has_function_privilege('anon','public.prevent_consent_mutation()','EXECUTE')
+     OR has_function_privilege('authenticated','public.prevent_consent_mutation()','EXECUTE')
+     OR has_function_privilege('anon','public.set_deletion_request_updated_at()','EXECUTE')
+     OR has_function_privilege('authenticated','public.set_deletion_request_updated_at()','EXECUTE')
+     OR has_function_privilege('anon','public.delete_user_data(uuid)','EXECUTE')
+     OR has_function_privilege('authenticated','public.delete_user_data(uuid)','EXECUTE')
+     OR has_function_privilege('service_role','public.delete_user_data(uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'a trigger-only or dormant SECURITY DEFINER routine has unexpected API/service EXECUTE';
+  END IF;
+
+  IF has_function_privilege('anon','public.rotate_health_e2ee_key(integer,uuid)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.rotate_health_e2ee_key(integer,uuid)','EXECUTE')
+     OR has_function_privilege('anon','public.upsert_user_state_if_newer(uuid,text,jsonb,timestamptz,text)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.upsert_user_state_if_newer(uuid,text,jsonb,timestamptz,text)','EXECUTE') THEN
+    RAISE EXCEPTION 'authenticated RPC caller grants are not least-privilege';
+  END IF;
 END;
 $function_privileges$;
 DROP FUNCTION public.rls_default_execute_probe();
@@ -227,6 +275,14 @@ BEGIN
     RAISE EXCEPTION 'direct user_state DELETE unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
+
+  -- The role has no direct EXECUTE on the trigger function, but can update
+  -- its own session and PostgreSQL still invokes the already-bound trigger.
+  UPDATE public.sport_workout_sessions
+  SET ended_at=now()
+  WHERE id='60000000-0000-0000-0000-000000000001';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 1 THEN RAISE EXCEPTION 'owner workout UPDATE did not execute its protected trigger'; END IF;
 
   SELECT count(*) INTO n FROM public.profiles;
   IF n <> 1 THEN RAISE EXCEPTION 'profile isolation failed: expected 1 row, got %', n; END IF;
