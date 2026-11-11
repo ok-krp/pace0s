@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../core/storage/local_store.dart';
+import '../../core/sync/sync_service.dart';
 import '../../ui/pace_theme.dart';
 
 class NutritionPage extends StatefulWidget {
-  const NutritionPage({super.key, required this.localStore});
+  const NutritionPage({super.key, required this.localStore, required this.sync});
 
   final LocalStore localStore;
+  final SyncService sync;
 
   @override
   State<NutritionPage> createState() => _NutritionPageState();
@@ -94,6 +96,15 @@ class _NutritionPageState extends State<NutritionPage> {
     data[day] = list;
     await widget.localStore.write('pace.nutrition.items', data);
     await _recalculateTotals(data);
+    try {
+      await widget.sync.syncNow();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Repas enregistré sur cet appareil ; synchronisation en attente de connexion.')),
+        );
+      }
+    }
     if (mounted) setState(() {});
   }
 
@@ -136,6 +147,15 @@ class _NutritionPageState extends State<NutritionPage> {
     data[day] = list;
     await widget.localStore.write('pace.nutrition.items', data);
     await _recalculateTotals(data);
+    try {
+      await widget.sync.syncNow();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Modification enregistrée sur cet appareil ; synchronisation en attente de connexion.')),
+        );
+      }
+    }
     if (mounted) setState(() {});
   }
 
