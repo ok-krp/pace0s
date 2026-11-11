@@ -128,6 +128,8 @@ assert.match(generatedTypes, /has_current_health_e2ee_consent:\s*\{\s*Args:\s*ne
   "The exposed health consent RPC must be represented in the generated Supabase types");
 assert.doesNotMatch(generatedTypes, /pace_private|owns_health_e2ee_pairing_session/,
   "The private policy helper must not be exposed in the generated Data API types");
+assert.match(generatedTypes, /upsert_user_state_if_newer:/,
+  "The monotonic user_state write RPC must remain part of the public app contract");
 
 const aiConsent = readFileSync("src/lib/ai-chat.server.ts", "utf8");
 const aiConsentInsert = aiConsent.match(
