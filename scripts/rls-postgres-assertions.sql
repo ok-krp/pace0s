@@ -318,7 +318,7 @@ BEGIN
   SELECT count(*) INTO n FROM public.profiles;
   IF n <> 1 THEN RAISE EXCEPTION 'profile isolation failed: expected 1 row, got %', n; END IF;
   SELECT count(*) INTO n FROM public.health_samples;
-  IF n <> 1 THEN RAISE EXCEPTION 'legacy health SELECT isolation failed: expected 1 row, got %', n; END IF;
+  IF n <> 0 THEN RAISE EXCEPTION 'legacy health rows visible without consent'; END IF;
 
   BEGIN
     INSERT INTO public.profiles(id,user_id)
@@ -501,6 +501,8 @@ BEGIN
   INSERT INTO public.consent_records(user_id,consent_type,granted,legal_version,policy_version) VALUES
     ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','health_data',true,'2026-07-10','2026-07-10'),
     ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','health_cloud_sync',true,'2026-07-10','2026-07-10');
+  SELECT count(*) INTO n FROM public.health_samples;
+  IF n <> 1 THEN RAISE EXCEPTION 'legacy health owner read failed after required consent'; END IF;
 
   SELECT count(*) INTO n FROM public.consent_records
   WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
@@ -715,6 +717,8 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
+  SELECT count(*) INTO n FROM public.health_samples;
+  IF n <> 0 THEN RAISE EXCEPTION 'legacy health rows remain visible after consent revocation'; END IF;
   SELECT count(*) INTO n FROM public.health_samples_e2ee;
   IF n <> 0 THEN RAISE EXCEPTION 'encrypted samples remain visible after consent revocation'; END IF;
   SELECT count(*) INTO n FROM public.health_e2ee_key_envelopes;
@@ -770,6 +774,9 @@ BEGIN
   SELECT count(*) INTO n FROM public.profiles
   WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
   IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A profile'; END IF;
+  SELECT count(*) INTO n FROM public.health_samples
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A legacy health rows'; END IF;
   SELECT count(*) INTO n FROM public.user_state
   WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
   IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A user_state'; END IF;
