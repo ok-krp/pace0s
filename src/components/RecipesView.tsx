@@ -312,7 +312,7 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
     setSaving(true);
     try {
       const saved = await addNutritionItem({ name, meal, kcal: +kcal || 0, p: +p || 0, c: +c || 0, f: +f || 0 });
-      if (saved) toast.success("Repas enregistré dans Nutrition et synchronisé.");
+      if (saved) { if (isNutritionDeviceSyncEnabled()) toast.success("Repas enregistré ; synchronisation entre appareils en cours."); else toast.info("Repas enregistré. Active « Fonctionnel — Synchronisation » dans les consentements pour le retrouver sur tes autres appareils."); }
       onClose();
     } catch (error) { toast.error(error instanceof Error ? error.message : "Enregistrement du repas impossible."); }
     finally { setSaving(false); }
