@@ -320,7 +320,6 @@ begin
     'development_tasks',
     'food_log',
     'food_scans',
-    'legal_consent',
     'profiles',
     'push_subscriptions',
     'reminder_settings',
@@ -337,6 +336,23 @@ begin
     );
   end loop;
 end $$;
+
+-- The legacy legal_consent row is a mutable current document/options snapshot.
+-- saveLegalConsent uses an owner-keyed UPSERT; keep only its explicit data fields.
+grant select on public.legal_consent to authenticated;
+revoke insert, update, delete on public.legal_consent from authenticated;
+grant insert (user_id, region, eula_version, privacy_version, ip_country, consented_at, opts)
+  on public.legal_consent to authenticated;
+grant update (user_id, region, eula_version, privacy_version, ip_country, consented_at, opts)
+  on public.legal_consent to authenticated;
+create policy legal_consent_select_own on public.legal_consent
+  for select to authenticated using (user_id = (select auth.uid()));
+create policy legal_consent_insert_own on public.legal_consent
+  for insert to authenticated with check (user_id = (select auth.uid()));
+create policy legal_consent_update_own on public.legal_consent
+  for update to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
 
 -- Legacy plaintext health rows are read-only. New writes go to consent-scoped
 -- health_samples_e2ee; legacy migration is performed through its SECURITY DEFINER RPC.
