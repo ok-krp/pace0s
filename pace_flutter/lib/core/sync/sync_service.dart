@@ -17,7 +17,9 @@ class SyncService {
   bool? _cloudSyncConsent;
   String? _cloudSyncConsentUserId;
   DateTime? _cloudSyncConsentCheckedAt;
+  DateTime? _lastNutritionReconciledAt;
   static const _cloudSyncConsentCacheTtl = Duration(seconds: 30);
+  static const _nutritionFallbackInterval = Duration(minutes: 1);
   RealtimeChannel? _realtimeChannel;
   String? _realtimeUserId;
 
@@ -112,12 +114,22 @@ class SyncService {
               operation['key'] == 'pace.settings.ai.confirm_actions' ||
               operation['key'] == 'pace.settings.ai.memory',
         );
+        final shouldReconcileNutrition = hadNutritionMutation ||
+            _lastNutritionReconciledAt == null ||
+            DateTime.now().difference(_lastNutritionReconciledAt!) >=
+                _nutritionFallbackInterval;
         await _pushPending();
         await _syncAiPreferences(pushLocal: hadLocalAiPreferenceMutation);
         await _pullRemote();
-        if (hadNutritionMutation) {
-          await _reconcileNutritionProjection(user.id);
-          await _pushPending();
+        if (shouldReconcileNutrition) {
+          final reconciled = await _reconcileNutritionProjection(user.id);
+          if (reconciled) _lastNutritionReconciledAt = DateTime.now();
+          if (hadNutritionMutation ||
+              localStore.pendingOperations().any(
+                (operation) => operation['key'] == 'pace.nutrition.items',
+              )) {
+            await _pushPending();
+          }
         }
       } while (_syncRequested && client?.auth.currentUser?.id == initialUserId);
     } finally {
@@ -170,6 +182,28 @@ class SyncService {
             value: userId,
           ),
           callback: handlePayload,
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'food_log',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (_) => unawaited(_handleFoodLogRealtime(userId)),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'food_log',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (_) => unawaited(_handleFoodLogRealtime(userId)),
         );
 
     _realtimeChannel = channel;
@@ -342,8 +376,25 @@ class SyncService {
     }
   }
 
-  Future<void> _reconcileNutritionProjection(String userId) async {
-    if (!_hasCachedCloudSyncConsent(userId)) return;
+  Future<bool> _handleFoodLogRealtime(String userId) async {
+    if (client?.auth.currentUser?.id != userId ||
+        !_hasCachedCloudSyncConsent(userId)) {
+      return false;
+    }
+    final reconciled = await _reconcileNutritionProjection(userId);
+    if (reconciled) {
+      _lastNutritionReconciledAt = DateTime.now();
+      if (localStore.pendingOperations().any(
+        (operation) => operation['key'] == 'pace.nutrition.items',
+      )) {
+        await syncNow();
+      }
+    }
+    return reconciled;
+  }
+
+  Future<bool> _reconcileNutritionProjection(String userId) async {
+    if (!_hasCachedCloudSyncConsent(userId)) return false;
     try {
       final now = DateTime.now();
       final day =
@@ -409,8 +460,10 @@ class SyncService {
         };
         await localStore.write('pace.nutrition.totals', totals);
       }
+      return true;
     } catch (_) {
       // Keep the local snapshot and its outbox intact if food_log is offline.
+      return false;
     }
   }
 
