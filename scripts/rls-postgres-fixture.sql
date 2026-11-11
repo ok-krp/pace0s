@@ -107,7 +107,27 @@ CREATE TABLE public.nutrition_dish_references (id uuid PRIMARY KEY);
 CREATE TABLE public.nutrition_reference_dishes (id uuid PRIMARY KEY);
 CREATE TABLE public.nutrition_reference_foods (id uuid PRIMARY KEY);
 CREATE TABLE public.nutrition_reference_sources (id uuid PRIMARY KEY);
-CREATE TABLE public.profiles (id uuid PRIMARY KEY, user_id uuid NOT NULL);
+CREATE TABLE public.profiles (
+  id uuid PRIMARY KEY,
+  user_id uuid NOT NULL,
+  display_name text,
+  email text,
+  age integer,
+  sex text,
+  height_cm numeric,
+  weight_kg numeric,
+  weight_goal_kg numeric,
+  body_fat_goal_pct numeric,
+  muscle_mass_goal_pct numeric,
+  daily_calorie_goal integer,
+  daily_protein_goal integer,
+  daily_water_ml_goal integer,
+  training_goal text,
+  activity_level text,
+  training_sessions_goal integer,
+  updated_at timestamptz,
+  updated_by text
+);
 CREATE TABLE public.push_subscriptions (id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.reminder_debug_log (id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.reminder_settings (id uuid PRIMARY KEY, user_id uuid NOT NULL);
