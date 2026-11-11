@@ -107,7 +107,13 @@ CREATE TABLE public.sport_progression_targets (
 );
 CREATE TABLE public.sport_workout_exercises (id uuid PRIMARY KEY, session_id uuid NOT NULL, exercise_id uuid NOT NULL);
 CREATE TABLE public.sport_workout_sets (id uuid PRIMARY KEY, workout_exercise_id uuid NOT NULL);
-CREATE TABLE public.sport_workout_sessions (id uuid PRIMARY KEY, user_id uuid NOT NULL, program_id uuid);
+CREATE TABLE public.sport_workout_sessions (
+  id uuid PRIMARY KEY,
+  user_id uuid NOT NULL,
+  program_id uuid,
+  ended_at timestamptz,
+  is_temporary boolean NOT NULL DEFAULT false
+);
 CREATE TABLE public.user_biometrics_e2ee (id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.user_state (
   id uuid PRIMARY KEY,
@@ -155,6 +161,14 @@ AS $ BEGIN RETURN NEW; END $;
 CREATE FUNCTION public.enforce_daily_nutrition_chat()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $ BEGIN RETURN NEW; END $;
+
+-- A real row trigger is attached before the follow-up migration revokes
+-- direct EXECUTE on its SECURITY DEFINER function.
+CREATE TRIGGER fixture_temporary_workout_trigger
+AFTER UPDATE OF ended_at ON public.sport_workout_sessions
+FOR EACH ROW
+WHEN (NEW.ended_at IS NOT NULL AND NEW.is_temporary = true)
+EXECUTE FUNCTION public.delete_temporary_workout_after_finish();
 
 -- Simulate broad legacy grants and a stale permissive policy.
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO anon, authenticated;
