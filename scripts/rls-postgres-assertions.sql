@@ -515,10 +515,15 @@ INSERT INTO public.health_e2ee_key_envelopes(user_id,device_id,sender_device_id,
   VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001',
           '70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000001',
           'valid-envelope','nonce','ECDH-P256/AES-256-GCM',1);
-SELECT count(*) INTO n FROM public.health_e2ee_key_envelopes
-WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
-  AND id IS NOT NULL AND created_at IS NOT NULL;
-IF n <> 1 THEN RAISE EXCEPTION 'database-generated E2EE envelope ID/timestamp failed'; END IF;
+DO $envelope_defaults$
+DECLARE n integer;
+BEGIN
+  SELECT count(*) INTO n FROM public.health_e2ee_key_envelopes
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    AND id IS NOT NULL AND created_at IS NOT NULL;
+  IF n <> 1 THEN RAISE EXCEPTION 'database-generated E2EE envelope ID/timestamp failed'; END IF;
+END;
+$envelope_defaults$;
 
 -- Commit the initial granted decisions. The withdrawal is a separate request
 -- transaction, so PostgreSQL's now() default is strictly later, as in PostgREST.
