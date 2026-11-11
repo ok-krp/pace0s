@@ -565,9 +565,8 @@ BEGIN
   SELECT count(*) INTO n FROM public.health_e2ee_key_versions
     WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' AND current_key_version=2;
   IF n <> 1 THEN RAISE EXCEPTION 'failed cross-account key rotation changed user A key version'; END IF;
-  SELECT count(*) INTO n FROM public.health_e2ee_devices
-    WHERE id='70000000-0000-0000-0000-000000000002' AND revoked_at IS NULL;
-  IF n <> 1 THEN RAISE EXCEPTION 'user A SECURITY DEFINER RPC revoked user B device'; END IF;
+  -- User A cannot inspect B's device row through RLS. User B's independent
+  -- session below verifies that the failed SECURITY DEFINER call changed nothing.
   BEGIN
     UPDATE public.profiles SET user_id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
       WHERE id='10000000-0000-0000-0000-000000000001';
@@ -1060,6 +1059,11 @@ DECLARE n integer;
 BEGIN
   SELECT count(*) INTO n FROM public.profiles;
   IF n <> 1 THEN RAISE EXCEPTION 'user B profile isolation failed: expected 1 row, got %',n; END IF;
+  SELECT count(*) INTO n FROM public.health_e2ee_devices
+  WHERE id='70000000-0000-0000-0000-000000000002'
+    AND user_id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+    AND revoked_at IS NULL;
+  IF n <> 1 THEN RAISE EXCEPTION 'user B device revoked or changed after user A key rotation attempt'; END IF;
   SELECT count(*) INTO n FROM public.sport_workout_sessions;
   IF n <> 1 THEN RAISE EXCEPTION 'user B workout missing after user A invoker delete attempt'; END IF;
   SELECT count(*) INTO n FROM public.sport_programs;
