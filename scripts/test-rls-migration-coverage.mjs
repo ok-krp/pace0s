@@ -31,7 +31,9 @@ const consentTables = sql.match(
 ) ? ["consent_records"] : [];
 
 const deletionTables = sql.match(
-  /grant select, insert on public\.data_deletion_requests to authenticated/i,
+  /grant select on public\.data_deletion_requests to authenticated/i,
+) && sql.match(
+  /grant insert \(user_id\) on public\.data_deletion_requests to authenticated/i,
 ) ? ["data_deletion_requests"] : [];
 
 const readOnlyLogTables = sql.match(
@@ -469,6 +471,23 @@ assert.match(sql, /health_e2ee_recovery_insert_own[\s\S]*?has_current_health_e2e
   "Recovery envelopes must be insertable only with current health/cloud-sync consent");
 assert.match(sql, /health_e2ee_recovery_update_own[\s\S]*?has_current_health_e2ee_consent/i,
   "Recovery envelopes must be updateable only with current health/cloud-sync consent");
+assert.match(sql, /grant insert \(user_id, envelope, nonce, algorithm, key_version, updated_at\)[\s\S]*?on public\.health_e2ee_recovery_envelopes to authenticated/i,
+  "Recovery UPSERT must have INSERT only on its explicit data fields");
+assert.match(sql, /grant update \(envelope, nonce, algorithm, key_version, updated_at\)[\s\S]*?on public\.health_e2ee_recovery_envelopes to authenticated/i,
+  "Recovery UPSERT must not update the owner or creation timestamp");
+assert.doesNotMatch(sql, /grant select, insert, update on public\.health_e2ee_recovery_envelopes/i,
+  "Recovery envelope privileges must not be table-wide");
+assert.match(sql, /grant insert \(user_id\) on public\.data_deletion_requests to authenticated/i,
+  "Users may submit a deletion request but cannot choose request metadata");
+assert.doesNotMatch(sql, /grant select, insert on public\.data_deletion_requests/i,
+  "Deletion request INSERT must not be table-wide");
+const leastPrivilegeAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.match(leastPrivilegeAssertions, /authenticated has broader-than-needed E2EE recovery column privileges/,
+  "PostgreSQL must assert recovery INSERT/UPDATE privileges are column-scoped");
+assert.match(leastPrivilegeAssertions, /authenticated can control deletion request metadata/,
+  "PostgreSQL must assert deletion request ID/status/timestamps are database-owned");
+assert.match(leastPrivilegeAssertions, /owner could not submit a database-default pending deletion request/,
+  "PostgreSQL must prove a valid owner can submit a default pending deletion request");
 assert.doesNotMatch(directBlock, /'health_e2ee_recovery_envelopes'/,
   "Recovery envelopes must not receive generic owner CRUD grants");
 assert.doesNotMatch(sql, /grant [^;]*delete[^;]*on public\.health_e2ee_recovery_envelopes/i,
