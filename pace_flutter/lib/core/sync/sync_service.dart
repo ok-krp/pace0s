@@ -257,6 +257,17 @@ class SyncService {
             value: userId,
           ),
           callback: (_) => unawaited(_handleFoodLogRealtime(userId)),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.delete,
+          schema: 'public',
+          table: 'food_log',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: userId,
+          ),
+          callback: (_) => unawaited(_handleFoodLogRealtime(userId)),
         );
 
     _realtimeChannel = channel;
