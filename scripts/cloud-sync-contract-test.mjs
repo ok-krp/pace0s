@@ -39,6 +39,13 @@ assert.match(flutterNutrition, /await widget\.sync\.syncNow\(\)/, "Flutter Nutri
 assert.match(flutterNutrition, /await widget\.localStore\.write\('pace\.nutrition\.items', data\);[\s\S]*await _recalculateTotals\(data\);[\s\S]*await widget\.sync\.syncNow\(\)/, "Flutter meal additions must persist locally before requesting immediate sync");
 assert.match(flutterApp, /NutritionPage\(localStore: widget\.localStore, sync: widget\.sync\)/, "Flutter app must inject the shared sync service into Nutrition");
 
+assert.match(flutterSync, /if \(hadNutritionMutation\) \{[\s\S]*_reconcileNutritionProjection\(user\.id\);[\s\S]*_pushPending\(\)/, "Flutter must reconcile canonical Nutrition rows after local mutations and push the merged snapshot");
+assert.match(flutterSync, /_reconcileNutritionProjection[\s\S]*from\('food_log'\)[\s\S]*legacyRows[\s\S]*_isFoodLogUuid/, "Flutter reconciliation must combine canonical food_log rows with legacy local-only manual meals");
+assert.match(flutterSync, /Future<void> deleteNutritionFoodLogItem\(String id\)[\s\S]*from\('food_log'\)[\s\S]*\.delete\(\)/, "Deleting a canonical meal must delete its exact food_log row");
+assert.match(flutterNutrition, /deleteNutritionFoodLogItem\(item\['id'\]\?\.toString\(\) \?\? ''\)/, "Flutter Nutrition UI must request explicit canonical deletion before removing an item");
+assert.match(flutterNutrition, /Suppression impossible ; le repas a été conservé\./, "A failed canonical deletion must leave the meal visible");
+
+
 
 // AI meal additions are append-only. Replaying the same tool call is handled
 // by the idempotency RPC; a later add must never merge/delete an older meal.
