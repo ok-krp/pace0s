@@ -264,14 +264,18 @@ assert.ok(joinCryptoStart >= 0 && completeCryptoStart > joinCryptoStart && pairi
   "Follow-up migration must replace both active pgcrypto-dependent pairing RPCs");
 const joinCryptoSql = definerHardeningSql.slice(joinCryptoStart, completeCryptoStart);
 const completeCryptoSql = definerHardeningSql.slice(completeCryptoStart, pairingAclStart);
-assert.ok(joinCryptoSql.includes("pg_catalog.pg_extension") &&
+assert.ok(joinCryptoSql.includes("as $pair_join$") &&
+  joinCryptoSql.includes("$pair_join$;") &&
+  joinCryptoSql.includes("pg_catalog.pg_extension") &&
   joinCryptoSql.includes("%I.digest(") &&
   joinCryptoSql.includes("pg_catalog.convert_to("),
-  "Pairing join must resolve pgcrypto.digest using the installed extension schema");
-assert.ok(completeCryptoSql.includes("pg_catalog.pg_extension") &&
+  "Pairing join must use a valid body and resolve pgcrypto.digest using the installed extension schema");
+assert.ok(completeCryptoSql.includes("as $pair_complete$") &&
+  completeCryptoSql.includes("$pair_complete$;") &&
+  completeCryptoSql.includes("pg_catalog.pg_extension") &&
   completeCryptoSql.includes("%I.digest(") &&
   completeCryptoSql.includes("%I.gen_random_bytes("),
-  "Pairing completion must resolve pgcrypto digest/random functions using the installed extension schema");
+  "Pairing completion must use a valid body and resolve pgcrypto digest/random functions using the installed extension schema");
 assert.doesNotMatch(joinCryptoSql, /\bdigest\s*\(\s*convert_to/i,
   "Pairing join must not use unqualified pgcrypto functions with an empty search_path");
 assert.doesNotMatch(completeCryptoSql, /\bdigest\s*\(\s*gen_random_bytes/i,
@@ -282,7 +286,6 @@ for (const assertion of [
   "owner key rotation did not advance exactly one version",
   "user B device revoked or changed after user A key rotation attempt",
   "failed cross-account key rotation changed user A key version",
-  "user B device revoked or changed after user A key rotation attempt",
   "E2EE pairing and health migration RPC EXECUTE grants are not least-privilege",
   "E2EE pairing or migration SECURITY DEFINER RPC lacks its protected mode/search_path",
   "pairing join did not hash and verify the secret using installed pgcrypto schema",
