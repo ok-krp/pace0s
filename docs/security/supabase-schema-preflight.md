@@ -257,7 +257,7 @@ The generated `src/integrations/supabase/types.ts` files were counted by parsing
 | `application` | 14 | 0 |
 | Current PR #316 | 15 | 2 |
 
-Therefore 31 of the 45 audited public tables are not represented in the current PR branch's generated TypeScript contract, and 20 of the 22 `main` RPC definitions are absent. The PR currently includes only the consent helper and `upsert_user_state_if_newer` in its function section. Many code paths consequently cast Supabase clients to `any`, hiding schema mismatches from TypeScript.
+Therefore 30 of the 45 audited public tables are not represented in the current PR branch's generated TypeScript contract, and 20 of the 22 `main` RPC definitions are absent. (The `application` branch is missing 31 table definitions.) The PR currently includes only the consent helper and `upsert_user_state_if_newer` in its function section. Many code paths consequently cast Supabase clients to `any`, hiding schema mismatches from TypeScript.
 
 Do not blindly copy `main`'s generated types into `application`: the 22-function contract includes the Nutrition v2 RPC whose SQL body is missing from all tracked migrations, as well as other functions absent from the application's 16-migration chain. Regenerate the client types only after the target database schema and complete canonical migration chain have been recovered, replayed in an isolated clone, and reconciled to the actual app contract.
 
