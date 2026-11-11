@@ -88,6 +88,8 @@ assert.match(packageScripts["test:sync"], /node --experimental-strip-types scrip
 
 const nutritionAi = read("src/lib/ai-chat.server.ts");
 const nutritionLog = read("src/lib/nutrition-log.ts");
+assert.match(nutritionLog, /function deletedIdsStorageKey\(userId: string\)[\s\S]*encodeURIComponent\(userId\)/, "Nutrition deletion tombstones must use a distinct storage namespace per account");
+assert.match(nutritionLog, /localStorage\.getItem\(deletedIdsStorageKey\(userId\)\)[\s\S]*legacy\?\.userId === userId[\s\S]*localStorage\.removeItem\(DELETED_IDS_KEY\)/, "Legacy single-account tombstones must migrate only to their owning account");
 const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const nutritionRoute = read("src/routes/nutrition.tsx");
 const domainStore = read("src/lib/domain-store.ts");
