@@ -65,6 +65,10 @@ grant usage on schema public to anon, authenticated;
 -- Pin default-ACL changes to the PostgreSQL migration owner explicitly.
 -- Supabase migrations are expected to run as postgres; never mutate a different
 -- owner's defaults merely because the connection role changes in another env.
+-- Revoke global and schema-local defaults: schema-local ACLs are additive to
+-- global defaults, so the local REVOKE alone cannot cancel a global grant.
+alter default privileges for role postgres revoke all on tables from public, anon, authenticated;
+alter default privileges for role postgres revoke all on sequences from public, anon, authenticated;
 alter default privileges for role postgres in schema public revoke all on tables from public, anon, authenticated;
 alter default privileges for role postgres in schema public revoke all on sequences from public, anon, authenticated;
 
