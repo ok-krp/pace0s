@@ -119,6 +119,12 @@ const expectedPublicTables = [
 assert.deepEqual([...names].sort(), expectedPublicTables,
   "The RLS migration classifications must match the exact audited 45-table public schema");
 
+const generatedTypes = readFileSync("src/integrations/supabase/types.ts", "utf8");
+assert.match(generatedTypes, /has_current_health_e2ee_consent:\s*\{\s*Args:\s*never;\s*Returns:\s*boolean\s*\}/,
+  "The exposed health consent RPC must be represented in the generated Supabase types");
+assert.doesNotMatch(generatedTypes, /pace_private|owns_health_e2ee_pairing_session/,
+  "The private policy helper must not be exposed in the generated Data API types");
+
 const assertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
 assert.ok(assertions.includes("anon unexpectedly read private profiles"),
   "Anonymous SELECT on private user data must be denied");
