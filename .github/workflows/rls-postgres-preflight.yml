@@ -60,6 +60,13 @@ jobs:
           docker exec -i "$PG_CONTAINER_ID" psql --username=postgres --dbname=paceos_rls_test \
             --set=ON_ERROR_STOP=1 < supabase/migrations/20261111140000_allow_nullable_health_e2ee_envelope_nonce.sql
 
+      - name: Harden existing SECURITY DEFINER routine ACLs
+        run: |
+          PG_CONTAINER_ID="$(docker ps --filter "ancestor=postgres:16" --format "{{.ID}}" | head -n 1)"
+          test -n "$PG_CONTAINER_ID"
+          docker exec -i "$PG_CONTAINER_ID" psql --username=postgres --dbname=paceos_rls_test \
+            --set=ON_ERROR_STOP=1 < supabase/migrations/20261111150000_harden_security_definer_routine_acl.sql
+
       - name: Assert tenant isolation, consent gates, and least privilege
         run: |
           PG_CONTAINER_ID="$(docker ps --filter "ancestor=postgres:16" --format "{{.ID}}" | head -n 1)"
