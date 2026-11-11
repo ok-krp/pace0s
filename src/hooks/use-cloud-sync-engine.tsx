@@ -146,35 +146,12 @@ function unwrapNutritionValue(value: unknown) {
   return value;
 }
 
-function mergeNutritionRemoteValue(incomingValue: unknown, authoritative = false) {
-  const incoming = unwrapNutritionValue(incomingValue);
-  if (authoritative) return sanitizeNutritionItems(incoming);
-  const current = readDomain<Record<string, unknown>>("nutrition.items", {}).value;
-  if (!incoming || typeof incoming !== "object" || Array.isArray(incoming) || !current || typeof current !== "object" || Array.isArray(current)) return sanitizeNutritionItems(incoming);
-  const merged: Record<string, unknown> = { ...(current as Record<string, unknown>) };
-  for (const [day, rawIncoming] of Object.entries(incoming as Record<string, unknown>)) {
-    if (!Array.isArray(rawIncoming)) continue;
-    const local = Array.isArray(merged[day]) ? merged[day] as unknown[] : [];
-    const byId = new Set(local.map((item) => item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "").filter(Boolean));
-    const output = [...local];
-    for (const item of rawIncoming) {
-      const id = item && typeof item === "object" ? String((item as Record<string, unknown>).id ?? "") : "";
-      if (id && byId.has(id)) {
-        const index = output.findIndex((existing) => existing && typeof existing === "object" && String((existing as Record<string, unknown>).id ?? "") === id);
-        if (index >= 0) output[index] = item;
-      } else {
-        output.push(item);
-        if (id) byId.add(id);
-      }
-    }
-    merged[day] = output;
-  }
-  return sanitizeNutritionItems(merged);
+function mergeNutritionRemoteValue(incomingValue: unknown) {
+  // user_state stores the complete daily projection, not a patch. Treat each
+  // monotonic remote write as authoritative so explicit item deletions converge.
+  return sanitizeNutritionItems(unwrapNutritionValue(incomingValue));
 }
 
-function isAuthoritativeNutritionWriter(updatedBy: string | null | undefined) {
-  return updatedBy === "coach_ai" || updatedBy === "nutrition_state_repair";
-}
 
 export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
@@ -189,7 +166,7 @@ export function useCloudSyncEngineInternal() {
     if (encoded !== undefined) lastRemoteValues.current[key] = encoded;
   };
   const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string, updatedBy?: string | null) => {
-    const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value, isAuthoritativeNutritionWriter(updatedBy)) : value;
+    const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value) : value;
     rememberRemote(key, safeValue);
     applyRemoteWrite(key, safeValue, updatedAt);
   };
