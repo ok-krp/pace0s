@@ -64,6 +64,33 @@ void main() {
       expect(store.pendingOperations(), isEmpty);
     });
 
+    test('recovers the last complete snapshot when interrupted replacement leaves only a backup', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-backup-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final file = File('${directory.path}/pace_local.json');
+      final backup = File('${file.path}.bak');
+      await backup.writeAsString(jsonEncode({
+        'pace.nutrition.items': {
+          '2026-11-11': [
+            {'id': 'meal-recovered', 'name': 'Repas récupéré'}
+          ]
+        }
+      }));
+
+      final store = await LocalStore.openAt(file);
+      expect(store.read('pace.nutrition.items'), {
+        '2026-11-11': [
+          {'id': 'meal-recovered', 'name': 'Repas récupéré'}
+        ]
+      });
+      expect(await file.exists(), isTrue);
+      expect(await backup.exists(), isFalse);
+    });
+
     test('fails closed and preserves an unreadable existing local file', () async {
       final directory = await Directory.systemTemp.createTemp('pace-local-corrupt-');
       addTearDown(() async {
