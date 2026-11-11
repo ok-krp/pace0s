@@ -48,7 +48,7 @@ create or replace function public.join_pairing_session(
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $pair_join$
 declare
   v_session public.health_e2ee_pairing_sessions%rowtype;
   v_attempt integer;
@@ -149,7 +149,7 @@ begin
       updated_at = now()
   where id = p_session_id;
 end;
-$;
+$pair_join$;
 
 create or replace function public.complete_pairing_session(
   p_session_id uuid,
@@ -158,7 +158,7 @@ create or replace function public.complete_pairing_session(
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $pair_complete$
 declare
   v_session public.health_e2ee_pairing_sessions%rowtype;
   v_pgcrypto_schema name;
@@ -211,7 +211,7 @@ begin
       secret_hash = v_rotated_secret_hash
   where id = p_session_id;
 end;
-$;
+$pair_complete$;
 
 -- E2EE pairing functions are SECURITY DEFINER and validate auth.uid()
 -- and device/session ownership internally. Revoke stale direct API grants
