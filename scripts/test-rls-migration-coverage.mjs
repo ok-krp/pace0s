@@ -67,6 +67,10 @@ const rpcOnlyTables = [
 
 const classes = {
   directUserTables,
+  legacyMutableLegalConsent: sql.match(/grant select on public\.legal_consent to authenticated/i) &&
+    sql.match(/grant insert \(user_id, region, eula_version, privacy_version, ip_country, consented_at, opts\)/i) &&
+    sql.match(/grant update \(user_id, region, eula_version, privacy_version, ip_country, consented_at, opts\)/i)
+    ? ["legal_consent"] : [],
   ownerReadOnlyUserState: sql.match(/grant select on public\.user_state to authenticated/i) ? ["user_state"] : [],
   childTables,
   publicReadOnlyCatalogues: catalogTables,
@@ -87,6 +91,8 @@ const names = classified.map((item) => item.table);
 const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
 
 assert.equal(directUserTables.length, 13, "Expected 13 direct user-owned CRUD tables");
+assert.equal(classes.legacyMutableLegalConsent.length, 1,
+  "The legacy legal document/options snapshot must have its own column-scoped access class");
 assert.match(sql, /grant select on public\.legal_consent to authenticated/i,
   "Current legal document/options snapshot must remain readable by its owner");
 assert.match(sql, /grant insert \(user_id, region, eula_version, privacy_version, ip_country, consented_at, opts\)[\s\S]*?on public\.legal_consent to authenticated/i,
