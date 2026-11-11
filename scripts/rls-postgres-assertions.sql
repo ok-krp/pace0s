@@ -815,6 +815,9 @@ BEGIN
   SELECT count(*) INTO n FROM public.health_samples
   WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
   IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A legacy health rows'; END IF;
+  SELECT count(*) INTO n FROM public.legal_consent
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A legal consent'; END IF;
   SELECT count(*) INTO n FROM public.user_state
   WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
   IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A user_state'; END IF;
