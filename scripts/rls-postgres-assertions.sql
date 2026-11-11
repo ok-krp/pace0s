@@ -128,6 +128,12 @@ BEGIN
     RAISE EXCEPTION 'anon unexpectedly wrote to catalogue';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
+
+  BEGIN
+    PERFORM id FROM public.profiles;
+    RAISE EXCEPTION 'anon unexpectedly read private profiles';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
 END;
 $anon$;
 ROLLBACK;
@@ -148,6 +154,14 @@ BEGIN
     INSERT INTO public.profiles(id,user_id)
       VALUES ('10000000-0000-0000-0000-000000000003','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
     RAISE EXCEPTION 'cross-user profile insert unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    UPDATE public.profiles
+    SET user_id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
+    WHERE id='10000000-0000-0000-0000-000000000001';
+    RAISE EXCEPTION 'profile owner reassignment unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
@@ -393,6 +407,32 @@ END;
 $health_consent_revoked$;
 
 
+ROLLBACK;
+
+-- A second authenticated session must see only B's rows too. This is a
+-- separate transaction/GUC context, not a second assertion under user A.
+BEGIN;
+SET LOCAL ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',true);
+DO $user_b$
+DECLARE n integer;
+BEGIN
+  SELECT count(*) INTO n FROM public.profiles;
+  IF n <> 1 THEN RAISE EXCEPTION 'user B profile isolation failed: expected 1 row, got %',n; END IF;
+
+  SELECT count(*) INTO n FROM public.profiles
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A profile'; END IF;
+
+  BEGIN
+    UPDATE public.profiles
+    SET user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    WHERE id='10000000-0000-0000-0000-000000000002';
+    RAISE EXCEPTION 'user B profile owner reassignment unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END;
+$user_b$;
 ROLLBACK;
 
 SELECT 'RLS PostgreSQL integration assertions passed' AS result;
