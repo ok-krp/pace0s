@@ -259,8 +259,17 @@ for (const table of e2eeTables) {
 }
 assert.match(sql, /health_samples_e2ee_update_own[\s\S]*?for update to authenticated/i,
   "Encrypted samples require owner-only UPDATE for conflict-safe upserts");
-assert.match(sql, /health_e2ee_devices_update_own[\s\S]*?for update to authenticated/i,
-  "Device revocation must be an owner-only UPDATE");
+assert.match(sql, /grant select, insert on public\.health_e2ee_devices to authenticated/i,
+  "Clients may register and list owned E2EE devices");
+assert.doesNotMatch(sql, /grant [^;]*update[^;]*on public\.health_e2ee_devices|grant update on public\.health_e2ee_devices/i,
+  "Clients must not directly update E2EE device revocation state");
+assert.doesNotMatch(sql, /create policy health_e2ee_devices_update_own/i,
+  "Device revocation must remain behind the key-rotation RPC");
+const deviceAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.match(deviceAssertions, /authenticated can directly UPDATE device revocation state/,
+  "PostgreSQL test must verify direct device UPDATE is denied");
+assert.match(deviceAssertions, /client directly reactivated revoked E2EE device/,
+  "PostgreSQL test must prove a revoked device cannot be reactivated by a client");
 assert.match(sql, /health_e2ee_envelopes_delete_own[\s\S]*?for delete to authenticated/i,
   "Envelopes must be deletable only by their owner");
 const insertPolicy = sql.match(/create policy health_e2ee_envelopes_insert_own[\s\S]*?create policy health_e2ee_envelopes_delete_own/i)?.[0] ?? "";
