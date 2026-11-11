@@ -155,6 +155,48 @@ assert.match(consentAssertions, /database timestamp default not applied to conse
 
 
 const nonceAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+const definerHardeningSql = readFileSync(
+  "supabase/migrations/20261111150000_harden_security_definer_routine_acl.sql", "utf8",
+);
+assert.match(definerHardeningSql, /revoke create on schema public from public, anon, authenticated/i,
+  "PUBLIC and API roles must not create shadow objects in the exposed public schema");
+for (const fn of [
+  "sync_sport_user_state()",
+  "delete_temporary_workout_after_finish()",
+  "touch_ai_provider_secret_updated_at()",
+  "prevent_audit_log_mutation()",
+  "prevent_consent_mutation()",
+  "set_deletion_request_updated_at()",
+  "delete_user_data(uuid)",
+  "sync_sport_program_archive_state()",
+  "enforce_daily_nutrition_chat()",
+]) {
+  assert.match(definerHardeningSql, new RegExp(
+    "alter function public\\." + fn.replace(/[.*+?^${}()|[\\]\\]/g, "\\const envelopeNonceMigration = readFileSync(") + "\\s+set search_path = ''",
+    "i",
+  ), "SECURITY DEFINER routine must use an empty search_path: " + fn);
+}
+assert.match(definerHardeningSql, /revoke all on function public\.sync_sport_user_state\(\)\s+from public, anon, authenticated/i,
+  "Sport sync trigger function must not be directly callable by API roles");
+assert.match(definerHardeningSql, /revoke all on function public\.delete_temporary_workout_after_finish\(\)\s+from public, anon, authenticated/i,
+  "Temporary workout trigger function must not be directly callable by API roles");
+assert.match(definerHardeningSql, /revoke all on function public\.delete_user_data\(uuid\)\s+from public, anon, authenticated, service_role/i,
+  "Dormant destructive SECURITY DEFINER deletion helper must remain inaccessible until a caller is proven");
+assert.match(definerHardeningSql, /grant execute on function public\.rotate_health_e2ee_key\(integer, uuid\)\s+to authenticated/i,
+  "Key rotation RPC must remain available only to its intended authenticated caller");
+assert.match(definerHardeningSql, /grant execute on function public\.upsert_user_state_if_newer\(uuid, text, jsonb, timestamptz, text\)\s+to authenticated/i,
+  "Monotonic cloud-state RPC must remain available only to authenticated callers");
+const definerWorkflow = readFileSync(".github/workflows/rls-postgres-preflight.yml", "utf8");
+assert.match(definerWorkflow, /--file=supabase\/migrations\/20261111150000_harden_security_definer_routine_acl\.sql/,
+  "PostgreSQL preflight must apply existing definer-routine hardening");
+const definerAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.match(definerAssertions, /existing SECURITY DEFINER routine does not have an empty search_path/,
+  "PostgreSQL must inspect every hardened routine's stored search_path");
+assert.match(definerAssertions, /trigger-only or dormant SECURITY DEFINER routine has unexpected API\/service EXECUTE/,
+  "PostgreSQL must reject direct execution on trigger-only and dormant routines");
+assert.match(definerAssertions, /owner workout UPDATE did not execute its protected trigger/,
+  "A valid owner update must still invoke its trigger after EXECUTE is revoked");
+
 const envelopeNonceMigration = readFileSync(
   "supabase/migrations/20261111140000_allow_nullable_health_e2ee_envelope_nonce.sql", "utf8",
 );
