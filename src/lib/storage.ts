@@ -130,26 +130,6 @@ function applyRemoteDomainRecord(domain: string, value: unknown, updatedAt: stri
   } catch {}
 }
 
-function mergeRecipeCustomRemote(value: unknown, localValue?: unknown): unknown[] | null {
-  if (!Array.isArray(value)) return null;
-  try {
-    const rawLocal = localValue !== undefined ? localValue : localStorage.getItem("pace.recipes.custom");
-    const local = typeof rawLocal === "string" ? JSON.parse(rawLocal) : rawLocal ?? [];
-    if (!Array.isArray(local)) return value;
-    const byId = new Map<string, unknown>();
-    for (const item of local) {
-      if (item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string") byId.set((item as Record<string, unknown>).id as string, item);
-    }
-    const merged = [...value];
-    const remoteIds = new Set<string>();
-    for (const item of value) {
-      if (item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string") remoteIds.add((item as Record<string, unknown>).id as string);
-    }
-    for (const [id, item] of byId) if (!remoteIds.has(id)) merged.push(item);
-    return merged;
-  } catch { return value; }
-}
-
 function hasCompatibleTopLevelShape<T>(parsed: unknown, initial: T): parsed is T {
   if (Array.isArray(initial)) return Array.isArray(parsed);
   if (initial !== null && typeof initial === "object") return !!parsed && typeof parsed === "object" && !Array.isArray(parsed);
@@ -194,7 +174,7 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
       if (!detail || detail.key !== key) return;
       suppressPersistRef.current = true;
-      const next = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(detail.value, valueRef.current) : detail.value;
+      const next = detail.value;
       if (!hasCompatibleTopLevelShape(next, initial)) return;
       valueRef.current = next as T;
       setValue(next as T);
@@ -226,7 +206,7 @@ function canonicalDomainFromRemoteKey(key: string): string | null {
 }
 
 export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
-  const safeValue = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(value) ?? value : value;
+  const safeValue = value;
   const canonicalDomain = canonicalDomainFromRemoteKey(key);
   const storageKey = canonicalDomain ? `pace.domain.${canonicalDomain}` : key;
   try { localStorage.setItem(storageKey, JSON.stringify(safeValue)); } catch {}
