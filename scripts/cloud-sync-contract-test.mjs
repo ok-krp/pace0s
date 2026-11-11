@@ -46,6 +46,11 @@ assert.match(nutritionLog, /Recover entries created by older app versions/, "Pre
 assert.match(nutritionLog, /id: item\.id, user_id: user\.id, log_date: day/, "Legacy recovery must preserve each existing nutrition UUID");
 assert.doesNotMatch(nutritionLog.slice(nutritionLog.indexOf("async function refreshNutritionFromFoodLog"), nutritionLog.indexOf("export async function addNutritionItem")), /\.delete\s*\(/, "Canonical refresh and legacy recovery must never delete nutrition entries");
 assert.match(nutritionLog, /order\("created_at", \{ ascending: true \}\)/, "Canonical nutrition refresh must retain stable meal ordering");
+assert.match(nutritionLog, /let nutritionBridgeChain: Promise<void>/, "Legacy nutrition snapshots must be serialized instead of being dropped during an in-flight bridge");
+assert.match(nutritionLog, /nutritionBridgeChain = nutritionBridgeChain\.then\(task, task\)/, "Queued nutrition bridge snapshots must run even after a previous failure");
+assert.match(nutritionLog, /await bridgeLocalNutritionToFoodLog\(readNutritionItems\(\)\)/, "Nutrition refresh must wait for legacy local entries to finish bridging");
+assert.doesNotMatch(nutritionLog, /nutritionBridgeRunning/, "The bridge must not silently discard writes while busy");
+
 assert.match(nutritionRoute, /await addNutritionItem\([\s\S]*"manual"\)/, "Manual form must use the canonical persisted add path");
 assert.match(nutritionRoute, /await addNutritionItem\([\s\S]*"barcode"\)/, "Barcode additions must use the canonical persisted add path");
 assert.match(nutritionRoute, /await addNutritionItem\([\s\S]*"photo_ai"\)/, "Photo AI additions must use the canonical persisted add path");
@@ -97,6 +102,10 @@ assert.match(engine, /if \(allowed\(\)\) startRealtime\(\);/, "Realtime must sta
 assert.match(engine, /if \(allowed\(\)\) \{ startRealtime\(\); void syncNow\(\); \}/, "Enabling sync consent must reconnect Realtime and reconcile");
 assert.match(engine, /queueItem\(\{ key, value, updatedAt, mutationId \}\);\n      if \(allowed\(\)\)/, "Local mutations must remain queued on-device while cloud sync consent is off");
 assert.match(engine, /localOnlyKeys/, "Legacy raw app-state bootstrap must exclude device-local security and appearance settings");
+assert.match(engine, /pace\.privacy\.pin\.hash/, "Finance PIN hashes must never be part of local raw-state cloud recovery");
+assert.match(engine, /pace\.ble\.devices/, "Paired Bluetooth device identifiers must remain device-local");
+assert.match(engine, /pace\.ai\.pending:/, "Local AI prompt drafts must remain device-local");
+
 assert.match(engine, /await flushQueue\(\); await pull\(\); await flushQueue\(\);/, "Bootstrapped and recovered local values must be pushed in the same sync pass");
 assert.match(engine, /const sourceRow = !canonical \? legacy : !legacy \? canonical/, "Legacy recovery must select the newest full snapshot instead of union-merging rows");
 assert.doesNotMatch(engine.slice(engine.indexOf("for (const [key, bucket] of grouped)"), engine.indexOf("// Bootstrap pre-existing local domain state")), /mergeRecoveredValues/, "A stale legacy snapshot must not resurrect deleted array entries");
