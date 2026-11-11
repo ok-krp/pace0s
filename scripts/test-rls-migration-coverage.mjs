@@ -483,9 +483,9 @@ assert.match(columnAclAssertions, /legacy column-level grants survived the RLS p
   "PostgreSQL must verify that old column-only grants do not survive");
 assert.match(sql, /revoke all privileges on schema public from anon, authenticated[\s\S]*?grant usage on schema public to anon, authenticated/i,
   "Schema usage must be re-established explicitly after revocation");
-assert.match(sql, /alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated/i,
+assert.match(sql, /alter default privileges for role postgres in schema public revoke all on tables from public, anon, authenticated/i,
   "Future tables created by postgres must not inherit API-role table grants");
-assert.match(sql, /alter default privileges for role postgres in schema public revoke all on sequences from anon, authenticated/i,
+assert.match(sql, /alter default privileges for role postgres in schema public revoke all on sequences from public, anon, authenticated/i,
   "Future sequences created by postgres must not inherit API-role sequence grants");
 assert.match(sql, /alter default privileges for role postgres revoke execute on functions from public/i,
   "Future functions created by postgres must not inherit the PostgreSQL PUBLIC EXECUTE grant");
@@ -493,9 +493,9 @@ assert.match(sql, /alter default privileges for role postgres in schema public r
   "Future public-schema functions created by postgres must not inherit schema-level PUBLIC EXECUTE grants");
 assert.match(sql, /alter default privileges for role postgres in schema public revoke execute on functions from anon, authenticated/i,
   "Future public-schema functions created by postgres must not inherit API-role EXECUTE grants");
-assert.match(sql, /alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated/i,
+assert.match(sql, /alter default privileges for role postgres in schema public revoke all on tables from public, anon, authenticated/i,
   "Future public tables created by postgres must not inherit direct API-role grants");
-assert.match(sql, /alter default privileges for role postgres in schema public revoke all on sequences from anon, authenticated/i,
+assert.match(sql, /alter default privileges for role postgres in schema public revoke all on sequences from public, anon, authenticated/i,
   "Future public sequences created by postgres must not inherit direct API-role grants");
 
 for (const table of catalogTables) {
