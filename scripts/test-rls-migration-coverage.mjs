@@ -262,7 +262,7 @@ for (const assertion of [
   "owner key rotation did not advance exactly one version",
   "user A revoked user B device through SECURITY DEFINER key rotation",
   "failed cross-account key rotation changed user A key version",
-  "user A SECURITY DEFINER RPC revoked user B device",
+  "user B device revoked or changed after user A key rotation attempt",
   "E2EE pairing and health migration RPC EXECUTE grants are not least-privilege",
   "E2EE pairing or migration SECURITY DEFINER RPC lacks its protected mode/search_path",
 ]) {
