@@ -59,6 +59,11 @@ const domainWriteEnd = domainStore.indexOf("window.addEventListener(WRITE_EVENT"
 assert.ok(domainLocalWriteStart >= 0 && domainRemoteWriteStart > domainLocalWriteStart && domainWriteEnd > domainRemoteWriteStart, "domain write handlers must remain identifiable");
 const domainWriteHandlers = domainStore.slice(domainLocalWriteStart, domainWriteEnd);
 assert.doesNotMatch(domainWriteHandlers, /mergeNutritionValues/, "A full local or remote Nutrition snapshot must not union deleted items back into the list");
+assert.doesNotMatch(domainStore, /domain === "sleep".*merged = \{/, "Full sleep snapshots must preserve explicit removals");
+assert.doesNotMatch(storage, /mergeRecipeCustomRemote/, "Recipe snapshots must not union deleted recipes back into the list");
+assert.match(storage, /const next = detail\.value;/, "Remote list values must be applied as complete snapshots");
+assert.match(storage, /const safeValue = value;/, "Remote storage application must preserve exact canonical values");
+
 assert.match(domainWriteHandlers, /sanitizeNutritionItems\(unwrapDomainValue\(detail\.record\.value\)\)/, "Local Nutrition writes must apply the exact snapshot");
 assert.match(domainWriteHandlers, /sanitizeNutritionItems\(next\.value\)/, "Remote Nutrition writes must apply the exact snapshot");
 
