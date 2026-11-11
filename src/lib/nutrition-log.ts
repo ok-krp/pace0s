@@ -24,6 +24,8 @@ export type NutritionItem = {
 
 const DOMAIN_ITEMS = "nutrition.items";
 const DELETED_IDS_KEY = "pace.__nutrition_deleted_ids_v1";
+const FOOD_LOG_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function isFoodLogUuid(id: string) { return FOOD_LOG_UUID.test(id); }
 type DeletedNutritionIds = { userId: string; ids: string[] };
 
 function readDeletedNutritionIds(userId: string): Set<string> {
@@ -94,6 +96,9 @@ export async function deletePersistedNutritionItem(id: string): Promise<void> {
   // makes the explicit SQL DELETE the final operation for this UUID.
   rememberDeletedNutritionId(user.id, id);
   await nutritionBridgeChain.catch(() => undefined);
+  // Historical Flutter entries used timestamp IDs and exist only in the
+  // user_state snapshot. They have no food_log row to delete.
+  if (!isFoodLogUuid(id)) return;
   const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
   if (error) {
     forgetDeletedNutritionId(user.id, id);
@@ -129,7 +134,7 @@ async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<
   }
 
   const deletedIds = readDeletedNutritionIds(user.id);
-  const nextRows = nutritionRows(value).filter(({ id }) => !deletedIds.has(id));
+  const nextRows = nutritionRows(value).filter(({ id }) => isFoodLogUuid(id) && !deletedIds.has(id));
   const previousById = new Map(nutritionRows(lastBridgedNutrition).map((row) => [row.id, row.item]));
   // A missing ID is not a delete instruction. Only the explicit remove handler
   // is allowed to delete a row from food_log.
@@ -205,7 +210,14 @@ async function refreshNutritionFromFoodLog(day: string) {
     };
   });
   const current = readNutritionItems();
-  writeDomain(DOMAIN_ITEMS, { ...current, [day]: rows });
+  const deletedIds = readDeletedNutritionIds(user.id);
+  // Older native Flutter releases stored manual meals only in user_state
+  // with timestamp IDs. Preserve those rows while food_log is canonical for
+  // UUID-backed meals; never mistake the legacy rows for SQL UUIDs.
+  const legacyRows = (current[day] ?? []).filter((item) => !isFoodLogUuid(item.id) && !deletedIds.has(item.id));
+  const canonicalIds = new Set(rows.map((item) => item.id));
+  const mergedRows = [...rows, ...legacyRows.filter((item) => !canonicalIds.has(item.id))];
+  writeDomain(DOMAIN_ITEMS, { ...current, [day]: mergedRows });
   window.dispatchEvent(new Event("pace.nutrition.changed"));
 }
 
