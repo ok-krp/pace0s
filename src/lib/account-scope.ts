@@ -75,10 +75,20 @@ export function switchLocalAccountScope(userId: string | null): boolean {
     // account. A signed-out initial render leaves it untouched as guest data.
     if (previousScope === null) {
       if (!userId) return false;
-      localStorage.setItem(
-        accountSnapshotKey(nextScope),
-        JSON.stringify(currentSnapshot),
-      );
+      // If a prior browser session left an account snapshot but lost its
+      // marker, that snapshot is authoritative; never replace it with whatever
+      // unscoped values happen to be visible after the reset.
+      const savedSnapshot = localStorage.getItem(accountSnapshotKey(nextScope));
+      if (savedSnapshot === null) {
+        localStorage.setItem(
+          accountSnapshotKey(nextScope),
+          JSON.stringify(currentSnapshot),
+        );
+      } else {
+        const restored = readAccountSnapshot(nextScope);
+        clearCurrentAccountState();
+        restoreAccountSnapshot(restored);
+      }
       localStorage.setItem(ACCOUNT_SCOPE_KEY, nextScope);
       window.dispatchEvent(new Event("pace.account.scope.changed"));
       window.dispatchEvent(new Event("pace.remote.write"));
