@@ -36,6 +36,61 @@ revoke all on function public.rotate_health_e2ee_key(integer, uuid)
 grant execute on function public.rotate_health_e2ee_key(integer, uuid)
   to authenticated;
 
+-- E2EE pairing functions are SECURITY DEFINER and validate auth.uid()
+-- and device/session ownership internally. Revoke stale direct API grants
+-- explicitly; the authenticated RPC calls are required by health.functions.ts.
+alter function public.create_pairing_session(uuid,text,text,jsonb,integer) set search_path = '';
+revoke all on function public.create_pairing_session(uuid,text,text,jsonb,integer)
+  from public, anon, authenticated;
+grant execute on function public.create_pairing_session(uuid,text,text,jsonb,integer)
+  to authenticated;
+
+alter function public.join_pairing_session(uuid,text,uuid,jsonb) set search_path = '';
+revoke all on function public.join_pairing_session(uuid,text,uuid,jsonb)
+  from public, anon, authenticated;
+grant execute on function public.join_pairing_session(uuid,text,uuid,jsonb)
+  to authenticated;
+
+alter function public.confirm_pairing_session(uuid,uuid) set search_path = '';
+revoke all on function public.confirm_pairing_session(uuid,uuid)
+  from public, anon, authenticated;
+grant execute on function public.confirm_pairing_session(uuid,uuid)
+  to authenticated;
+
+alter function public.complete_pairing_session(uuid,uuid) set search_path = '';
+revoke all on function public.complete_pairing_session(uuid,uuid)
+  from public, anon, authenticated;
+grant execute on function public.complete_pairing_session(uuid,uuid)
+  to authenticated;
+
+alter function public.create_pairing_envelope(uuid,uuid,uuid,text,integer,text) set search_path = '';
+revoke all on function public.create_pairing_envelope(uuid,uuid,uuid,text,integer,text)
+  from public, anon, authenticated;
+grant execute on function public.create_pairing_envelope(uuid,uuid,uuid,text,integer,text)
+  to authenticated;
+
+alter function public.get_pairing_session(uuid) set search_path = '';
+revoke all on function public.get_pairing_session(uuid)
+  from public, anon, authenticated;
+grant execute on function public.get_pairing_session(uuid)
+  to authenticated;
+
+-- The legacy Health migration RPC is called by the authenticated migration
+-- flow and checks auth.uid() for every row it writes.
+alter function public.migrate_health_legacy_chunk(jsonb) set search_path = '';
+revoke all on function public.migrate_health_legacy_chunk(jsonb)
+  from public, anon, authenticated;
+grant execute on function public.migrate_health_legacy_chunk(jsonb)
+  to authenticated;
+
+-- Historical backfill RPC also checks auth.uid() and only updates the
+-- caller's rows; keep the explicitly documented authenticated grant.
+alter function public.backfill_health_e2ee_dedupe_hashes(jsonb) set search_path = '';
+revoke all on function public.backfill_health_e2ee_dedupe_hashes(jsonb)
+  from public, anon, authenticated;
+grant execute on function public.backfill_health_e2ee_dedupe_hashes(jsonb)
+  to authenticated;
+
 -- The following Sport RPCs intentionally remain SECURITY INVOKER. Their
 -- bodies fully qualify public tables and auth.uid(); an empty path removes
 -- unnecessary name-resolution risk without bypassing table RLS.
