@@ -56,6 +56,24 @@ class SyncService {
   bool _hasCachedCloudSyncConsent(String userId) =>
       _cloudSyncConsentUserId == userId && _cloudSyncConsent == true;
 
+  Future<void> onAccountChanged(String? userId) async {
+    if (_realtimeUserId != userId) {
+      final channel = _realtimeChannel;
+      _realtimeChannel = null;
+      _realtimeUserId = null;
+      if (channel != null && client != null) {
+        await client!.removeChannel(channel);
+      }
+    }
+    if (_cloudSyncConsentUserId != userId) {
+      _cloudSyncConsentUserId = null;
+      _cloudSyncConsent = null;
+      _cloudSyncConsentCheckedAt = null;
+    }
+    _lastNutritionReconciledAt = null;
+    _syncRequested = false;
+  }
+
   bool get cloudSyncConsentGranted =>
       _cloudSyncConsentUserId == client?.auth.currentUser?.id &&
       _cloudSyncConsent == true;
