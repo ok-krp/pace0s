@@ -98,9 +98,13 @@ class _NutritionPageState extends State<NutritionPage> {
     await _recalculateTotals(data);
     try {
       await widget.sync.syncNow();
-      if (mounted && !widget.sync.cloudSyncConsentGranted) {
+      if (mounted && widget.sync.cloudSyncConsentDenied) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Repas enregistré sur cet appareil. Active « Synchronisation entre appareils » dans Plus → Paramètres pour le retrouver sur tes autres appareils.')),
+        );
+      } else if (mounted && !widget.sync.cloudSyncConsentGranted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Repas conservé localement : impossible de vérifier le consentement cloud. La synchronisation reprendra après reconnexion.')),
         );
       }
     } catch (_) {
@@ -164,9 +168,13 @@ class _NutritionPageState extends State<NutritionPage> {
     await _recalculateTotals(data);
     try {
       await widget.sync.syncNow();
-      if (mounted && !widget.sync.cloudSyncConsentGranted) {
+      if (mounted && widget.sync.cloudSyncConsentDenied) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Modification enregistrée sur cet appareil. Active « Synchronisation entre appareils » dans Plus → Paramètres pour la transmettre aux autres appareils.')),
+        );
+      } else if (mounted && !widget.sync.cloudSyncConsentGranted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Modification conservée localement : impossible de vérifier le consentement cloud. La synchronisation reprendra après reconnexion.')),
         );
       }
     } catch (_) {
