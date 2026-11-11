@@ -180,7 +180,12 @@ grant execute on function pace_private.owns_health_e2ee_pairing_session(uuid) to
 
 -- Recovery envelopes contain the wrapped health master key. Treat them as
 -- consent-scoped E2EE material, not a generic owner CRUD record.
-grant select, insert, update on public.health_e2ee_recovery_envelopes to authenticated;
+grant select on public.health_e2ee_recovery_envelopes to authenticated;
+revoke insert, update, delete on public.health_e2ee_recovery_envelopes from authenticated;
+grant insert (user_id, envelope, nonce, algorithm, key_version, updated_at)
+  on public.health_e2ee_recovery_envelopes to authenticated;
+grant update (envelope, nonce, algorithm, key_version, updated_at)
+  on public.health_e2ee_recovery_envelopes to authenticated;
 create policy health_e2ee_recovery_select_own on public.health_e2ee_recovery_envelopes
   for select to authenticated
   using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
@@ -310,7 +315,9 @@ create policy billing_subscriptions_read_own on public.billing_subscriptions for
 create policy billing_trials_read_own on public.billing_trials for select to authenticated using (user_id = (select auth.uid()));
 
 -- Deletion requests may be submitted/read by the owner; status is server-managed.
-grant select, insert on public.data_deletion_requests to authenticated;
+grant select on public.data_deletion_requests to authenticated;
+revoke insert, update, delete on public.data_deletion_requests from authenticated;
+grant insert (user_id) on public.data_deletion_requests to authenticated;
 drop policy if exists data_deletion_requests_submit_own on public.data_deletion_requests;
 drop policy if exists data_deletion_requests_read_own on public.data_deletion_requests;
 create policy data_deletion_requests_submit_own on public.data_deletion_requests
