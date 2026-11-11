@@ -423,8 +423,10 @@ BEGIN
 END;
 $post_user_a_e2ee_check$;
 
-INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
-  VALUES ('72000000-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000001');
+INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id,pairing_session_id)
+  VALUES ('72000000-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+          '70000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000001',
+          '80000000-0000-0000-0000-000000000001');
 
 -- Commit the initial granted decisions. The withdrawal is a separate request
 -- transaction, so PostgreSQL's now() default is strictly later, as in PostgREST.
