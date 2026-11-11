@@ -125,6 +125,20 @@ assert.match(generatedTypes, /has_current_health_e2ee_consent:\s*\{\s*Args:\s*ne
 assert.doesNotMatch(generatedTypes, /pace_private|owns_health_e2ee_pairing_session/,
   "The private policy helper must not be exposed in the generated Data API types");
 
+const aclAudit = readFileSync("scripts/rls-postgres-function-acl-audit.sql", "utf8");
+assert.match(aclAudit, /has_function_privilege\('anon'/,
+  "The read-only ACL inventory must report effective anonymous EXECUTE rights");
+assert.match(aclAudit, /has_function_privilege\('authenticated'/,
+  "The read-only ACL inventory must report effective authenticated EXECUTE rights");
+assert.match(aclAudit, /explicit_public_execute/,
+  "The read-only ACL inventory must report explicit PUBLIC EXECUTE grants");
+assert.match(aclAudit, /pg_default_acl/,
+  "The read-only ACL inventory must inspect defaults by object owner");
+assert.match(aclAudit, /SECURITY DEFINER/,
+  "The read-only ACL inventory must report SECURITY DEFINER routines");
+assert.doesNotMatch(aclAudit, /^\s*(?:alter|create|drop|grant|revoke|insert|update|delete)\s/im,
+  "The ACL inventory must remain read-only");
+
 const assertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
 assert.ok(assertions.includes("anon unexpectedly read private profiles"),
   "Anonymous SELECT on private user data must be denied");
