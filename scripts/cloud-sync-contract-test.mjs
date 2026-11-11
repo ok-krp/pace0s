@@ -39,6 +39,7 @@ const flutterSync = read("pace_flutter/lib/core/sync/sync_service.dart");
 const flutterNutrition = read("pace_flutter/lib/features/nutrition/nutrition_page.dart");
 const flutterApp = read("pace_flutter/lib/app/pace_app.dart");
 const flutterSettings = read("pace_flutter/lib/features/more/more_page.dart");
+const flutterLocalStore = read("pace_flutter/lib/core/storage/local_store.dart");
 const flutterPushStart = flutterSync.indexOf("Future<void> _pushPending()");
 const flutterPushEnd = flutterSync.indexOf("Future<_PushResult> _push(", flutterPushStart);
 assert.ok(flutterPushStart >= 0 && flutterPushEnd > flutterPushStart, "Flutter outbox push path must remain identifiable");
@@ -58,6 +59,16 @@ assert.match(flutterSync, /if \(userId == null \|\| !_hasCachedCloudSyncConsent\
 assert.match(flutterSync, /if \(!_hasCachedCloudSyncConsent\(userId\)\) return;/, "Flutter must not pull remote state without sync_cloud consent");
 assert.match(flutterSettings, /Synchronisation entre appareils[\s\S]*_setConsent\('sync_cloud', value\)/, "Flutter settings must expose the functional cross-device sync consent");
 assert.match(flutterSettings, /await widget\.sync\.setCloudSyncConsent\(value\)/, "Changing consent must immediately update native sync behavior");
+
+assert.match(flutterLocalStore, /__local_store_version': 2[\s\S]*__accounts/, "Flutter local storage must persist independent versioned account snapshots");
+assert.match(flutterLocalStore, /Future<void> activateAccount\(String\? userId\)/, "Flutter must switch local snapshot and outbox atomically at account boundaries");
+assert.match(flutterLocalStore, /account:\$userId/, "Flutter local account namespaces must be bound to the authenticated user ID");
+assert.match(flutterApp, /await widget\.sync\.onAccountChanged\(userId\);[\s\S]*await widget\.localStore\.activateAccount\(userId\);[\s\S]*await widget\.sync\.syncNow\(\)/, "Flutter must switch account namespace before starting cloud sync");
+assert.match(flutterSync, /localStore\.currentAccountId != userId/, "Flutter cloud operations must stop when the active local scope does not match the authenticated user");
+assert.match(flutterSync, /localStore\.currentAccountId != initialUserId/, "An in-flight sync must abort as soon as the authenticated account changes");
+assert.match(flutterSync, /if \(localStore\.currentAccountId != userId\) \{[\s\S]*Espace local différent du compte authentifié/, "The final push RPC must recheck account scope at the write boundary");
+assert.match(flutterSync, /Future<void> onAccountChanged\(String\? userId\)[\s\S]*_cloudSyncConsent = null[\s\S]*_lastNutritionReconciledAt = null/, "Account changes must close old Realtime channels and invalidate the previous consent cache");
+
 
 
 assert.match(flutterSync, /if \(hadNutritionMutation\) \{[\s\S]*_reconcileNutritionProjection\(user\.id\);[\s\S]*_pushPending\(\)/, "Flutter must reconcile canonical Nutrition rows after local mutations and push the merged snapshot");
