@@ -25,6 +25,21 @@ const nutritionLog = read("src/lib/nutrition-log.ts");
 const nutritionRoute = read("src/routes/nutrition.tsx");
 const domainStore = read("src/lib/domain-store.ts");
 
+const flutterSync = read("pace_flutter/lib/core/sync/sync_service.dart");
+const flutterNutrition = read("pace_flutter/lib/features/nutrition/nutrition_page.dart");
+const flutterApp = read("pace_flutter/lib/app/pace_app.dart");
+const flutterPushStart = flutterSync.indexOf("Future<void> _pushPending()");
+const flutterPushEnd = flutterSync.indexOf("Future<_PushResult> _push(", flutterPushStart);
+assert.ok(flutterPushStart >= 0 && flutterPushEnd > flutterPushStart, "Flutter outbox push path must remain identifiable");
+const flutterPush = flutterSync.slice(flutterPushStart, flutterPushEnd);
+assert.match(flutterSync, /bool shouldAcknowledgeSyncOperation\(\{required bool accepted\}\) => accepted/);
+assert.match(flutterPush, /if \(!shouldAcknowledgeSyncOperation\(accepted: result\.accepted\)\) \{[\s\S]*continue;/, "Flutter must retain rejected local mutations in its durable outbox");
+assert.doesNotMatch(flutterPush, /applyRemote\(/, "Flutter must not replace a pending local value when the cloud rejects its write");
+assert.match(flutterNutrition, /await widget\.sync\.syncNow\(\)/, "Flutter Nutrition manual changes must request immediate cloud sync");
+assert.match(flutterNutrition, /await widget\.localStore\.write\('pace\.nutrition\.items', data\);[\s\S]*await _recalculateTotals\(data\);[\s\S]*await widget\.sync\.syncNow\(\)/, "Flutter meal additions must persist locally before requesting immediate sync");
+assert.match(flutterApp, /NutritionPage\(localStore: widget\.localStore, sync: widget\.sync\)/, "Flutter app must inject the shared sync service into Nutrition");
+
+
 // AI meal additions are append-only. Replaying the same tool call is handled
 // by the idempotency RPC; a later add must never merge/delete an older meal.
 const aiAddStart = nutritionAi.indexOf("const toolCallId = options.toolCallId");
