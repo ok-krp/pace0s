@@ -26,11 +26,6 @@ const DOMAIN_ITEMS = "nutrition.items";
 type NutritionTotals = Record<string, { kcal: number; p: number; c: number; f: number }>;
 type NutritionMap = Record<string, NutritionItem[]>;
 const completedOperations = new Map<string, number>();
-const recentAdds = new Map<string, number>();
-
-function addFingerprint(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }) {
-  return JSON.stringify({ name: item.name.trim(), meal: item.meal.trim(), kcal: Number(item.kcal || 0), p: Number(item.p || 0), c: Number(item.c || 0), f: Number(item.f || 0), fiber: Number(item.fiber || 0), sugar: Number(item.sugar || 0), sodium: Number(item.sodium || 0), qty: Number(item.qty ?? 1) });
-}
 
 export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
   const totals: NutritionTotals = {};
@@ -195,24 +190,20 @@ export async function addNutritionItem(
   if (operationId) {
     const previous = completedOperations.get(operationId);
     if (previous && now - previous < 60_000) return false;
-  } else {
-    const fingerprint = addFingerprint(item);
-    const previous = recentAdds.get(fingerprint);
-    if (previous && now - previous < 2_000) return false;
+    // Reserve the operation before awaiting I/O so two concurrent deliveries
+    // carrying the same operation ID cannot create duplicate rows.
+    completedOperations.set(operationId, now);
+    for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
   }
 
   // food_log is canonical: persist before projecting the entry into local UI
   // state, then rebuild the day's complete view from the database.
-  await persistNutritionItem(item, source);
-  await refreshNutritionFromFoodLog(todayKey());
-
-  if (operationId) {
-    completedOperations.set(operationId, now);
-    for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
-  } else {
-    const fingerprint = addFingerprint(item);
-    recentAdds.set(fingerprint, now);
-    for (const [key, timestamp] of recentAdds) if (now - timestamp >= 60_000) recentAdds.delete(key);
+  try {
+    await persistNutritionItem(item, source);
+    await refreshNutritionFromFoodLog(todayKey());
+    return true;
+  } catch (error) {
+    if (operationId) completedOperations.delete(operationId);
+    throw error;
   }
-  return true;
 }
