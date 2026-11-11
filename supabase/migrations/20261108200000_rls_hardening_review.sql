@@ -40,6 +40,13 @@ grant usage on schema public to anon, authenticated;
 alter default privileges in schema public revoke all on tables from anon, authenticated;
 alter default privileges in schema public revoke all on sequences from anon, authenticated;
 
+-- PostgreSQL grants EXECUTE on new functions to PUBLIC by default. Supabase
+-- also gives the API roles direct default EXECUTE grants in public. Close both
+-- paths for functions created by this migration role; each required RPC must
+-- explicitly GRANT EXECUTE to its intended caller below/in its own migration.
+alter default privileges revoke execute on functions from public;
+alter default privileges in schema public revoke execute on functions from anon, authenticated;
+
 -- 3) Public, immutable nutrition/reference catalogues: read only.
 grant select on table
   public.nutrition_canonical_dishes,
@@ -137,9 +144,14 @@ create policy health_e2ee_devices_update_own on public.health_e2ee_devices
   using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()))
   with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
 
--- Create the helper before policies that invoke it. The function is SECURITY
--- DEFINER so it can validate the RPC-only pairing table without exposing it.
-create or replace function public.owns_health_e2ee_pairing_session(p_session_id uuid)
+-- Keep the policy-only SECURITY DEFINER helper outside the exposed public schema.
+-- The schema is not added to the Data API exposed-schema list; authenticated
+-- receives only USAGE plus EXECUTE on this one ownership predicate.
+create schema if not exists pace_private;
+revoke all on schema pace_private from public, anon, authenticated;
+grant usage on schema pace_private to authenticated;
+
+create or replace function pace_private.owns_health_e2ee_pairing_session(p_session_id uuid)
 returns boolean
 language sql
 stable
@@ -153,8 +165,8 @@ as $owns_pairing_session$
       and s.user_id = auth.uid()
   );
 $owns_pairing_session$;
-revoke all on function public.owns_health_e2ee_pairing_session(uuid) from public, anon, authenticated;
-grant execute on function public.owns_health_e2ee_pairing_session(uuid) to authenticated;
+revoke all on function pace_private.owns_health_e2ee_pairing_session(uuid) from public, anon, authenticated;
+grant execute on function pace_private.owns_health_e2ee_pairing_session(uuid) to authenticated;
 
 -- Key envelopes are immutable: owner SELECT/INSERT/DELETE only, with every
 -- referenced device/session checked against the same account.
@@ -170,7 +182,7 @@ create policy health_e2ee_envelopes_select_own on public.health_e2ee_key_envelop
       select 1 from public.health_e2ee_devices d
       where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
     ))
-    and (pairing_session_id is null or public.owns_health_e2ee_pairing_session(pairing_session_id))
+    and (pairing_session_id is null or pace_private.owns_health_e2ee_pairing_session(pairing_session_id))
   );
 create policy health_e2ee_envelopes_insert_own on public.health_e2ee_key_envelopes
   for insert to authenticated
@@ -183,7 +195,7 @@ create policy health_e2ee_envelopes_insert_own on public.health_e2ee_key_envelop
       select 1 from public.health_e2ee_devices d
       where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
     ))
-    and (pairing_session_id is null or public.owns_health_e2ee_pairing_session(pairing_session_id))
+    and (pairing_session_id is null or pace_private.owns_health_e2ee_pairing_session(pairing_session_id))
   );
 create policy health_e2ee_envelopes_delete_own on public.health_e2ee_key_envelopes
   for delete to authenticated
