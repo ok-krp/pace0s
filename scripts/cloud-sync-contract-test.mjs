@@ -52,6 +52,26 @@ assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconc
 assert.equal(/setInterval\s*\(/.test(storage), false, "storage must not poll for local changes");
 assert.match(storage, /pace\.local\.write/);
 assert.match(engine, /onLocalWrite\(/);
+const domainStore = read("src/lib/domain-store.ts");
+const domainLocalWriteStart = domainStore.indexOf("const onWrite =");
+const domainRemoteWriteStart = domainStore.indexOf("const onRemoteWrite =", domainLocalWriteStart);
+const domainWriteEnd = domainStore.indexOf("window.addEventListener(WRITE_EVENT", domainRemoteWriteStart);
+assert.ok(domainLocalWriteStart >= 0 && domainRemoteWriteStart > domainLocalWriteStart && domainWriteEnd > domainRemoteWriteStart, "domain write handlers must remain identifiable");
+const domainWriteHandlers = domainStore.slice(domainLocalWriteStart, domainWriteEnd);
+assert.doesNotMatch(domainWriteHandlers, /mergeNutritionValues/, "A full local or remote Nutrition snapshot must not union deleted items back into the list");
+assert.match(domainWriteHandlers, /sanitizeNutritionItems\(unwrapDomainValue\(detail\.record\.value\)\)/, "Local Nutrition writes must apply the exact snapshot");
+assert.match(domainWriteHandlers, /sanitizeNutritionItems\(next\.value\)/, "Remote Nutrition writes must apply the exact snapshot");
+
+const nutritionRemoteStart = engine.indexOf("function mergeNutritionRemoteValue(");
+const nutritionRemoteEnd = engine.indexOf("\n}", nutritionRemoteStart) + 2;
+const nutritionRemote = engine.slice(nutritionRemoteStart, nutritionRemoteEnd);
+assert.match(nutritionRemote, /return sanitizeNutritionItems\(unwrapNutritionValue\(incomingValue\)\)/, "Remote Nutrition snapshots must be applied as complete canonical values");
+assert.doesNotMatch(nutritionRemote, /new Set\(local|output = \[\.\.\.local\]/, "Remote Nutrition sync must not reinsert explicitly deleted local rows");
+
+// Full snapshots must propagate explicit removals, not union them away.
+const applyNutritionSnapshot = (_current, incoming) => incoming;
+assert.deepEqual(applyNutritionSnapshot([{ id: "keep" }, { id: "remove" }], [{ id: "keep" }]), [{ id: "keep" }]);
+
 assert.match(engine, /isLegalCategoryAllowed\("sync_cloud"\)/, "cross-device sync must respect the explicit cloud-sync consent");
 assert.match(read("src/lib/legal.ts"), /sync_cloud: false/, "cloud sync must remain opt-in by default");
 assert.match(nutritionLog, /isNutritionDeviceSyncEnabled\(\).*isLegalCategoryAllowed\("sync_cloud"\)/s, "Nutrition UI must be able to explain when cross-device sync is disabled");
