@@ -197,3 +197,22 @@ Added `scripts/rls-postgres-function-acl-audit.sql`, a read-only target prefligh
 - schema USAGE and public-table RLS/SELECT privileges.
 
 The PostgreSQL CI preflight now runs this inventory after the isolation assertions. Its static coverage test verifies that the audit script remains read-only. This does **not** revoke EXECUTE from existing functions: the target's routines must first be inventoried and classified against the canonical RPC list, then each function must receive an explicit intended grant/revoke decision. The current visible audit project has zero public routines, which cannot substitute for the inaccessible runtime target.
+
+
+## 13. Privileged routine source review — 2026-11-11
+
+Review of tracked `main` migration definitions and later SQL markers identified the following routines for target-side verification:
+
+| Routine | Source definition / security posture | Current review |
+|---|---|---|
+| `rotate_health_e2ee_key(integer, uuid)` | `SECURITY DEFINER`, `SET search_path = public`; owner check via `auth.uid()`; explicit grant to authenticated after revoking PUBLIC | Replace with a fully-qualified body and empty `search_path` in a canonical follow-up migration before rollout. |
+| `sync_sport_user_state()` | `SECURITY DEFINER`, `SET search_path = public`; trigger-only; explicit revoke from PUBLIC/anon/authenticated in a prior migration that later `CREATE OR REPLACE` operations preserve | Confirm runtime ACL remains revoked and assess search-path hardening. |
+| `delete_temporary_workout_after_finish()` | `SECURITY DEFINER`, `SET search_path = public`; trigger-only; the tracked canonical definition has no explicit EXECUTE revoke. A later lock-down filename exists only as a no-op history marker. | Missing canonical privilege change; verify target ACL and add a real canonical follow-up. |
+| `sync_sport_program_archive_state()` | `SECURITY DEFINER`, empty `search_path`; explicit revoke from PUBLIC/anon/authenticated | Reviewed as trigger-only. |
+| `enforce_daily_nutrition_chat()` | `SECURITY DEFINER`, empty `search_path`; explicit revoke from PUBLIC/anon/authenticated | Reviewed as trigger-only. |
+| `prevent_audit_log_mutation()`, `prevent_consent_mutation()`, `set_deletion_request_updated_at()` | Trigger-only definer functions; explicit revokes, but configured with `search_path = public, pg_temp` | Confirm target ACL and assess whether the path can be reduced to an empty path. |
+| `delete_user_data(uuid)` | `SECURITY DEFINER`, `search_path = public, pg_temp`; revokes EXECUTE from PUBLIC/anon/authenticated; no tracked application callsite found | Treat as dormant until its intended server caller and explicit service-role grant are established; do not grant it speculatively. |
+
+The new read-only audit script now reports whether `anon` or `authenticated` can `CREATE` in `public` or `pace_private`, in addition to function `proconfig`, owner and effective EXECUTE ACLs. This is necessary to quantify the risk of a mutable `search_path = public`; the connected project did not respond to the read-only SQL request, so no current ACL conclusion is claimed.
+
+Do not infer effective target ACLs from source migrations alone. The target audit must be executed against the positively confirmed runtime project and every result compared to the canonical RPC/trigger inventory.
