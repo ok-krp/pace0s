@@ -145,7 +145,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     // access JWTs remain valid until exp, so this prevents refresh/re-entry but
     // does not claim immediate invalidation of already-issued access tokens.
     const authorization = getRequest()?.headers.get("authorization");
-    const accessToken = authorization?.match(/^Bearer\\s+(.+)$/i)?.[1];
+    const accessToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!accessToken) {
       throw new Error("Impossible de révoquer les sessions du compte.");
     }
