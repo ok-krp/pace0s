@@ -64,6 +64,8 @@ assert.match(flutterLocalStore, /__local_store_version': 2[\s\S]*__accounts/, "F
 assert.match(flutterLocalStore, /Future<void> activateAccount\(String\? userId\)/, "Flutter must switch local snapshot and outbox atomically at account boundaries");
 assert.match(flutterLocalStore, /account:\$userId/, "Flutter local account namespaces must be bound to the authenticated user ID");
 assert.match(flutterApp, /await widget\.sync\.onAccountChanged\(userId\);[\s\S]*await widget\.localStore\.activateAccount\(userId\);[\s\S]*await widget\.sync\.syncNow\(\)/, "Flutter must switch account namespace before starting cloud sync");
+assert.match(flutterApp, /widget\.auth\.currentUser\?\.id != userId/, "Flutter must ignore obsolete queued auth events during rapid account switching");
+assert.match(flutterSync, /localStore\.currentAccountId != userId\) return;/, "Explicit consent updates must not be attributed to a different local account");
 assert.match(flutterSync, /localStore\.currentAccountId != userId/, "Flutter cloud operations must stop when the active local scope does not match the authenticated user");
 assert.match(flutterSync, /localStore\.currentAccountId != initialUserId/, "An in-flight sync must abort as soon as the authenticated account changes");
 assert.match(flutterSync, /if \(localStore\.currentAccountId != userId\) \{[\s\S]*Espace local différent du compte authentifié/, "The final push RPC must recheck account scope at the write boundary");
