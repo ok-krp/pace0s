@@ -153,6 +153,73 @@ assert.match(consentAssertions, /client overrode consent record id\/timestamp/,
 assert.match(consentAssertions, /database timestamp default not applied to consent records/,
   "PostgreSQL integration tests must prove database-generated consent timestamps");
 
+
+const privacySource = readFileSync("src/lib/privacy.functions.ts", "utf8");
+const privacyExportBlock = privacySource.match(/const EXPORT_TABLES = \[([\s\S]*?)\] as const/)?.[1] ?? "";
+const privacyDeleteBlock = privacySource.match(/const DELETE_TABLES = \[([\s\S]*?)\] as const/)?.[1] ?? "";
+for (const table of [
+  "health_samples",
+  "health_samples_e2ee",
+  "user_biometrics_e2ee",
+  "health_e2ee_devices",
+  "health_e2ee_key_versions",
+  "health_e2ee_key_envelopes",
+  "health_e2ee_recovery_envelopes",
+  "health_legacy_migration_map",
+  "consent_records",
+  "data_deletion_requests",
+  "ai_action_log",
+  "ai_conversations",
+  "ai_messages",
+  "ai_preferences",
+  "development_tasks",
+  "sport_programs",
+  "sport_workout_sessions",
+  "billing_customers",
+  "billing_subscriptions",
+  "billing_trials",
+]) {
+  assert.match(privacyExportBlock, new RegExp('"' + table + '"'),
+    "Privacy export must include the authenticated user's " + table);
+}
+for (const table of [
+  "health_samples",
+  "health_samples_e2ee",
+  "user_biometrics_e2ee",
+  "health_e2ee_devices",
+  "health_e2ee_key_versions",
+  "health_e2ee_key_envelopes",
+  "health_e2ee_pairing_sessions",
+  "health_e2ee_recovery_envelopes",
+  "health_legacy_migration_map",
+  "ai_provider_secrets",
+  "ai_tool_idempotency",
+  "data_deletion_requests",
+  "sport_programs",
+  "sport_workout_sessions",
+]) {
+  assert.match(privacyDeleteBlock, new RegExp('"' + table + '"'),
+    "Account deletion must clean up " + table);
+}
+assert.doesNotMatch(privacyExportBlock, /ai_provider_secrets|ai_tool_idempotency/,
+  "Provider credentials and idempotency internals must never be included in a user export");
+assert.match(privacySource, /db\.from\(table\)\.select\("\*"\)\.eq\("user_id", context\.userId\)/,
+  "Admin-backed export must filter every owner table by the authenticated server context");
+assert.match(privacySource, /\.from\("sport_program_items"\)[\s\S]*?\.in\("program_id", programIds\)/,
+  "Sport program child rows must be exported through owner-derived program IDs");
+assert.match(privacySource, /\.from\("sport_workout_exercises"\)[\s\S]*?\.in\("session_id", sessionIds\)/,
+  "Sport workout exercises must be exported through owner-derived session IDs");
+assert.match(privacySource, /\.from\("sport_workout_sets"\)[\s\S]*?\.in\("workout_exercise_id", exerciseIds\)/,
+  "Sport workout sets must be exported through owner-derived exercise IDs");
+assert.match(privacySource, /\.from\("sport_workout_sets"\)\.delete\(\)[\s\S]*?\.in\("workout_exercise_id", exerciseIds\)/,
+  "Account deletion must remove Sport sets before exercises");
+assert.match(privacySource, /\.from\("sport_program_items"\)\.delete\(\)[\s\S]*?\.in\("program_id", programIds\)/,
+  "Account deletion must remove Sport program items before programs");
+assert.match(privacySource, /for \(const table of DELETE_TABLES\)[\s\S]*?db\.from\(table\)\.delete\(\)\.eq\("user_id", userId\)/,
+  "Account deletion must apply owner-scoped cleanup to the complete deletion allowlist");
+assert.ok(privacySource.indexOf("for (const table of DELETE_TABLES)") < privacySource.indexOf("auth.admin.deleteUser(userId)"),
+  "The auth user must not be deleted until all owned table cleanup has succeeded");
+
 const aclAudit = readFileSync("scripts/rls-postgres-function-acl-audit.sql", "utf8");
 assert.match(aclAudit, /has_function_privilege\('anon'/,
   "The read-only ACL inventory must report effective anonymous EXECUTE rights");
