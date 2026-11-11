@@ -134,26 +134,59 @@ if (typeof window !== "undefined") {
   void bridgeLocalNutritionToFoodLog(lastBridgedNutrition);
 }
 
-export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, operationId?: string): boolean {
+async function refreshNutritionFromFoodLog(day: string) {
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError || !user) throw new Error("Session utilisateur indisponible.");
+  const { data, error } = await supabase.from("food_log")
+    .select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta")
+    .eq("user_id", user.id).eq("log_date", day).order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  const rows: NutritionItem[] = (data ?? []).map((row) => {
+    const meta = row.meta && typeof row.meta === "object" ? row.meta as Record<string, unknown> : {};
+    const nutrients = meta.client_nutrients && typeof meta.client_nutrients === "object" ? meta.client_nutrients as Record<string, unknown> : {};
+    return {
+      id: row.id, name: row.name, meal: row.meal,
+      kcal: Number(row.kcal ?? 0), p: Number(row.protein_g ?? 0),
+      c: Number(row.carbs_g ?? 0), f: Number(row.fat_g ?? 0),
+      fiber: Number(row.fiber_g ?? 0), sugar: Number(row.sugar_g ?? 0),
+      sodium: Number(row.sodium_mg ?? 0), sat: Number(nutrients.sat ?? 0) || undefined,
+      salt: Number(nutrients.salt ?? 0) || undefined, iron: Number(nutrients.iron ?? 0) || undefined,
+      calcium: Number(nutrients.calcium ?? 0) || undefined, vitC: Number(nutrients.vitC ?? 0) || undefined,
+      qty: 1,
+    };
+  });
+  const current = readNutritionItems();
+  writeDomain(DOMAIN_ITEMS, { ...current, [day]: rows });
+  window.dispatchEvent(new Event("pace.nutrition.changed"));
+}
+
+export async function addNutritionItem(
+  item: Omit<NutritionItem, "id" | "qty"> & { qty?: number },
+  operationId?: string,
+  source: PersistedNutritionSource = "manual",
+): Promise<boolean> {
   const now = Date.now();
   if (operationId) {
     const previous = completedOperations.get(operationId);
     if (previous && now - previous < 60_000) return false;
-    completedOperations.set(operationId, now);
-    for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
   } else {
     const fingerprint = addFingerprint(item);
     const previous = recentAdds.get(fingerprint);
     if (previous && now - previous < 2_000) return false;
-    recentAdds.set(fingerprint, now);
-    for (const [key, timestamp] of recentAdds) if (now - timestamp >= 2_000) recentAdds.delete(key);
   }
-  const today = todayKey();
-  const it: NutritionItem = { id: crypto.randomUUID(), qty: item.qty ?? 1, ...item };
-  const items = readNutritionItems();
-  const list = [...(items[today] ?? []), it];
-  const nextItems = { ...items, [today]: list };
-  writeDomain(DOMAIN_ITEMS, nextItems);
-  window.dispatchEvent(new Event("pace.nutrition.changed"));
+
+  // food_log is canonical: persist before projecting the entry into local UI
+  // state, then rebuild the day's complete view from the database.
+  await persistNutritionItem(item, source);
+  await refreshNutritionFromFoodLog(todayKey());
+
+  if (operationId) {
+    completedOperations.set(operationId, now);
+    for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
+  } else {
+    const fingerprint = addFingerprint(item);
+    recentAdds.set(fingerprint, now);
+    for (const [key, timestamp] of recentAdds) if (now - timestamp >= 60_000) recentAdds.delete(key);
+  }
   return true;
 }
