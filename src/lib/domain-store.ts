@@ -6,15 +6,21 @@ const WRITE_EVENT = "pace.domain.write";
 const LOCAL_WRITE_EVENT = "pace.local.write";
 const REMOTE_WRITE_EVENT = "pace.remote.write";
 const STORAGE_PREFIX = "pace.domain.";
-const MAX_NUTRITION_ITEMS_PER_DAY = 500;
-const MAX_IDENTICAL_NUTRITION_ITEMS_PER_DAY = 3;
 
 function storageKey(domain: string) { return `${STORAGE_PREFIX}${domain}`; }
 function mutationId() { if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID(); return `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
 function compareRecords<T>(a: DomainRecord<T>, b: DomainRecord<T>) { const time = a.updatedAt.localeCompare(b.updatedAt); if (time !== 0) return time; return a.mutationId.localeCompare(b.mutationId); }
-function nutritionFingerprint(item: unknown) { if (!item || typeof item !== "object" || Array.isArray(item)) return "invalid"; const x = item as Record<string, unknown>; return JSON.stringify({ name: x.name ?? "", meal: x.meal ?? "", kcal: Number(x.kcal ?? 0), p: Number(x.p ?? 0), c: Number(x.c ?? 0), f: Number(x.f ?? 0), fiber: Number(x.fiber ?? 0), sugar: Number(x.sugar ?? 0), sodium: Number(x.sodium ?? 0), qty: Number(x.qty ?? 1) }); }
 function unwrapDomainValue(value: unknown, maxDepth = 8): unknown { let current = value; for (let depth = 0; depth < maxDepth; depth++) { if (!current || typeof current !== "object" || Array.isArray(current)) return current; const candidate = current as Record<string, unknown>; if (candidate.version !== 1 || typeof candidate.updatedAt !== "string" || typeof candidate.mutationId !== "string" || !("value" in candidate)) return current; current = candidate.value; } return current; }
-export function sanitizeNutritionItems(value: unknown): unknown { if (!value || typeof value !== "object" || Array.isArray(value)) return value; const source = value as Record<string, unknown>; const output: Record<string, unknown> = {}; for (const [day, rawList] of Object.entries(source)) { if (!Array.isArray(rawList)) { output[day] = []; continue; } const counts = new Map<string, number>(); const cleaned: unknown[] = []; for (const item of rawList) { const fingerprint = nutritionFingerprint(item); const count = counts.get(fingerprint) ?? 0; if (count >= MAX_IDENTICAL_NUTRITION_ITEMS_PER_DAY) continue; counts.set(fingerprint, count + 1); cleaned.push(item); } output[day] = cleaned.length > MAX_NUTRITION_ITEMS_PER_DAY ? cleaned.slice(-MAX_NUTRITION_ITEMS_PER_DAY) : cleaned; } return output; }
+export function sanitizeNutritionItems(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const output: Record<string, unknown> = {};
+  for (const [day, rawList] of Object.entries(value as Record<string, unknown>)) {
+    // Keep all valid entries, including identical repeated foods. Silent
+    // deduplication or truncation would discard legitimate user meal records.
+    output[day] = Array.isArray(rawList) ? rawList : [];
+  }
+  return output;
+}
 type NutritionTotals = { kcal: number; p: number; c: number; f: number };
 function recomputeNutritionTotals(value: unknown): Record<string, NutritionTotals> { if (!value || typeof value !== "object" || Array.isArray(value)) return {}; const totals: Record<string, NutritionTotals> = {}; for (const [day, rawList] of Object.entries(value as Record<string, unknown>)) { const list = Array.isArray(rawList) ? rawList : []; totals[day] = list.reduce<NutritionTotals>((a, raw) => { const x = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}; return { kcal: a.kcal + Number(x.kcal ?? 0), p: a.p + Number(x.p ?? 0), c: a.c + Number(x.c ?? 0), f: a.f + Number(x.f ?? 0) }; }, { kcal: 0, p: 0, c: 0, f: 0 }); } return totals; }
 function unwrapNutritionValue(value: unknown) { return unwrapDomainValue(value); }
