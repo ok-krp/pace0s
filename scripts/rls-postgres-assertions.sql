@@ -34,6 +34,59 @@ BEGIN
   IF NOT has_function_privilege('authenticated', 'public.has_current_health_e2ee_consent()', 'EXECUTE') THEN
     RAISE EXCEPTION 'authenticated cannot execute the app health consent RPC';
   END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid='public.has_current_health_e2ee_consent()'::regprocedure
+      AND (p.proconfig IS NULL OR NOT p.proconfig @> ARRAY['search_path=""'])
+  ) THEN
+    RAISE EXCEPTION 'health consent helper must use an empty search_path';
+  END IF;
+
+  IF has_function_privilege('anon','public.sport_delete_workout(uuid)','EXECUTE')
+     OR has_function_privilege('anon','public.sport_delete_program(uuid)','EXECUTE')
+     OR has_function_privilege('anon','public.sport_delete_exercise(uuid)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.sport_delete_workout(uuid)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.sport_delete_program(uuid)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.sport_delete_exercise(uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'Sport deletion RPC EXECUTE grants are not least-privilege';
+  END IF;
+
+  IF has_function_privilege('anon','public.touch_updated_at()','EXECUTE')
+     OR has_function_privilege('authenticated','public.touch_updated_at()','EXECUTE')
+     OR has_function_privilege('anon','public.update_updated_at_column()','EXECUTE')
+     OR has_function_privilege('authenticated','public.update_updated_at_column()','EXECUTE') THEN
+    RAISE EXCEPTION 'timestamp trigger helpers remain directly executable by API roles';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid = ANY (ARRAY[
+      'public.touch_updated_at()'::regprocedure,
+      'public.update_updated_at_column()'::regprocedure,
+      'public.sport_delete_workout(uuid)'::regprocedure,
+      'public.sport_delete_program(uuid)'::regprocedure,
+      'public.sport_delete_exercise(uuid)'::regprocedure,
+      'public.sport_update_exercise(uuid,text,text,text,text,integer,integer,numeric,integer)'::regprocedure,
+      'public.sport_update_program(uuid,text,text,integer[])'::regprocedure,
+      'public.sport_finish_workout(uuid,timestamptz,integer,text)'::regprocedure
+    ])
+    AND (p.proconfig IS NULL OR NOT p.proconfig @> ARRAY['search_path=""'])
+  ) THEN
+    RAISE EXCEPTION 'Sport invoker RPC or timestamp trigger helper lacks empty search_path';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid = ANY (ARRAY[
+      'public.sport_delete_workout(uuid)'::regprocedure,
+      'public.sport_delete_program(uuid)'::regprocedure,
+      'public.sport_delete_exercise(uuid)'::regprocedure,
+      'public.sport_update_exercise(uuid,text,text,text,text,integer,integer,numeric,integer)'::regprocedure,
+      'public.sport_update_program(uuid,text,text,integer[])'::regprocedure,
+      'public.sport_finish_workout(uuid,timestamptz,integer,text)'::regprocedure
+    ])
+    AND p.prosecdef
+  ) THEN
+    RAISE EXCEPTION 'Sport table RPC unexpectedly bypasses caller RLS as SECURITY DEFINER';
+  END IF;
   IF has_function_privilege('anon','public.upsert_profile_if_newer(uuid,jsonb,timestamptz,text)','EXECUTE')
      OR NOT has_function_privilege('authenticated','public.upsert_profile_if_newer(uuid,jsonb,timestamptz,text)','EXECUTE') THEN
     RAISE EXCEPTION 'profile sync RPC EXECUTE grants are not least-privilege';
@@ -78,11 +131,19 @@ BEGIN
       'public.set_deletion_request_updated_at()'::regprocedure,
       'public.delete_user_data(uuid)'::regprocedure,
       'public.sync_sport_program_archive_state()'::regprocedure,
-      'public.enforce_daily_nutrition_chat()'::regprocedure
+      'public.enforce_daily_nutrition_chat()'::regprocedure,
+      'public.touch_updated_at()'::regprocedure,
+      'public.update_updated_at_column()'::regprocedure,
+      'public.sport_delete_workout(uuid)'::regprocedure,
+      'public.sport_delete_program(uuid)'::regprocedure,
+      'public.sport_delete_exercise(uuid)'::regprocedure,
+      'public.sport_update_exercise(uuid,text,text,text,text,integer,integer,numeric,integer)'::regprocedure,
+      'public.sport_update_program(uuid,text,text,integer[])'::regprocedure,
+      'public.sport_finish_workout(uuid,timestamptz,integer,text)'::regprocedure
     ])
     AND (p.proconfig IS NULL OR NOT p.proconfig @> ARRAY['search_path=""'])
   ) THEN
-    RAISE EXCEPTION 'an existing SECURITY DEFINER routine does not have an empty search_path';
+    RAISE EXCEPTION 'an existing privileged routine does not have an empty search_path';
   END IF;
 
   IF has_function_privilege('anon','public.sync_sport_user_state()','EXECUTE')
@@ -356,6 +417,30 @@ BEGIN
   WHERE id='60000000-0000-0000-0000-000000000001';
   GET DIAGNOSTICS n = ROW_COUNT;
   IF n <> 1 THEN RAISE EXCEPTION 'owner workout UPDATE did not execute its protected trigger'; END IF;
+  UPDATE public.reminder_settings SET updated_at='2000-01-01T00:00:00Z'
+  WHERE id='93000000-0000-0000-0000-000000000001';
+  SELECT count(*) INTO n FROM public.reminder_settings
+    WHERE id='93000000-0000-0000-0000-000000000001'
+      AND updated_at > '2000-01-01T00:00:00Z';
+  IF n <> 1 THEN RAISE EXCEPTION 'revoked timestamp trigger helper did not run for owner UPDATE'; END IF;
+
+  SELECT public.sport_delete_workout('60000000-0000-0000-0000-000000000002') INTO accepted;
+  IF accepted THEN RAISE EXCEPTION 'user A deleted user B workout via invoker RPC'; END IF;
+  SELECT count(*) INTO n FROM public.sport_workout_sessions
+    WHERE id='60000000-0000-0000-0000-000000000002';
+  IF n <> 1 THEN RAISE EXCEPTION 'user B workout was deleted by user A invoker RPC'; END IF;
+
+  SELECT public.sport_delete_program('40000000-0000-0000-0000-000000000002') INTO accepted;
+  IF accepted THEN RAISE EXCEPTION 'user A deleted user B program via invoker RPC'; END IF;
+  SELECT count(*) INTO n FROM public.sport_programs
+    WHERE id='40000000-0000-0000-0000-000000000002';
+  IF n <> 1 THEN RAISE EXCEPTION 'user B program was deleted by user A invoker RPC'; END IF;
+
+  SELECT public.sport_delete_exercise('50000000-0000-0000-0000-000000000002') INTO accepted;
+  IF accepted THEN RAISE EXCEPTION 'user A deleted user B exercise via invoker RPC'; END IF;
+  SELECT count(*) INTO n FROM public.sport_exercises
+    WHERE id='50000000-0000-0000-0000-000000000002';
+  IF n <> 1 THEN RAISE EXCEPTION 'user B exercise was deleted by user A invoker RPC'; END IF;
 
   SELECT count(*) INTO n FROM public.profiles;
   IF n <> 1 THEN RAISE EXCEPTION 'profile isolation failed: expected 1 row, got %', n; END IF;
