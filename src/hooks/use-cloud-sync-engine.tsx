@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
 import { readDomain, sanitizeNutritionItems } from "@/lib/domain-store";
@@ -210,11 +211,10 @@ export function useCloudSyncEngineInternal() {
       // Let the monotonic RPC be the single write authority. Avoid a pre-write
       // SELECT on every queued mutation; if the server rejects the write because
       // a newer row exists, fetch that row once to reconcile the client.
-      const rpc = supabase.rpc as unknown as (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown | null }>;
-      const result = await rpc("upsert_user_state_if_newer", {
+      const result = await supabase.rpc("upsert_user_state_if_newer", {
         p_user_id: user.id,
         p_key: item.key,
-        p_value: item.value,
+        p_value: item.value as Json,
         // Kept for RPC compatibility. Ordering is server-authoritative.
         p_updated_at: item.updatedAt,
         p_updated_by: DEVICE_ID,
