@@ -165,7 +165,6 @@ for (const table of [
   "health_e2ee_key_versions",
   "health_e2ee_key_envelopes",
   "health_e2ee_recovery_envelopes",
-  "health_legacy_migration_map",
   "consent_records",
   "data_deletion_requests",
   "ai_action_log",
