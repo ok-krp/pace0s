@@ -164,7 +164,7 @@ assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 // performs a single reconciliation read against the canonical row.
 assert.match(engine, /if \(!payload\.accepted\)/);
 assert.match(engine, /supabase\.from\("user_state"\)\.select\("key,value,updated_at,updated_by"\)/);
-assert.match(engine, /serialize\(queued\.value\) === serialize\(mergedValue\)/);
+assert.match(engine, /serialize\(queued\.value\) === serialize\(remoteValue\)/);
 
 // The server RPC is monotonic: an older canonical timestamp must never be
 // replaced by a newer request carrying an older-than-canonical server timestamp.
