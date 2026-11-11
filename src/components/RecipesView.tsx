@@ -100,8 +100,9 @@ export function RecipesView() {
   };
 
   const addToLog = (r: Recipe, meal: string) => {
-    addNutritionItem({ name: `${r.emoji} ${r.name}`, meal, kcal: r.kcal, p: r.p, c: r.c, f: r.f });
-
+    void addNutritionItem({ name: `${r.emoji} ${r.name}`, meal, kcal: r.kcal, p: r.p, c: r.c, f: r.f })
+      .then((saved) => { if (saved) toast.success("Repas enregistré dans Nutrition et synchronisé."); })
+      .catch((error) => toast.error(error instanceof Error ? error.message : "Enregistrement du repas impossible."));
   };
 
   const addCat = () => {
@@ -305,11 +306,16 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
   const [kcal, setKcal] = useState("");
   const [p, setP] = useState(""); const [c, setC] = useState(""); const [f, setF] = useState("");
   const [meal, setMeal] = useState("Déjeuner");
-  const submit = () => {
-    if (!name || !kcal) { toast.error("Nom et calories obligatoires"); return; }
-    addNutritionItem({ name, meal, kcal: +kcal || 0, p: +p || 0, c: +c || 0, f: +f || 0 });
-
-    onClose();
+  const [saving, setSaving] = useState(false);
+  const submit = async () => {
+    if (!name || !kcal || saving) { if (!name || !kcal) toast.error("Nom et calories obligatoires"); return; }
+    setSaving(true);
+    try {
+      const saved = await addNutritionItem({ name, meal, kcal: +kcal || 0, p: +p || 0, c: +c || 0, f: +f || 0 });
+      if (saved) toast.success("Repas enregistré dans Nutrition et synchronisé.");
+      onClose();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Enregistrement du repas impossible."); }
+    finally { setSaving(false); }
   };
   return (
     <DialogContent className="max-w-sm">
@@ -328,7 +334,7 @@ function QuickAddDialog({ onClose }: { onClose: () => void }) {
         </div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={onClose}>Annuler</Button>
-          <Button onClick={submit}>Ajouter</Button>
+          <Button onClick={submit} disabled={saving}>{saving ? "Enregistrement…" : "Ajouter"}</Button>
         </div>
       </div>
     </DialogContent>
