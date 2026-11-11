@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -397,6 +398,40 @@ class SyncService {
       final now = DateTime.now();
       final day =
           '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final raw = localStore.read('pace.nutrition.items');
+      final itemsByDay =
+          Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
+      final currentDay = itemsByDay[day] is List
+          ? List<dynamic>.from(itemsByDay[day] as List)
+          : <dynamic>[];
+
+      // Retry pending native inserts with their stable UUID. Upsert makes a
+      // lost HTTP response safe: the same local operation cannot create a
+      // duplicate food_log row on the next reconnect.
+      for (final rawItem in currentDay.whereType<Map>()) {
+        final item = Map<String, dynamic>.from(rawItem);
+        if (item['pendingFoodLog'] != true || !_isFoodLogUuid(item['id'])) {
+          continue;
+        }
+        try {
+          await upsertNutritionFoodLogItem(
+            id: item['id'] as String,
+            logDate: day,
+            name: item['name']?.toString() ?? 'Aliment',
+            meal: item['meal']?.toString() ?? 'Repas',
+            kcal: _numberOrZero(item['kcal']),
+            proteinG: _numberOrZero(item['p']),
+            carbsG: _numberOrZero(item['c']),
+            fatG: _numberOrZero(item['f']),
+            fiberG: _numberOrZero(item['fiber']),
+            sugarG: _numberOrZero(item['sugar']),
+            sodiumMg: _numberOrZero(item['sodium']),
+          );
+        } catch (_) {
+          // Keep the durable local meal and retry on the next cycle.
+        }
+      }
+
       final rows = await client!
           .from('food_log')
           .select('id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg')
@@ -404,12 +439,6 @@ class SyncService {
           .eq('log_date', day)
           .order('created_at');
 
-      final raw = localStore.read('pace.nutrition.items');
-      final itemsByDay =
-          Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
-      final currentDay = itemsByDay[day] is List
-          ? List<dynamic>.from(itemsByDay[day] as List)
-          : <dynamic>[];
       final legacyRows = currentDay
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
@@ -431,9 +460,18 @@ class SyncService {
           }).toList();
       final canonicalIds =
           canonicalRows.map((item) => item['id'] as String).toSet();
+      final pendingRows = currentDay
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) =>
+              item['pendingFoodLog'] == true &&
+              _isFoodLogUuid(item['id']) &&
+              !canonicalIds.contains(item['id']))
+          .toList();
       final nextRows = [
         ...canonicalRows,
         ...legacyRows.where((item) => !canonicalIds.contains(item['id'])),
+        ...pendingRows.where((item) => !canonicalIds.contains(item['id'])),
       ];
 
       if (jsonEncode(currentDay) != jsonEncode(nextRows)) {
@@ -463,6 +501,41 @@ class SyncService {
       // Keep the local snapshot and its outbox intact if food_log is offline.
       return false;
     }
+  }
+
+  Future<void> upsertNutritionFoodLogItem({
+    required String id,
+    required String logDate,
+    required String name,
+    required String meal,
+    required double kcal,
+    required double proteinG,
+    required double carbsG,
+    required double fatG,
+    required double fiberG,
+    required double sugarG,
+    required double sodiumMg,
+  }) async {
+    final user = client?.auth.currentUser;
+    if (client == null || user == null) {
+      throw StateError('Session utilisateur indisponible.');
+    }
+    await client!.from('food_log').upsert({
+      'id': id,
+      'user_id': user.id,
+      'log_date': logDate,
+      'meal': meal,
+      'name': name,
+      'kcal': kcal,
+      'protein_g': proteinG,
+      'carbs_g': carbsG,
+      'fat_g': fatG,
+      'fiber_g': fiberG,
+      'sugar_g': sugarG,
+      'sodium_mg': sodiumMg,
+      'source': 'manual',
+      'meta': <String, dynamic>{'native_manual': true},
+    }, onConflict: 'id');
   }
 
   Future<void> deleteNutritionFoodLogItem(String id) async {
@@ -508,6 +581,18 @@ class SyncService {
       await localStore.applyRemote(key, row['value'], remoteUpdatedAt);
     }
   }
+}
+
+double _numberOrZero(dynamic value) =>
+    value is num ? value.toDouble() : 0;
+
+String newFoodLogUuid() {
+  final random = Random.secure();
+  final bytes = List<int>.generate(16, (_) => random.nextInt(256));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final hex = bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}';
 }
 
 bool _isFoodLogUuid(dynamic id) {
