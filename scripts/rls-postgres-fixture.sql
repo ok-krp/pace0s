@@ -120,6 +120,42 @@ CREATE TABLE public.user_state (
   UNIQUE (user_id, key)
 );
 
+-- Minimal legacy SECURITY DEFINER routine stubs. The follow-up hardening
+-- migration must empty their search_path and remove caller EXECUTE grants.
+CREATE FUNCTION public.upsert_user_state_if_newer(uuid,text,jsonb,timestamptz,text)
+RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path=public
+AS $ SELECT '{}'::jsonb $;
+CREATE FUNCTION public.rotate_health_e2ee_key(integer,uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public
+AS $ BEGIN RETURN; END $;
+CREATE FUNCTION public.sync_sport_user_state()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public
+AS $ BEGIN RETURN NEW; END $;
+CREATE FUNCTION public.delete_temporary_workout_after_finish()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public
+AS $ BEGIN RETURN NEW; END $;
+CREATE FUNCTION public.touch_ai_provider_secret_updated_at()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public
+AS $ BEGIN RETURN NEW; END $;
+CREATE FUNCTION public.prevent_audit_log_mutation()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
+AS $ BEGIN RETURN NEW; END $;
+CREATE FUNCTION public.prevent_consent_mutation()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
+AS $ BEGIN RETURN NEW; END $;
+CREATE FUNCTION public.set_deletion_request_updated_at()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
+AS $ BEGIN RETURN NEW; END $;
+CREATE FUNCTION public.delete_user_data(uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public,pg_temp
+AS $ BEGIN RETURN; END $;
+CREATE FUNCTION public.sync_sport_program_archive_state()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $ BEGIN RETURN NEW; END $;
+CREATE FUNCTION public.enforce_daily_nutrition_chat()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $ BEGIN RETURN NEW; END $;
+
 -- Simulate broad legacy grants and a stale permissive policy.
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO anon, authenticated;
 CREATE POLICY fixture_stale_profiles_select ON public.profiles
