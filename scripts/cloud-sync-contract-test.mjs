@@ -108,6 +108,12 @@ assert.match(engine, /DOMAIN_OUTBOX_KEY/);
 
 // Remote application is separated from user mutation events.
 assert.match(storage, /REMOTE_WRITE_EVENT/);
+const localRemoteHandlerStart = storage.indexOf("const onRemote =");
+const localRemoteHandlerEnd = storage.indexOf("window.addEventListener(REMOTE_WRITE_EVENT, onRemote)", localRemoteHandlerStart);
+const localRemoteHandler = storage.slice(localRemoteHandlerStart, localRemoteHandlerEnd);
+assert.ok(localRemoteHandler.indexOf("hasCompatibleTopLevelShape") < localRemoteHandler.indexOf("suppressPersistRef.current = true"), "Invalid remote shapes must not suppress the next manual local write");
+assert.match(localRemoteHandler, /Object\.is\(valueRef\.current, next\)/, "Identical primitive remote values must not leave a stale suppression flag");
+
 assert.match(storage, /CustomEvent<LocalWriteDetail>\(LOCAL_WRITE_EVENT/);
 assert.match(engine, /lastRemoteValues/);
 
