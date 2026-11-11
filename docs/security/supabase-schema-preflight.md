@@ -266,3 +266,14 @@ Do not blindly copy `main`'s generated types into `application`: the 22-function
 The current PR branch's prior `privacy.functions.ts` exported/deleted only a small nine-table owner list. It now has separate explicit allowlists: a direct authenticated/RLS export list and a broader service-role deletion list. The export covers owner-readable E2EE recovery material, key versions, encrypted biometrics, AI data, billing, consent and Sport; relationship-only Sport child rows are fetched through owner-filtered parent IDs under RLS. RPC-only pairing sessions and migration maps are not exposed through the direct export API. The deletion flow removes child sets/exercises/program items before their parents and deletes owned E2EE/service tables by `context.userId`; it refuses to delete the Auth user if any cleanup fails. Provider secrets and idempotency state are deleted but are never included in user exports.
 
 The export deliberately uses the authenticated Supabase client, not `service_role`, so row and parent-ownership RLS remains active. The account deletion flow uses the service client only on a server-side fixed allowlist and always applies the authenticated user's ID; user-provided IDs are not accepted.
+
+
+## 17. Existing SECURITY DEFINER routines and trigger ACLs — 2026-11-11
+
+A repository-wide SQL search found several active privileged routines whose final tracked definition retained `search_path = public` or `public, pg_temp`: `sync_sport_user_state()`, `delete_temporary_workout_after_finish()`, `touch_ai_provider_secret_updated_at()`, `prevent_audit_log_mutation()`, `prevent_consent_mutation()`, `set_deletion_request_updated_at()`, `rotate_health_e2ee_key(integer,uuid)`, and the legacy `delete_user_data(uuid)`. The last routine had no tracked app caller and remains inaccessible to API and service roles.
+
+Added `20261111150000_harden_security_definer_routine_acl.sql` to set the routines' search path to empty, revoke direct execution from `PUBLIC`, `anon` and `authenticated` for trigger-only helpers, preserve `authenticated` execution only for the two user-facing RPCs (`upsert_user_state_if_newer` and `rotate_health_e2ee_key`), and keep `delete_user_data` revoked from every API/service role. It also explicitly revokes `CREATE` on schema `public` from `PUBLIC` and the API roles, while preserving schema `USAGE`.
+
+The PostgreSQL 16 fixture now creates representative legacy SECURITY DEFINER functions before hardening and attaches a real row trigger before its EXECUTE grant is revoked. Assertions inspect stored `proconfig`, effective EXECUTE for API/service roles, schema CREATE rights, retained authenticated RPC grants, and prove that an owner-authorized workout UPDATE still fires its pre-existing trigger after callers lose direct EXECUTE.
+
+This migration depends on the canonical routine definitions existing, so it remains unmerged and must not be applied to a partially restored database.
