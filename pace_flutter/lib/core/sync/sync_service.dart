@@ -146,23 +146,18 @@ class SyncService {
     )) {
       try {
         final result = await _push(operation);
-        if (result.accepted) {
-          if (result.serverUpdatedAt != null) {
-            await localStore.markSyncedAt(
-              operation['key'] as String,
-              result.serverUpdatedAt!,
-            );
-          }
-          await localStore.acknowledgeOperation(operation);
+        if (!shouldAcknowledgeSyncOperation(accepted: result.accepted)) {
+          // A rejected mutation is not an acknowledgement. Keep the durable
+          // local outbox entry and skip remote hydration for this key in
+          // _pullRemote; the next sync cycle can retry against server time.
+          // Never replace a pending local user edit with a remote snapshot.
           continue;
         }
-
-        // A rejected mutation is not an acknowledgement. Keep the durable
-        // local outbox entry and skip remote hydration for this key in
-        // _pullRemote; the next sync cycle can retry against server time.
-        // Never replace a pending local user edit with a remote snapshot.
-        if (!shouldAcknowledgeSyncOperation(accepted: result.accepted)) {
-          continue;
+        if (result.serverUpdatedAt != null) {
+          await localStore.markSyncedAt(
+            operation['key'] as String,
+            result.serverUpdatedAt!,
+          );
         }
         await localStore.acknowledgeOperation(operation);
       } catch (_) {
