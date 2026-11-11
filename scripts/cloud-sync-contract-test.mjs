@@ -27,6 +27,23 @@ assert.match(syncRpcTypeBlock, /Returns: Json/, "Generated Supabase types must r
 assert.match(writeItemBlock, /supabase\.rpc\("upsert_user_state_if_newer"/, "Web cloud sync must use the generated typed RPC contract");
 assert.doesNotMatch(writeItemBlock, /const rpc = supabase\.rpc as unknown as/, "Web cloud sync must not hide the generated RPC response contract behind an unsafe cast");
 
+const scopedQueueStart = engine.indexOf("function scopedSyncStorageKey");
+const scopedQueueEnd = engine.indexOf("function readDomainRecord", scopedQueueStart);
+assert.ok(scopedQueueStart >= 0 && scopedQueueEnd > scopedQueueStart, "Account-scoped browser queue helpers must remain identifiable");
+const scopedQueueHelpers = engine.slice(scopedQueueStart, scopedQueueEnd);
+assert.match(scopedQueueHelpers, /function readScopedSyncValue[\s\S]*localStorage\.getItem\(base\)[\s\S]*localStorage\.setItem\(scopedKey[\s\S]*localStorage\.removeItem\(base\)/, "Legacy browser sync state must be claimed into the first account namespace before the global key is removed");
+assert.match(scopedQueueHelpers, /function readQueue\(userId: string\)/, "Web outbox reads must always require an explicit account ID");
+assert.match(scopedQueueHelpers, /function queueItem\(item: QueueItem, userId: string\)/, "Web local mutations must be enqueued under their originating account");
+assert.match(scopedQueueHelpers, /ownerUserId: userId/, "Web queue items must retain their owning account ID");
+assert.match(scopedQueueHelpers, /function readMeta\(userId: string\)/, "Web sync versions must be account-scoped");
+assert.match(scopedQueueHelpers, /function readConflicts\(userId: string\)/, "Web unresolved conflicts must be account-scoped");
+assert.doesNotMatch(engine, /readQueue\(\)/, "No Web sync path may read an unscoped outbox");
+assert.doesNotMatch(engine, /readMeta\(\)/, "No Web sync path may read unscoped sync versions");
+assert.doesNotMatch(engine, /readConflicts\(\)/, "No Web sync path may read another account's conflicts");
+assert.match(engine, /running\.current\[user\.id\]/, "Concurrent sync locks must be isolated per authenticated account");
+assert.match(engine, /const writeKey = user\.id \+ ':' \+ item\.key/, "In-flight key writes must be isolated per authenticated account");
+
+
 
 
 const nutritionAi = read("src/lib/ai-chat.server.ts");
