@@ -58,6 +58,12 @@ assert.ok(
   "Switching accounts must save the previous account's state before restoring the next account's state",
 );
 assert.match(accountScope, /nextScope = userId \?\? "__guest__"/, "Signed-out browser state must use a distinct guest namespace");
+
+assert.match(accountScope, /LEGACY_SYNC_KEYS = \[[\s\S]*pace\.__sync_queue[\s\S]*pace\.__sync_meta[\s\S]*pace\.__sync_conflicts/, "Legacy global queue, version and conflict keys must be migrated together");
+assert.match(accountScope, /migrateLegacySyncState\(nextScope\)/, "The first authenticated account must claim legacy browser outbox state before sync hooks mount");
+assert.match(accountScope, /migrateLegacySyncState\(previousScope\)/, "A later account switch must finish assigning legacy sync state to the account that owned the previous local data");
+assert.match(accountScope, /localStorage\.removeItem\(legacyKey\)/, "Legacy global sync keys must be removed after their account-scoped copy is saved");
+
 assert.match(accountScope, /localStorage\.setItem\(ACCOUNT_SCOPE_KEY, previousScope\)/, "A failed restore must roll back to the previous account namespace");
 assert.match(authProvider, /switchLocalAccountScope\(nextSession\?\.user\.id \?\? null\)/, "Every auth session transition must switch the local data namespace");
 assert.match(authProvider, /<Ctx\.Provider[\s\S]*key=\{session\?\.user\.id \?\? "__guest__"\}/, "React state hooks must remount after switching local account namespaces");
