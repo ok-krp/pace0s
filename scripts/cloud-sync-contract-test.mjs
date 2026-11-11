@@ -28,6 +28,7 @@ const domainStore = read("src/lib/domain-store.ts");
 const flutterSync = read("pace_flutter/lib/core/sync/sync_service.dart");
 const flutterNutrition = read("pace_flutter/lib/features/nutrition/nutrition_page.dart");
 const flutterApp = read("pace_flutter/lib/app/pace_app.dart");
+const flutterSettings = read("pace_flutter/lib/features/more/more_page.dart");
 const flutterPushStart = flutterSync.indexOf("Future<void> _pushPending()");
 const flutterPushEnd = flutterSync.indexOf("Future<_PushResult> _push(", flutterPushStart);
 assert.ok(flutterPushStart >= 0 && flutterPushEnd > flutterPushStart, "Flutter outbox push path must remain identifiable");
@@ -38,6 +39,14 @@ assert.doesNotMatch(flutterPush, /applyRemote\(/, "Flutter must not replace a pe
 assert.match(flutterNutrition, /await widget\.sync\.syncNow\(\)/, "Flutter Nutrition manual changes must request immediate cloud sync");
 assert.match(flutterNutrition, /await widget\.localStore\.write\('pace\.nutrition\.items', data\);[\s\S]*await _recalculateTotals\(data\);[\s\S]*await widget\.sync\.syncNow\(\)/, "Flutter meal additions must persist locally before requesting immediate sync");
 assert.match(flutterApp, /NutritionPage\(localStore: widget\.localStore, sync: widget\.sync\)/, "Flutter app must inject the shared sync service into Nutrition");
+
+assert.match(flutterSync, /Future<bool> _hasCloudSyncConsent\(String userId\)/, "Flutter must load the latest explicit sync_cloud consent");
+assert.match(flutterSync, /consent_type', 'sync_cloud'/, "Flutter sync consent must match the web consent category");
+assert.match(flutterSync, /if \(userId == null \|\| !_hasCachedCloudSyncConsent\(userId\)\) return;/, "Flutter must not push local outbox mutations without sync_cloud consent");
+assert.match(flutterSync, /if \(!_hasCachedCloudSyncConsent\(userId\)\) return;/, "Flutter must not pull remote state without sync_cloud consent");
+assert.match(flutterSettings, /Synchronisation entre appareils[\s\S]*_setConsent\('sync_cloud', value\)/, "Flutter settings must expose the functional cross-device sync consent");
+assert.match(flutterSettings, /await widget\.sync\.setCloudSyncConsent\(value\)/, "Changing consent must immediately update native sync behavior");
+
 
 assert.match(flutterSync, /if \(hadNutritionMutation\) \{[\s\S]*_reconcileNutritionProjection\(user\.id\);[\s\S]*_pushPending\(\)/, "Flutter must reconcile canonical Nutrition rows after local mutations and push the merged snapshot");
 assert.match(flutterSync, /_reconcileNutritionProjection[\s\S]*from\('food_log'\)[\s\S]*legacyRows[\s\S]*_isFoodLogUuid/, "Flutter reconciliation must combine canonical food_log rows with legacy local-only manual meals");
