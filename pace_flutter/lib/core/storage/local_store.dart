@@ -91,10 +91,10 @@ class LocalStore {
     if (userId != null &&
         !_accounts.containsKey(targetScope) &&
         (_scope == '__unscoped__' || _accounts.containsKey('__unscoped__'))) {
-      // Auth startup commonly visits the signed-out guest scope before the
-      // initial session is resolved. In that case the v1 snapshot has already
-      // been parked under __unscoped__; claim it for the first account rather
-      // than silently leaving the user's pre-upgrade offline data behind.
+      // A caller may explicitly activate the guest scope before the first
+      // authenticated session is applied. In that case the v1 snapshot has
+      // already been parked under __unscoped__; claim it for the first account
+      // rather than leaving the user's pre-upgrade offline data unassigned.
       final legacySnapshot = _scope == '__unscoped__'
           ? currentSnapshot
           : Map<String, dynamic>.from(_accounts['__unscoped__']!);
