@@ -108,6 +108,9 @@ BEGIN
   INSERT INTO public.health_samples (id,user_id) VALUES
     ('20000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
     ('20000000-0000-0000-0000-000000000002','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
+  INSERT INTO public.user_biometrics_e2ee(id,user_id,ciphertext,nonce,algorithm,key_version) VALUES
+    ('21000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','cipher-a','nonce-a','AES-256-GCM',1),
+    ('21000000-0000-0000-0000-000000000002','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','cipher-b','nonce-b','AES-256-GCM',1);
   INSERT INTO public.ai_conversations (id,user_id) VALUES
     ('30000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
     ('30000000-0000-0000-0000-000000000002','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
@@ -470,6 +473,14 @@ BEGIN
     RAISE EXCEPTION 'E2EE device registration succeeded without required consent';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
+  SELECT count(*) INTO n FROM public.user_biometrics_e2ee;
+  IF n <> 0 THEN RAISE EXCEPTION 'E2EE biometrics visible without consent'; END IF;
+  BEGIN
+    INSERT INTO public.user_biometrics_e2ee(user_id,ciphertext,nonce)
+      VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','without-consent','nonce');
+    RAISE EXCEPTION 'E2EE biometric write succeeded without required consent';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   SELECT count(*) INTO n FROM public.health_e2ee_recovery_envelopes;
   IF n <> 0 THEN RAISE EXCEPTION 'E2EE recovery envelope visible without consent'; END IF;
   BEGIN
@@ -496,6 +507,11 @@ BEGIN
     AND consent_type IN ('health_data','health_cloud_sync')
     AND created_at=(SELECT now());
   IF n <> 2 THEN RAISE EXCEPTION 'database timestamp default not applied to consent records: %',n; END IF;
+
+  INSERT INTO public.user_biometrics_e2ee(user_id,ciphertext,nonce,algorithm,key_version)
+    VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','consented-biometric','nonce','AES-256-GCM',1);
+  SELECT count(*) INTO n FROM public.user_biometrics_e2ee;
+  IF n <> 2 THEN RAISE EXCEPTION 'consented E2EE biometric rows are not owner-visible'; END IF;
 
   INSERT INTO public.health_e2ee_devices(user_id,device_name,public_key,algorithm)
     VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','consented-device','{}'::jsonb,'ECDH-P256');
@@ -686,6 +702,19 @@ BEGIN
     RAISE EXCEPTION 'latest false health consent did not revoke E2EE access';
   END IF;
 
+  SELECT count(*) INTO n FROM public.user_biometrics_e2ee;
+  IF n <> 0 THEN RAISE EXCEPTION 'encrypted biometrics remain visible after consent revocation'; END IF;
+  UPDATE public.user_biometrics_e2ee SET ciphertext='revoked-update'
+  WHERE id='21000000-0000-0000-0000-000000000001';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 0 THEN RAISE EXCEPTION 'encrypted biometrics update succeeded after consent revocation'; END IF;
+  BEGIN
+    INSERT INTO public.user_biometrics_e2ee(user_id,ciphertext,nonce)
+      VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','after-revoke','nonce');
+    RAISE EXCEPTION 'encrypted biometrics insert succeeded after consent revocation';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
   SELECT count(*) INTO n FROM public.health_samples_e2ee;
   IF n <> 0 THEN RAISE EXCEPTION 'encrypted samples remain visible after consent revocation'; END IF;
   SELECT count(*) INTO n FROM public.health_e2ee_key_envelopes;
@@ -744,6 +773,9 @@ BEGIN
   SELECT count(*) INTO n FROM public.user_state
   WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
   IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A user_state'; END IF;
+  SELECT count(*) INTO n FROM public.user_biometrics_e2ee
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A E2EE biometrics'; END IF;
   SELECT count(*) INTO n FROM public.health_e2ee_recovery_envelopes;
   IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A E2EE recovery envelope'; END IF;
 
