@@ -22,7 +22,7 @@ export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
 export type SyncConflict = { id: string; key: string; localValue: unknown; remoteValue: unknown; remoteUpdatedAt: string; detectedAt: string; };
 type SyncRow = { key: string; value: unknown; updated_at: string; updated_by: string | null };
 type ServerWriteResult = { accepted: boolean; updated_at: string | null };
-type QueueItem = { key: string; value: unknown; updatedAt: string; mutationId?: string };
+type QueueItem = { key: string; value: unknown; updatedAt: string; mutationId?: string; ownerUserId?: string };
 type LegacyQueue = string[] | QueueItem[];
 type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 
@@ -37,34 +37,98 @@ function getDeviceId() {
   } catch { return `${Date.now()}-${Math.random()}`; }
 }
 function isSyncableKey(key: string) { return key.startsWith(PACE_PREFIX) && !key.startsWith(INTERNAL_PREFIX) && key !== DOMAIN_OUTBOX_KEY && !EXCLUDED.has(key); }
-function readQueue(): QueueItem[] {
+function scopedSyncStorageKey(base: string, userId: string) {
+  return `${base}:account:${encodeURIComponent(userId)}`;
+}
+function readScopedSyncValue<T>(base: string, userId: string, fallback: T): T {
+  const scopedKey = scopedSyncStorageKey(base, userId);
   try {
-    const raw = JSON.parse(localStorage.getItem(QUEUE_KEY) ?? "[]") as LegacyQueue;
+    const scoped = localStorage.getItem(scopedKey);
+    if (scoped !== null) return JSON.parse(scoped) as T;
+
+    // One-time compatibility claim for the old unscoped browser queue/meta.
+    // This preserves the existing user's pending work without sharing it with
+    // any later account that signs into the same browser profile.
+    const legacy = localStorage.getItem(base);
+    if (legacy !== null) {
+      const parsed = JSON.parse(legacy) as T;
+      localStorage.setItem(scopedKey, JSON.stringify(parsed));
+      localStorage.removeItem(base);
+      return parsed;
+    }
+  } catch {}
+  return fallback;
+}
+function writeScopedSyncValue<T>(base: string, userId: string, value: T) {
+  try {
+    localStorage.setItem(scopedSyncStorageKey(base, userId), JSON.stringify(value));
+  } catch {}
+}
+function readQueue(userId: string): QueueItem[] {
+  try {
+    const raw = readScopedSyncValue<LegacyQueue>(QUEUE_KEY, userId, []);
     if (!Array.isArray(raw)) return [];
-    const meta = readMeta();
+    const meta = readMeta(userId);
     return raw.flatMap((item) => {
       if (typeof item === "string") {
         const timestamp = meta[item];
         if (!timestamp) return [];
         let value: unknown;
         try { value = JSON.parse(localStorage.getItem(item) ?? "null"); } catch { value = null; }
-        return [{ key: item, value, updatedAt: timestamp }];
+        return [{ key: item, value, updatedAt: timestamp, ownerUserId: userId }];
       }
-      return item?.key && item?.updatedAt ? [item] : [];
+      if (!item?.key || !item?.updatedAt) return [];
+      if (item.ownerUserId && item.ownerUserId !== userId) return [];
+      return [{ ...item, ownerUserId: userId }];
     });
   } catch { return []; }
 }
-function writeQueue(items: QueueItem[]) { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(items.filter((item) => isSyncableKey(item.key)))); } catch {} }
-function queueItem(item: QueueItem) {
-  if (!isSyncableKey(item.key) || !item.updatedAt) return;
-  const next = readQueue().filter((queued) => queued.key !== item.key);
-  next.push(item); writeQueue(next);
+function writeQueue(items: QueueItem[], userId: string) {
+  writeScopedSyncValue(
+    QUEUE_KEY,
+    userId,
+    items
+      .filter((item) => isSyncableKey(item.key) && (!item.ownerUserId || item.ownerUserId === userId))
+      .map((item) => ({ ...item, ownerUserId: userId })),
+  );
 }
-function getQueued(key: string) { return readQueue().find((item) => item.key === key); }
-function unqueueIfMutation(key: string, updatedAt: string) { writeQueue(readQueue().filter((item) => !(item.key === key && item.updatedAt === updatedAt))); }
-function readMeta(): SyncMeta { try { return JSON.parse(localStorage.getItem(META_KEY) ?? "{}"); } catch { return {}; } }
-function writeMeta(meta: SyncMeta) { try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch {} }
-function markVersion(key: string, timestamp: string) { const meta = readMeta(); meta[key] = timestamp; writeMeta(meta); }
+function queueItem(item: QueueItem, userId: string) {
+  if (!isSyncableKey(item.key) || !item.updatedAt) return;
+  const next = readQueue(userId).filter((queued) => queued.key !== item.key);
+  next.push({ ...item, ownerUserId: userId });
+  writeQueue(next, userId);
+}
+function getQueued(key: string, userId: string) {
+  return readQueue(userId).find((item) => item.key === key);
+}
+function unqueueIfMutation(key: string, updatedAt: string, userId: string) {
+  writeQueue(
+    readQueue(userId).filter((item) => !(item.key === key && item.updatedAt === updatedAt)),
+    userId,
+  );
+}
+function readMeta(userId: string): SyncMeta {
+  return readScopedSyncValue<SyncMeta>(META_KEY, userId, {});
+}
+function writeMeta(meta: SyncMeta, userId: string) {
+  writeScopedSyncValue(META_KEY, userId, meta);
+}
+function markVersion(key: string, timestamp: string, userId: string) {
+  const meta = readMeta(userId);
+  meta[key] = timestamp;
+  writeMeta(meta, userId);
+}
+function readConflicts(userId: string): SyncConflict[] {
+  const raw = readScopedSyncValue<SyncConflict[]>(CONFLICTS_KEY, userId, []);
+  return Array.isArray(raw) ? raw.filter((item) => item?.id && item?.key) : [];
+}
+function writeConflicts(items: SyncConflict[], userId: string) {
+  writeScopedSyncValue(CONFLICTS_KEY, userId, items.slice(-20));
+}
+function conflictForKey(key: string, userId: string): SyncConflict | undefined {
+  return readConflicts(userId).find((item) => item.key === key);
+}
+
 function readDomainRecord(key: string): DomainRecord | null {
   try {
     const storageKey = key.startsWith(DOMAIN_PREFIX) ? key : `${DOMAIN_PREFIX}${key.slice(PACE_PREFIX.length)}`;
@@ -136,7 +200,7 @@ function serialize(value: unknown): string | undefined {
     return undefined;
   }
 }
-function readConflicts(): SyncConflict[] { try { const raw = JSON.parse(localStorage.getItem(CONFLICTS_KEY) ?? "[]") as SyncConflict[]; return Array.isArray(raw) ? raw.filter((item) => item?.id && item?.key) : []; } catch { return []; } }
+function readConflicts(user.id): SyncConflict[] { try { const raw = JSON.parse(localStorage.getItem(CONFLICTS_KEY) ?? "[]") as SyncConflict[]; return Array.isArray(raw) ? raw.filter((item) => item?.id && item?.key) : []; } catch { return []; } }
 function writeConflicts(items: SyncConflict[]) { try { localStorage.setItem(CONFLICTS_KEY, JSON.stringify(items.slice(-20))); } catch {} }
 function conflictForKey(key: string): SyncConflict | undefined { return readConflicts().find((item) => item.key === key); }
 
@@ -173,7 +237,14 @@ export function useCloudSyncEngineInternal() {
   };
 
   useEffect(() => {
-    if (typeof window === "undefined" || !user) return;
+    if (typeof window === "undefined") return;
+    if (!user) {
+      setConflicts([]);
+      setStatus("idle");
+      return;
+    }
+    setConflicts(readConflicts(user.id));
+    setStatus("idle");
     let cancelled = false;
     const allowed = () => { try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; } };
 
@@ -182,16 +253,16 @@ export function useCloudSyncEngineInternal() {
       if (serialize(localValue) === serialize(remoteValue)) {
         const remaining = currentConflicts.filter((item) => item.key !== key);
         if (remaining.length !== currentConflicts.length) {
-          writeConflicts(remaining);
+          writeConflicts(remaining, user.id);
           setConflicts(remaining);
         }
         return;
       }
-      const existing = conflictForKey(key);
+      const existing = conflictForKey(key, user.id);
       if (existing && serialize(existing.remoteValue) === serialize(remoteValue) && serialize(existing.localValue) === serialize(localValue)) return;
       const next: SyncConflict = { id: `${key}:${Date.now()}`, key, localValue, remoteValue, remoteUpdatedAt, detectedAt: new Date().toISOString() };
       const all = [...currentConflicts.filter((item) => item.key !== key), next];
-      writeConflicts(all);
+      writeConflicts(all, user.id);
       setConflicts(all);
     };
 
@@ -206,7 +277,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const writeItem = async (item: QueueItem): Promise<boolean> => {
-      if (conflictForKey(item.key)) return false;
+      if (conflictForKey(item.key, user.id)) return false;
 
       // Let the monotonic RPC be the single write authority. Avoid a pre-write
       // SELECT on every queued mutation; if the server rejects the write because
@@ -232,10 +303,10 @@ export function useCloudSyncEngineInternal() {
         // Keep the queued mutation and expose an explicit conflict for resolution;
         // do not hydrate the remote snapshot over the user's pending local value.
         recordConflict(row.key, item.value, row.value, row.updated_at);
-        markVersion(row.key, row.updated_at);
+        markVersion(row.key, row.updated_at, user.id);
         return false;
       }
-      markVersion(item.key, payload.updated_at);
+      markVersion(item.key, payload.updated_at, user.id);
       localStorage.setItem("pace.__last_sync_at", payload.updated_at);
       return true;
     };
@@ -245,7 +316,7 @@ export function useCloudSyncEngineInternal() {
       const previous = keyWrites.current[item.key] ?? Promise.resolve();
       const current = previous.then(async () => {
         if (cancelled || !allowed() || !navigator.onLine) return;
-        const latest = getQueued(item.key);
+        const latest = getQueued(item.key, user.id);
         if (!latest || latest.updatedAt !== item.updatedAt) return;
         setStatus("syncing");
         let accepted = false;
@@ -258,7 +329,7 @@ export function useCloudSyncEngineInternal() {
         if (accepted) {
           localStorage.setItem("pace.__last_sync_at", readMeta()[latest.key] ?? latest.updatedAt);
           // Remove only the exact mutation the server acknowledged.
-          unqueueIfMutation(latest.key, latest.updatedAt);
+          unqueueIfMutation(latest.key, latest.updatedAt, user.id);
           setStatus("ok");
         } else {
           // Rejected writes remain durable in the outbox until conflict resolution.
@@ -271,7 +342,7 @@ export function useCloudSyncEngineInternal() {
 
     const flushQueue = async () => {
       if (cancelled || !allowed() || !navigator.onLine || running.current) return;
-      const queue = readQueue();
+      const queue = readQueue(user.id);
       if (!queue.length) return;
       running.current = true;
       try { await Promise.all(queue.map((item) => pushItem(item))); } finally { running.current = false; }
@@ -281,10 +352,10 @@ export function useCloudSyncEngineInternal() {
       if (cancelled || !allowed() || !isSyncableKey(row.key) || row.updated_by === DEVICE_ID) return;
       const remoteTime = Date.parse(row.updated_at);
       if (!Number.isFinite(remoteTime)) return;
-      const meta = readMeta();
+      const meta = readMeta(user.id);
       const knownTime = Date.parse(meta[row.key] ?? "1970-01-01T00:00:00.000Z");
       if (remoteTime <= knownTime) return;
-      const queued = getQueued(row.key);
+      const queued = getQueued(row.key, user.id);
       if (queued) { recordConflict(row.key, queued.value, row.value, row.updated_at); return; }
       const domain = readDomainRecord(row.key);
       if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) return;
@@ -299,7 +370,7 @@ export function useCloudSyncEngineInternal() {
       try {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
         if (error || !data || cancelled) return;
-        const queue = new Set(readQueue().map((item) => item.key));
+        const queue = new Set(readQueue(user.id).map((item) => item.key));
         const meta = readMeta();
         const grouped = new Map<string, { canonical?: SyncRow; legacy?: SyncRow }>();
         for (const raw of data) {
@@ -434,12 +505,12 @@ export function useCloudSyncEngineInternal() {
             if (isEmptyRecoveredValue(value)) continue;
             const updatedAt = new Date().toISOString();
             const mutationId = `local-bootstrap-${updatedAt}-${key}`;
-            queueItem({ key, value, updatedAt, mutationId });
+            queueItem({ key, value, updatedAt, mutationId }, user.id);
             meta[key] = updatedAt;
             newest = newest && Date.parse(newest) > Date.parse(updatedAt) ? newest : updatedAt;
           }
         } catch {}
-        writeMeta(meta);
+        writeMeta(meta, user.id);
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (newest) setStatus("ok");
       } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
@@ -544,14 +615,14 @@ export function useCloudSyncEngineInternal() {
   }, [user]);
 
   const resolveConflict = useCallback(async (conflictId: string, choice: "local" | "remote" | "merge") => {
-    const conflict = readConflicts().find((item) => item.id === conflictId); if (!conflict) return;
+    const userId = user?.id; if (!userId) return; const conflict = readConflicts(userId).find((item) => item.id === conflictId); if (!conflict) return;
     const merged = choice === "merge" ? mergeRecoveredValues(conflict.remoteValue, conflict.localValue) : choice === "local" ? conflict.localValue : conflict.remoteValue;
-    if (choice === "remote") { applyRemoteWrite(conflict.key, conflict.remoteValue, conflict.remoteUpdatedAt); unqueueIfMutation(conflict.key, getQueued(conflict.key)?.updatedAt ?? ""); markVersion(conflict.key, conflict.remoteUpdatedAt); }
-    else { const updatedAt = new Date().toISOString(); applyRemoteWrite(conflict.key, merged, updatedAt); queueItem({ key: conflict.key, value: merged, updatedAt, mutationId: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : updatedAt }); }
-    const remaining = readConflicts().filter((item) => item.id !== conflictId); writeConflicts(remaining); setConflicts(remaining); window.dispatchEvent(new Event("pace.sync.conflict.resolved"));
+    if (choice === "remote") { applyRemoteWrite(conflict.key, conflict.remoteValue, conflict.remoteUpdatedAt); unqueueIfMutation(conflict.key, getQueued(conflict.key, userId)?.updatedAt ?? "", userId); markVersion(conflict.key, conflict.remoteUpdatedAt, userId); }
+    else { const updatedAt = new Date().toISOString(); applyRemoteWrite(conflict.key, merged, updatedAt); queueItem({ key: conflict.key, value: merged, updatedAt, mutationId: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : updatedAt }, userId); }
+    const remaining = readConflicts(userId).filter((item) => item.id !== conflictId); writeConflicts(remaining, userId); setConflicts(remaining); window.dispatchEvent(new Event("pace.sync.conflict.resolved"));
   }, []);
 
-  return { status, queuedCount: readQueue().length, conflicts, resolveConflict };
+  return { status, queuedCount: user ? readQueue(user.id).length : 0, conflicts, resolveConflict };
 }
 
 type SyncContextValue = {
