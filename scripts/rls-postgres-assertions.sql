@@ -525,6 +525,31 @@ BEGIN
 END;
 $envelope_defaults$;
 
+INSERT INTO public.health_e2ee_key_envelopes(
+  user_id,device_id,sender_device_id,pairing_session_id,envelope,nonce,algorithm,key_version
+) VALUES (
+  'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+  '70000000-0000-0000-0000-000000000001',
+  '70000000-0000-0000-0000-000000000001',
+  '80000000-0000-0000-0000-000000000001',
+  'key-wrap-envelope',NULL,'ECDH-P256/HKDF-SHA256/AES-256-KW',1
+);
+DO $envelope_nonce_contract$
+DECLARE n integer;
+BEGIN
+  SELECT count(*) INTO n FROM public.health_e2ee_key_envelopes
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    AND algorithm='ECDH-P256/HKDF-SHA256/AES-256-KW'
+    AND nonce IS NULL;
+  IF n <> 1 THEN RAISE EXCEPTION 'AES Key Wrap envelope must accept NULL nonce'; END IF;
+  SELECT count(*) INTO n FROM public.health_e2ee_key_envelopes
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    AND algorithm='ECDH-P256/AES-256-GCM'
+    AND nonce IS NOT NULL;
+  IF n <> 1 THEN RAISE EXCEPTION 'AES-GCM envelope must retain its nonce'; END IF;
+END;
+$envelope_nonce_contract$;
+
 -- Commit the initial granted decisions. The withdrawal is a separate request
 -- transaction, so PostgreSQL's now() default is strictly later, as in PostgREST.
 COMMIT;
