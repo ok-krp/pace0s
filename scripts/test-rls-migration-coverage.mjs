@@ -118,7 +118,7 @@ const expectedPublicTables = [
   "profiles","push_subscriptions","reminder_debug_log","reminder_settings",
   "sport_exercises","sport_program_items","sport_programs","sport_progression_targets",
   "sport_workout_exercises","sport_workout_sets","sport_workout_sessions",
-  "user_biometrics_e2ee",
+  "user_biometrics_e2ee","user_state",
 ].sort();
 assert.deepEqual([...names].sort(), expectedPublicTables,
   "The RLS migration classifications must match the exact audited 45-table public schema");
