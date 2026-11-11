@@ -419,6 +419,21 @@ assert.doesNotMatch(privacyExportBlock, /health_legacy_migration_map|health_e2ee
   "RPC-only E2EE internals must not be exported through direct PostgREST access");
 assert.match(privacySource, /const db = context\.supabase as any/,
   "Privacy export must execute through the authenticated client so RLS relationship checks remain active");
+assert.match(privacySource, /import \{ getRequest \} from "@tanstack\/react-start\/server"/,
+  "Account deletion must read the already authenticated request without editing generated auth middleware");
+assert.match(privacySource, /authorization\?\.match\(\/\^Bearer\\s\+\(\.\+\)\$\/i\)/,
+  "Account deletion must extract only the authenticated Bearer JWT");
+assert.match(privacySource, /supabaseAdmin\.auth\.admin\.signOut\(\s*accessToken,\s*"global"/,
+  "Account deletion must revoke every refresh-token session before deleting user data");
+assert.match(privacySource, /if \(sessionRevocationError\)[\s\S]*?throw new Error\("Impossible de révoquer les sessions du compte\."/,
+  "Account deletion must fail closed when session revocation fails");
+assert.ok(
+  privacySource.indexOf("auth.admin.signOut") < privacySource.indexOf("const [{ data: programs"),
+  "Account sessions must be revoked before destructive Sport/account cleanup begins",
+);
+assert.match(privacySource, /Access JWTs remain valid until exp/,
+  "Account deletion must document that an already-issued access JWT remains valid until expiry");
+
 assert.match(privacySource, /db\.from\(table\)\.select\("\*"\)\.eq\("user_id", context\.userId\)/,
   "Admin-backed export must filter every owner table by the authenticated server context");
 assert.match(privacySource, /\.from\("sport_program_items"\)[\s\S]*?\.in\("program_id", programIds\)/,
