@@ -433,21 +433,18 @@ BEGIN
 
   SELECT public.sport_delete_workout('60000000-0000-0000-0000-000000000002') INTO accepted;
   IF accepted THEN RAISE EXCEPTION 'user A deleted user B workout via invoker RPC'; END IF;
-  SELECT count(*) INTO n FROM public.sport_workout_sessions
-    WHERE id='60000000-0000-0000-0000-000000000002';
-  IF n <> 1 THEN RAISE EXCEPTION 'user B workout was deleted by user A invoker RPC'; END IF;
+  -- User A cannot count another account's row under RLS. User B's
+  -- independent session below verifies that the target remains present.
 
   SELECT public.sport_delete_program('40000000-0000-0000-0000-000000000002') INTO accepted;
   IF accepted THEN RAISE EXCEPTION 'user A deleted user B program via invoker RPC'; END IF;
-  SELECT count(*) INTO n FROM public.sport_programs
-    WHERE id='40000000-0000-0000-0000-000000000002';
-  IF n <> 1 THEN RAISE EXCEPTION 'user B program was deleted by user A invoker RPC'; END IF;
+  -- User A cannot count another account's row under RLS. User B's
+  -- independent session below verifies that the target remains present.
 
   SELECT public.sport_delete_exercise('50000000-0000-0000-0000-000000000002') INTO accepted;
   IF accepted THEN RAISE EXCEPTION 'user A deleted user B exercise via invoker RPC'; END IF;
-  SELECT count(*) INTO n FROM public.sport_exercises
-    WHERE id='50000000-0000-0000-0000-000000000002';
-  IF n <> 1 THEN RAISE EXCEPTION 'user B exercise was deleted by user A invoker RPC'; END IF;
+  -- User A cannot count another account's row under RLS. User B's
+  -- independent session below verifies that the target remains present.
 
   SELECT count(*) INTO n FROM public.profiles;
   IF n <> 1 THEN RAISE EXCEPTION 'profile isolation failed: expected 1 row, got %', n; END IF;
@@ -980,6 +977,12 @@ DECLARE n integer;
 BEGIN
   SELECT count(*) INTO n FROM public.profiles;
   IF n <> 1 THEN RAISE EXCEPTION 'user B profile isolation failed: expected 1 row, got %',n; END IF;
+  SELECT count(*) INTO n FROM public.sport_workout_sessions;
+  IF n <> 1 THEN RAISE EXCEPTION 'user B workout missing after user A invoker delete attempt'; END IF;
+  SELECT count(*) INTO n FROM public.sport_programs;
+  IF n <> 1 THEN RAISE EXCEPTION 'user B program missing after user A invoker delete attempt'; END IF;
+  SELECT count(*) INTO n FROM public.sport_exercises;
+  IF n <> 1 THEN RAISE EXCEPTION 'user B exercise missing after user A invoker delete attempt'; END IF;
 
   SELECT count(*) INTO n FROM public.profiles
   WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
