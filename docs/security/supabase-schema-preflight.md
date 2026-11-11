@@ -324,3 +324,8 @@ The final routine inventory also includes `create_pairing_session`, `join_pairin
 ### pgcrypto calls under an empty search path
 
 Supabase installs most extensions in the `extensions` schema, while older projects can have an extension in a different schema. The E2EE pairing join/completion RPCs previously called `digest()` and `gen_random_bytes()` unqualified despite using `search_path = ''`. The follow-up migration now resolves the installed `pgcrypto` namespace from `pg_catalog.pg_extension` and schema-quotes those function calls dynamically; it does not widen the privileged function's search path. PostgreSQL preflight installs `pgcrypto` into `extensions` and executes both the valid/invalid pairing-secret paths and one-time secret rotation during completion.
+
+
+### Account deletion and Auth session revocation
+
+The account deletion server function now obtains the Bearer JWT from the same request already validated by `requireSupabaseAuth` and calls `supabaseAdmin.auth.admin.signOut(jwt, 'global')` before deleting any user-owned rows. A revocation failure is fail-closed: the deletion does not proceed. This revokes refresh-token sessions across devices and prevents session renewal. Supabase access-token JWTs already issued cannot be revoked before their `exp`; they remain cryptographically valid until expiry. The application must not describe global sign-out as immediate invalidation of an already-issued access JWT. The generated auth middleware remains untouched.
