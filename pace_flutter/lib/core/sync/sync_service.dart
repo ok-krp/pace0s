@@ -54,6 +54,10 @@ class SyncService {
   bool _hasCachedCloudSyncConsent(String userId) =>
       _cloudSyncConsentUserId == userId && _cloudSyncConsent == true;
 
+  bool get cloudSyncConsentGranted =>
+      _cloudSyncConsentUserId == client?.auth.currentUser?.id &&
+      _cloudSyncConsent == true;
+
   Future<void> setCloudSyncConsent(bool granted) async {
     final userId = client?.auth.currentUser?.id;
     if (userId == null) return;
