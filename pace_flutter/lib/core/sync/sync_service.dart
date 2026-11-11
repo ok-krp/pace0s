@@ -114,7 +114,10 @@ class SyncService {
       if (channel != null) await client!.removeChannel(channel);
       return;
     }
-    if (client?.auth.currentUser?.id != initialUserId) return;
+    if (client?.auth.currentUser?.id != initialUserId ||
+        localStore.currentAccountId != initialUserId) {
+      return;
+    }
     if (_running) {
       // Coalesce writes that arrive during an active network cycle instead
       // of silently dropping their immediate-sync request.
