@@ -337,7 +337,11 @@ export function useCloudSyncEngineInternal() {
             recordConflict(key, queued.value, remoteValue, updatedAt);
             continue;
           }
-          if (localDomain && !localIsEmpty && localTime > sourceTime) {
+          const localDomainTime = localDomain ? Date.parse(localDomain.updatedAt) : Number.NaN;
+          // Compare the actual persisted local mutation timestamp with the
+          // canonical cloud snapshot. meta[key] is only the last acknowledged
+          // cloud version; it must not decide whether a newer local edit wins.
+          if (localDomain && !localIsEmpty && Number.isFinite(localDomainTime) && localDomainTime > sourceTime) {
             queueItem({
               key,
               value: localDomain.value,
@@ -345,7 +349,7 @@ export function useCloudSyncEngineInternal() {
               mutationId: localDomain.mutationId,
             });
             meta[key] = localDomain.updatedAt;
-            newest = newest && Date.parse(newest) > localTime ? newest : localDomain.updatedAt;
+            newest = newest && Date.parse(newest) > localDomainTime ? newest : localDomain.updatedAt;
             continue;
           }
           if (sourceTime <= localTime && !localIsEmpty) continue;
