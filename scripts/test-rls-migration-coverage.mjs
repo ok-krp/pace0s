@@ -257,6 +257,16 @@ assert.match(sql, /health_e2ee_devices_update_own[\s\S]*?for update to authentic
   "Device revocation must be an owner-only UPDATE");
 assert.match(sql, /health_e2ee_envelopes_delete_own[\s\S]*?for delete to authenticated/i,
   "Envelopes must be deletable only by their owner");
+const insertPolicy = sql.match(/create policy health_e2ee_envelopes_insert_own[\s\S]*?create policy health_e2ee_envelopes_delete_own/i)?.[0] ?? "";
+assert.match(insertPolicy, /device_id[\s\S]*?revoked_at is null/i,
+  "Envelope recipient devices must be active at insertion time");
+assert.match(insertPolicy, /sender_device_id[\s\S]*?revoked_at is null/i,
+  "Envelope sender devices must be active at insertion time");
+const e2eeAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.match(e2eeAssertions, /envelope for revoked recipient device unexpectedly succeeded/,
+  "PostgreSQL tests must reject envelopes targeting revoked devices");
+assert.match(e2eeAssertions, /envelope from revoked sender device unexpectedly succeeded/,
+  "PostgreSQL tests must reject envelopes sent by revoked devices");
 assert.match(sql, /health_e2ee_key_versions_select_own[\s\S]*?for select to authenticated/i,
   "Key versions must be read-only through direct API access");
 
