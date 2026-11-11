@@ -35,6 +35,13 @@ const bridge = nutritionLog.slice(bridgeStart, bridgeEnd);
 assert.doesNotMatch(bridge, /\.delete\s*\(/, "A missing local snapshot row must never delete canonical food_log data");
 assert.match(bridge, /absence from a local snapshot must never erase cloud data/);
 assert.match(nutritionRoute, /await deletePersistedNutritionItem\(id\)/, "User-requested deletion must explicitly delete its exact SQL row");
+assert.match(nutritionLog, /await persistNutritionItem\(item, source\)/, "All nutrition additions must persist to food_log before updating local state");
+assert.match(nutritionLog, /refreshNutritionFromFoodLog\(todayKey\(\)\)/, "Nutrition projection must be rebuilt from canonical food_log after an addition");
+assert.match(nutritionLog, /order\("created_at", \{ ascending: true \}\)/, "Canonical nutrition refresh must retain stable meal ordering");
+assert.match(nutritionRoute, /await addNutritionItem\([\s\S]*"manual"\)/, "Manual form must use the canonical persisted add path");
+assert.match(nutritionRoute, /await addNutritionItem\([\s\S]*"barcode"\)/, "Barcode additions must use the canonical persisted add path");
+assert.match(nutritionRoute, /await addNutritionItem\([\s\S]*"photo_ai"\)/, "Photo AI additions must use the canonical persisted add path");
+assert.match(read("src/components/RecipesView.tsx"), /await addNutritionItem\(/, "Recipe quick-add must wait for canonical persistence");
 
 assert.match(engine, /setInterval\s*\(.*60(?:000|_000)/s, "sync engine must reconcile periodically");
 assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
