@@ -285,12 +285,6 @@ BEGIN
   END;
 
   BEGIN
-    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
-      VALUES ('72000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000002');
-    RAISE EXCEPTION 'cross-user pairing envelope INSERT unexpectedly succeeded';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
-  END;
-  BEGIN
     PERFORM legacy_sample_id FROM public.health_legacy_migration_map;
     RAISE EXCEPTION 'direct legacy migration map SELECT unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
@@ -339,6 +333,12 @@ BEGIN
     AND created_at=(SELECT now());
   IF n <> 2 THEN RAISE EXCEPTION 'database timestamp default not applied to consent records: %',n; END IF;
 
+  BEGIN
+    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
+      VALUES ('72000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000002');
+    RAISE EXCEPTION 'cross-user pairing envelope INSERT unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   BEGIN
     INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id)
       VALUES ('72000000-0000-0000-0000-000000000010','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
