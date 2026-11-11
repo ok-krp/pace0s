@@ -228,7 +228,10 @@ export function useCloudSyncEngineInternal() {
         if (error) throw error;
         const row = data?.[0] as SyncRow | undefined;
         if (!row) throw new Error("cloud sync row disappeared");
-        applyRemoteAndRemember(row.key, row.value, row.updated_at);
+        // A stale local timestamp is not permission to discard local intent.
+        // Keep the queued mutation and expose an explicit conflict for resolution;
+        // do not hydrate the remote snapshot over the user's pending local value.
+        recordConflict(row.key, item.value, row.value, row.updated_at);
         markVersion(row.key, row.updated_at);
         return false;
       }
@@ -254,9 +257,13 @@ export function useCloudSyncEngineInternal() {
         if (cancelled) return;
         if (accepted) {
           localStorage.setItem("pace.__last_sync_at", readMeta()[latest.key] ?? latest.updatedAt);
+          // Remove only the exact mutation the server acknowledged.
+          unqueueIfMutation(latest.key, latest.updatedAt);
+          setStatus("ok");
+        } else {
+          // Rejected writes remain durable in the outbox until conflict resolution.
+          setStatus("error");
         }
-        unqueueIfMutation(latest.key, latest.updatedAt);
-        setStatus("ok");
       });
       keyWrites.current[item.key] = current.catch(() => undefined);
       try { await current; } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
