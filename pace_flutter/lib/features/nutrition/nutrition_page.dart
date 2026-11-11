@@ -42,6 +42,8 @@ class _NutritionPageState extends State<NutritionPage> {
   }
 
   Future<void> _addFood() async {
+    final accountId = widget.sync.activeAccountId;
+    if (!widget.sync.isCurrentLocalAccount(accountId)) return;
     final name = TextEditingController();
     final kcal = TextEditingController();
     final protein = TextEditingController();
@@ -81,6 +83,7 @@ class _NutritionPageState extends State<NutritionPage> {
     carbs.dispose();
     fat.dispose();
     if (result == null || itemName.isEmpty) return;
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
 
     final raw = widget.localStore.read('pace.nutrition.items');
     final data = Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
@@ -96,7 +99,9 @@ class _NutritionPageState extends State<NutritionPage> {
     });
     data[day] = list;
     await widget.localStore.write('pace.nutrition.items', data);
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
     await _recalculateTotals(data);
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
     try {
       await widget.sync.syncNow();
       if (mounted && widget.sync.cloudSyncConsentDenied) {
@@ -146,6 +151,8 @@ class _NutritionPageState extends State<NutritionPage> {
   }
 
   Future<void> _deleteItem(Map<String, dynamic> item) async {
+    final accountId = widget.sync.activeAccountId;
+    if (!widget.sync.isCurrentLocalAccount(accountId)) return;
     try {
       await widget.sync.deleteNutritionFoodLogItem(item['id']?.toString() ?? '');
     } catch (_) {
@@ -156,6 +163,7 @@ class _NutritionPageState extends State<NutritionPage> {
       }
       return;
     }
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
     final raw = widget.localStore.read('pace.nutrition.items');
     if (raw is! Map) return;
     final data = Map<String, dynamic>.from(raw);
@@ -166,7 +174,9 @@ class _NutritionPageState extends State<NutritionPage> {
     if (list.length == before) return;
     data[day] = list;
     await widget.localStore.write('pace.nutrition.items', data);
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
     await _recalculateTotals(data);
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
     try {
       await widget.sync.syncNow();
       if (mounted && widget.sync.cloudSyncConsentDenied) {
