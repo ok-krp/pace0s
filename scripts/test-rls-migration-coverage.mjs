@@ -232,20 +232,20 @@ const definerFunctions = [
   "sync_sport_program_archive_state()",
   "enforce_daily_nutrition_chat()",
 ];
-const normalizedDefinerSql = definerHardeningSql.replace(/\\s+/g, "").toLowerCase();
+const normalizedDefinerSql = definerHardeningSql.replace(/\s+/g, "").toLowerCase();
 for (const functionName of definerFunctions) {
   assert.ok(
     normalizedDefinerSql.includes(
-      ("alterfunctionpublic." + functionName.replace(/\\s+/g, "") + "setsearch_path=''").toLowerCase(),
+      ("alterfunctionpublic." + functionName.replace(/\s+/g, "") + "setsearch_path=''").toLowerCase(),
     ),
     "Hardened privileged routine must use an empty search_path: " + functionName,
   );
 }
-assert.match(definerHardeningSql, /alter function public\\.upsert_profile_if_newer\\(uuid, jsonb, timestamptz, text\\)\\s+security definer/i,
+assert.match(definerHardeningSql, /alter function public\.upsert_profile_if_newer\(uuid, jsonb, timestamptz, text\)\s+security definer/i,
   "The profile sync RPC must be SECURITY DEFINER after checking auth.uid()");
-assert.match(definerHardeningSql, /grant execute on function public\\.upsert_profile_if_newer\\(uuid, jsonb, timestamptz, text\\)\\s+to authenticated/i,
+assert.match(definerHardeningSql, /grant execute on function public\.upsert_profile_if_newer\(uuid, jsonb, timestamptz, text\)\s+to authenticated/i,
   "The profile sync RPC must remain callable by authenticated users");
-const normalizedHardeningSql = definerHardeningSql.replace(/\\s+/g, "").toLowerCase();
+const normalizedHardeningSql = definerHardeningSql.replace(/\s+/g, "").toLowerCase();
 for (const fn of [
   "sport_delete_workout(uuid)",
   "sport_delete_program(uuid)",
@@ -258,9 +258,9 @@ for (const fn of [
     "Authenticated owner must retain the intended Sport deletion RPC: " + fn,
   );
 }
-assert.match(definerHardeningSql, /revoke all on function public\\.touch_updated_at\\(\\) from public, anon, authenticated/i,
+assert.match(definerHardeningSql, /revoke all on function public\.touch_updated_at\(\) from public, anon, authenticated/i,
   "Timestamp trigger helper must not be directly callable by API roles");
-assert.match(definerHardeningSql, /revoke all on function public\\.update_updated_at_column\\(\\) from public, anon, authenticated/i,
+assert.match(definerHardeningSql, /revoke all on function public\.update_updated_at_column\(\) from public, anon, authenticated/i,
   "Legacy timestamp trigger helper must not be directly callable by API roles");
 const invokerAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
 for (const assertion of [
