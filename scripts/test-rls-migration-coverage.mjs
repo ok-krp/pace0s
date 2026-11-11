@@ -63,6 +63,7 @@ const rpcOnlyTables = [
 
 const classes = {
   directUserTables,
+  ownerReadOnlyUserState: sql.match(/grant select on public\.user_state to authenticated/i) ? ["user_state"] : [],
   childTables,
   publicReadOnlyCatalogues: catalogTables,
   ownerReadOnlyBilling: billingTables,
@@ -81,7 +82,8 @@ const classified = Object.entries(classes).flatMap(([classification, tables]) =>
 const names = classified.map((item) => item.table);
 const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
 
-assert.equal(directUserTables.length, 17, "Expected 17 direct user-owned CRUD tables");
+assert.equal(directUserTables.length, 16, "Expected 16 direct user-owned CRUD tables");
+assert.equal(classes.ownerReadOnlyUserState.length, 1, "user_state must be owner-readable but RPC-write-only");
 assert.equal(childTables.length, 4, "Expected four child tables with parent ownership checks");
 assert.equal(catalogTables.length, 6, "Expected six public read-only nutrition catalogues");
 assert.equal(billingTables.length, 3, "Expected three owner-readable billing tables");
@@ -116,7 +118,7 @@ const expectedPublicTables = [
   "profiles","push_subscriptions","reminder_debug_log","reminder_settings",
   "sport_exercises","sport_program_items","sport_programs","sport_progression_targets",
   "sport_workout_exercises","sport_workout_sets","sport_workout_sessions",
-  "user_biometrics_e2ee","user_state",
+  "user_biometrics_e2ee",
 ].sort();
 assert.deepEqual([...names].sort(), expectedPublicTables,
   "The RLS migration classifications must match the exact audited 45-table public schema");
@@ -182,6 +184,15 @@ assert.match(sql, /from pg_policies\s+where schemaname = 'public'/i,
   "Existing permissive policies must be removed before applying the reviewed policy set");
 assert.match(sql, /drop policy %I on %I\.%I/i,
   "The migration must drop existing policies by their actual names");
+assert.match(sql, /grant select on public\.user_state to authenticated/i,
+  "user_state must remain owner-readable");
+assert.match(sql, /create policy user_state_select_own on public\.user_state[\s\S]*?for select to authenticated/i,
+  "user_state direct SELECT must be owner-isolated");
+assert.doesNotMatch(sql, /grant [^;]*on public\.user_state to authenticated[^;]*(?:insert|update|delete)/i,
+  "user_state writes must remain RPC-only");
+assert.doesNotMatch(directBlock, /'user_state'/,
+  "user_state must not receive blanket CRUD privileges");
+
 assert.match(sql, /revoke all privileges on all tables in schema public from anon, authenticated/i,
   "Existing API-role table grants must be removed before minimal grants are added");
 assert.match(sql, /revoke all privileges on schema public from anon, authenticated[\s\S]*?grant usage on schema public to anon, authenticated/i,
