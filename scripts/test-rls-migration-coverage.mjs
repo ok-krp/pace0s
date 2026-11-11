@@ -122,10 +122,6 @@ for (const assertion of [
 ]) {
   assert.ok(profileAssertions.includes(assertion), "Missing least-privilege profile assertion: " + assertion);
 }
-assert.match(definerHardeningSql, /alter function public\.upsert_profile_if_newer\(uuid, jsonb, timestamptz, text\)\s+security definer/i,
-  "The profile sync RPC must be SECURITY DEFINER after checking auth.uid()");
-assert.match(definerHardeningSql, /grant execute on function public\.upsert_profile_if_newer\(uuid, jsonb, timestamptz, text\)\s+to authenticated/i,
-  "The profile sync RPC must remain callable by authenticated users");
 assert.match(sql, /grant update \(user_id, region, eula_version, privacy_version, ip_country, consented_at, opts\)[\s\S]*?on public\.legal_consent to authenticated/i,
   "Legal consent UPSERT may update only app-submitted decision fields");
 assert.doesNotMatch(sql, /grant [^;]*delete[^;]*on public\.legal_consent/i,
@@ -236,6 +232,10 @@ for (const functionName of definerFunctions) {
     "SECURITY DEFINER routine must use an empty search_path: " + functionName,
   );
 }
+assert.match(definerHardeningSql, /alter function public\.upsert_profile_if_newer\(uuid, jsonb, timestamptz, text\)\s+security definer/i,
+  "The profile sync RPC must be SECURITY DEFINER after checking auth.uid()");
+assert.match(definerHardeningSql, /grant execute on function public\.upsert_profile_if_newer\(uuid, jsonb, timestamptz, text\)\s+to authenticated/i,
+  "The profile sync RPC must remain callable by authenticated users");
 assert.match(definerHardeningSql, /revoke all on function public\.sync_sport_user_state\(\)\s+from public, anon, authenticated/i,
   "Sport sync trigger function must not be directly callable by API roles");
 assert.match(definerHardeningSql, /revoke all on function public\.delete_temporary_workout_after_finish\(\)\s+from public, anon, authenticated/i,
