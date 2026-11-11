@@ -141,8 +141,9 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const [loaded, setLoaded] = useState(false);
   const valueRef = useRef<T>(initial);
   const hydratedRef = useRef(false);
-  const suppressPersistRef = useRef(false);
-  useEffect(() => { hydratedRef.current = false; suppressPersistRef.current = false; }, [key]);
+  const pendingRemoteValueRef = useRef<unknown>(undefined);
+  const hasPendingRemoteValueRef = useRef(false);
+  useEffect(() => { hydratedRef.current = false; hasPendingRemoteValueRef.current = false; pendingRemoteValueRef.current = undefined; }, [key]);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -159,8 +160,23 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   useEffect(() => { valueRef.current = value; }, [value]);
   useEffect(() => {
     if (!loaded) return;
-    if (suppressPersistRef.current) { suppressPersistRef.current = false; return; }
-    if (!hydratedRef.current) { hydratedRef.current = true; return; }
+    if (!hydratedRef.current) {
+      hydratedRef.current = true;
+      // Complete the initial local/remote hydration without persisting it.
+      // Mark hydration complete even when the first state came from Realtime
+      // so the next manual change is never swallowed.
+      if (hasPendingRemoteValueRef.current && Object.is(pendingRemoteValueRef.current, value)) {
+        hasPendingRemoteValueRef.current = false;
+        pendingRemoteValueRef.current = undefined;
+      }
+      return;
+    }
+    if (hasPendingRemoteValueRef.current) {
+      const isRemoteEcho = Object.is(pendingRemoteValueRef.current, value);
+      hasPendingRemoteValueRef.current = false;
+      pendingRemoteValueRef.current = undefined;
+      if (isRemoteEcho) return;
+    }
     try {
       const serialized = JSON.stringify(value); const previous = localStorage.getItem(key); if (previous === serialized) return;
       localStorage.setItem(key, serialized);
@@ -175,7 +191,8 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
       if (!detail || detail.key !== key) return;
       const next = detail.value;
       if (!hasCompatibleTopLevelShape(next, initial) || Object.is(valueRef.current, next)) return;
-      suppressPersistRef.current = true;
+      hasPendingRemoteValueRef.current = true;
+      pendingRemoteValueRef.current = next;
       valueRef.current = next as T;
       setValue(next as T);
     };
@@ -184,6 +201,10 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   }, [key]);
   const set = useCallback((next: T | ((p: T) => T)) => {
     const resolved = typeof next === "function" ? (next as (p: T) => T)(valueRef.current) : next;
+    // A user mutation arriving before the remote-state effect runs is local
+    // intent and must be persisted, not mistaken for a Realtime echo.
+    hasPendingRemoteValueRef.current = false;
+    pendingRemoteValueRef.current = undefined;
     valueRef.current = resolved;
     if (key === "pace.recipes.custom" && typeof window !== "undefined") {
       try {
