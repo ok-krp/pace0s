@@ -22,6 +22,9 @@ assert.doesNotMatch(aiAddPath, /\.delete\s*\(/, "AI add_food must never delete a
 assert.doesNotMatch(aiAddPath, /\.update\s*\(/, "AI add_food must never overwrite a previous food_log row");
 assert.match(nutritionAi, /AJOUT APPEND-ONLY/, "Coach IA must be instructed to preserve every existing meal during additions");
 assert.doesNotMatch(nutritionAi, /Si le même plat est ajouté au même repas, conserve un seul objet logique/);
+assert.match(nutritionAi, /Déplacement refusé : demande explicite de déplacement absente/);
+assert.match(nutritionAi, /Remplacement refusé : demande explicite de modification absente/);
+assert.match(nutritionAi, /Une demande d’ajout est toujours un ajout append-only/);
 
 // A local cache snapshot may be partial or stale. Only explicit UI deletion
 // is allowed to issue DELETE; the compatibility bridge is insert/update only.
