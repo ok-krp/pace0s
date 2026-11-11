@@ -55,6 +55,15 @@ assert.match(nutritionAi, /Déplacement refusé : demande explicite de déplacem
 assert.match(nutritionAi, /Remplacement refusé : demande explicite de modification absente/);
 assert.match(nutritionAi, /Une demande d’ajout est toujours un ajout append-only/);
 
+const aiNutritionSyncStart = nutritionAi.indexOf("async function syncNutritionStateFromDb");
+const aiNutritionSyncEnd = nutritionAi.indexOf("async function mirrorAiFoodToNutritionState", aiNutritionSyncStart);
+assert.ok(aiNutritionSyncStart >= 0 && aiNutritionSyncEnd > aiNutritionSyncStart, "AI Nutrition DB projection must remain identifiable");
+const aiNutritionSync = nutritionAi.slice(aiNutritionSyncStart, aiNutritionSyncEnd);
+assert.match(aiNutritionSync, /const legacyRows = .*uuidPattern\.test\(item\.id\)/s, "AI projection must retain historical non-UUID native manual meals");
+assert.match(aiNutritionSync, /itemsByDay\[day\] = \[\.\.\.canonicalRows, \.\.\.legacyRows\]/, "AI projection must not replace legacy manual entries with food_log-only rows");
+assert.match(nutritionAi, /const legacyMeals = .*context\.todayNutrition = \[\.\.\.\(data \?\? \[\]\), \.\.\.legacyMeals\]/s, "Coach context must include legacy native manual meals");
+
+
 // A local cache snapshot may be partial or stale. Only explicit UI deletion
 // is allowed to issue DELETE; the compatibility bridge is insert/update only.
 const bridgeStart = nutritionLog.indexOf("async function bridgeNutritionSnapshot(value: unknown, userId: string)");
@@ -76,6 +85,11 @@ assert.ok(explicitNutritionDelete.indexOf("rememberDeletedNutritionId(user.id, i
 assert.ok(explicitNutritionDelete.indexOf("await nutritionBridgeChain.catch") < explicitNutritionDelete.indexOf('from("food_log").delete()'), "SQL deletion must run after queued legacy bridge writes finish");
 assert.match(explicitNutritionDelete, /forgetDeletedNutritionId\(user\.id, id\)/, "A failed explicit SQL deletion must roll back its tombstone");
 
+
+
+assert.match(bridge, /isFoodLogUuid\(id\) && !deletedIds\.has\(id\)/, "Legacy timestamp IDs must not be sent to the UUID food_log primary key");
+assert.match(nutritionLog, /const legacyRows = \(current\[day\] \?\? \[\]\)\.filter\(\(item\) => !isFoodLogUuid\(item\.id\)/, "Web refresh must retain legacy Flutter meals absent from food_log");
+assert.match(nutritionLog, /if \(!isFoodLogUuid\(id\)\) return/, "Legacy timestamp meal deletion must not query the UUID food_log key");
 
 assert.match(nutritionLog, /await persistNutritionItem\(item, source\)/, "All nutrition additions must persist to food_log before updating local state");
 assert.doesNotMatch(domainStore, /MAX_IDENTICAL_NUTRITION_ITEMS_PER_DAY|MAX_NUTRITION_ITEMS_PER_DAY|count >=/, "Nutrition sanitization must not silently deduplicate or truncate valid meal entries");
