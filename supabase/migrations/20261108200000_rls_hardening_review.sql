@@ -320,7 +320,6 @@ begin
     'development_tasks',
     'food_log',
     'food_scans',
-    'profiles',
     'push_subscriptions',
     'reminder_settings',
     'sport_exercises',
@@ -336,6 +335,21 @@ begin
     );
   end loop;
 end $$;
+
+-- Profile persistence uses the owner-checking monotonic RPC. The AI Coach
+-- direct update path writes only the six explicitly granted preference fields.
+grant select on public.profiles to authenticated;
+revoke insert, update, delete on public.profiles from authenticated;
+grant update (
+  weight_kg, weight_goal_kg, daily_calorie_goal,
+  daily_protein_goal, daily_water_ml_goal, training_goal
+) on public.profiles to authenticated;
+create policy profiles_select_own on public.profiles
+  for select to authenticated using (user_id = (select auth.uid()));
+create policy profiles_ai_update_own on public.profiles
+  for update to authenticated
+  using (user_id = (select auth.uid()))
+  with check (user_id = (select auth.uid()));
 
 -- The legacy legal_consent row is a mutable current document/options snapshot.
 -- saveLegalConsent uses an owner-keyed UPSERT; keep only its explicit data fields.
