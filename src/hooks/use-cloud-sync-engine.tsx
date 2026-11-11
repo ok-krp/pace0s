@@ -412,7 +412,7 @@ export function useCloudSyncEngineInternal() {
           "pace.ble.devices",
           "pace.ble.mapping",
         ]);
-        const localOnlyPrefixes = ["pace.ai.pending:", "pace.privacy.", "pace.ble."];
+        const localOnlyPrefixes = ["pace.ai.pending:", "pace.ai.debug", "pace.local-ai.", "pace.ai.local.", "pace.privacy.", "pace.finance.", "pace.ble."];
         try {
           for (const key of Object.keys(localStorage)) {
             if (!key.startsWith(PACE_PREFIX) || key.startsWith(INTERNAL_PREFIX) || key.startsWith(DOMAIN_PREFIX)) continue;
