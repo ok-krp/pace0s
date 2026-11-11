@@ -244,6 +244,7 @@ export function useCloudSyncEngineInternal() {
         if (cancelled || !allowed() || !navigator.onLine) return;
         const latest = getQueued(item.key);
         if (!latest || latest.updatedAt !== item.updatedAt) return;
+        setStatus("syncing");
         let accepted = false;
         try {
           accepted = await writeItem(latest);
