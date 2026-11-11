@@ -46,6 +46,7 @@ const legacyHealthTables = sql.match(
 
 const e2eeTables = [
   "health_e2ee_devices",
+  "user_biometrics_e2ee",
   "health_samples_e2ee",
   "health_e2ee_key_envelopes",
   "health_e2ee_key_versions",
@@ -85,7 +86,7 @@ const classified = Object.entries(classes).flatMap(([classification, tables]) =>
 const names = classified.map((item) => item.table);
 const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
 
-assert.equal(directUserTables.length, 15, "Expected 15 direct user-owned CRUD tables");
+assert.equal(directUserTables.length, 14, "Expected 14 direct user-owned CRUD tables");
 assert.equal(classes.ownerReadOnlyUserState.length, 1, "user_state must be owner-readable but RPC-write-only");
 assert.equal(childTables.length, 4, "Expected four child tables with parent ownership checks");
 assert.equal(catalogTables.length, 6, "Expected six public read-only nutrition catalogues");
@@ -94,7 +95,7 @@ assert.equal(consentTables.length, 1, "Expected immutable consent records");
 assert.equal(deletionTables.length, 1, "Expected deletion requests");
 assert.equal(readOnlyLogTables.length, 2, "Expected two owner-readable, non-writable logs");
 assert.equal(legacyHealthTables.length, 1, "Expected one read-only legacy health table");
-assert.equal(e2eeTables.length, 5, "Expected five consent-scoped E2EE tables");
+assert.equal(e2eeTables.length, 6, "Expected six consent-scoped E2EE tables");
 assert.equal(backendOnlyTables.length, 4, "Expected four service-only tables");
 assert.equal(rpcOnlyTables.length, 2, "Expected two SECURITY DEFINER RPC-only tables");
 assert.deepEqual(duplicates, [], "A public table must belong to exactly one access class");
@@ -424,6 +425,28 @@ for (const table of e2eeTables) {
 }
 assert.match(sql, /health_samples_e2ee_update_own[\s\S]*?for update to authenticated/i,
   "Encrypted samples require owner-only UPDATE for conflict-safe upserts");
+for (const operation of ["select", "insert", "update", "delete"]) {
+  assert.match(sql, new RegExp(
+    "create policy user_biometrics_e2ee_" + operation + "_own[\\s\\S]*?for " + operation +
+      " to authenticated[\\s\\S]*?has_current_health_e2ee_consent",
+    "i",
+  ), "Encrypted biometrics require owner-scoped consent-gated " + operation);
+}
+assert.doesNotMatch(directBlock, /'user_biometrics_e2ee'/,
+  "Encrypted biometrics must not receive generic CRUD policy grants");
+const biometricAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+for (const assertion of [
+  "E2EE biometrics visible without consent",
+  "E2EE biometric write succeeded without required consent",
+  "consented E2EE biometric rows are not owner-visible",
+  "encrypted biometrics remain visible after consent revocation",
+  "encrypted biometrics update succeeded after consent revocation",
+  "encrypted biometrics insert succeeded after consent revocation",
+  "user B can read user A E2EE biometrics",
+]) {
+  assert.ok(biometricAssertions.includes(assertion),
+    "PostgreSQL must verify encrypted biometric consent/isolation: " + assertion);
+}
 assert.match(sql, /grant select on public\.health_e2ee_devices to authenticated/i,
   "Clients may list owned E2EE devices");
 assert.match(sql, /grant insert \(user_id, device_name, public_key, algorithm\)[\s\S]*?on public\.health_e2ee_devices to authenticated/i,
