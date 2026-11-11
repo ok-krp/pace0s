@@ -161,21 +161,24 @@ const definerHardeningSql = readFileSync(
 assert.match(definerHardeningSql, /revoke create on schema public from public, anon, authenticated/i,
   "PUBLIC and API roles must not create shadow objects in the exposed public schema");
 const definerFunctions = [
-  ["sync_sport_user_state\\(\\)", "sync_sport_user_state()"],
-  ["delete_temporary_workout_after_finish\\(\\)", "delete_temporary_workout_after_finish()"],
-  ["touch_ai_provider_secret_updated_at\\(\\)", "touch_ai_provider_secret_updated_at()"],
-  ["prevent_audit_log_mutation\\(\\)", "prevent_audit_log_mutation()"],
-  ["prevent_consent_mutation\\(\\)", "prevent_consent_mutation()"],
-  ["set_deletion_request_updated_at\\(\\)", "set_deletion_request_updated_at()"],
-  ["delete_user_data\\(uuid\\)", "delete_user_data(uuid)"],
-  ["sync_sport_program_archive_state\\(\\)", "sync_sport_program_archive_state()"],
-  ["enforce_daily_nutrition_chat\\(\\)", "enforce_daily_nutrition_chat()"],
+  "sync_sport_user_state()",
+  "delete_temporary_workout_after_finish()",
+  "touch_ai_provider_secret_updated_at()",
+  "prevent_audit_log_mutation()",
+  "prevent_consent_mutation()",
+  "set_deletion_request_updated_at()",
+  "delete_user_data(uuid)",
+  "sync_sport_program_archive_state()",
+  "enforce_daily_nutrition_chat()",
 ];
-for (const [functionPattern, functionName] of definerFunctions) {
-  assert.match(definerHardeningSql, new RegExp(
-    "alter function public\\\\." + functionPattern + "\\\\s+set search_path = ''",
-    "i",
-  ), "SECURITY DEFINER routine must use an empty search_path: " + functionName);
+const normalizedDefinerSql = definerHardeningSql.replace(/\\s+/g, " ").toLowerCase();
+for (const functionName of definerFunctions) {
+  assert.ok(
+    normalizedDefinerSql.includes(
+      ("alter function public." + functionName + " set search_path = ''").toLowerCase(),
+    ),
+    "SECURITY DEFINER routine must use an empty search_path: " + functionName,
+  );
 }
 assert.match(definerHardeningSql, /revoke all on function public\.sync_sport_user_state\(\)\s+from public, anon, authenticated/i,
   "Sport sync trigger function must not be directly callable by API roles");
