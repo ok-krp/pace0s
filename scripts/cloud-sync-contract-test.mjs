@@ -36,6 +36,11 @@ assert.doesNotMatch(bridge, /\.delete\s*\(/, "A missing local snapshot row must 
 assert.match(bridge, /absence from a local snapshot must never erase cloud data/);
 assert.match(nutritionRoute, /await deletePersistedNutritionItem\(id\)/, "User-requested deletion must explicitly delete its exact SQL row");
 assert.match(nutritionLog, /await persistNutritionItem\(item, source\)/, "All nutrition additions must persist to food_log before updating local state");
+assert.doesNotMatch(domainStore, /MAX_IDENTICAL_NUTRITION_ITEMS_PER_DAY|MAX_NUTRITION_ITEMS_PER_DAY|count >=/, "Nutrition sanitization must not silently deduplicate or truncate valid meal entries");
+assert.doesNotMatch(nutritionLog, /recentAdds|addFingerprint/, "Identical intentional food entries must not be dropped by a client-side fingerprint cooldown");
+assert.match(nutritionLog, /completedOperations\.set\(operationId, now\)/, "Only explicit operation IDs should trigger idempotency suppression");
+assert.match(nutritionRoute, /savingPending/, "Barcode and photo confirmation must prevent accidental duplicate clicks while the server write is pending");
+
 assert.match(nutritionLog, /refreshNutritionFromFoodLog\(todayKey\(\)\)/, "Nutrition projection must be rebuilt from canonical food_log after an addition");
 assert.match(nutritionLog, /Recover entries created by older app versions/, "Previously local-only manual entries must be recovered into food_log");
 assert.match(nutritionLog, /id: item\.id, user_id: user\.id, log_date: day/, "Legacy recovery must preserve each existing nutrition UUID");
