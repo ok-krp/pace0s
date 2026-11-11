@@ -320,21 +320,6 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
-  BEGIN
-    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id)
-      VALUES ('72000000-0000-0000-0000-000000000010','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-              '70000000-0000-0000-0000-000000000003','70000000-0000-0000-0000-000000000001');
-    RAISE EXCEPTION 'envelope for revoked recipient device unexpectedly succeeded';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
-  END;
-  BEGIN
-    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id)
-      VALUES ('72000000-0000-0000-0000-000000000011','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-              '70000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000003');
-    RAISE EXCEPTION 'envelope from revoked sender device unexpectedly succeeded';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
-  END;
-
   SELECT count(*) INTO n FROM public.health_samples_e2ee;
   IF n <> 0 THEN RAISE EXCEPTION 'E2EE samples visible without consent'; END IF;
   BEGIN
@@ -353,6 +338,21 @@ BEGIN
     AND consent_type IN ('health_data','health_cloud_sync')
     AND created_at=(SELECT now());
   IF n <> 2 THEN RAISE EXCEPTION 'database timestamp default not applied to consent records: %',n; END IF;
+
+  BEGIN
+    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id)
+      VALUES ('72000000-0000-0000-0000-000000000010','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+              '70000000-0000-0000-0000-000000000003','70000000-0000-0000-0000-000000000001');
+    RAISE EXCEPTION 'envelope for revoked recipient device unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id)
+      VALUES ('72000000-0000-0000-0000-000000000011','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+              '70000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000003');
+    RAISE EXCEPTION 'envelope from revoked sender device unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
 
   INSERT INTO public.health_samples_e2ee(id,user_id)
     VALUES ('a0000000-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
