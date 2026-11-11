@@ -307,8 +307,13 @@ export function useCloudSyncEngineInternal() {
         for (const [key, bucket] of grouped) {
           const canonical = bucket.canonical;
           const legacy = bucket.legacy;
-          const mergedValue = legacy ? mergeRecoveredValues(legacy.value, canonical?.value) : canonical?.value;
-          const sourceTime = Math.max(Date.parse(canonical?.updated_at ?? "1970-01-01T00:00:00.000Z"), Date.parse(legacy?.updated_at ?? "1970-01-01T00:00:00.000Z"));
+          // Each user_state row is a complete snapshot. Select the newest row;
+          // union-merging an older legacy array can resurrect explicitly deleted items.
+          const sourceRow = !canonical ? legacy : !legacy ? canonical
+            : Date.parse(legacy.updated_at) > Date.parse(canonical.updated_at) ? legacy : canonical;
+          if (!sourceRow) continue;
+          const remoteValue = sourceRow.value;
+          const sourceTime = Date.parse(sourceRow.updated_at);
           if (!Number.isFinite(sourceTime)) continue;
           const updatedAt = new Date(sourceTime).toISOString();
           const localDomain = readDomainRecord(key);
@@ -316,7 +321,7 @@ export function useCloudSyncEngineInternal() {
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           const queued = getQueued(key);
           if (queued) {
-            if (serialize(queued.value) === serialize(mergedValue)) {
+            if (serialize(queued.value) === serialize(remoteValue)) {
               const currentConflicts = readConflicts();
               const remainingConflicts = currentConflicts.filter((item) => item.key !== key);
               if (remainingConflicts.length !== currentConflicts.length) {
@@ -328,7 +333,7 @@ export function useCloudSyncEngineInternal() {
               newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
               continue;
             }
-            recordConflict(key, queued.value, mergedValue, updatedAt);
+            recordConflict(key, queued.value, remoteValue, updatedAt);
             continue;
           }
           if (localDomain && !localIsEmpty && localTime > sourceTime) {
@@ -343,18 +348,20 @@ export function useCloudSyncEngineInternal() {
             continue;
           }
           if (sourceTime <= localTime && !localIsEmpty) continue;
-          applyRemoteAndRemember(key, mergedValue, updatedAt);
+          applyRemoteAndRemember(key, remoteValue, updatedAt);
           meta[key] = updatedAt;
           newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
-          if (legacy && canonical && serialize(mergedValue) !== serialize(canonical.value)) {
+          if (legacy && canonical && sourceRow === legacy) {
+            // Promote the newer legacy snapshot verbatim; do not union two
+            // generations of full-state rows.
             const recoveryTime = new Date().toISOString();
             try {
               await supabase.rpc("upsert_user_state_if_newer", {
                 p_user_id: user.id,
                 p_key: key,
-                p_value: mergedValue as never,
+                p_value: remoteValue as never,
                 p_updated_at: recoveryTime,
-                p_updated_by: "state_recovery_v4",
+                p_updated_by: "state_recovery_v5",
               });
               meta[key] = recoveryTime;
               newest = recoveryTime;
