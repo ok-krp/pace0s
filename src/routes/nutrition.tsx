@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { z } from "zod";
 import { Apple, Plus, Trash2, ScanBarcode, Camera, Loader2, X, AlertTriangle, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useUserGoals } from "@/hooks/use-user-goals";
 import { useNutritionCols, NUT_COLS, type NutCol } from "@/hooks/use-nutrition-cols";
-import { addNutritionItem, deletePersistedNutritionItem, isNutritionDeviceSyncEnabled, type NutritionItem } from "@/lib/nutrition-log";
+import { addNutritionItem, deletePersistedNutritionItem, isNutritionDeviceSyncEnabled, refreshNutritionFromFoodLog, subscribeNutritionFoodLogChanges, type NutritionItem } from "@/lib/nutrition-log";
 import { WaterView } from "@/components/WaterView";
 import { RecipesView } from "@/components/RecipesView";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
@@ -72,6 +72,25 @@ function NutritionPage() {
   const [busy, setBusy] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const analyzePhoto = useServerFn(analyzeFoodPhoto);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => {
+      if (!active || !isNutritionDeviceSyncEnabled()) return;
+      void refreshNutritionFromFoodLog(todayKey(), { bridgeLocalFirst: false }).catch((error) => {
+        if (active) console.error("[nutrition] Realtime refresh failed", error instanceof Error ? error.message : error);
+      });
+    };
+    const unsubscribe = subscribeNutritionFoodLogChanges(refresh);
+    // A one-minute fallback covers disabled/unavailable Realtime publication
+    // without reintroducing the old high-frequency full-state polling.
+    const fallback = window.setInterval(refresh, 60_000);
+    if (isNutritionDeviceSyncEnabled()) refresh();
+    return () => {
+      active = false;
+      window.clearInterval(fallback);
+      unsubscribe();
+    };
+  }, []);
   const handleBarcode = async (code: string) => { setScanOpen(false); setBusy(true); try { const p = await fetchProductByBarcode(code); if (!p) { toast.error("Produit introuvable"); return; } setPending({ kind: "barcode", product: p, grams: 100, meal: "Déjeuner" }); } catch (e) { toast.error(e instanceof Error ? e.message : "Erreur scan"); } finally { setBusy(false); } };
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
