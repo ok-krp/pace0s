@@ -276,7 +276,10 @@ class SyncService {
     dynamic value,
     String updatedAt,
   ) async {
-    if (_cloudSyncConsentUserId != client?.auth.currentUser?.id ||
+    final userId = client?.auth.currentUser?.id;
+    if (userId == null ||
+        localStore.currentAccountId != userId ||
+        _cloudSyncConsentUserId != userId ||
         _cloudSyncConsent != true) {
       return;
     }
