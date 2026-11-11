@@ -171,7 +171,7 @@ const definerFunctions = [
   "sync_sport_program_archive_state()",
   "enforce_daily_nutrition_chat()",
 ];
-const normalizedDefinerSql = definerHardeningSql.replace(/\\s+/g, " ").toLowerCase();
+const normalizedDefinerSql = definerHardeningSql.replace(/\s+/g, " ").toLowerCase();
 for (const functionName of definerFunctions) {
   assert.ok(
     normalizedDefinerSql.includes(
@@ -191,7 +191,7 @@ assert.match(definerHardeningSql, /grant execute on function public\.rotate_heal
 assert.match(definerHardeningSql, /grant execute on function public\.upsert_user_state_if_newer\(uuid, text, jsonb, timestamptz, text\)\s+to authenticated/i,
   "Monotonic cloud-state RPC must remain available only to authenticated callers");
 const definerWorkflow = readFileSync(".github/workflows/rls-postgres-preflight.yml", "utf8");
-assert.match(definerWorkflow, /--file=supabase\/migrations\/20261111150000_harden_security_definer_routine_acl\.sql/,
+assert.match(definerWorkflow, /supabase\/migrations\/20261111150000_harden_security_definer_routine_acl\.sql/,
   "PostgreSQL preflight must apply existing definer-routine hardening");
 const definerAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
 assert.match(definerAssertions, /existing SECURITY DEFINER routine does not have an empty search_path/,
@@ -214,7 +214,7 @@ assert.match(nonceTestBody, /AES-GCM envelope without a nonce unexpectedly succe
 assert.match(nonceTestBody, /AES Key Wrap envelope with a nonce unexpectedly succeeded/,
   "PostgreSQL must reject AES Key Wrap envelopes with a nonce");
 const postgresWorkflow = readFileSync(".github/workflows/rls-postgres-preflight.yml", "utf8");
-assert.match(postgresWorkflow, /--file=supabase\/migrations\/20261111140000_allow_nullable_health_e2ee_envelope_nonce\.sql/,
+assert.match(postgresWorkflow, /supabase\/migrations\/20261111140000_allow_nullable_health_e2ee_envelope_nonce\.sql/,
   "PostgreSQL preflight must apply the E2EE nonce repair before envelope assertions");
 assert.match(nonceAssertions, /AES Key Wrap envelope must accept NULL nonce/,
   "PostgreSQL must exercise the null-nonce AES Key Wrap case");
