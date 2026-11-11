@@ -96,7 +96,7 @@ returns boolean
 language sql
 stable
 security invoker
-set search_path = public
+set search_path = ''
 as $health_consent$
   select
     coalesce((
@@ -155,6 +155,8 @@ create policy health_e2ee_devices_insert_own on public.health_e2ee_devices
 create schema if not exists pace_private;
 revoke all on schema pace_private from public, anon, authenticated;
 grant usage on schema pace_private to authenticated;
+alter default privileges for role postgres in schema pace_private revoke execute on functions from public;
+alter default privileges for role postgres in schema pace_private revoke execute on functions from anon, authenticated;
 
 create or replace function pace_private.owns_health_e2ee_pairing_session(p_session_id uuid)
 returns boolean
