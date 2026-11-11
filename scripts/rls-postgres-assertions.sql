@@ -421,8 +421,13 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
-  INSERT INTO public.data_deletion_requests(id,user_id,status)
-    VALUES ('90000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','pending');
+  INSERT INTO public.data_deletion_requests(user_id)
+    VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+  SELECT count(*) INTO n FROM public.data_deletion_requests
+    WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+      AND status='pending' AND completed_at IS NULL AND error_code IS NULL
+      AND id IS NOT NULL AND requested_at IS NOT NULL;
+  IF n <> 1 THEN RAISE EXCEPTION 'owner could not submit a database-default pending deletion request'; END IF;
 
   BEGIN
     INSERT INTO public.data_deletion_requests(id,user_id,status,completed_at)
