@@ -14,12 +14,71 @@ class SyncService {
   final SupabaseClient? client;
   bool _running = false;
   bool _syncRequested = false;
+  bool? _cloudSyncConsent;
+  String? _cloudSyncConsentUserId;
+  DateTime? _cloudSyncConsentCheckedAt;
+  static const _cloudSyncConsentCacheTtl = Duration(seconds: 30);
   RealtimeChannel? _realtimeChannel;
   String? _realtimeUserId;
+
+  Future<bool> _hasCloudSyncConsent(String userId) async {
+    final now = DateTime.now();
+    if (_cloudSyncConsentUserId == userId &&
+        _cloudSyncConsent != null &&
+        _cloudSyncConsentCheckedAt != null &&
+        now.difference(_cloudSyncConsentCheckedAt!) < _cloudSyncConsentCacheTtl) {
+      return _cloudSyncConsent!;
+    }
+
+    try {
+      final rows = await client!
+          .from('consent_records')
+          .select('granted')
+          .eq('user_id', userId)
+          .eq('consent_type', 'sync_cloud')
+          .order('created_at', ascending: false)
+          .limit(1);
+      _cloudSyncConsentUserId = userId;
+      _cloudSyncConsent = rows.isNotEmpty && rows.first['granted'] == true;
+      _cloudSyncConsentCheckedAt = now;
+      return _cloudSyncConsent!;
+    } catch (_) {
+      // Fail closed if consent cannot be confirmed. Local outbox entries remain.
+      _cloudSyncConsentUserId = userId;
+      _cloudSyncConsent = false;
+      _cloudSyncConsentCheckedAt = now;
+      return false;
+    }
+  }
+
+  Future<void> setCloudSyncConsent(bool granted) async {
+    final userId = client?.auth.currentUser?.id;
+    if (userId == null) return;
+    _cloudSyncConsentUserId = userId;
+    _cloudSyncConsent = granted;
+    _cloudSyncConsentCheckedAt = DateTime.now();
+    if (!granted) {
+      final channel = _realtimeChannel;
+      _realtimeChannel = null;
+      _realtimeUserId = null;
+      if (channel != null) await client!.removeChannel(channel);
+    }
+  }
 
   Future<void> syncNow() async {
     final initialUserId = client?.auth.currentUser?.id;
     if (client == null || initialUserId == null) return;
+    if (!shouldRunCloudSync(
+      userId: initialUserId,
+      consentGranted: await _hasCloudSyncConsent(initialUserId),
+    )) {
+      final channel = _realtimeChannel;
+      _realtimeChannel = null;
+      _realtimeUserId = null;
+      if (channel != null) await client!.removeChannel(channel);
+      return;
+    }
+    if (client?.auth.currentUser?.id != initialUserId) return;
     if (_running) {
       // Coalesce writes that arrive during an active network cycle instead
       // of silently dropping their immediate-sync request.
@@ -139,6 +198,10 @@ class SyncService {
     dynamic value,
     String updatedAt,
   ) async {
+    if (_cloudSyncConsentUserId != client?.auth.currentUser?.id ||
+        _cloudSyncConsent != true) {
+      return;
+    }
     if (_running) {
       // The regular sync cycle will reconcile this row after its current
       // mutation batch completes, preventing a transient overwrite.
@@ -445,6 +508,12 @@ class _PushResult {
   final String? serverUpdatedAt;
 }
 , caseSensitive: false).hasMatch(id);
+
+/// Native and web clients share the same explicit sync_cloud opt-in.
+bool shouldRunCloudSync({
+  required String? userId,
+  required bool consentGranted,
+}) => userId != null && consentGranted;
 
 /// A local outbox operation is acknowledged only after server acceptance.
 bool shouldAcknowledgeSyncOperation({required bool accepted}) => accepted;
