@@ -199,8 +199,24 @@ export async function addNutritionItem(
   // food_log is canonical: persist before projecting the entry into local UI
   // state, then rebuild the day's complete view from the database.
   try {
-    await persistNutritionItem(item, source);
-    await refreshNutritionFromFoodLog(todayKey());
+    const saved = await persistNutritionItem(item, source);
+    if (operationId) {
+      completedOperations.set(operationId, now);
+      for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
+    }
+    try {
+      await refreshNutritionFromFoodLog(todayKey());
+    } catch (refreshError) {
+      // The SQL insert already succeeded. Keep the returned row visible rather
+      // than telling the user to retry and accidentally inserting it again.
+      console.error("[nutrition] canonical refresh failed after successful insert", refreshError instanceof Error ? refreshError.message : refreshError);
+      const day = todayKey();
+      const current = readNutritionItems();
+      const list = current[day] ?? [];
+      if (!list.some((row) => row.id === saved.id)) {
+        writeDomain(DOMAIN_ITEMS, { ...current, [day]: [...list, saved] });
+      }
+    }
     return true;
   } catch (error) {
     if (operationId) completedOperations.delete(operationId);
