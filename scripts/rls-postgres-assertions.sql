@@ -99,6 +99,14 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'authenticated profile sync RPC must use SECURITY DEFINER with empty search_path';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid='public.rotate_health_e2ee_key(integer,uuid)'::regprocedure
+      AND p.prosecdef
+      AND p.proconfig @> ARRAY['search_path=""']
+  ) THEN
+    RAISE EXCEPTION 'E2EE key rotation RPC must retain SECURITY DEFINER with empty search_path';
+  END IF;
   IF has_function_privilege('anon', 'pace_private.owns_health_e2ee_pairing_session(uuid)', 'EXECUTE') THEN
     RAISE EXCEPTION 'pairing ownership helper is executable by anon';
   END IF;
@@ -485,6 +493,26 @@ BEGIN
     denied := true;
   END;
   IF NOT denied THEN RAISE EXCEPTION 'profile RPC accepted another account ID'; END IF;
+
+  PERFORM public.rotate_health_e2ee_key(2, NULL);
+  SELECT count(*) INTO n FROM public.health_e2ee_key_versions
+    WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' AND current_key_version=2;
+  IF n <> 1 THEN RAISE EXCEPTION 'owner key rotation did not advance exactly one version'; END IF;
+  denied := false;
+  BEGIN
+    PERFORM public.rotate_health_e2ee_key(
+      3,'70000000-0000-0000-0000-000000000002'
+    );
+  EXCEPTION WHEN OTHERS THEN
+    denied := true;
+  END;
+  IF NOT denied THEN RAISE EXCEPTION 'user A revoked user B device through SECURITY DEFINER key rotation'; END IF;
+  SELECT count(*) INTO n FROM public.health_e2ee_key_versions
+    WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' AND current_key_version=2;
+  IF n <> 1 THEN RAISE EXCEPTION 'failed cross-account key rotation changed user A key version'; END IF;
+  SELECT count(*) INTO n FROM public.health_e2ee_devices
+    WHERE id='70000000-0000-0000-0000-000000000002' AND revoked_at IS NULL;
+  IF n <> 1 THEN RAISE EXCEPTION 'user A SECURITY DEFINER RPC revoked user B device'; END IF;
   BEGIN
     UPDATE public.profiles SET user_id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
       WHERE id='10000000-0000-0000-0000-000000000001';
