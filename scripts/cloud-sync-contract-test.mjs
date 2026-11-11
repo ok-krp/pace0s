@@ -6,6 +6,7 @@ const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
+const supabaseTypes = read("src/integrations/supabase/types.ts");
 
 const writeItemStart = engine.indexOf("const writeItem =");
 const pushItemStart = engine.indexOf("const pushItem =", writeItemStart);
@@ -18,6 +19,14 @@ assert.doesNotMatch(writeItemBlock, /applyRemoteAndRemember\(row\.key/, "a rejec
 assert.match(pushItemBlock, /if \(accepted\) \{[\s\S]*unqueueIfMutation\(latest\.key, latest\.updatedAt\)/, "only server-accepted mutations may leave the outbox");
 assert.match(pushItemBlock, /else \{[\s\S]*Rejected writes remain durable in the outbox/, "a rejected mutation must remain queued until conflict resolution");
 assert.doesNotMatch(pushItemBlock, /\}\s*unqueueIfMutation\(latest\.key, latest\.updatedAt\)/, "outbox entries must not be removed unconditionally after a rejected write");
+
+const syncRpcTypeStart = supabaseTypes.indexOf("upsert_user_state_if_newer:");
+const syncRpcTypeEnd = supabaseTypes.indexOf("\\n      }", syncRpcTypeStart);
+assert.ok(syncRpcTypeStart >= 0 && syncRpcTypeEnd > syncRpcTypeStart, "Generated cloud sync RPC type must remain identifiable");
+assert.match(supabaseTypes.slice(syncRpcTypeStart, syncRpcTypeEnd), /Returns: Json/, "Generated Supabase types must reflect the jsonb accepted/updated_at response");
+assert.match(writeItemBlock, /supabase\.rpc\("upsert_user_state_if_newer"/, "Web cloud sync must use the generated typed RPC contract");
+assert.doesNotMatch(writeItemBlock, /const rpc = supabase\.rpc as unknown as/, "Web cloud sync must not hide the generated RPC response contract behind an unsafe cast");
+
 
 
 const nutritionAi = read("src/lib/ai-chat.server.ts");
