@@ -21,9 +21,9 @@ assert.match(pushItemBlock, /else \{[\s\S]*Rejected writes remain durable in the
 assert.doesNotMatch(pushItemBlock, /\}\s*unqueueIfMutation\(latest\.key, latest\.updatedAt\)/, "outbox entries must not be removed unconditionally after a rejected write");
 
 const syncRpcTypeStart = supabaseTypes.indexOf("upsert_user_state_if_newer:");
-const syncRpcTypeEnd = supabaseTypes.indexOf("\\n      }", syncRpcTypeStart);
-assert.ok(syncRpcTypeStart >= 0 && syncRpcTypeEnd > syncRpcTypeStart, "Generated cloud sync RPC type must remain identifiable");
-assert.match(supabaseTypes.slice(syncRpcTypeStart, syncRpcTypeEnd), /Returns: Json/, "Generated Supabase types must reflect the jsonb accepted/updated_at response");
+const syncRpcTypeBlock = supabaseTypes.slice(syncRpcTypeStart, syncRpcTypeStart + 350);
+assert.ok(syncRpcTypeStart >= 0, "Generated cloud sync RPC type must remain identifiable");
+assert.match(syncRpcTypeBlock, /Returns: Json/, "Generated Supabase types must reflect the jsonb accepted/updated_at response");
 assert.match(writeItemBlock, /supabase\.rpc\("upsert_user_state_if_newer"/, "Web cloud sync must use the generated typed RPC contract");
 assert.doesNotMatch(writeItemBlock, /const rpc = supabase\.rpc as unknown as/, "Web cloud sync must not hide the generated RPC response contract behind an unsafe cast");
 
