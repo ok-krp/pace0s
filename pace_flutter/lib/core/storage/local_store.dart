@@ -11,7 +11,14 @@ class LocalStore {
 
   final File _file;
   Map<String, dynamic> _data = <String, dynamic>{};
+  final Map<String, Map<String, dynamic>> _accounts = {};
+  String _scope = '__unscoped__';
   Future<void> _flushQueue = Future<void>.value();
+
+  /// The signed-in account owning the currently active local snapshot.
+  /// Null means the unscoped legacy/guest workspace is active.
+  String? get currentAccountId =>
+      _scope.startsWith('account:') ? _scope.substring('account:'.length) : null;
 
   static Future<LocalStore> open() async {
     final directory = await getApplicationSupportDirectory();
@@ -20,7 +27,26 @@ class LocalStore {
     if (await file.exists()) {
       try {
         final decoded = jsonDecode(await file.readAsString());
-        if (decoded is Map<String, dynamic>) store._data = decoded;
+        if (decoded is Map<String, dynamic> &&
+            decoded['__local_store_version'] == 2 &&
+            decoded['__accounts'] is Map) {
+          final rawAccounts = decoded['__accounts'] as Map;
+          for (final entry in rawAccounts.entries) {
+            if (entry.key is String && entry.value is Map) {
+              store._accounts[entry.key as String] =
+                  Map<String, dynamic>.from(entry.value as Map);
+            }
+          }
+          final savedScope = decoded['__active_scope'];
+          store._scope = savedScope is String ? savedScope : '__guest__';
+          store._data = Map<String, dynamic>.from(
+            store._accounts[store._scope] ?? <String, dynamic>{},
+          );
+        } else if (decoded is Map<String, dynamic>) {
+          // Version 1 was a single unscoped snapshot. Keep every value and
+          // its outbox untouched until the first authenticated account claims it.
+          store._data = decoded;
+        }
       } catch (_) {
         store._data = <String, dynamic>{};
       }
@@ -31,6 +57,30 @@ class LocalStore {
   dynamic read(String key) => _data[key];
 
   String? lastSyncedAt(String key) => _syncMeta[key] as String?;
+
+  /// Switches the active local snapshot without ever mixing account outboxes.
+  /// The first authenticated account adopts the existing unscoped v1 data so
+  /// a user's current offline work is preserved during this format upgrade.
+  Future<void> activateAccount(String? userId) async {
+    final targetScope = userId == null ? '__guest__' : 'account:$userId';
+    if (_scope == targetScope) return;
+
+    final currentSnapshot = Map<String, dynamic>.from(_data);
+    if (_scope == '__unscoped__' &&
+        userId != null &&
+        !_accounts.containsKey(targetScope)) {
+      _accounts[targetScope] = currentSnapshot;
+      _accounts.remove('__unscoped__');
+    } else {
+      _accounts[_scope] = currentSnapshot;
+    }
+
+    _scope = targetScope;
+    _data = Map<String, dynamic>.from(
+      _accounts[targetScope] ?? <String, dynamic>{},
+    );
+    await _flush();
+  }
 
   Future<void> write(String key, dynamic value, {bool enqueueSync = true}) async {
     _data[key] = value;
@@ -113,7 +163,13 @@ class LocalStore {
     _flushQueue = _flushQueue.then((_) async {
       await _file.parent.create(recursive: true);
       final temporary = File('${_file.path}.tmp');
-      await temporary.writeAsString(jsonEncode(_data), flush: true);
+      _accounts[_scope] = Map<String, dynamic>.from(_data);
+      final persisted = <String, dynamic>{
+        '__local_store_version': 2,
+        '__active_scope': _scope,
+        '__accounts': _accounts,
+      };
+      await temporary.writeAsString(jsonEncode(persisted), flush: true);
       if (await _file.exists()) await _file.delete();
       await temporary.rename(_file.path);
     });
