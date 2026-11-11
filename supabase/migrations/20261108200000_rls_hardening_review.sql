@@ -140,7 +140,10 @@ create policy health_samples_e2ee_delete_own on public.health_samples_e2ee
 -- them. Revocation is performed only through the ownership-checking rotation RPC.
 -- Device revocation is performed only by the SECURITY DEFINER key-rotation RPC.
 -- Direct UPDATE would let a client clear revoked_at and reactivate an old key.
-grant select, insert on public.health_e2ee_devices to authenticated;
+grant select on public.health_e2ee_devices to authenticated;
+revoke insert on public.health_e2ee_devices from authenticated;
+grant insert (user_id, device_name, public_key, algorithm)
+  on public.health_e2ee_devices to authenticated;
 drop policy if exists health_e2ee_devices_update_own on public.health_e2ee_devices;
 create policy health_e2ee_devices_select_own on public.health_e2ee_devices
   for select to authenticated
@@ -189,9 +192,14 @@ create policy health_e2ee_recovery_update_own on public.health_e2ee_recovery_env
   using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()))
   with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
 
--- Key envelopes are immutable: owner SELECT/INSERT/DELETE only, with every
--- referenced device/session checked against the same account.
-grant select, insert, delete on public.health_e2ee_key_envelopes to authenticated;
+-- Key envelopes are immutable: owner SELECT/INSERT only. The row ID and
+-- timestamp are database-generated, and account deletion is the only delete path.
+grant select on public.health_e2ee_key_envelopes to authenticated;
+revoke insert, delete on public.health_e2ee_key_envelopes from authenticated;
+grant insert (
+  user_id, device_id, sender_device_id, pairing_session_id,
+  envelope, nonce, algorithm, key_version
+) on public.health_e2ee_key_envelopes to authenticated;
 create policy health_e2ee_envelopes_select_own on public.health_e2ee_key_envelopes
   for select to authenticated
   using (
@@ -224,15 +232,6 @@ create policy health_e2ee_envelopes_insert_own on public.health_e2ee_key_envelop
     )
     and (pairing_session_id is null or pace_private.owns_health_e2ee_pairing_session(pairing_session_id))
   );
-create policy health_e2ee_envelopes_delete_own on public.health_e2ee_key_envelopes
-  for delete to authenticated
-  using (
-    user_id = (select auth.uid())
-    and (select public.has_current_health_e2ee_consent())
-    and exists (select 1 from public.health_e2ee_devices d
-                where d.id = health_e2ee_key_envelopes.device_id and d.user_id = (select auth.uid()))
-  );
-
 -- The current key version is readable directly; writes are performed only by
 -- the authenticated SECURITY DEFINER rotation RPC.
 grant select on public.health_e2ee_key_versions to authenticated;
