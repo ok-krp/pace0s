@@ -288,7 +288,7 @@ const definerWorkflow = readFileSync(".github/workflows/rls-postgres-preflight.y
 assert.match(definerWorkflow, /supabase\/migrations\/20261111150000_harden_security_definer_routine_acl\.sql/,
   "PostgreSQL preflight must apply existing definer-routine hardening");
 const definerAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
-assert.match(definerAssertions, /existing SECURITY DEFINER routine does not have an empty search_path/,
+assert.match(definerAssertions, /existing privileged routine does not have an empty search_path/,
   "PostgreSQL must inspect every hardened routine's stored search_path");
 assert.match(definerAssertions, /trigger-only or dormant SECURITY DEFINER routine has unexpected API\/service EXECUTE/,
   "PostgreSQL must reject direct execution on trigger-only and dormant routines");
