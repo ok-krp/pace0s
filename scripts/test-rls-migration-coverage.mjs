@@ -396,6 +396,18 @@ for (const table of legacyHealthTables) {
   assert.doesNotMatch(sql, /grant [^;]*on public\.health_samples to authenticated[^;]*(?:insert|update|delete)/i,
     "Legacy plaintext health rows must not grant writes");
 }
+assert.match(sql, /health_samples_legacy_select_own[\s\S]*?has_current_health_e2ee_consent/i,
+  "Legacy plaintext health rows must require current granular health/cloud-sync consent");
+const legacyHealthAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+for (const assertion of [
+  "legacy health rows visible without consent",
+  "legacy health owner read failed after required consent",
+  "user B can read user A legacy health rows",
+  "legacy health rows remain visible after consent revocation",
+]) {
+  assert.ok(legacyHealthAssertions.includes(assertion),
+    "PostgreSQL must verify legacy health consent and isolation: " + assertion);
+}
 
 for (const table of readOnlyLogTables) {
   assert.match(sql, new RegExp(
