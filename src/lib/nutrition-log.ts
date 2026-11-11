@@ -26,6 +26,13 @@ const DOMAIN_ITEMS = "nutrition.items";
 const DELETED_IDS_KEY = "pace.__nutrition_deleted_ids_v1";
 const FOOD_LOG_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function isFoodLogUuid(id: string) { return FOOD_LOG_UUID.test(id); }
+function activeNutritionAccountId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const scope = localStorage.getItem("pace.__account_scope");
+    return scope && scope !== "__guest__" ? scope : null;
+  } catch { return null; }
+}
 type DeletedNutritionIds = { userId: string; ids: string[] };
 
 function deletedIdsStorageKey(userId: string) {
@@ -151,7 +158,7 @@ async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<
   if (userError) throw userError;
   // A queued snapshot from a previous session must never be written under a
   // different account after an account switch.
-  if (!user || user.id !== userId) return;
+  if (!user || user.id !== userId || activeNutritionAccountId() !== userId) return;
   if (lastBridgedUserId !== userId) {
     lastBridgedUserId = userId;
     lastBridgedNutrition = readNutritionItems();
@@ -163,12 +170,15 @@ async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<
   // A missing ID is not a delete instruction. Only the explicit remove handler
   // is allowed to delete a row from food_log.
   const requestedIds = [...new Set(nextRows.map((row) => row.id))];
+  if (activeNutritionAccountId() !== userId) return;
   const { data: existing, error: selectError } = requestedIds.length
-    ? await supabase.from("food_log").select("id").eq("user_id", user.id).in("id", requestedIds)
+    ? await supabase.from("food_log").select("id").eq("user_id", userId).in("id", requestedIds)
     : { data: [], error: null };
   if (selectError) throw selectError;
+  if (activeNutritionAccountId() !== userId) return;
   const existingIds = new Set((existing ?? []).map((row) => row.id));
   for (const { id, day, item } of nextRows) {
+    if (activeNutritionAccountId() !== userId) return;
     const previous = previousById.get(id);
     const changed = previous !== undefined && JSON.stringify(previous) !== JSON.stringify(item);
     if (existingIds.has(id) && !changed) continue;
@@ -186,12 +196,18 @@ async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<
   lastBridgedNutrition = value && typeof value === "object" && !Array.isArray(value) ? value as NutritionMap : {};
 }
 
-function bridgeLocalNutritionToFoodLog(value: unknown): Promise<void> {
-  if (typeof window === "undefined") return Promise.resolve();
+function bridgeLocalNutritionToFoodLog(
+  value: unknown,
+  expectedUserId = activeNutritionAccountId(),
+): Promise<void> {
+  if (typeof window === "undefined" || !expectedUserId) return Promise.resolve();
   const task = async () => {
     const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return;
-    await bridgeNutritionSnapshot(value, user.id);
+    // Bind queued work to the account that owned the local mutation when it
+    // was scheduled. Never infer ownership from a later, possibly new session.
+    if (error || !user || user.id !== expectedUserId ||
+        activeNutritionAccountId() !== expectedUserId) return;
+    await bridgeNutritionSnapshot(value, expectedUserId);
   };
   // Serialize snapshots instead of dropping writes while a previous bridge
   // operation is still in flight. Each snapshot is rechecked against food_log.
