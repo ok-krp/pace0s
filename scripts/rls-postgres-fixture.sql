@@ -61,7 +61,7 @@ CREATE TABLE public.health_e2ee_key_envelopes (
   sender_device_id uuid,
   pairing_session_id uuid,
   envelope text NOT NULL DEFAULT 'cipher',
-  nonce text,
+  nonce text NOT NULL,
   algorithm text NOT NULL DEFAULT 'ECDH-P256/AES-256-GCM',
   key_version integer NOT NULL DEFAULT 1,
   created_at timestamptz NOT NULL DEFAULT now()
