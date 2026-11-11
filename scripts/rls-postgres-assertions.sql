@@ -276,10 +276,25 @@ BEGIN
   INSERT INTO public.health_e2ee_devices (id,user_id,revoked_at) VALUES
     ('70000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',NULL),
     ('70000000-0000-0000-0000-000000000002','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',NULL),
-    ('70000000-0000-0000-0000-000000000003','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',now());
-  INSERT INTO public.health_e2ee_pairing_sessions (id,user_id,initiator_device_id) VALUES
-    ('80000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001'),
-    ('80000000-0000-0000-0000-000000000002','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','70000000-0000-0000-0000-000000000002');
+    ('70000000-0000-0000-0000-000000000003','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',now()),
+    ('70000000-0000-0000-0000-000000000004','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',NULL);
+  INSERT INTO public.health_e2ee_pairing_sessions (
+    id,user_id,initiator_device_id,recipient_device_id,status,secret_hash,expires_at
+  ) VALUES
+    ('80000000-0000-0000-0000-000000000001',
+      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001',
+      NULL,'pending',encode(extensions.digest(convert_to('correct-secret','UTF8'),'sha256'),'hex'),
+      now()+interval '5 minutes'),
+    ('80000000-0000-0000-0000-000000000002',
+      'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','70000000-0000-0000-0000-000000000002',
+      NULL,'pending',repeat('b',64),now()+interval '5 minutes'),
+    ('80000000-0000-0000-0000-000000000003',
+      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001',
+      '70000000-0000-0000-0000-000000000004','confirmed',repeat('c',64),
+      now()+interval '5 minutes'),
+    ('80000000-0000-0000-0000-000000000004',
+      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001',
+      NULL,'pending',repeat('d',64),now()+interval '5 minutes');
   INSERT INTO public.ai_action_log(id,user_id,conversation_id) VALUES
     ('31000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','30000000-0000-0000-0000-000000000002');
   INSERT INTO public.development_tasks(id,user_id,conversation_id) VALUES
