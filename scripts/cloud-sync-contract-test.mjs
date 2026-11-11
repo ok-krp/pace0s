@@ -96,24 +96,6 @@ assert.match(engine, /await flushQueue\(\); await pull\(\); await flushQueue\(\)
 assert.match(engine, /const sourceRow = !canonical \? legacy : !legacy \? canonical/, "Legacy recovery must select the newest full snapshot instead of union-merging rows");
 assert.doesNotMatch(engine.slice(engine.indexOf("for (const [key, bucket] of grouped)"), engine.indexOf("// Bootstrap pre-existing local domain state")), /mergeRecoveredValues/, "A stale legacy snapshot must not resurrect deleted array entries");
 
-const syncSettings = read("src/components/CloudSyncSettings.tsx");
-assert.match(syncSettings, /isLegalCategoryAllowed\("sync_cloud"\)/, "Settings must show the actual cross-device sync consent");
-assert.match(syncSettings, /Désactivée — active/, "Settings must not claim synchronization is active when consent is off");
-const realtimeStart = engine.indexOf("const startRealtime =");
-const realtimeEnd = engine.indexOf("const offLocal =", realtimeStart);
-assert.ok(realtimeStart >= 0 && realtimeEnd > realtimeStart, "Realtime lifecycle must be identifiable");
-const realtimeLifecycle = engine.slice(realtimeStart, realtimeEnd);
-assert.match(realtimeLifecycle, /!allowed\(\)/, "Realtime must not start without cloud-sync consent");
-assert.match(engine, /if \(cancelled \|\| !allowed\(\) \|\| !isSyncableKey\(row\.key\)/, "Remote writes must be rejected when cloud-sync consent is off");
-assert.match(engine, /stopRealtime\(\);\n      setStatus\("offline"\);/, "Realtime must stop when the app goes offline");
-assert.match(engine, /if \(allowed\(\)\) startRealtime\(\);/, "Realtime must start on initial opt-in");
-assert.match(engine, /if \(allowed\(\)\) \{ startRealtime\(\); void syncNow\(\); \}/, "Enabling sync consent must reconnect Realtime and reconcile");
-assert.match(engine, /queueItem\(\{ key, value, updatedAt, mutationId \}\);\n      if \(allowed\(\)\)/, "Local mutations must remain queued on-device while cloud sync consent is off");
-assert.match(engine, /localOnlyKeys/, "Legacy raw app-state bootstrap must exclude device-local security and appearance settings");
-assert.match(engine, /await flushQueue\(\); await pull\(\); await flushQueue\(\);/, "Bootstrapped and recovered local values must be pushed in the same sync pass");
-assert.match(engine, /const sourceRow = !canonical \? legacy : !legacy \? canonical/, "Legacy recovery must select the newest full snapshot instead of union-merging rows");
-assert.doesNotMatch(engine.slice(engine.indexOf("for (const [key, bucket] of grouped)"), engine.indexOf("// Bootstrap pre-existing local domain state")), /mergeRecoveredValues/, "A stale legacy snapshot must not resurrect deleted array entries");
-
 assert.match(read("src/lib/legal.ts"), /sync_cloud: false/, "cloud sync must remain opt-in by default");
 assert.match(nutritionLog, /isNutritionDeviceSyncEnabled\(\).*isLegalCategoryAllowed\("sync_cloud"\)/s, "Nutrition UI must be able to explain when cross-device sync is disabled");
 assert.match(engine, /postgres_changes/);
