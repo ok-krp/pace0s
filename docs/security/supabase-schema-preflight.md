@@ -287,3 +287,8 @@ A final ACL review found that PostgreSQL stores per-column grants separately fro
 ### Encrypted biometric table brought under granular health consent
 
 The audited 45-table inventory and generated `main` types include `user_biometrics_e2ee` with `ciphertext`, `nonce`, `algorithm` and `key_version`, but no tracked web/Flutter callsite was found. It had been placed in the generic user-owned CRUD group, which meant it was not gated by the current `health_data` and `health_cloud_sync` decisions. It is now in the E2EE access class with owner-scoped SELECT/INSERT/UPDATE/DELETE and the same two-consent predicate as encrypted health samples. PostgreSQL fixture assertions now test no-consent denial, consented owner access, A/B isolation and immediate denial after a later consent withdrawal.
+
+
+### Legacy plaintext health reads now require current consent
+
+The RLS proposal previously made `health_samples` owner-readable but did not check the two health/cloud-sync consent records. The policy now requires `has_current_health_e2ee_consent()`, matching the E2EE health and encrypted biometric stores. The disposable PostgreSQL tests prove that user A cannot read legacy health rows before consent, can read their own rows after both consent decisions, user B cannot read A's rows despite having their own consent, and A loses access in a later transaction after withdrawing health-data consent.
