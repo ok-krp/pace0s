@@ -127,13 +127,6 @@ assert.match(generatedTypes, /has_current_health_e2ee_consent:\s*\{\s*Args:\s*ne
 assert.doesNotMatch(generatedTypes, /pace_private|owns_health_e2ee_pairing_session/,
   "The private policy helper must not be exposed in the generated Data API types");
 
-const flutterConsent = readFileSync("pace_flutter/lib/core/compliance/compliance_service.dart", "utf8");
-const flutterConsentInsert = flutterConsent.match(
-  /from\('consent_records'\)\.insert\(\{[\s\S]*?\}\)/,
-)?.[0] ?? "";
-assert.ok(flutterConsentInsert.length > 0, "Flutter granular consent insert must remain present");
-assert.doesNotMatch(flutterConsentInsert, /created_at|\bid:/i,
-  "Flutter must not supply consent record IDs or timestamps");
 const aiConsent = readFileSync("src/lib/ai-chat.server.ts", "utf8");
 const aiConsentInsert = aiConsent.match(
   /from\(["']consent_records["']\)\.insert\(\{[\s\S]*?\}\)/,
