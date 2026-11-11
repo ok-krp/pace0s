@@ -154,6 +154,22 @@ assert.match(consentAssertions, /database timestamp default not applied to conse
   "PostgreSQL integration tests must prove database-generated consent timestamps");
 
 
+const envelopeNonceMigration = readFileSync(
+  "supabase/migrations/20261111140000_allow_nullable_health_e2ee_envelope_nonce.sql", "utf8",
+);
+assert.match(envelopeNonceMigration, /alter table public\.health_e2ee_key_envelopes\s+alter column nonce drop not null/i,
+  "AES Key Wrap pairing requires a nullable nonce column");
+const postgresWorkflow = readFileSync(".github/workflows/rls-postgres-preflight.yml", "utf8");
+assert.match(postgresWorkflow, /--file=supabase\/migrations\/20261111140000_allow_nullable_health_e2ee_envelope_nonce\.sql/,
+  "PostgreSQL preflight must apply the E2EE nonce repair before envelope assertions");
+const nonceAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.match(nonceAssertions, /AES Key Wrap envelope must accept NULL nonce/,
+  "PostgreSQL must exercise the null-nonce AES Key Wrap case");
+assert.match(nonceAssertions, /AES-GCM envelope must retain its nonce/,
+  "PostgreSQL must preserve the required AES-GCM nonce case");
+assert.match(sql, /health_e2ee_recovery_select_own/,
+  "The same RLS suite must continue to cover consent-gated recovery envelopes");
+
 const privacySource = readFileSync("src/lib/privacy.functions.ts", "utf8");
 const privacyExportBlock = privacySource.match(/const EXPORT_TABLES = \[([\s\S]*?)\] as const/)?.[1] ?? "";
 const privacyDeleteBlock = privacySource.match(/const DELETE_TABLES = \[([\s\S]*?)\] as const/)?.[1] ?? "";
