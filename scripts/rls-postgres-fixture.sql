@@ -207,9 +207,43 @@ $profile_sync$;
 CREATE FUNCTION public.upsert_user_state_if_newer(uuid,text,jsonb,timestamptz,text)
 RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path=public
 AS $routine$ SELECT '{}'::jsonb $routine$;
-CREATE FUNCTION public.rotate_health_e2ee_key(integer,uuid)
+CREATE FUNCTION public.rotate_health_e2ee_key(
+  p_new_key_version integer, p_revoked_device_id uuid DEFAULT NULL
+)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=public
-AS $routine$ BEGIN RETURN; END $routine$;
+AS $routine$
+DECLARE v_current_version integer;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  IF p_new_key_version <= 1 THEN RAISE EXCEPTION 'Invalid key version'; END IF;
+
+  SELECT current_key_version INTO v_current_version
+  FROM public.health_e2ee_key_versions
+  WHERE user_id = auth.uid()
+  FOR UPDATE;
+
+  IF v_current_version IS NULL THEN
+    v_current_version := 1;
+    INSERT INTO public.health_e2ee_key_versions(user_id,current_key_version)
+    VALUES (auth.uid(),1)
+    ON CONFLICT (user_id) DO NOTHING;
+  END IF;
+  IF p_new_key_version <> v_current_version + 1 THEN
+    RAISE EXCEPTION 'Key version must advance exactly one step';
+  END IF;
+
+  IF p_revoked_device_id IS NOT NULL THEN
+    UPDATE public.health_e2ee_devices
+    SET revoked_at=coalesce(revoked_at,now())
+    WHERE id=p_revoked_device_id AND user_id=auth.uid();
+    IF NOT FOUND THEN RAISE EXCEPTION 'Device does not belong to current user'; END IF;
+  END IF;
+
+  UPDATE public.health_e2ee_key_versions
+  SET current_key_version=p_new_key_version, updated_at=now()
+  WHERE user_id=auth.uid();
+END;
+$routine$;
 CREATE FUNCTION public.sync_sport_user_state()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=public
 AS $routine$ BEGIN RETURN NEW; END $routine$;
