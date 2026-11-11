@@ -92,7 +92,7 @@ assert.equal(consentTables.length, 1, "Expected immutable consent records");
 assert.equal(deletionTables.length, 1, "Expected deletion requests");
 assert.equal(readOnlyLogTables.length, 2, "Expected two owner-readable, non-writable logs");
 assert.equal(legacyHealthTables.length, 1, "Expected one read-only legacy health table");
-assert.equal(e2eeTables.length, 4, "Expected four consent-scoped E2EE tables");
+assert.equal(e2eeTables.length, 5, "Expected five consent-scoped E2EE tables");
 assert.equal(backendOnlyTables.length, 4, "Expected four service-only tables");
 assert.equal(rpcOnlyTables.length, 2, "Expected two SECURITY DEFINER RPC-only tables");
 assert.deepEqual(duplicates, [], "A public table must belong to exactly one access class");
