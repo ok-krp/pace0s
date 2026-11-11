@@ -58,3 +58,10 @@ jobs:
         run: |
           psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
             --set=ON_ERROR_STOP=1 --file=scripts/rls-postgres-assertions.sql
+
+      - name: Audit function ACLs and default privileges
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
+            --set=ON_ERROR_STOP=1 --file=scripts/rls-postgres-function-acl-audit.sql
