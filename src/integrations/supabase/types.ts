@@ -649,6 +649,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      has_current_health_e2ee_consent: { Args: never; Returns: boolean }
       upsert_user_state_if_newer: {
         Args: {
           p_user_id: string
