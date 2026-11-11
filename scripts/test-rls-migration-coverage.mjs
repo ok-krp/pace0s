@@ -278,8 +278,12 @@ for (const table of e2eeTables) {
 }
 assert.match(sql, /health_samples_e2ee_update_own[\s\S]*?for update to authenticated/i,
   "Encrypted samples require owner-only UPDATE for conflict-safe upserts");
-assert.match(sql, /grant select, insert on public\.health_e2ee_devices to authenticated/i,
-  "Clients may register and list owned E2EE devices");
+assert.match(sql, /grant select on public\.health_e2ee_devices to authenticated/i,
+  "Clients may list owned E2EE devices");
+assert.match(sql, /grant insert \(user_id, device_name, public_key, algorithm\)[\s\S]*?on public\.health_e2ee_devices to authenticated/i,
+  "Device registration may insert only owner identity and public key metadata");
+assert.doesNotMatch(sql, /grant insert on public\.health_e2ee_devices to authenticated/i,
+  "Device IDs, timestamps and revocation metadata must remain database-owned");
 assert.doesNotMatch(sql, /grant [^;]*update[^;]*on public\.health_e2ee_devices|grant update on public\.health_e2ee_devices/i,
   "Clients must not directly update E2EE device revocation state");
 assert.doesNotMatch(sql, /create policy health_e2ee_devices_update_own/i,
@@ -289,9 +293,18 @@ assert.match(deviceAssertions, /authenticated can directly UPDATE device revocat
   "PostgreSQL test must verify direct device UPDATE is denied");
 assert.match(deviceAssertions, /client directly reactivated revoked E2EE device/,
   "PostgreSQL test must prove a revoked device cannot be reactivated by a client");
-assert.match(sql, /health_e2ee_envelopes_delete_own[\s\S]*?for delete to authenticated/i,
-  "Envelopes must be deletable only by their owner");
-const insertPolicy = sql.match(/create policy health_e2ee_envelopes_insert_own[\s\S]*?create policy health_e2ee_envelopes_delete_own/i)?.[0] ?? "";
+assert.match(deviceAssertions, /authenticated can choose E2EE device ID, timestamp or revocation state/,
+  "PostgreSQL must prove device IDs, timestamps and revocation state are database-owned");
+assert.match(sql, /grant insert \([\s\S]*?user_id, device_id, sender_device_id, pairing_session_id,[\s\S]*?envelope, nonce, algorithm, key_version[\s\S]*?\) on public\.health_e2ee_key_envelopes to authenticated/i,
+  "Envelope INSERT must be column-scoped to data fields; IDs and timestamps stay database-generated");
+assert.doesNotMatch(sql, /grant [^;]*delete[^;]*on public\.health_e2ee_key_envelopes/i,
+  "Clients must not directly delete key envelopes");
+const envelopeAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.match(envelopeAssertions, /authenticated can choose E2EE envelope ID or timestamp/,
+  "PostgreSQL must verify E2EE envelope IDs/timestamps cannot be client-supplied");
+assert.match(envelopeAssertions, /authenticated can directly delete E2EE key envelopes/,
+  "PostgreSQL must verify key-envelope deletion is service-only");
+const insertPolicy = sql.match(/create policy health_e2ee_envelopes_insert_own[\s\S]*?-- The current key version/i)?.[0] ?? "";
 assert.match(insertPolicy, /device_id[\s\S]*?revoked_at is null/i,
   "Envelope recipient devices must be active at insertion time");
 assert.match(insertPolicy, /sender_device_id[\s\S]*?revoked_at is null/i,
