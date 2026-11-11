@@ -27,8 +27,15 @@ CREATE TABLE public.billing_events (id uuid PRIMARY KEY);
 CREATE TABLE public.billing_subscriptions (id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.billing_trials (id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.consent_records (
-  id uuid PRIMARY KEY, user_id uuid NOT NULL, consent_type text NOT NULL,
-  granted boolean NOT NULL, created_at timestamptz NOT NULL DEFAULT now()
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  consent_type text NOT NULL,
+  granted boolean NOT NULL,
+  legal_version text NOT NULL,
+  policy_version text NOT NULL,
+  ip_hash text,
+  user_agent text,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE public.data_deletion_requests (
   id uuid PRIMARY KEY, user_id uuid NOT NULL, status text NOT NULL DEFAULT 'pending',
