@@ -97,3 +97,15 @@ Before applying the revised migration, inspect the confirmed project's Data API 
 The connected database reports that the executing `postgres` role is not a member of `supabase_admin` (which is a separate superuser role); the migration therefore does not claim to rewrite that role's independent default ACL entries. Application migrations are expected to execute as `postgres`; this assumption must be checked against the confirmed Vercel target before deployment.
 
 **This is still a draft preflight change.** The configured Vercel project points to the inaccessible `cduyjejftorfuxuwhbqt` ref. No SQL was executed against Supabase, no environment variable was changed, and no Production deployment or merge was performed.
+
+
+## 7. Bidirectional tenant-isolation regression checks — 2026-11-11
+
+The disposable PostgreSQL assertion suite now explicitly models two separate authenticated SQL transactions:
+
+- User A can read only A's profile and cannot change its `user_id` to B.
+- User B can read only B's profile and cannot read A's profile; B also cannot reassign ownership to A.
+- The anonymous role cannot SELECT the private profiles table.
+- Existing checks for cross-user inserts, billing immutability, parent-child Sport relationships, E2EE consent, and server-only tables remain in the suite.
+
+The assertions and static coverage guard were updated on the PR #316 branch. The workflow run for the latest code head is the release signal; do not mark these new tests passed until that exact run completes successfully.
