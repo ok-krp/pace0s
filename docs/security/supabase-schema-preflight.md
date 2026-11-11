@@ -231,3 +231,10 @@ The RLS proposal no longer grants `UPDATE` on `health_e2ee_devices` to `authenti
 ### Cloud synchronization is now RPC-write-only
 
 The RLS proposal removes `user_state` from the generic owner CRUD loop. Authenticated users retain owner-scoped `SELECT`, but do not receive table `INSERT`, `UPDATE` or `DELETE`; all mutations must use `upsert_user_state_if_newer`, whose database-side timestamp comparison prevents stale-device writes from replacing newer state. The PostgreSQL fixture seeds one row per test account and tests all three direct-write denials. Static coverage also requires the generated public RPC type to remain present.
+
+
+### Recovery-envelope policy gap closed
+
+The historical `health_e2ee_recovery_envelopes` table was previously included in the generic owner CRUD loop. The app uses it only for an authenticated owner-scoped SELECT and UPSERT; account deletion is performed server-side with the service role. The proposal now moves it into the E2EE access class: SELECT/INSERT/UPDATE require both current granular consents, ownership is checked on all three operations, and direct authenticated DELETE is removed. The PostgreSQL fixture now matches the actual recovery-envelope table shape and tests no-consent denial, owner write/read, cross-account denial and access denial after consent withdrawal.
+
+The public consent helper now uses an empty `search_path` with fully-qualified table references. The private `pace_private` schema also receives explicit default-function EXECUTE revocations for `postgres`, including schema-level `PUBLIC`, `anon` and `authenticated` entries.
