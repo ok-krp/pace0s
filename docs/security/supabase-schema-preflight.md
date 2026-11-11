@@ -238,3 +238,10 @@ The RLS proposal removes `user_state` from the generic owner CRUD loop. Authenti
 The historical `health_e2ee_recovery_envelopes` table was previously included in the generic owner CRUD loop. The app uses it only for an authenticated owner-scoped SELECT and UPSERT; account deletion is performed server-side with the service role. The proposal now moves it into the E2EE access class: SELECT/INSERT/UPDATE require both current granular consents, ownership is checked on all three operations, and direct authenticated DELETE is removed. The PostgreSQL fixture now matches the actual recovery-envelope table shape and tests no-consent denial, owner write/read, cross-account denial and access denial after consent withdrawal.
 
 The public consent helper now uses an empty `search_path` with fully-qualified table references. The private `pace_private` schema also receives explicit default-function EXECUTE revocations for `postgres`, including schema-level `PUBLIC`, `anon` and `authenticated` entries.
+
+
+## 14. Pairing-envelope nonce schema contradiction — 2026-11-11
+
+The canonical E2EE device/envelope table migration declares `health_e2ee_key_envelopes.nonce NOT NULL`. However, the tracked `create_pairing_envelope(...)` SECURITY DEFINER RPC inserts `NULL` for the `ECDH-P256/HKDF-SHA256/AES-256-KW` algorithm, and the Flutter direct insert path also sends `nonce: null` for AES Key Wrap key bundles. AES-GCM envelopes still require a nonce. No tracked migration previously changed this nullability.
+
+Added canonical migration `20261111140000_allow_nullable_health_e2ee_envelope_nonce.sql` to drop the NOT NULL constraint while documenting that NULL is valid only for key-wrap formats at the application contract level. The disposable PostgreSQL 16 fixture now starts with the historical NOT NULL constraint, applies the RLS proposal, then applies this repair. Its assertions insert both an AES-GCM envelope with a nonce and an AES Key Wrap envelope with a NULL nonce. This migration remains unmerged and unexecuted against Supabase.
