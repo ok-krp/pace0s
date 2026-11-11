@@ -24,10 +24,9 @@ class SyncService {
   Future<bool> _hasCloudSyncConsent(String userId) async {
     final now = DateTime.now();
     if (_cloudSyncConsentUserId == userId &&
-        _cloudSyncConsent != null &&
         _cloudSyncConsentCheckedAt != null &&
         now.difference(_cloudSyncConsentCheckedAt!) < _cloudSyncConsentCacheTtl) {
-      return _cloudSyncConsent!;
+      return _cloudSyncConsent == true;
     }
 
     try {
@@ -45,7 +44,7 @@ class SyncService {
     } catch (_) {
       // Fail closed if consent cannot be confirmed. Local outbox entries remain.
       _cloudSyncConsentUserId = userId;
-      _cloudSyncConsent = false;
+      _cloudSyncConsent = null;
       _cloudSyncConsentCheckedAt = now;
       return false;
     }
@@ -57,6 +56,10 @@ class SyncService {
   bool get cloudSyncConsentGranted =>
       _cloudSyncConsentUserId == client?.auth.currentUser?.id &&
       _cloudSyncConsent == true;
+
+  bool get cloudSyncConsentDenied =>
+      _cloudSyncConsentUserId == client?.auth.currentUser?.id &&
+      _cloudSyncConsent == false;
 
   Future<void> setCloudSyncConsent(bool granted) async {
     final userId = client?.auth.currentUser?.id;
