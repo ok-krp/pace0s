@@ -32,8 +32,10 @@ begin
 end $drop_policy_cleanup$;
 
 -- 2) Remove inherited API-role privileges. Service role remains owner/bypass-RLS.
-revoke all privileges on all tables in schema public from anon, authenticated;
-revoke all privileges on all sequences in schema public from anon, authenticated;
+-- PUBLIC grants are inherited by both API roles; clear them together with
+-- direct grants before applying the explicit minimal permission matrix.
+revoke all privileges on all tables in schema public from public, anon, authenticated;
+revoke all privileges on all sequences in schema public from public, anon, authenticated;
 
 -- Table ACL revocation does not clear independently granted column ACLs.
 -- Remove every legacy column grant from PUBLIC and the API roles before the
@@ -63,8 +65,8 @@ grant usage on schema public to anon, authenticated;
 -- Pin default-ACL changes to the PostgreSQL migration owner explicitly.
 -- Supabase migrations are expected to run as postgres; never mutate a different
 -- owner's defaults merely because the connection role changes in another env.
-alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated;
-alter default privileges for role postgres in schema public revoke all on sequences from anon, authenticated;
+alter default privileges for role postgres in schema public revoke all on tables from public, anon, authenticated;
+alter default privileges for role postgres in schema public revoke all on sequences from public, anon, authenticated;
 
 -- PostgreSQL grants EXECUTE on new functions to PUBLIC by default. Supabase
 -- also gives the API roles direct default EXECUTE grants in public. Close both
