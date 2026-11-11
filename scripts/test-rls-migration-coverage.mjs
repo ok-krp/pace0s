@@ -462,6 +462,13 @@ assert.match(sql, /revoke all privileges on all tables in schema public from pub
   "Existing API-role table grants must be removed before minimal grants are added");
 assert.match(sql, /revoke all privileges on all sequences in schema public from public, anon, authenticated/i,
   "PUBLIC-inherited sequence grants must be removed before minimal grants are added");
+assert.match(sql, /alter default privileges for role postgres in schema public revoke all on tables from public, anon, authenticated/i,
+  "Schema-local default table ACLs for PUBLIC/API roles must be cleared");
+assert.match(sql, /alter default privileges for role postgres in schema public revoke all on sequences from public, anon, authenticated/i,
+  "Schema-local default sequence ACLs for PUBLIC/API roles must be cleared");
+const defaultAclProbeAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.match(defaultAclProbeAssertions, /new public table or sequence inherited PUBLIC\/API-role default ACL/,
+  "PostgreSQL must verify newly created objects do not inherit PUBLIC/API grants");
 assert.match(sql, /alter default privileges for role postgres revoke all on tables from public, anon, authenticated/i,
   "Global default table ACLs for PUBLIC/API roles must be cleared");
 assert.match(sql, /alter default privileges for role postgres revoke all on sequences from public, anon, authenticated/i,
