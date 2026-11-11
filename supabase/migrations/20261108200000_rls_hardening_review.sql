@@ -37,15 +37,18 @@ revoke all privileges on all sequences in schema public from anon, authenticated
 revoke all privileges on schema public from anon, authenticated;
 grant usage on schema public to anon, authenticated;
 -- The audited schema has no public sequences. Do not grant sequence access globally.
-alter default privileges in schema public revoke all on tables from anon, authenticated;
-alter default privileges in schema public revoke all on sequences from anon, authenticated;
+-- Pin default-ACL changes to the PostgreSQL migration owner explicitly.
+-- Supabase migrations are expected to run as postgres; never mutate a different
+-- owner's defaults merely because the connection role changes in another env.
+alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated;
+alter default privileges for role postgres in schema public revoke all on sequences from anon, authenticated;
 
 -- PostgreSQL grants EXECUTE on new functions to PUBLIC by default. Supabase
 -- also gives the API roles direct default EXECUTE grants in public. Close both
--- paths for functions created by this migration role; each required RPC must
--- explicitly GRANT EXECUTE to its intended caller below/in its own migration.
-alter default privileges revoke execute on functions from public;
-alter default privileges in schema public revoke execute on functions from anon, authenticated;
+-- paths for functions created by postgres; each required RPC must explicitly
+-- GRANT EXECUTE to its intended caller in its canonical migration.
+alter default privileges for role postgres revoke execute on functions from public;
+alter default privileges for role postgres in schema public revoke execute on functions from anon, authenticated;
 
 -- 3) Public, immutable nutrition/reference catalogues: read only.
 grant select on table
