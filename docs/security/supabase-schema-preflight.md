@@ -292,3 +292,8 @@ The audited 45-table inventory and generated `main` types include `user_biometri
 ### Legacy plaintext health reads now require current consent
 
 The RLS proposal previously made `health_samples` owner-readable but did not check the two health/cloud-sync consent records. The policy now requires `has_current_health_e2ee_consent()`, matching the E2EE health and encrypted biometric stores. The disposable PostgreSQL tests prove that user A cannot read legacy health rows before consent, can read their own rows after both consent decisions, user B cannot read A's rows despite having their own consent, and A loses access in a later transaction after withdrawing health-data consent.
+
+
+### Legacy legal-consent snapshot narrowed without breaking the app UPSERT
+
+The application still calls `saveLegalConsent` to upsert the current EULA/privacy version and option snapshot on `(user_id,eula_version,privacy_version)`; this is distinct from the append-only granular `consent_records` ledger. The generic CRUD policy has been replaced with owner SELECT and column-scoped INSERT/UPDATE for exactly `user_id, region, eula_version, privacy_version, ip_country, consented_at, opts`. ID, created/updated timestamps stay database-owned, and API DELETE is removed. PostgreSQL tests execute a real insert/conflict-update/update path and verify deletion and metadata overrides are denied.
