@@ -25,7 +25,9 @@ const billingTables = sql.match(
 ) ? ["billing_customers", "billing_subscriptions", "billing_trials"] : [];
 
 const consentTables = sql.match(
-  /grant select, insert on public\.consent_records to authenticated/i,
+  /grant select on public\.consent_records to authenticated/i,
+) && sql.match(
+  /grant insert \(user_id, consent_type, granted, legal_version, policy_version\)\s+on public\.consent_records to authenticated/i,
 ) ? ["consent_records"] : [];
 
 const deletionTables = sql.match(
