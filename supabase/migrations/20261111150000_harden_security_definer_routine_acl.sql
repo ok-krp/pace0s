@@ -15,6 +15,17 @@ revoke all on function public.upsert_user_state_if_newer(uuid, text, jsonb, time
 grant execute on function public.upsert_user_state_if_newer(uuid, text, jsonb, timestamptz, text)
   to authenticated;
 
+-- Profile sync is the single insertion path; the function verifies auth.uid()
+-- against p_user_id and preserves server-side newest-wins semantics.
+alter function public.upsert_profile_if_newer(uuid, jsonb, timestamptz, text)
+  security definer;
+alter function public.upsert_profile_if_newer(uuid, jsonb, timestamptz, text)
+  set search_path = '';
+revoke all on function public.upsert_profile_if_newer(uuid, jsonb, timestamptz, text)
+  from public, anon, authenticated;
+grant execute on function public.upsert_profile_if_newer(uuid, jsonb, timestamptz, text)
+  to authenticated;
+
 -- E2EE key rotation is a user RPC with auth.uid() and device-ownership checks.
 alter function public.rotate_health_e2ee_key(integer, uuid)
   set search_path = '';
