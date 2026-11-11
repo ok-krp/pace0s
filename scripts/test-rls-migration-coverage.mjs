@@ -67,6 +67,9 @@ const rpcOnlyTables = [
 
 const classes = {
   directUserTables,
+  ownerReadProfileLimitedAiUpdate: sql.match(/grant select on public\.profiles to authenticated/i) &&
+    sql.match(/grant update \(weight_kg, weight_goal_kg, daily_calorie_goal, daily_protein_goal, daily_water_ml_goal, training_goal\)[\s\S]*?on public\.profiles to authenticated/i)
+    ? ["profiles"] : [],
   legacyMutableLegalConsent: sql.match(/grant select on public\.legal_consent to authenticated/i) &&
     sql.match(/grant insert \(user_id, region, eula_version, privacy_version, ip_country, consented_at, opts\)/i) &&
     sql.match(/grant update \(user_id, region, eula_version, privacy_version, ip_country, consented_at, opts\)/i)
@@ -90,13 +93,39 @@ const classified = Object.entries(classes).flatMap(([classification, tables]) =>
 const names = classified.map((item) => item.table);
 const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
 
-assert.equal(directUserTables.length, 13, "Expected 13 direct user-owned CRUD tables");
+assert.equal(directUserTables.length, 12, "Expected 12 direct user-owned CRUD tables");
+assert.equal(classes.ownerReadProfileLimitedAiUpdate.length, 1,
+  "Profiles must remain owner-readable with only the direct AI preference fields writable");
 assert.equal(classes.legacyMutableLegalConsent.length, 1,
   "The legacy legal document/options snapshot must have its own column-scoped access class");
 assert.match(sql, /grant select on public\.legal_consent to authenticated/i,
   "Current legal document/options snapshot must remain readable by its owner");
 assert.match(sql, /grant insert \(user_id, region, eula_version, privacy_version, ip_country, consented_at, opts\)[\s\S]*?on public\.legal_consent to authenticated/i,
   "Legal consent UPSERT may insert only app-submitted decision fields");
+assert.match(sql, /grant select on public\.profiles to authenticated/i,
+  "Profiles must remain owner-readable");
+assert.match(sql, /grant update \(weight_kg, weight_goal_kg, daily_calorie_goal, daily_protein_goal, daily_water_ml_goal, training_goal\)[\s\S]*?on public\.profiles to authenticated/i,
+  "Only the six direct AI Coach profile update fields may be directly writable");
+assert.doesNotMatch(sql, /grant [^;]*insert[^;]*on public\.profiles to authenticated/i,
+  "Profile creation must use the owner-checking version-safe RPC");
+assert.doesNotMatch(sql, /grant [^;]*delete[^;]*on public\.profiles to authenticated/i,
+  "Profiles must not be directly deletable");
+assert.doesNotMatch(sql, /grant [^;]*update[^;]*on public\.profiles to authenticated/i,
+  "Profile UPDATE must remain column-scoped");
+const profileAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+for (const assertion of [
+  "authenticated has broad profile write privileges",
+  "AI Coach profile field update failed",
+  "direct profile owner column update unexpectedly succeeded",
+  "direct profile delete unexpectedly succeeded",
+  "authenticated profile sync RPC must use SECURITY DEFINER with empty search_path",
+]) {
+  assert.ok(profileAssertions.includes(assertion), "Missing least-privilege profile assertion: " + assertion);
+}
+assert.match(definerHardeningSql, /alter function public\.upsert_profile_if_newer\(uuid, jsonb, timestamptz, text\)\s+security definer/i,
+  "The profile sync RPC must be SECURITY DEFINER after checking auth.uid()");
+assert.match(definerHardeningSql, /grant execute on function public\.upsert_profile_if_newer\(uuid, jsonb, timestamptz, text\)\s+to authenticated/i,
+  "The profile sync RPC must remain callable by authenticated users");
 assert.match(sql, /grant update \(user_id, region, eula_version, privacy_version, ip_country, consented_at, opts\)[\s\S]*?on public\.legal_consent to authenticated/i,
   "Legal consent UPSERT may update only app-submitted decision fields");
 assert.doesNotMatch(sql, /grant [^;]*delete[^;]*on public\.legal_consent/i,
