@@ -103,7 +103,8 @@ begin
   into v_secret_hash
   using p_secret_plaintext;
 
-  if v_secret_hash <> v_session.secret_hash then
+  -- NULL input must fail closed: ordinary <> yields NULL and would skip IF.
+  if v_secret_hash is distinct from v_session.secret_hash then
     v_attempt := v_session.attempt_count + 1;
 
     update public.health_e2ee_pairing_sessions
