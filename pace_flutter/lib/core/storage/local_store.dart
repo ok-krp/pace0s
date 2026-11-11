@@ -23,6 +23,12 @@ class LocalStore {
   static Future<LocalStore> open() async {
     final directory = await getApplicationSupportDirectory();
     final file = File(p.join(directory.path, 'pace_local.json'));
+    return openAt(file);
+  }
+
+  /// Opens a LocalStore at an explicit file path. Used by isolated storage
+  /// tests; production callers should use [open].
+  static Future<LocalStore> openAt(File file) async {
     final store = LocalStore._(file);
     if (await file.exists()) {
       try {
