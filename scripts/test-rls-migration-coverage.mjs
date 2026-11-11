@@ -125,6 +125,34 @@ assert.match(generatedTypes, /has_current_health_e2ee_consent:\s*\{\s*Args:\s*ne
 assert.doesNotMatch(generatedTypes, /pace_private|owns_health_e2ee_pairing_session/,
   "The private policy helper must not be exposed in the generated Data API types");
 
+const flutterConsent = readFileSync("pace_flutter/lib/core/compliance/compliance_service.dart", "utf8");
+const flutterConsentInsert = flutterConsent.match(
+  /from\('consent_records'\)\.insert\(\{[\s\S]*?\}\)/,
+)?.[0] ?? "";
+assert.ok(flutterConsentInsert.length > 0, "Flutter granular consent insert must remain present");
+assert.doesNotMatch(flutterConsentInsert, /created_at|\bid:/i,
+  "Flutter must not supply consent record IDs or timestamps");
+const aiConsent = readFileSync("src/lib/ai-chat.server.ts", "utf8");
+const aiConsentInsert = aiConsent.match(
+  /from\(["']consent_records["']\)\.insert\(\{[\s\S]*?\}\)/,
+)?.[0] ?? "";
+if (aiConsent.includes('.from("consent_records").insert(')) {
+  assert.ok(aiConsentInsert.length > 0, "AI consent backfill insert must be detected");
+  assert.doesNotMatch(aiConsentInsert, /created_at|\bid:/i,
+    "AI consent backfill must not supply consent record IDs or timestamps");
+}
+assert.match(sql, /grant insert \(user_id, consent_type, granted, legal_version, policy_version\)[\s\S]*?on public\.consent_records to authenticated/i,
+  "Consent clients must receive INSERT only on the five decision columns");
+assert.match(sql, /created_at = \(select now\(\)\)/i,
+  "Consent INSERT policy must require the database transaction timestamp");
+assert.doesNotMatch(sql, /grant select, insert on public\.consent_records to authenticated/i,
+  "Consent clients must not receive table-wide INSERT privileges");
+const consentAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.match(consentAssertions, /client overrode consent record id\/timestamp/,
+  "PostgreSQL integration tests must reject client-controlled consent metadata");
+assert.match(consentAssertions, /database timestamp default not applied to consent records/,
+  "PostgreSQL integration tests must prove database-generated consent timestamps");
+
 const aclAudit = readFileSync("scripts/rls-postgres-function-acl-audit.sql", "utf8");
 assert.match(aclAudit, /has_function_privilege\('anon'/,
   "The read-only ACL inventory must report effective anonymous EXECUTE rights");
