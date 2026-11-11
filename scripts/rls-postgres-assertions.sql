@@ -15,6 +15,16 @@ BEGIN
   IF has_function_privilege('anon', 'public.rls_default_execute_probe()', 'EXECUTE') THEN
     RAISE EXCEPTION 'new public function inherited EXECUTE for anon';
   END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM pg_proc p
+    CROSS JOIN LATERAL aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) acl
+    WHERE p.oid = 'public.rls_default_execute_probe()'::regprocedure
+      AND acl.grantee = 0
+      AND acl.privilege_type = 'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION 'new public function inherited explicit PUBLIC EXECUTE';
+  END IF;
   IF has_function_privilege('authenticated', 'public.rls_default_execute_probe()', 'EXECUTE') THEN
     RAISE EXCEPTION 'new public function inherited EXECUTE for authenticated';
   END IF;
