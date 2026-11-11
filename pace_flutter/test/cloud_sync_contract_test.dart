@@ -18,15 +18,26 @@ void main() {
 
   group('Flutter cross-device sync consent', () {
     test('does not sync without an authenticated account', () {
-      expect(shouldRunCloudSync(userId: null, consentGranted: true), isFalse);
+      expect(shouldRunCloudSync(userId: null, activeAccountId: null, consentGranted: true), isFalse);
     });
 
     test('does not sync when functional cloud consent is disabled', () {
-      expect(shouldRunCloudSync(userId: 'user-a', consentGranted: false), isFalse);
+      expect(shouldRunCloudSync(userId: 'user-a', activeAccountId: 'user-a', consentGranted: false), isFalse);
     });
 
     test('allows sync only when the account explicitly granted consent', () {
-      expect(shouldRunCloudSync(userId: 'user-a', consentGranted: true), isTrue);
+      expect(shouldRunCloudSync(userId: 'user-a', activeAccountId: 'user-a', consentGranted: true), isTrue);
+    });
+    
+    test('never syncs one account using another account local snapshot', () {
+      expect(
+        shouldRunCloudSync(
+          userId: 'user-b',
+          activeAccountId: 'user-a',
+          consentGranted: true,
+        ),
+        isFalse,
+      );
     });
   });
 
