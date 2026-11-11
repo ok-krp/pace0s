@@ -564,6 +564,40 @@ BEGIN
   END;
   IF NOT denied THEN RAISE EXCEPTION 'profile RPC accepted another account ID'; END IF;
 
+  -- The pairing RPCs must resolve pgcrypto in its installed schema while
+  -- retaining an empty SECURITY DEFINER search_path.
+  PERFORM public.join_pairing_session(
+    '80000000-0000-0000-0000-000000000001',
+    'correct-secret',
+    '70000000-0000-0000-0000-000000000004',
+    '{"kty":"EC","crv":"P-256","x":"x","y":"y"}'::jsonb
+  );
+  SELECT count(*) INTO n
+  FROM public.get_pairing_session('80000000-0000-0000-0000-000000000001')
+  WHERE status='joined';
+  IF n <> 1 THEN RAISE EXCEPTION 'pairing join did not hash and verify the secret using installed pgcrypto schema'; END IF;
+
+  denied := false;
+  BEGIN
+    PERFORM public.join_pairing_session(
+      '80000000-0000-0000-0000-000000000004',
+      'wrong-secret',
+      '70000000-0000-0000-0000-000000000004',
+      '{"kty":"EC","crv":"P-256","x":"x","y":"y"}'::jsonb
+    );
+  EXCEPTION WHEN OTHERS THEN
+    denied := true;
+  END;
+  IF NOT denied THEN RAISE EXCEPTION 'pairing join accepted an invalid secret'; END IF;
+
+  PERFORM public.complete_pairing_session(
+    '80000000-0000-0000-0000-000000000003',
+    '70000000-0000-0000-0000-000000000004'
+  );
+  SELECT count(*) INTO n
+  FROM public.get_pairing_session('80000000-0000-0000-0000-000000000003');
+  IF n <> 0 THEN RAISE EXCEPTION 'pairing completion did not rotate its one-time secret and close the session'; END IF;
+
   PERFORM public.rotate_health_e2ee_key(2, NULL);
   SELECT count(*) INTO n FROM public.health_e2ee_key_versions
     WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' AND current_key_version=2;
