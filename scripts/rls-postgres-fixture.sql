@@ -126,7 +126,8 @@ CREATE TABLE public.profiles (
   activity_level text,
   training_sessions_goal integer,
   updated_at timestamptz,
-  updated_by text
+  updated_by text,
+  UNIQUE (user_id)
 );
 CREATE TABLE public.push_subscriptions (id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.reminder_debug_log (id uuid PRIMARY KEY, user_id uuid NOT NULL);
@@ -169,9 +170,36 @@ CREATE TABLE public.user_state (
 
 -- Minimal legacy SECURITY DEFINER routine stubs. The follow-up hardening
 -- migration must empty their search_path and remove caller EXECUTE grants.
-CREATE FUNCTION public.upsert_profile_if_newer(uuid,jsonb,timestamptz,text)
-RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=public
-AS $routine$ BEGIN RETURN true; END $routine$;
+CREATE FUNCTION public.upsert_profile_if_newer(
+  p_user_id uuid, p_profile jsonb, p_updated_at timestamptz, p_updated_by text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $profile_sync$
+DECLARE accepted boolean := false;
+BEGIN
+  IF auth.uid() IS NULL OR auth.uid() <> p_user_id THEN
+    RAISE EXCEPTION 'not authorized';
+  END IF;
+  INSERT INTO public.profiles(id,user_id,weight_kg,training_goal,updated_at,updated_by)
+  VALUES (
+    p_user_id,p_user_id,
+    NULLIF(p_profile->>'weight_kg','')::numeric,
+    p_profile->>'training_goal',
+    p_updated_at,p_updated_by
+  )
+  ON CONFLICT (user_id) DO UPDATE SET
+    weight_kg=EXCLUDED.weight_kg,
+    training_goal=EXCLUDED.training_goal,
+    updated_at=EXCLUDED.updated_at,
+    updated_by=EXCLUDED.updated_by
+  WHERE public.profiles.updated_at IS NULL OR EXCLUDED.updated_at > public.profiles.updated_at
+  RETURNING true INTO accepted;
+  RETURN COALESCE(accepted,false);
+END;
+$profile_sync$;
 CREATE FUNCTION public.upsert_user_state_if_newer(uuid,text,jsonb,timestamptz,text)
 RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path=public
 AS $routine$ SELECT '{}'::jsonb $routine$;
