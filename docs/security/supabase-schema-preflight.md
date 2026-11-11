@@ -277,3 +277,8 @@ Added `20261111150000_harden_security_definer_routine_acl.sql` to set the routin
 The PostgreSQL 16 fixture now creates representative legacy SECURITY DEFINER functions before hardening and attaches a real row trigger before its EXECUTE grant is revoked. Assertions inspect stored `proconfig`, effective EXECUTE for API/service roles, schema CREATE rights, retained authenticated RPC grants, and prove that an owner-authorized workout UPDATE still fires its pre-existing trigger after callers lose direct EXECUTE.
 
 This migration depends on the canonical routine definitions existing, so it remains unmerged and must not be applied to a partially restored database.
+
+
+### Column-level privilege reset
+
+A final ACL review found that PostgreSQL stores per-column grants separately from table-level ACLs. The RLS reset now iterates every live column in the public tables and revokes all column privileges from `PUBLIC`, `anon` and `authenticated` before reapplying the narrowly scoped consent, device, envelope, recovery and deletion-request column grants. The fixture intentionally adds stale `SELECT(user_id)`, `INSERT(user_id)` and `UPDATE(user_id)` grants to the backend-only `ai_provider_secrets` table for all three grantees; PostgreSQL assertions fail if any survives.
