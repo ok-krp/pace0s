@@ -316,7 +316,8 @@ END $routine$;
 CREATE FUNCTION public.complete_pairing_session(p_session_id uuid,p_recipient_device_id uuid)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $routine$ BEGIN
-  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END $routine$;
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+END $routine$;
 END $routine$;
 CREATE FUNCTION public.create_pairing_envelope(
   p_session_id uuid,p_sender_device_id uuid,p_recipient_device_id uuid,
