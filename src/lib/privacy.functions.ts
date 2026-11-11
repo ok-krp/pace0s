@@ -141,9 +141,9 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
 
-    // Revoke every refresh-token session before destructive cleanup. Supabase
-    // access JWTs remain valid until exp, so this prevents refresh/re-entry but
-    // does not claim immediate invalidation of already-issued access tokens.
+    // Revoke every refresh-token session before destructive cleanup. This
+    // prevents refresh-token renewal across devices. Supabase access JWTs that
+    // were already issued remain valid until exp and are not revoked here.
     const authorization = getRequest()?.headers.get("authorization");
     const accessToken = authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
     if (!accessToken) {
