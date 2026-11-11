@@ -222,7 +222,7 @@ export function useCloudSyncEngineInternal() {
   const { user } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
   const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
-  const running = useRef(false);
+  const running = useRef<Record<string, boolean>>({});
   const keyWrites = useRef<Record<string, Promise<void>>>({});
   const lastRemoteValues = useRef<Record<string, string>>({});
 
@@ -249,7 +249,7 @@ export function useCloudSyncEngineInternal() {
     const allowed = () => { try { return isLegalCategoryAllowed("sync_cloud"); } catch { return false; } };
 
     const recordConflict = (key: string, localValue: unknown, remoteValue: unknown, remoteUpdatedAt: string) => {
-      const currentConflicts = readConflicts();
+      const currentConflicts = readConflicts(user.id);
       if (serialize(localValue) === serialize(remoteValue)) {
         const remaining = currentConflicts.filter((item) => item.key !== key);
         if (remaining.length !== currentConflicts.length) {
@@ -267,7 +267,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const pruneEquivalentConflicts = () => {
-      const currentConflicts = readConflicts();
+      const currentConflicts = readConflicts(user.id);
       const remaining = currentConflicts.filter((item) => serialize(item.localValue) !== serialize(item.remoteValue));
       if (remaining.length !== currentConflicts.length) {
         writeConflicts(remaining);
@@ -313,7 +313,8 @@ export function useCloudSyncEngineInternal() {
 
     const pushItem = async (item: QueueItem) => {
       if (cancelled || !allowed() || !isSyncableKey(item.key) || !navigator.onLine) return;
-      const previous = keyWrites.current[item.key] ?? Promise.resolve();
+      const writeKey = `${user.id}:${item.key}`;
+      const previous = keyWrites.current[writeKey] ?? Promise.resolve();
       const current = previous.then(async () => {
         if (cancelled || !allowed() || !navigator.onLine) return;
         const latest = getQueued(item.key, user.id);
@@ -336,16 +337,16 @@ export function useCloudSyncEngineInternal() {
           setStatus("error");
         }
       });
-      keyWrites.current[item.key] = current.catch(() => undefined);
+      keyWrites.current[writeKey] = current.catch(() => undefined);
       try { await current; } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
     };
 
     const flushQueue = async () => {
-      if (cancelled || !allowed() || !navigator.onLine || running.current) return;
+      if (cancelled || !allowed() || !navigator.onLine || running.current[user.id]) return;
       const queue = readQueue(user.id);
       if (!queue.length) return;
-      running.current = true;
-      try { await Promise.all(queue.map((item) => pushItem(item))); } finally { running.current = false; }
+      running.current[user.id] = true;
+      try { await Promise.all(queue.map((item) => pushItem(item))); } finally { running.current[user.id] = false; }
     };
 
     const applyRemoteRow = (row: SyncRow) => {
@@ -371,7 +372,7 @@ export function useCloudSyncEngineInternal() {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
         if (error || !data || cancelled) return;
         const queue = new Set(readQueue(user.id).map((item) => item.key));
-        const meta = readMeta();
+        const meta = readMeta(user.id);
         const grouped = new Map<string, { canonical?: SyncRow; legacy?: SyncRow }>();
         for (const raw of data) {
           const row = raw as unknown as SyncRow;
@@ -398,7 +399,7 @@ export function useCloudSyncEngineInternal() {
           const localDomain = readDomainRecord(key);
           const localIsEmpty = localDomain ? isEmptyRecoveredValue(localDomain.value) : true;
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
-          const queued = getQueued(key);
+          const queued = getQueued(key, user.id);
           if (queued) {
             if (serialize(queued.value) === serialize(remoteValue)) {
               const currentConflicts = readConflicts();
@@ -499,7 +500,7 @@ export function useCloudSyncEngineInternal() {
         try {
           for (const key of Object.keys(localStorage)) {
             if (!key.startsWith(PACE_PREFIX) || key.startsWith(INTERNAL_PREFIX) || key.startsWith(DOMAIN_PREFIX)) continue;
-            if (!isSyncableKey(key) || localOnlyKeys.has(key) || localOnlyPrefixes.some((prefix) => key.startsWith(prefix)) || grouped.has(key) || getQueued(key) || readDomainRecord(key)) continue;
+            if (!isSyncableKey(key) || localOnlyKeys.has(key) || localOnlyPrefixes.some((prefix) => key.startsWith(prefix)) || grouped.has(key) || getQueued(key, user.id) || readDomainRecord(key)) continue;
             let value: unknown;
             try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { continue; }
             if (isEmptyRecoveredValue(value)) continue;
@@ -559,7 +560,7 @@ export function useCloudSyncEngineInternal() {
       const encoded = serialize(value);
       if (encoded !== undefined && lastRemoteValues.current[key] === encoded) { delete lastRemoteValues.current[key]; return; }
       delete lastRemoteValues.current[key];
-      queueItem({ key, value, updatedAt, mutationId });
+      queueItem({ key, value, updatedAt, mutationId }, user.id);
       if (allowed()) void pushItem({ key, value, updatedAt, mutationId });
     });
 
