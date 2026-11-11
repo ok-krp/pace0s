@@ -139,8 +139,15 @@ assert.match(storage, /REMOTE_WRITE_EVENT/);
 const localRemoteHandlerStart = storage.indexOf("const onRemote =");
 const localRemoteHandlerEnd = storage.indexOf("window.addEventListener(REMOTE_WRITE_EVENT, onRemote)", localRemoteHandlerStart);
 const localRemoteHandler = storage.slice(localRemoteHandlerStart, localRemoteHandlerEnd);
-assert.ok(localRemoteHandler.indexOf("hasCompatibleTopLevelShape") < localRemoteHandler.indexOf("suppressPersistRef.current = true"), "Invalid remote shapes must not suppress the next manual local write");
-assert.match(localRemoteHandler, /Object\.is\(valueRef\.current, next\)/, "Identical primitive remote values must not leave a stale suppression flag");
+assert.ok(localRemoteHandler.indexOf("hasCompatibleTopLevelShape") < localRemoteHandler.indexOf("hasPendingRemoteValueRef.current = true"), "Invalid remote shapes must not suppress the next manual local write");
+assert.match(localRemoteHandler, /Object\.is\(valueRef\.current, next\)/, "Identical remote values must not create a pending echo");
+assert.match(localRemoteHandler, /pendingRemoteValueRef\.current = next/, "Realtime application must remember the exact remote value instead of a global suppression flag");
+const localSetStart = storage.indexOf("const set = useCallback", localRemoteHandlerEnd);
+const localSetEnd = storage.indexOf("return [value, set]", localSetStart);
+const localSetHandler = storage.slice(localSetStart, localSetEnd);
+assert.match(localSetHandler, /hasPendingRemoteValueRef\.current = false/, "A local mutation arriving during remote hydration must cancel the pending echo");
+assert.match(storage, /if \(!hydratedRef\.current\) \{\n      hydratedRef\.current = true;/, "Initial hydration must complete before remote-echo suppression");
+assert.doesNotMatch(storage, /suppressPersistRef/, "A stale boolean must not suppress a later independent local mutation");
 
 assert.match(storage, /CustomEvent<LocalWriteDetail>\(LOCAL_WRITE_EVENT/);
 assert.match(engine, /lastRemoteValues/);
