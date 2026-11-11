@@ -1,5 +1,9 @@
 -- Publish canonical Nutrition changes so Web and native clients can
 -- reconcile AI/manual food_log mutations without waiting for a user_state write.
+-- FULL replica identity is required for account-filtered DELETE events because
+-- Postgres otherwise exposes only the primary key in the old-row payload.
+ALTER TABLE public.food_log REPLICA IDENTITY FULL;
+
 -- This migration is additive and idempotent. It is intentionally not applied
 -- to any Supabase environment as part of this PR.
 DO $$
