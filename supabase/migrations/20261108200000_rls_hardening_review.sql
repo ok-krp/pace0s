@@ -138,16 +138,15 @@ create policy health_samples_e2ee_delete_own on public.health_samples_e2ee
 
 -- Devices are user-managed but cannot be physically deleted through the API;
 -- revocation uses revoked_at and remains consent-gated.
-grant select, insert, update on public.health_e2ee_devices to authenticated;
+-- Device revocation is performed only by the SECURITY DEFINER key-rotation RPC.
+-- Direct UPDATE would let a client clear revoked_at and reactivate an old key.
+grant select, insert on public.health_e2ee_devices to authenticated;
+drop policy if exists health_e2ee_devices_update_own on public.health_e2ee_devices;
 create policy health_e2ee_devices_select_own on public.health_e2ee_devices
   for select to authenticated
   using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
 create policy health_e2ee_devices_insert_own on public.health_e2ee_devices
   for insert to authenticated
-  with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
-create policy health_e2ee_devices_update_own on public.health_e2ee_devices
-  for update to authenticated
-  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()))
   with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
 
 -- Keep the policy-only SECURITY DEFINER helper outside the exposed public schema.
