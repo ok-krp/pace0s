@@ -188,8 +188,16 @@ if (typeof window !== "undefined") {
   });
 }
 
-async function refreshNutritionFromFoodLog(day: string) {
-  await bridgeLocalNutritionToFoodLog(readNutritionItems());
+let nutritionRefreshChain: Promise<void> = Promise.resolve();
+
+export function refreshNutritionFromFoodLog(
+  day: string,
+  options: { bridgeLocalFirst?: boolean } = {},
+): Promise<void> {
+  const task = async () => {
+    if (options.bridgeLocalFirst !== false) {
+      await bridgeLocalNutritionToFoodLog(readNutritionItems());
+    }
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Session utilisateur indisponible.");
   const { data, error } = await supabase.from("food_log")
@@ -218,8 +226,77 @@ async function refreshNutritionFromFoodLog(day: string) {
   const legacyRows = (current[day] ?? []).filter((item) => !isFoodLogUuid(item.id) && !deletedIds.has(item.id));
   const canonicalIds = new Set(rows.map((item) => item.id));
   const mergedRows = [...rows, ...legacyRows.filter((item) => !canonicalIds.has(item.id))];
-  writeDomain(DOMAIN_ITEMS, { ...current, [day]: mergedRows });
+  const nextSnapshot = { ...current, [day]: mergedRows };
+  // Mark the fetched canonical snapshot before writeDomain emits LOCAL_WRITE;
+  // the compatibility bridge must not upload its own remote refresh again.
+  lastBridgedNutrition = nextSnapshot;
+  writeDomain(DOMAIN_ITEMS, nextSnapshot);
   window.dispatchEvent(new Event("pace.nutrition.changed"));
+  };
+  nutritionRefreshChain = nutritionRefreshChain.then(task, task);
+  return nutritionRefreshChain;
+}
+
+export function subscribeNutritionFoodLogChanges(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  let disposed = false;
+  let generation = 0;
+  let channel: ReturnType<typeof supabase.channel> | null = null;
+
+  const detach = () => {
+    const current = channel;
+    channel = null;
+    if (current) void supabase.removeChannel(current);
+  };
+
+  const attach = async () => {
+    const currentGeneration = ++generation;
+    detach();
+    if (!isNutritionDeviceSyncEnabled()) return;
+
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (disposed || currentGeneration !== generation || error || !user) return;
+
+    const nextChannel = supabase
+      .channel(`pace-food-log-${user.id}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "food_log",
+        filter: `user_id=eq.${user.id}`,
+      }, () => onChange())
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "food_log",
+        filter: `user_id=eq.${user.id}`,
+      }, () => onChange());
+
+    channel = nextChannel;
+    nextChannel.subscribe((status) => {
+      if (!disposed && currentGeneration === generation && status === "SUBSCRIBED") {
+        onChange();
+      }
+    });
+    // Initial reconciliation is also required when Realtime is delayed or
+    // the project has not yet enabled food_log in supabase_realtime.
+    onChange();
+  };
+
+  const onConsentChanged = () => { void attach(); };
+  const authSubscription = supabase.auth.onAuthStateChange(() => {
+    queueMicrotask(() => { void attach(); });
+  });
+  window.addEventListener("pace.legal.changed", onConsentChanged);
+  void attach();
+
+  return () => {
+    disposed = true;
+    generation++;
+    window.removeEventListener("pace.legal.changed", onConsentChanged);
+    authSubscription.data.subscription.unsubscribe();
+    detach();
+  };
 }
 
 export function isNutritionDeviceSyncEnabled() { return isLegalCategoryAllowed("sync_cloud"); }
