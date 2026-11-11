@@ -17,7 +17,7 @@ The MCP protected-resource metadata served by the latest PR #315 Preview adverti
 
 The Supabase connection currently lists only:
 - `jayzswkabxfhzmftagku` — PaceOS, INACTIVE
-- `oqaqolvjxhrkvscsqhzp` — PaceOS-Migrated, ACTIVE_HEALTHY
+- `oqaqolvjxhrkvscsqhzp` — PaceOS-Migrated, currently reported INACTIVE by the connected-account listing on 2026-11-11 (previous read-only audit had reported ACTIVE_HEALTHY).
 
 The `cduyjejftorfuxuwhbqt` project is not listed and direct project lookup is not authorized by the current Supabase connection. This does **not** prove that the project is deleted; it proves that its current status/schema cannot be verified with the available access. Do not silently substitute either visible project.
 
@@ -108,7 +108,7 @@ The disposable PostgreSQL assertion suite now explicitly models two separate aut
 - The anonymous role cannot SELECT the private profiles table.
 - Existing checks for cross-user inserts, billing immutability, parent-child Sport relationships, E2EE consent, and server-only tables remain in the suite.
 
-The assertions and static coverage guard were updated on the PR #316 branch. The workflow run for the latest code head is the release signal; do not mark these new tests passed until that exact run completes successfully.
+The assertions and static coverage guard were updated on the PR #316 branch. On verified HEAD `b0e570727e4182b41831266963889d5bee083bb8`, RLS PostgreSQL preflight run `43071628212`, Sync RPC Migration Policy run `43071628143`, and Web dependency and AI quality policy run `43071628197` all completed successfully. These are disposable PostgreSQL and CI validations only; they do not establish the state of the inaccessible runtime Supabase project.
 
 
 ## 8. Supabase project-reference drift across Git and Vercel — 2026-11-11
@@ -329,3 +329,18 @@ Supabase installs most extensions in the `extensions` schema, while older projec
 ### Account deletion and Auth session revocation
 
 The account deletion server function now obtains the Bearer JWT from the same request already validated by `requireSupabaseAuth` and calls `supabaseAdmin.auth.admin.signOut(jwt, 'global')` before deleting any user-owned rows. A revocation failure is fail-closed: the deletion does not proceed. This revokes refresh-token sessions across devices and prevents session renewal. Supabase access-token JWTs already issued cannot be revoked before their `exp`; they remain cryptographically valid until expiry. The application must not describe global sign-out as immediate invalidation of an already-issued access JWT. The generated auth middleware remains untouched.
+
+
+## 14. NULL E2EE pairing-secret handling — 2026-11-11
+
+A further review of the actual `join_pairing_session` PL/pgSQL body found a SQL three-valued-logic defect. The prior check used:
+
+`if v_secret_hash <> v_session.secret_hash then`
+
+If `p_secret_plaintext` is NULL, `digest(NULL)` returns NULL and the `<>` comparison also returns NULL. A PL/pgSQL `IF` does not enter its branch for NULL, so the invalid-secret path could be skipped. This is a real authorization defect, not merely a static-test mismatch.
+
+The current PR #316 migration changes the comparison to `IS DISTINCT FROM`, which treats a NULL computed hash as distinct from the non-NULL stored hash and therefore fails closed. The PostgreSQL assertion suite now submits a NULL secret against a separate pending pairing session and fails if the RPC accepts it. The static coverage guard requires both the hardened comparison and the negative test.
+
+The current PR HEAD is `b0e570727e4182b41831266963889d5bee083bb8`; all three GitHub Actions workflows listed in Section 7 passed on that tree. Vercel has a READY Preview for earlier commit `36d5d4ac2bb9bb66c8c0fbb9d0d18801290964e3`, but the read-only deployment query returned no deployment record for current HEAD `b0e5707`. Do not claim the current HEAD has a verified Preview until one exists.
+
+The connected Supabase account's latest project listing reports both visible refs, `jayzswkabxfhzmftagku` and `oqaqolvjxhrkvscsqhzp`, as INACTIVE. The configured Vercel runtime ref `cduyjejftorfuxuwhbqt` remains absent from the connected account. This does not establish that the configured project is deleted; its live schema and current routine ACLs remain unverified.
