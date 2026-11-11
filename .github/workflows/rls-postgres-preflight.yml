@@ -52,6 +52,13 @@ jobs:
           psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
             --set=ON_ERROR_STOP=1 --file=supabase/migrations/20261108200000_rls_hardening_review.sql
 
+      - name: Apply nullable AES Key Wrap envelope nonce migration
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host=127.0.0.1 --username=postgres --dbname=paceos_rls_test \
+            --set=ON_ERROR_STOP=1 --file=supabase/migrations/20261111140000_allow_nullable_health_e2ee_envelope_nonce.sql
+
       - name: Assert tenant isolation, consent gates, and least privilege
         env:
           PGPASSWORD: postgres
