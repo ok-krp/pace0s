@@ -93,7 +93,7 @@ assert.ok(aiNutritionSyncStart >= 0 && aiNutritionSyncEnd > aiNutritionSyncStart
 const aiNutritionSync = nutritionAi.slice(aiNutritionSyncStart, aiNutritionSyncEnd);
 assert.match(aiNutritionSync, /const existingDay = Array\.isArray\(itemsByDay\[day\]\) \? itemsByDay\[day\] : \[\]/, "AI projection must safely inspect an existing Nutrition day snapshot");
 assert.match(aiNutritionSync, /const legacyRows = existingDay\.filter\(\(item\) =>[\s\S]*!uuidPattern\.test\(item\.id\)/, "AI projection must retain historical non-UUID native manual meals");
-assert.match(aiNutritionSync, /itemsByDay\[day\] = \[\.\.\.canonicalRows, \.\.\.legacyRows\]/, "AI projection must not replace legacy manual entries with food_log-only rows");
+assert.match(aiNutritionSync, /itemsByDay\[day\] = \[\.\.\.canonicalRows, \.\.\.legacyRows, \.\.\.pendingRows\]/, "AI projection must retain both historical and pending native manual meals");
 assert.match(aiNutritionSync, /const pendingRows = existingDay\.filter\(\(item\) =>[\s\S]*item\.pendingFoodLog === true[\s\S]*!canonicalIds\.has/, "AI projection must preserve pending native UUID rows not yet visible in food_log");
 assert.match(aiNutritionSync, /itemsByDay\[day\] = \[\.\.\.canonicalRows, \.\.\.legacyRows, \.\.\.pendingRows\]/, "AI projection must retain both historical and pending native manual meals");
 assert.match(nutritionAi, /async function writeNutritionStateSnapshot[\s\S]*upsert_user_state_if_newer/, "AI Nutrition snapshots must use the monotonic cloud sync RPC rather than a direct user_state update");
@@ -133,6 +133,7 @@ assert.match(explicitNutritionDelete, /forgetDeletedNutritionId\(user\.id, id\)/
 
 assert.match(bridge, /isFoodLogUuid\(id\) && !deletedIds\.has\(id\)/, "Legacy timestamp IDs must not be sent to the UUID food_log primary key");
 assert.match(nutritionLog, /const legacyRows = \(current\[day\] \?\? \[\]\)\.filter\(\(item\) => !isFoodLogUuid\(item\.id\)/, "Web refresh must retain legacy Flutter meals absent from food_log");
+assert.match(nutritionLog, /const pendingRows = currentRows\.filter\(\(item\) =>[\s\S]*pendingFoodLog === true[\s\S]*!canonicalIds\.has\(item\.id\)/, "Web refresh must retain pending native UUID rows absent from food_log");
 assert.match(nutritionLog, /const pendingRows = currentRows\.filter\(\(item\) =>[\s\S]*pendingFoodLog === true[\s\S]*!canonicalIds\.has\(item\.id\)/, "Web refresh must preserve native UUID rows while their canonical food_log insert is pending");
 assert.match(nutritionLog, /if \(pendingRows\.length\) await bridgeLocalNutritionToFoodLog\(nextSnapshot\)/, "Web must retry pending native meal inserts through the idempotent UUID bridge");
 assert.match(nutritionLog, /if \(!isFoodLogUuid\(id\)\) return/, "Legacy timestamp meal deletion must not query the UUID food_log key");
