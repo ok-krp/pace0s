@@ -68,7 +68,7 @@ const rpcOnlyTables = [
 const classes = {
   directUserTables,
   ownerReadProfileLimitedAiUpdate: sql.match(/grant select on public\.profiles to authenticated/i) &&
-    sql.match(/grant update \(weight_kg, weight_goal_kg, daily_calorie_goal, daily_protein_goal, daily_water_ml_goal, training_goal\)[\s\S]*?on public\.profiles to authenticated/i)
+    sql.match(/grant update\s*\(\s*weight_kg,\s*weight_goal_kg,\s*daily_calorie_goal,\s*daily_protein_goal,\s*daily_water_ml_goal,\s*training_goal\s*\)\s*on public\.profiles to authenticated/i)
     ? ["profiles"] : [],
   legacyMutableLegalConsent: sql.match(/grant select on public\.legal_consent to authenticated/i) &&
     sql.match(/grant insert \(user_id, region, eula_version, privacy_version, ip_country, consented_at, opts\)/i) &&
@@ -104,7 +104,7 @@ assert.match(sql, /grant insert \(user_id, region, eula_version, privacy_version
   "Legal consent UPSERT may insert only app-submitted decision fields");
 assert.match(sql, /grant select on public\.profiles to authenticated/i,
   "Profiles must remain owner-readable");
-assert.match(sql, /grant update \(weight_kg, weight_goal_kg, daily_calorie_goal, daily_protein_goal, daily_water_ml_goal, training_goal\)[\s\S]*?on public\.profiles to authenticated/i,
+assert.match(sql, /grant update\s*\(\s*weight_kg,\s*weight_goal_kg,\s*daily_calorie_goal,\s*daily_protein_goal,\s*daily_water_ml_goal,\s*training_goal\s*\)\s*on public\.profiles to authenticated/i,
   "Only the six direct AI Coach profile update fields may be directly writable");
 assert.doesNotMatch(sql, /grant insert on public\.profiles to authenticated/i,
   "Profile creation must use the owner-checking version-safe RPC");
