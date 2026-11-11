@@ -192,6 +192,11 @@ assert.match(sql, /create policy user_state_select_own on public\.user_state[\s\
   "user_state direct SELECT must be owner-isolated");
 assert.doesNotMatch(sql, /grant [^;]*on public\.user_state to authenticated[^;]*(?:insert|update|delete)/i,
   "user_state writes must remain RPC-only");
+const syncAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.match(syncAssertions, /user A can read user B user_state/,
+  "PostgreSQL must verify user A cannot read user B cloud state");
+assert.match(syncAssertions, /user B can read user A user_state/,
+  "PostgreSQL must verify user B cannot read user A cloud state");
 assert.doesNotMatch(directBlock, /'user_state'/,
   "user_state must not receive blanket CRUD privileges");
 
