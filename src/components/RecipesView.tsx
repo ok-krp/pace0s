@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { addNutritionItem } from "@/lib/nutrition-log";
+import { addNutritionItem, isNutritionDeviceSyncEnabled } from "@/lib/nutrition-log";
 import { toast } from "sonner";
 
 type Recipe = {
@@ -101,7 +101,7 @@ export function RecipesView() {
 
   const addToLog = (r: Recipe, meal: string) => {
     void addNutritionItem({ name: `${r.emoji} ${r.name}`, meal, kcal: r.kcal, p: r.p, c: r.c, f: r.f })
-      .then((saved) => { if (saved) toast.success("Repas enregistré dans Nutrition et synchronisé."); })
+      .then((saved) => { if (saved) { if (isNutritionDeviceSyncEnabled()) toast.success("Repas enregistré ; synchronisation entre appareils en cours."); else toast.info("Repas enregistré. Active « Fonctionnel — Synchronisation » dans les consentements pour le retrouver sur tes autres appareils."); } })
       .catch((error) => toast.error(error instanceof Error ? error.message : "Enregistrement du repas impossible."));
   };
 
