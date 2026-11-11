@@ -241,6 +241,13 @@ create policy notification_log_select_own on public.notification_log
 create policy reminder_debug_log_select_own on public.reminder_debug_log
   for select to authenticated using (user_id = (select auth.uid()));
 
+-- Cloud state is readable by owner, but every write must go through the
+-- server-ordered SECURITY DEFINER RPC. A direct PostgREST write would bypass
+-- the database commit-time monotonic conflict rule.
+grant select on public.user_state to authenticated;
+create policy user_state_select_own on public.user_state
+  for select to authenticated using (user_id = (select auth.uid()));
+
 -- 5) Tables with a direct user_id owner. Policies require the JWT subject to
 -- equal user_id for reads and writes. No anon policy is created.
 do $$
@@ -262,8 +269,7 @@ begin
     'sport_programs',
     'sport_progression_targets',
     'sport_workout_sessions',
-    'user_biometrics_e2ee',
-    'user_state'
+    'user_biometrics_e2ee'
   ] loop
     execute format('grant select, insert, update, delete on public.%I to authenticated', t);
     execute format('drop policy if exists %I on public.%I', t || '_user_isolation', t);
