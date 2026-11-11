@@ -129,9 +129,13 @@ class _AuthGateState extends State<_AuthGate> {
 
   Future<void> _applyAccountSwitch(String? userId) async {
     try {
+      // Auth events may arrive in quick succession. Ignore an obsolete event
+      // before it is allowed to switch the local namespace.
+      if (widget.auth.currentUser?.id != userId) return;
       // Stop the previous account's Realtime listeners and invalidate its
       // consent cache before changing the local snapshot or starting a sync.
       await widget.sync.onAccountChanged(userId);
+      if (widget.auth.currentUser?.id != userId) return;
       if (userId != null) {
         await widget.localStore.activateAccount(userId);
       } else if (widget.localStore.currentAccountId != null) {
@@ -139,6 +143,7 @@ class _AuthGateState extends State<_AuthGate> {
         // local snapshot while the auth gate is showing the login screen.
         await widget.localStore.activateAccount(null);
       }
+      if (widget.auth.currentUser?.id != userId) return;
       if (!mounted) return;
       setState(() {
         _signedIn = userId != null;
