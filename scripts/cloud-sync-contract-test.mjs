@@ -68,6 +68,10 @@ assert.match(accountScope, /localStorage\.setItem\(ACCOUNT_SCOPE_KEY, previousSc
 assert.match(authProvider, /switchLocalAccountScope\(nextSession\?\.user\.id \?\? null\)/, "Every auth session transition must switch the local data namespace");
 assert.match(authProvider, /<Ctx\.Provider[\s\S]*key=\{session\?\.user\.id \?\? "__guest__"\}/, "React state hooks must remount after switching local account namespaces");
 assert.match(authProvider, /authEventVersion[\s\S]*authEventVersion === initialVersion/, "A delayed initial session lookup must not reverse a newer authentication event");
+
+assert.match(authProvider, /hasAuthEvent = true[\s\S]*!hasAuthEvent && authEventVersion === initialVersion/, "Any auth stream event must take precedence over a delayed initial getSession result");
+assert.match(accountScope, /const restored = readAccountSnapshot\(nextScope\)[\s\S]*catch \(error\)[\s\S]*restoreAccountSnapshot\(currentSnapshot\)/, "A failed initial account restore must roll back to the legacy local snapshot");
+
 assert.match(authProvider, /scopeError/, "The app must not render account data if namespace restoration fails");
 
 
