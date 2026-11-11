@@ -167,6 +167,9 @@ BEGIN
      OR has_table_privilege('authenticated','public.user_state','DELETE') THEN
     RAISE EXCEPTION 'authenticated can bypass monotonic user_state RPC with direct writes';
   END IF;
+  IF has_table_privilege('authenticated','public.health_e2ee_recovery_envelopes','DELETE') THEN
+    RAISE EXCEPTION 'authenticated can directly delete an E2EE recovery envelope';
+  END IF;
   IF has_column_privilege('authenticated','public.consent_records','id','INSERT') THEN
     RAISE EXCEPTION 'authenticated can choose consent record identifiers';
   END IF;
@@ -357,6 +360,14 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
+  SELECT count(*) INTO n FROM public.health_e2ee_recovery_envelopes;
+  IF n <> 0 THEN RAISE EXCEPTION 'E2EE recovery envelope visible without consent'; END IF;
+  BEGIN
+    INSERT INTO public.health_e2ee_recovery_envelopes(user_id,envelope,nonce,algorithm,key_version)
+      VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','cipher','nonce','PBKDF2-SHA-256/AES-256-GCM',1);
+    RAISE EXCEPTION 'E2EE recovery write succeeded without required consent';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
   SELECT count(*) INTO n FROM public.health_samples_e2ee;
   IF n <> 0 THEN RAISE EXCEPTION 'E2EE samples visible without consent'; END IF;
   BEGIN
@@ -375,6 +386,13 @@ BEGIN
     AND consent_type IN ('health_data','health_cloud_sync')
     AND created_at=(SELECT now());
   IF n <> 2 THEN RAISE EXCEPTION 'database timestamp default not applied to consent records: %',n; END IF;
+
+  INSERT INTO public.health_e2ee_recovery_envelopes(user_id,envelope,nonce,algorithm,key_version)
+    VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','wrapped-key','wrapped-nonce','PBKDF2-SHA-256/AES-256-GCM',1)
+    ON CONFLICT (user_id) DO UPDATE SET envelope=EXCLUDED.envelope,nonce=EXCLUDED.nonce,
+      algorithm=EXCLUDED.algorithm,key_version=EXCLUDED.key_version;
+  SELECT count(*) INTO n FROM public.health_e2ee_recovery_envelopes;
+  IF n <> 1 THEN RAISE EXCEPTION 'consented E2EE recovery envelope write failed'; END IF;
 
   BEGIN
     UPDATE public.health_e2ee_devices SET revoked_at=NULL
@@ -528,6 +546,8 @@ BEGIN
   SELECT count(*) INTO n FROM public.user_state
   WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
   IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A user_state'; END IF;
+  SELECT count(*) INTO n FROM public.health_e2ee_recovery_envelopes;
+  IF n <> 0 THEN RAISE EXCEPTION 'user B can read user A E2EE recovery envelope'; END IF;
 
   BEGIN
     UPDATE public.profiles
