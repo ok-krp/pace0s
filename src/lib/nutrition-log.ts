@@ -1,6 +1,7 @@
 import { todayKey, onLocalWrite } from "@/lib/storage";
 import { writeDomain, readDomain } from "@/lib/domain-store";
 import { supabase } from "@/integrations/supabase/client";
+import { isLegalCategoryAllowed } from "@/lib/legal";
 
 export type NutritionItem = {
   id: string;
@@ -182,6 +183,8 @@ async function refreshNutritionFromFoodLog(day: string) {
   writeDomain(DOMAIN_ITEMS, { ...current, [day]: rows });
   window.dispatchEvent(new Event("pace.nutrition.changed"));
 }
+
+export function isNutritionDeviceSyncEnabled() { return isLegalCategoryAllowed("sync_cloud"); }
 
 export async function addNutritionItem(
   item: Omit<NutritionItem, "id" | "qty"> & { qty?: number },
