@@ -12,23 +12,37 @@ class SyncService {
   final LocalStore localStore;
   final SupabaseClient? client;
   bool _running = false;
+  bool _syncRequested = false;
   RealtimeChannel? _realtimeChannel;
   String? _realtimeUserId;
 
   Future<void> syncNow() async {
-    final user = client?.auth.currentUser;
-    if (_running || client == null || user == null) return;
+    final initialUserId = client?.auth.currentUser?.id;
+    if (client == null || initialUserId == null) return;
+    if (_running) {
+      // Coalesce writes that arrive during an active network cycle instead
+      // of silently dropping their immediate-sync request.
+      _syncRequested = true;
+      return;
+    }
+
     _running = true;
     try {
-      await _ensureRealtimeSubscription(user.id);
-      final hadLocalAiPreferenceMutation = localStore.pendingOperations().any(
-        (operation) =>
-            operation['key'] == 'pace.settings.ai.confirm_actions' ||
-            operation['key'] == 'pace.settings.ai.memory',
-      );
-      await _pushPending();
-      await _syncAiPreferences(pushLocal: hadLocalAiPreferenceMutation);
-      await _pullRemote();
+      do {
+        _syncRequested = false;
+        final user = client?.auth.currentUser;
+        if (user == null || user.id != initialUserId) break;
+
+        await _ensureRealtimeSubscription(user.id);
+        final hadLocalAiPreferenceMutation = localStore.pendingOperations().any(
+          (operation) =>
+              operation['key'] == 'pace.settings.ai.confirm_actions' ||
+              operation['key'] == 'pace.settings.ai.memory',
+        );
+        await _pushPending();
+        await _syncAiPreferences(pushLocal: hadLocalAiPreferenceMutation);
+        await _pullRemote();
+      } while (_syncRequested && client?.auth.currentUser?.id == initialUserId);
     } finally {
       _running = false;
     }
