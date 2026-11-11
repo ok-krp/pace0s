@@ -307,3 +307,10 @@ The 45-table access inventory now classifies `legal_consent` separately from ord
 ### Profile writes restricted to the monotonic sync RPC and AI fields
 
 The profile route writes through `upsert_profile_if_newer`; the Coach tool directly updates only `weight_kg`, `weight_goal_kg`, `daily_calorie_goal`, `daily_protein_goal`, `daily_water_ml_goal` and `training_goal`. The RLS migration now grants owner SELECT and column-level UPDATE for exactly those six direct fields, with no direct INSERT, `id/user_id` UPDATE or DELETE. The follow-up hardening migration promotes the historical owner-checking `upsert_profile_if_newer` RPC to `SECURITY DEFINER`, sets an empty `search_path`, and grants EXECUTE only to `authenticated`. PostgreSQL fixture assertions exercise the AI field update, a valid newer RPC write, rejection of a stale timestamp, rejection of another account's `p_user_id`, and denial of direct owner reassignment/deletion.
+
+
+### SECURITY INVOKER Sport RPCs and timestamp trigger helpers
+
+The Sport edit/delete RPCs (`sport_update_exercise`, `sport_delete_exercise`, `sport_update_program`, `sport_delete_program`, `sport_finish_workout`, `sport_delete_workout`) remain `SECURITY INVOKER`: their writes must continue to be evaluated against the caller's RLS policies. Their fully qualified statements no longer need `search_path = public`; the hardening migration pins an empty path and re-grants EXECUTE only to `authenticated`. The RLS fixture asserts the functions are not SECURITY DEFINER and proves A cannot delete B's workout, program or exercise through these RPCs.
+
+The shared `touch_updated_at()` and legacy `update_updated_at_column()` functions are trigger-only helpers. Their direct EXECUTE grants are revoked from `PUBLIC`, `anon` and `authenticated`, and their paths are emptied. The PostgreSQL fixture attaches both triggers before revocation, then proves owner updates still invoke the triggers. `has_current_health_e2ee_consent()` is also pinned to an empty path while remaining an authenticated invoker function for RLS evaluation.
