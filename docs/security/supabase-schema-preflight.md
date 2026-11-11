@@ -282,3 +282,8 @@ This migration depends on the canonical routine definitions existing, so it rema
 ### Column-level privilege reset
 
 A final ACL review found that PostgreSQL stores per-column grants separately from table-level ACLs. The RLS reset now iterates every live column in the public tables and revokes all column privileges from `PUBLIC`, `anon` and `authenticated` before reapplying the narrowly scoped consent, device, envelope, recovery and deletion-request column grants. The fixture intentionally adds stale `SELECT(user_id)`, `INSERT(user_id)` and `UPDATE(user_id)` grants to the backend-only `ai_provider_secrets` table for all three grantees; PostgreSQL assertions fail if any survives.
+
+
+### Encrypted biometric table brought under granular health consent
+
+The audited 45-table inventory and generated `main` types include `user_biometrics_e2ee` with `ciphertext`, `nonce`, `algorithm` and `key_version`, but no tracked web/Flutter callsite was found. It had been placed in the generic user-owned CRUD group, which meant it was not gated by the current `health_data` and `health_cloud_sync` decisions. It is now in the E2EE access class with owner-scoped SELECT/INSERT/UPDATE/DELETE and the same two-consent predicate as encrypted health samples. PostgreSQL fixture assertions now test no-consent denial, consented owner access, A/B isolation and immediate denial after a later consent withdrawal.
