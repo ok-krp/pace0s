@@ -36,6 +36,183 @@ revoke all on function public.rotate_health_e2ee_key(integer, uuid)
 grant execute on function public.rotate_health_e2ee_key(integer, uuid)
   to authenticated;
 
+-- These two pairing RPCs call pgcrypto. Resolve the extension's actual schema
+-- from pg_catalog instead of relying on an unqualified function lookup while
+-- keeping search_path empty (legacy projects may have pgcrypto in public).
+create or replace function public.join_pairing_session(
+  p_session_id uuid,
+  p_secret_plaintext text,
+  p_recipient_device_id uuid,
+  p_ephemeral_pub jsonb
+) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $
+declare
+  v_session public.health_e2ee_pairing_sessions%rowtype;
+  v_attempt integer;
+  v_pgcrypto_schema name;
+  v_secret_hash text;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  select *
+  into v_session
+  from public.health_e2ee_pairing_sessions
+  where id = p_session_id
+    and user_id = auth.uid()
+  for update;
+
+  if not found then
+    raise exception 'Session not found';
+  end if;
+
+  if v_session.expires_at <= now() then
+    update public.health_e2ee_pairing_sessions
+    set status = 'expired', updated_at = now()
+    where id = p_session_id
+      and status not in ('completed','rejected');
+    raise exception 'Session expired';
+  end if;
+
+  if v_session.locked_until is not null and v_session.locked_until > now() then
+    raise exception 'Session locked due to brute force protection';
+  end if;
+
+  if v_session.status <> 'pending' then
+    raise exception 'Invalid state transition';
+  end if;
+
+  select n.nspname
+  into v_pgcrypto_schema
+  from pg_catalog.pg_extension e
+  join pg_catalog.pg_namespace n on n.oid = e.extnamespace
+  where e.extname = 'pgcrypto';
+
+  if v_pgcrypto_schema is null then
+    raise exception 'pgcrypto extension is not installed';
+  end if;
+
+  execute pg_catalog.format(
+    'select pg_catalog.encode(%I.digest(pg_catalog.convert_to($1, ''UTF8''), ''sha256''), ''hex'')',
+    v_pgcrypto_schema
+  )
+  into v_secret_hash
+  using p_secret_plaintext;
+
+  if v_secret_hash <> v_session.secret_hash then
+    v_attempt := v_session.attempt_count + 1;
+
+    update public.health_e2ee_pairing_sessions
+    set attempt_count = v_attempt,
+        locked_until = case
+          when v_attempt >= v_session.max_attempts then now() + interval '15 minutes'
+          else null
+        end,
+        status = case
+          when v_attempt >= v_session.max_attempts then 'locked'
+          else status
+        end,
+        updated_at = now()
+    where id = p_session_id;
+
+    raise exception 'Invalid session secret';
+  end if;
+
+  if jsonb_typeof(p_ephemeral_pub) <> 'object'
+     or p_ephemeral_pub->>'kty' <> 'EC'
+     or p_ephemeral_pub->>'crv' <> 'P-256'
+     or coalesce(length(p_ephemeral_pub->>'x'), 0) = 0
+     or coalesce(length(p_ephemeral_pub->>'y'), 0) = 0 then
+    raise exception 'Invalid recipient ephemeral public key';
+  end if;
+
+  if not exists (
+    select 1
+    from public.health_e2ee_devices d
+    where d.id = p_recipient_device_id
+      and d.user_id = auth.uid()
+      and d.revoked_at is null
+      and d.algorithm = 'ECDH-P256'
+      and d.id <> v_session.initiator_device_id
+  ) then
+    raise exception 'Unauthorized recipient device';
+  end if;
+
+  update public.health_e2ee_pairing_sessions
+  set status = 'joined',
+      recipient_device_id = p_recipient_device_id,
+      recipient_ephemeral_public_key = p_ephemeral_pub,
+      updated_at = now()
+  where id = p_session_id;
+end;
+$;
+
+create or replace function public.complete_pairing_session(
+  p_session_id uuid,
+  p_recipient_device_id uuid
+) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $
+declare
+  v_session public.health_e2ee_pairing_sessions%rowtype;
+  v_pgcrypto_schema name;
+  v_rotated_secret_hash text;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required';
+  end if;
+
+  select *
+  into v_session
+  from public.health_e2ee_pairing_sessions
+  where id = p_session_id
+    and user_id = auth.uid()
+    and recipient_device_id = p_recipient_device_id
+  for update;
+
+  if not found or v_session.status <> 'confirmed' then
+    raise exception 'Invalid session or state';
+  end if;
+
+  if v_session.expires_at <= now() then
+    update public.health_e2ee_pairing_sessions
+    set status = 'expired', updated_at = now()
+    where id = p_session_id;
+    raise exception 'Session expired';
+  end if;
+
+  select n.nspname
+  into v_pgcrypto_schema
+  from pg_catalog.pg_extension e
+  join pg_catalog.pg_namespace n on n.oid = e.extnamespace
+  where e.extname = 'pgcrypto';
+
+  if v_pgcrypto_schema is null then
+    raise exception 'pgcrypto extension is not installed';
+  end if;
+
+  execute pg_catalog.format(
+    'select pg_catalog.encode(%I.digest(%I.gen_random_bytes(32), ''sha256''), ''hex'')',
+    v_pgcrypto_schema,
+    v_pgcrypto_schema
+  )
+  into v_rotated_secret_hash;
+
+  update public.health_e2ee_pairing_sessions
+  set status = 'completed',
+      completed_at = now(),
+      updated_at = now(),
+      secret_hash = v_rotated_secret_hash
+  where id = p_session_id;
+end;
+$;
+
 -- E2EE pairing functions are SECURITY DEFINER and validate auth.uid()
 -- and device/session ownership internally. Revoke stale direct API grants
 -- explicitly; the authenticated RPC calls are required by health.functions.ts.
