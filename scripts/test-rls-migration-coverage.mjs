@@ -265,9 +265,9 @@ assert.match(definerHardeningSql, /revoke all on function public\.update_updated
 const invokerAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
 for (const assertion of [
   "Sport table RPC unexpectedly bypasses caller RLS as SECURITY DEFINER",
-  "user A deleted user B workout via invoker RPC",
-  "user A deleted user B program via invoker RPC",
-  "user A deleted user B exercise via invoker RPC",
+  "user B workout missing after user A invoker delete attempt",
+  "user B program missing after user A invoker delete attempt",
+  "user B exercise missing after user A invoker delete attempt",
   "timestamp trigger helpers remain directly executable by API roles",
   "revoked timestamp trigger helper did not run for owner UPDATE",
 ]) {
