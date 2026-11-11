@@ -62,19 +62,6 @@ async function writeNutritionStateSnapshot(client: Client, userId: string, key: 
 }
 
 async function syncNutritionStateFromDb(client: Client, userId: string, day: string) {
-  const { data, error } = await client.from("food_log")
-    .select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,created_at")
-    .eq("user_id", userId).eq("log_date", day).order("created_at");
-  if (error) throw error;
-
-  const canonicalRows = (data ?? []).map((row) => ({
-    id: row.id, name: row.name, meal: row.meal,
-    kcal: Number(row.kcal ?? 0), p: Number(row.protein_g ?? 0),
-    c: Number(row.carbs_g ?? 0), f: Number(row.fat_g ?? 0),
-    fiber: Number(row.fiber_g ?? 0), sugar: Number(row.sugar_g ?? 0),
-    sodium: Number(row.sodium_mg ?? 0), qty: 1,
-  }));
-  const canonicalIds = new Set(canonicalRows.map((row) => row.id));
   const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
   // Retry the canonical projection if another device commits a newer
@@ -83,6 +70,18 @@ async function syncNutritionStateFromDb(client: Client, userId: string, day: str
   for (let attempt = 0; attempt < 3; attempt++) {
     const current = await readUserState(client, userId, "pace.nutrition.items");
     const raw = current?.value;
+    const { data, error } = await client.from("food_log")
+      .select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,created_at")
+      .eq("user_id", userId).eq("log_date", day).order("created_at");
+    if (error) throw error;
+    const canonicalRows = (data ?? []).map((row) => ({
+      id: row.id, name: row.name, meal: row.meal,
+      kcal: Number(row.kcal ?? 0), p: Number(row.protein_g ?? 0),
+      c: Number(row.carbs_g ?? 0), f: Number(row.fat_g ?? 0),
+      fiber: Number(row.fiber_g ?? 0), sugar: Number(row.sugar_g ?? 0),
+      sodium: Number(row.sodium_mg ?? 0), qty: 1,
+    }));
+    const canonicalIds = new Set(canonicalRows.map((row) => row.id));
     const itemsByDay: Record<string, Array<Record<string, unknown>>> =
       raw && typeof raw === "object" && !Array.isArray(raw)
         ? { ...(raw as Record<string, Array<Record<string, unknown>>>) }
