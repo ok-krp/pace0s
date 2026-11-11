@@ -79,83 +79,77 @@ function nutritionRows(value: unknown) {
 }
 
 let lastBridgedNutrition = readNutritionItems();
-let nutritionBridgeRunning = false;
+let lastBridgedUserId: string | null = null;
+let nutritionBridgeChain: Promise<void> = Promise.resolve();
 
-async function bridgeLocalNutritionToFoodLog(value: unknown) {
-  if (nutritionBridgeRunning || typeof window === "undefined") return;
-  nutritionBridgeRunning = true;
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const nextRows = nutritionRows(value);
-    const previousById = new Map(nutritionRows(lastBridgedNutrition).map((row) => [row.id, row.item]));
-    // Query only IDs present in this snapshot. A missing ID is not a delete
-    // instruction: snapshots can be partial, stale, or still hydrating.
-    const requestedIds = [...new Set(nextRows.map((row) => row.id))];
-    const { data: existing, error: selectError } = requestedIds.length
-      ? await supabase.from("food_log").select("id").eq("user_id", user.id).in("id", requestedIds)
-      : { data: [], error: null };
-    if (selectError) throw selectError;
-    const existingIds = new Set((existing ?? []).map((row) => row.id));
-    for (const { id, day, item } of nextRows) {
-      const previous = previousById.get(id);
-      const changed = previous !== undefined && JSON.stringify(previous) !== JSON.stringify(item);
-      if (existingIds.has(id) && !changed) continue;
-      const payload = { id, user_id: user.id, log_date: day, meal: item.meal, name: item.name, kcal: Number(item.kcal || 0), protein_g: Number(item.p || 0), carbs_g: Number(item.c || 0), fat_g: Number(item.f || 0), fiber_g: Number(item.fiber || 0), sugar_g: Number(item.sugar || 0), sodium_mg: Number(item.sodium || 0), source: existingIds.has(id) ? undefined : "manual", meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } } };
-      if (existingIds.has(id)) {
-        const { source: _source, ...update } = payload;
-        const { error } = await supabase.from("food_log").update(update).eq("id", id).eq("user_id", user.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("food_log").insert(payload);
-        if (error) throw error;
-        existingIds.add(id);
-      }
-    }
-    // Deliberately no DELETE here. Only an explicit delete action may remove
-    // a food_log row; absence from a local snapshot must never erase cloud data.
-    lastBridgedNutrition = value && typeof value === "object" && !Array.isArray(value) ? value as NutritionMap : {};
-  } catch (error) {
-    console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
-  } finally {
-    nutritionBridgeRunning = false;
+async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<void> {
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  // A queued snapshot from a previous session must never be written under a
+  // different account after an account switch.
+  if (!user || user.id !== userId) return;
+  if (lastBridgedUserId !== userId) {
+    lastBridgedUserId = userId;
+    lastBridgedNutrition = readNutritionItems();
   }
+
+  const nextRows = nutritionRows(value);
+  const previousById = new Map(nutritionRows(lastBridgedNutrition).map((row) => [row.id, row.item]));
+  // A missing ID is not a delete instruction. Only the explicit remove handler
+  // is allowed to delete a row from food_log.
+  const requestedIds = [...new Set(nextRows.map((row) => row.id))];
+  const { data: existing, error: selectError } = requestedIds.length
+    ? await supabase.from("food_log").select("id").eq("user_id", user.id).in("id", requestedIds)
+    : { data: [], error: null };
+  if (selectError) throw selectError;
+  const existingIds = new Set((existing ?? []).map((row) => row.id));
+  for (const { id, day, item } of nextRows) {
+    const previous = previousById.get(id);
+    const changed = previous !== undefined && JSON.stringify(previous) !== JSON.stringify(item);
+    if (existingIds.has(id) && !changed) continue;
+    const payload = { id, user_id: user.id, log_date: day, meal: item.meal, name: item.name, kcal: Number(item.kcal || 0), protein_g: Number(item.p || 0), carbs_g: Number(item.c || 0), fat_g: Number(item.f || 0), fiber_g: Number(item.fiber || 0), sugar_g: Number(item.sugar || 0), sodium_mg: Number(item.sodium || 0), source: existingIds.has(id) ? undefined : "manual", meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } } };
+    if (existingIds.has(id)) {
+      const { source: _source, ...update } = payload;
+      const { error } = await supabase.from("food_log").update(update).eq("id", id).eq("user_id", user.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("food_log").insert(payload);
+      if (error) throw error;
+      existingIds.add(id);
+    }
+  }
+  lastBridgedNutrition = value && typeof value === "object" && !Array.isArray(value) ? value as NutritionMap : {};
+}
+
+function bridgeLocalNutritionToFoodLog(value: unknown): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  const task = async () => {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) return;
+    await bridgeNutritionSnapshot(value, user.id);
+  };
+  // Serialize snapshots instead of dropping writes while a previous bridge
+  // operation is still in flight. Each snapshot is rechecked against food_log.
+  nutritionBridgeChain = nutritionBridgeChain.then(task, task);
+  return nutritionBridgeChain;
 }
 
 if (typeof window !== "undefined") {
   onLocalWrite((key, value) => {
     if (key !== "pace.nutrition.items") return;
-    void bridgeLocalNutritionToFoodLog(value);
+    void bridgeLocalNutritionToFoodLog(value).catch((error) => {
+      console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
+    });
   });
-  void bridgeLocalNutritionToFoodLog(lastBridgedNutrition);
+  void bridgeLocalNutritionToFoodLog(lastBridgedNutrition).catch((error) => {
+    console.error("[nutrition] initial food_log bridge failed", error instanceof Error ? error.message : error);
+  });
 }
 
 async function refreshNutritionFromFoodLog(day: string) {
+  await bridgeLocalNutritionToFoodLog(readNutritionItems());
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user) throw new Error("Session utilisateur indisponible.");
-  // Recover entries created by older app versions that existed only in the
-  // device's local domain snapshot. Keep their original IDs and never delete.
-  const localSnapshot = readNutritionItems();
-  const localRows = localSnapshot[day] ?? [];
-  const localIds = [...new Set(localRows.map((item) => item.id).filter(Boolean))];
-  if (localIds.length) {
-    const { data: existing, error: lookupError } = await supabase.from("food_log")
-      .select("id").eq("user_id", user.id).in("id", localIds);
-    if (lookupError) throw new Error(lookupError.message);
-    const existingIds = new Set((existing ?? []).map((row) => row.id));
-    for (const item of localRows) {
-      if (existingIds.has(item.id)) continue;
-      const { error: insertError } = await supabase.from("food_log").insert({
-        id: item.id, user_id: user.id, log_date: day, meal: item.meal, name: item.name,
-        kcal: Number(item.kcal || 0), protein_g: Number(item.p || 0),
-        carbs_g: Number(item.c || 0), fat_g: Number(item.f || 0),
-        fiber_g: Number(item.fiber || 0), sugar_g: Number(item.sugar || 0),
-        sodium_mg: Number(item.sodium || 0), source: "manual",
-        meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } },
-      });
-      if (insertError) throw new Error(insertError.message);
-    }
-  }
   const { data, error } = await supabase.from("food_log")
     .select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta")
     .eq("user_id", user.id).eq("log_date", day).order("created_at", { ascending: true });
