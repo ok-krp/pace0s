@@ -237,6 +237,9 @@ assert.match(nutritionLog, /source === "photo_ai" \? "photo" : source/, "Photo A
 assert.match(nutritionLog, /export function subscribeNutritionFoodLogChanges/, "Web Nutrition must subscribe to canonical food_log changes");
 assert.match(nutritionLog, /event: "INSERT"[\s\S]*table: "food_log"[\s\S]*filter: `user_id=eq\.\$\{user\.id\}`/, "Web Nutrition Realtime must be scoped to the authenticated account");
 assert.match(nutritionLog, /event: "UPDATE"[\s\S]*table: "food_log"/, "Web Nutrition must refresh when canonical meals are edited by AI or another device");
+assert.match(nutritionLog, /event: "DELETE"[\s\S]*table: "food_log"[\s\S]*filter: `user_id=eq\.\$\{user\.id\}`/, "Web Nutrition must receive account-filtered canonical meal deletions in Realtime");
+assert.match(flutterSync, /event: PostgresChangeEvent\.delete[\s\S]*table: 'food_log'[\s\S]*column: 'user_id'[\s\S]*_handleFoodLogRealtime\(userId\)/, "Flutter must reconcile account-filtered food_log DELETE events");
+assert.match(nutritionRealtimeMigration, /ALTER TABLE public\.food_log REPLICA IDENTITY FULL/, "food_log must expose old user_id values so DELETE Realtime can be filtered per account");
 assert.match(nutritionLog, /nutritionRefreshChain = nutritionRefreshChain\.then\(task, task\)/, "Concurrent Nutrition hydration requests must be serialized");
 assert.match(nutritionLog, /lastBridgedNutrition = nextSnapshot;[\s\S]*writeDomain\(DOMAIN_ITEMS, nextSnapshot\)/, "A Realtime refresh must not echo stale local rows back into food_log");
 assert.match(nutritionLog, /const changed = JSON\.stringify\(current\[day\] \?\? \[\]\) !== JSON\.stringify\(mergedRows\);[\s\S]*if \(changed\) \{[\s\S]*writeDomain/, "A Realtime refresh must not enqueue identical full Nutrition snapshots");
