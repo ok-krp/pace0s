@@ -75,7 +75,7 @@ assert.match(bridge, /A missing ID is not a delete instruction/);
 assert.match(nutritionRoute, /await deletePersistedNutritionItem\(id\)/, "User-requested deletion must explicitly delete its exact SQL row");
 assert.match(nutritionLog, /DELETED_IDS_KEY = "pace\.__nutrition_deleted_ids_v1"/, "Explicit nutrition deletions must leave an account-local tombstone");
 assert.match(nutritionLog, /rememberDeletedNutritionId\(user\.id, id\)/, "A successful SQL deletion must tombstone the deleted UUID");
-assert.match(nutritionLog, /nutritionRows\(value\)\.filter\(\(\{ id \}\) => !deletedIds\.has\(id\)\)/, "A queued stale browser snapshot must not reinsert an explicitly deleted UUID");
+assert.match(nutritionLog, /nutritionRows\(value\)\.filter\(\(\{ id \}\) => isFoodLogUuid\(id\) && !deletedIds\.has\(id\)\)/, "Only UUID-backed rows may be bridged, and explicitly deleted IDs stay excluded");
 assert.match(nutritionLog, /raw\?\.userId === userId/, "Nutrition tombstones must be isolated to the signed-in account");
 const explicitNutritionDeleteStart = nutritionLog.indexOf("export async function deletePersistedNutritionItem");
 const explicitNutritionDeleteEnd = nutritionLog.indexOf("\nfunction nutritionRows", explicitNutritionDeleteStart);
