@@ -86,7 +86,24 @@ const classified = Object.entries(classes).flatMap(([classification, tables]) =>
 const names = classified.map((item) => item.table);
 const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
 
-assert.equal(directUserTables.length, 14, "Expected 14 direct user-owned CRUD tables");
+assert.equal(directUserTables.length, 13, "Expected 13 direct user-owned CRUD tables");
+assert.match(sql, /grant select on public\.legal_consent to authenticated/i,
+  "Current legal document/options snapshot must remain readable by its owner");
+assert.match(sql, /grant insert \(user_id, region, eula_version, privacy_version, ip_country, consented_at, opts\)[\s\S]*?on public\.legal_consent to authenticated/i,
+  "Legal consent UPSERT may insert only app-submitted decision fields");
+assert.match(sql, /grant update \(user_id, region, eula_version, privacy_version, ip_country, consented_at, opts\)[\s\S]*?on public\.legal_consent to authenticated/i,
+  "Legal consent UPSERT may update only app-submitted decision fields");
+assert.doesNotMatch(sql, /grant [^;]*delete[^;]*on public\.legal_consent/i,
+  "Clients must not delete their legal consent snapshot");
+const legalAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+for (const assertion of [
+  "authenticated has broader-than-needed legacy legal consent privileges",
+  "legacy legal consent UPSERT lost required column privileges",
+  "legal consent owner UPSERT failed",
+  "client deleted legal consent snapshot",
+]) {
+  assert.ok(legalAssertions.includes(assertion), "Missing legacy legal consent assertion: " + assertion);
+}
 assert.equal(classes.ownerReadOnlyUserState.length, 1, "user_state must be owner-readable but RPC-write-only");
 assert.equal(childTables.length, 4, "Expected four child tables with parent ownership checks");
 assert.equal(catalogTables.length, 6, "Expected six public read-only nutrition catalogues");
