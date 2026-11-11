@@ -7,6 +7,19 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
 
+const writeItemStart = engine.indexOf("const writeItem =");
+const pushItemStart = engine.indexOf("const pushItem =", writeItemStart);
+const flushQueueStart = engine.indexOf("const flushQueue =", pushItemStart);
+assert.ok(writeItemStart >= 0 && pushItemStart > writeItemStart && flushQueueStart > pushItemStart, "cloud write acknowledgement handlers must remain identifiable");
+const writeItemBlock = engine.slice(writeItemStart, pushItemStart);
+const pushItemBlock = engine.slice(pushItemStart, flushQueueStart);
+assert.match(writeItemBlock, /if \(!payload\.accepted\)[\s\S]*recordConflict\(row\.key, item\.value, row\.value, row\.updated_at\)/, "a stale server rejection must create a resolvable conflict without replacing the local value");
+assert.doesNotMatch(writeItemBlock, /applyRemoteAndRemember\(row\.key/, "a rejected local write must not overwrite the user's local snapshot with remote data");
+assert.match(pushItemBlock, /if \(accepted\) \{[\s\S]*unqueueIfMutation\(latest\.key, latest\.updatedAt\)/, "only server-accepted mutations may leave the outbox");
+assert.match(pushItemBlock, /else \{[\s\S]*Rejected writes remain durable in the outbox/, "a rejected mutation must remain queued until conflict resolution");
+assert.doesNotMatch(pushItemBlock, /\}\s*unqueueIfMutation\(latest\.key, latest\.updatedAt\)/, "outbox entries must not be removed unconditionally after a rejected write");
+
+
 const nutritionAi = read("src/lib/ai-chat.server.ts");
 const nutritionLog = read("src/lib/nutrition-log.ts");
 const nutritionRoute = read("src/routes/nutrition.tsx");
