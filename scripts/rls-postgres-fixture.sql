@@ -114,7 +114,16 @@ CREATE TABLE public.sport_workout_sessions (
   ended_at timestamptz,
   is_temporary boolean NOT NULL DEFAULT false
 );
-CREATE TABLE public.user_biometrics_e2ee (id uuid PRIMARY KEY, user_id uuid NOT NULL);
+CREATE TABLE public.user_biometrics_e2ee (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  ciphertext text NOT NULL,
+  nonce text NOT NULL,
+  algorithm text NOT NULL DEFAULT 'AES-256-GCM',
+  key_version integer NOT NULL DEFAULT 1,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE public.user_state (
   id uuid PRIMARY KEY,
   user_id uuid NOT NULL,
