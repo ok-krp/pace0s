@@ -133,6 +133,10 @@ assert.match(sql, /alter default privileges in schema public revoke all on table
   "Future tables must not inherit API-role table grants");
 assert.match(sql, /alter default privileges in schema public revoke all on sequences from anon, authenticated/i,
   "Future sequences must not inherit API-role sequence grants");
+assert.match(sql, /alter default privileges revoke execute on functions from public/i,
+  "Future functions must not inherit the PostgreSQL PUBLIC EXECUTE grant");
+assert.match(sql, /alter default privileges in schema public revoke execute on functions from anon, authenticated/i,
+  "Future public-schema functions must not inherit API-role EXECUTE grants");
 
 for (const table of catalogTables) {
   assert.match(sql, new RegExp(
@@ -218,14 +222,14 @@ for (const table of rpcOnlyTables) {
     "i",
   ), "RPC-only table " + table + " must have an explicit deny policy");
 }
-assert.match(sql, /create or replace function public[.]owns_health_e2ee_pairing_session[(]p_session_id uuid[)][\s\S]*?security definer[\s\S]*?set search_path = ''/i,
+assert.match(sql, /create or replace function pace_private[.]owns_health_e2ee_pairing_session[(]p_session_id uuid[)][\s\S]*?security definer[\s\S]*?set search_path = ''/i,
   "Pairing parent ownership must be checked through a hardened SECURITY DEFINER helper");
 assert.ok(
   sql.indexOf("create or replace function public.owns_health_e2ee_pairing_session")
     < sql.indexOf("create policy health_e2ee_envelopes_select_own"),
   "The pairing ownership helper must be created before envelope policies reference it",
 );
-assert.match(sql, /revoke all on function public[.]owns_health_e2ee_pairing_session[(]uuid[)] from public, anon, authenticated[\s\S]*?grant execute on function public[.]owns_health_e2ee_pairing_session[(]uuid[)] to authenticated/i,
+assert.match(sql, /revoke all on function pace_private[.]owns_health_e2ee_pairing_session[(]uuid[)] from public, anon, authenticated[\s\S]*?grant execute on function pace_private[.]owns_health_e2ee_pairing_session[(]uuid[)] to authenticated/i,
   "Pairing helper execution must be restricted to authenticated users");
 
 for (const table of [
