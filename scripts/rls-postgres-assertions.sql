@@ -182,6 +182,13 @@ BEGIN
     ('10000000-0000-0000-0000-000000000002','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
   INSERT INTO public.reminder_settings(id,user_id)
     VALUES ('93000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+  INSERT INTO public.legal_consent(
+    id,user_id,region,eula_version,privacy_version,consented_at,opts,updated_at
+  ) VALUES (
+    '94000000-0000-0000-0000-000000000001',
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','EU','eula-v1','privacy-v1',
+    now(),'{}'::jsonb,'2000-01-01T00:00:00Z'
+  );
   INSERT INTO public.health_samples (id,user_id) VALUES
     ('20000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
     ('20000000-0000-0000-0000-000000000002','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
@@ -645,6 +652,10 @@ BEGIN
       AND opts='{"ai":false,"notifications":true}'::jsonb
       AND id IS NOT NULL AND created_at IS NOT NULL AND updated_at IS NOT NULL;
   IF n <> 1 THEN RAISE EXCEPTION 'legal consent owner UPSERT failed'; END IF;
+  SELECT count(*) INTO n FROM public.legal_consent
+    WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+      AND updated_at > '2000-01-01T00:00:00Z';
+  IF n <> 1 THEN RAISE EXCEPTION 'legacy legal consent timestamp trigger did not run after EXECUTE revoke'; END IF;
   BEGIN
     DELETE FROM public.legal_consent WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
     RAISE EXCEPTION 'client deleted legal consent snapshot';
