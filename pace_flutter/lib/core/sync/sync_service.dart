@@ -332,13 +332,18 @@ class SyncService {
           // Never replace a pending local user edit with a remote snapshot.
           continue;
         }
-        if (result.serverUpdatedAt != null) {
-          await localStore.markSyncedAt(
-            operation['key'] as String,
-            result.serverUpdatedAt!,
-          );
+        // The request may finish after an auth event switches the active
+        // namespace. Acknowledge only the original owner's saved outbox;
+        // never mutate the newly active account's queue or sync metadata.
+        await localStore.acknowledgeOperationForAccount(
+          userId,
+          operation,
+          result.serverUpdatedAt ?? DateTime.now().toUtc().toIso8601String(),
+        );
+        if (client?.auth.currentUser?.id != userId ||
+            localStore.currentAccountId != userId) {
+          return;
         }
-        await localStore.acknowledgeOperation(operation);
       } catch (_) {
         // Preserve the operation for the next reconnect/retry.
         break;
@@ -529,6 +534,10 @@ class SyncService {
         ...pendingRows.where((item) => !canonicalIds.contains(item['id'])),
       ];
 
+      if (client?.auth.currentUser?.id != userId ||
+          localStore.currentAccountId != userId) {
+        return false;
+      }
       if (jsonEncode(currentDay) != jsonEncode(nextRows)) {
         itemsByDay[day] = nextRows;
         await localStore.write('pace.nutrition.items', itemsByDay);
@@ -619,6 +628,10 @@ class SyncService {
         .eq('user_id', userId);
 
     for (final raw in rows) {
+      if (client?.auth.currentUser?.id != userId ||
+          localStore.currentAccountId != userId) {
+        return;
+      }
       final row = Map<String, dynamic>.from(raw);
       final key = row['key'] as String;
       final remoteUpdatedAt = row['updated_at'] as String?;
