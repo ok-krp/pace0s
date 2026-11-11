@@ -69,7 +69,7 @@ async function syncNutritionStateFromDb(client: Client, userId: string, day: str
   // silently deletes the user's manual entries.
   const legacyRows = (itemsByDay[day] ?? []).filter((item) =>
     item && typeof item === "object" && typeof item.id === "string" &&
-    !uuidPattern.test(item.id) && !canonicalIds.has(item.id)
+    !uuidPattern.test(item.id) && !canonicalIds.has(String(item.id))
   );
   itemsByDay[day] = [...canonicalRows, ...legacyRows];
   await writeUserState(client, userId, "pace.nutrition.items", itemsByDay);
