@@ -214,6 +214,7 @@ assert.match(definerHardeningSql, /revoke create on schema public from public, a
 const definerFunctions = [
   "sync_sport_user_state()",
   "upsert_profile_if_newer(uuid,jsonb,timestamptz,text)",
+  "rotate_health_e2ee_key(integer,uuid)",
   "sport_update_exercise(uuid,text,text,text,text,integer,integer,numeric,integer)",
   "sport_delete_exercise(uuid)",
   "sport_update_program(uuid,text,text,integer[])",
@@ -245,6 +246,19 @@ assert.match(definerHardeningSql, /alter function public\.upsert_profile_if_newe
   "The profile sync RPC must be SECURITY DEFINER after checking auth.uid()");
 assert.match(definerHardeningSql, /grant execute on function public\.upsert_profile_if_newer\(uuid, jsonb, timestamptz, text\)\s+to authenticated/i,
   "The profile sync RPC must remain callable by authenticated users");
+assert.match(definerHardeningSql, /grant execute on function public\.rotate_health_e2ee_key\(integer, uuid\)\s+to authenticated/i,
+  "The owner-checked key rotation RPC must remain callable by authenticated users");
+const rotationAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+for (const assertion of [
+  "E2EE key rotation RPC must retain SECURITY DEFINER with empty search_path",
+  "owner key rotation did not advance exactly one version",
+  "user A revoked user B device through SECURITY DEFINER key rotation",
+  "failed cross-account key rotation changed user A key version",
+  "user A SECURITY DEFINER RPC revoked user B device",
+]) {
+  assert.ok(rotationAssertions.includes(assertion),
+    "PostgreSQL must verify E2EE key rotation ownership: " + assertion);
+}
 const normalizedHardeningSql = definerHardeningSql.replace(/\s+/g, "").toLowerCase();
 for (const fn of [
   "sport_delete_workout(uuid)",
