@@ -159,6 +159,10 @@ assert.match(aclAudit, /pg_default_acl/,
   "The read-only ACL inventory must inspect defaults by object owner");
 assert.match(aclAudit, /SECURITY DEFINER/,
   "The read-only ACL inventory must report SECURITY DEFINER routines");
+assert.match(aclAudit, /has_schema_privilege\('anon',[\s\S]*?'CREATE'/,
+  "The read-only ACL inventory must report whether anon can CREATE in exposed schemas");
+assert.match(aclAudit, /has_schema_privilege\('authenticated',[\s\S]*?'CREATE'/,
+  "The read-only ACL inventory must report whether authenticated can CREATE in exposed schemas");
 assert.doesNotMatch(aclAudit, /^\s*(?:alter|create|drop|grant|revoke|insert|update|delete)\s/im,
   "The ACL inventory must remain read-only");
 
