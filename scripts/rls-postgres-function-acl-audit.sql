@@ -60,7 +60,9 @@ order by r.rolname, schema_name, object_type;
 select
   n.nspname as schema_name,
   has_schema_privilege('anon', n.oid, 'USAGE') as anon_schema_usage,
-  has_schema_privilege('authenticated', n.oid, 'USAGE') as authenticated_schema_usage
+  has_schema_privilege('authenticated', n.oid, 'USAGE') as authenticated_schema_usage,
+  has_schema_privilege('anon', n.oid, 'CREATE') as anon_schema_create,
+  has_schema_privilege('authenticated', n.oid, 'CREATE') as authenticated_schema_create
 from pg_namespace n
 where n.nspname in ('public', 'pace_private')
 order by n.nspname;
