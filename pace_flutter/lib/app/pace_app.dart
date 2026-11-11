@@ -166,7 +166,7 @@ class _PaceShellState extends State<PaceShell> {
   Widget build(BuildContext context) {
     final pages = <Widget>[
       DashboardPage(localStore: widget.localStore),
-      NutritionPage(localStore: widget.localStore),
+      NutritionPage(localStore: widget.localStore, sync: widget.sync),
       SportPage(localStore: widget.localStore),
       SleepPage(localStore: widget.localStore),
       MorePage(
