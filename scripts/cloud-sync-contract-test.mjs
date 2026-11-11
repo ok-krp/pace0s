@@ -36,6 +36,11 @@ const bridge = nutritionLog.slice(bridgeStart, bridgeEnd);
 assert.doesNotMatch(bridge, /\.delete\s*\(/, "A missing local snapshot row must never delete canonical food_log data");
 assert.match(bridge, /A missing ID is not a delete instruction/);
 assert.match(nutritionRoute, /await deletePersistedNutritionItem\(id\)/, "User-requested deletion must explicitly delete its exact SQL row");
+assert.match(nutritionLog, /DELETED_IDS_KEY = "pace\.__nutrition_deleted_ids_v1"/, "Explicit nutrition deletions must leave an account-local tombstone");
+assert.match(nutritionLog, /rememberDeletedNutritionId\(user\.id, id\)/, "A successful SQL deletion must tombstone the deleted UUID");
+assert.match(nutritionLog, /nutritionRows\(value\)\.filter\(\(\{ id \}\) => !deletedIds\.has\(id\)\)/, "A queued stale browser snapshot must not reinsert an explicitly deleted UUID");
+assert.match(nutritionLog, /raw\?\.userId === userId/, "Nutrition tombstones must be isolated to the signed-in account");
+
 assert.match(nutritionLog, /await persistNutritionItem\(item, source\)/, "All nutrition additions must persist to food_log before updating local state");
 assert.doesNotMatch(domainStore, /MAX_IDENTICAL_NUTRITION_ITEMS_PER_DAY|MAX_NUTRITION_ITEMS_PER_DAY|count >=/, "Nutrition sanitization must not silently deduplicate or truncate valid meal entries");
 assert.doesNotMatch(nutritionLog, /recentAdds|addFingerprint/, "Identical intentional food entries must not be dropped by a client-side fingerprint cooldown");
