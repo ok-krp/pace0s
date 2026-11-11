@@ -302,3 +302,8 @@ The application still calls `saveLegalConsent` to upsert the current EULA/privac
 ### Legacy legal-consent access class
 
 The 45-table access inventory now classifies `legal_consent` separately from ordinary CRUD: owner SELECT plus column-scoped owner INSERT/UPDATE required by the live version/options UPSERT; no API DELETE and no client control over ID or technical timestamps. The PostgreSQL fixture matches its composite unique key and defaults, exercises an UPSERT followed by an options update, rejects deletion, and tests that a second account cannot read the snapshot.
+
+
+### Profile writes restricted to the monotonic sync RPC and AI fields
+
+The profile route writes through `upsert_profile_if_newer`; the Coach tool directly updates only `weight_kg`, `weight_goal_kg`, `daily_calorie_goal`, `daily_protein_goal`, `daily_water_ml_goal` and `training_goal`. The RLS migration now grants owner SELECT and column-level UPDATE for exactly those six direct fields, with no direct INSERT, `id/user_id` UPDATE or DELETE. The follow-up hardening migration promotes the historical owner-checking `upsert_profile_if_newer` RPC to `SECURITY DEFINER`, sets an empty `search_path`, and grants EXECUTE only to `authenticated`. PostgreSQL fixture assertions exercise the AI field update, a valid newer RPC write, rejection of a stale timestamp, rejection of another account's `p_user_id`, and denial of direct owner reassignment/deletion.
