@@ -106,8 +106,14 @@ export function switchLocalAccountScope(userId: string | null): boolean {
         );
       } else {
         const restored = readAccountSnapshot(nextScope);
-        clearCurrentAccountState();
-        restoreAccountSnapshot(restored);
+        try {
+          clearCurrentAccountState();
+          restoreAccountSnapshot(restored);
+        } catch (error) {
+          clearCurrentAccountState();
+          restoreAccountSnapshot(currentSnapshot);
+          throw error;
+        }
       }
       localStorage.setItem(ACCOUNT_SCOPE_KEY, nextScope);
       window.dispatchEvent(new Event("pace.account.scope.changed"));
