@@ -1,6 +1,7 @@
 import { todayKey, onLocalWrite } from "@/lib/storage";
 import { writeDomain, readDomain } from "@/lib/domain-store";
 import { supabase } from "@/integrations/supabase/client";
+import { isLegalCategoryAllowed } from "@/lib/legal";
 
 export type NutritionItem = {
   id: string;
@@ -22,14 +23,71 @@ export type NutritionItem = {
 };
 
 const DOMAIN_ITEMS = "nutrition.items";
+const DELETED_IDS_KEY = "pace.__nutrition_deleted_ids_v1";
+const FOOD_LOG_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function isFoodLogUuid(id: string) { return FOOD_LOG_UUID.test(id); }
+function activeNutritionAccountId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const scope = localStorage.getItem("pace.__account_scope");
+    return scope && scope !== "__guest__" ? scope : null;
+  } catch { return null; }
+}
+type DeletedNutritionIds = { userId: string; ids: string[] };
+
+function deletedIdsStorageKey(userId: string) {
+  return `${DELETED_IDS_KEY}:${encodeURIComponent(userId)}`;
+}
+
+function readDeletedNutritionIds(userId: string): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const scopedRaw = localStorage.getItem(deletedIdsStorageKey(userId));
+    if (scopedRaw !== null) {
+      const scoped = JSON.parse(scopedRaw) as DeletedNutritionIds;
+      return Array.isArray(scoped.ids)
+        ? new Set(scoped.ids.filter((id) => typeof id === "string"))
+        : new Set();
+    }
+
+    // Migrate the former single-user tombstone slot without allowing another
+    // account to claim or overwrite the previous account's deletion history.
+    const legacy = JSON.parse(localStorage.getItem(DELETED_IDS_KEY) ?? "null") as DeletedNutritionIds | null;
+    if (legacy?.userId === userId && Array.isArray(legacy.ids)) {
+      const ids = new Set(legacy.ids.filter((id) => typeof id === "string"));
+      writeDeletedNutritionIds(userId, ids);
+      localStorage.removeItem(DELETED_IDS_KEY);
+      return ids;
+    }
+  } catch { return new Set(); }
+  return new Set();
+}
+
+function writeDeletedNutritionIds(userId: string, ids: Set<string>) {
+  if (typeof window === "undefined") return;
+  // IDs are opaque UUIDs; cap each account's tombstone list to bound storage.
+  localStorage.setItem(
+    deletedIdsStorageKey(userId),
+    JSON.stringify({ userId, ids: [...ids].slice(-5000) } satisfies DeletedNutritionIds),
+  );
+}
+
+function rememberDeletedNutritionId(userId: string, id: string) {
+  if (!id) return;
+  const ids = readDeletedNutritionIds(userId);
+  ids.add(id);
+  writeDeletedNutritionIds(userId, ids);
+}
+
+function forgetDeletedNutritionId(userId: string, id: string) {
+  const ids = readDeletedNutritionIds(userId);
+  ids.delete(id);
+  writeDeletedNutritionIds(userId, ids);
+}
 type NutritionTotals = Record<string, { kcal: number; p: number; c: number; f: number }>;
 type NutritionMap = Record<string, NutritionItem[]>;
 const completedOperations = new Map<string, number>();
-const recentAdds = new Map<string, number>();
-
-function addFingerprint(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }) {
-  return JSON.stringify({ name: item.name.trim(), meal: item.meal.trim(), kcal: Number(item.kcal || 0), p: Number(item.p || 0), c: Number(item.c || 0), f: Number(item.f || 0), fiber: Number(item.fiber || 0), sugar: Number(item.sugar || 0), sodium: Number(item.sodium || 0), qty: Number(item.qty ?? 1) });
-}
+let nutritionBridgeChain: Promise<void> = Promise.resolve();
 
 export function recomputeNutritionTotals(items: NutritionMap): NutritionTotals {
   const totals: NutritionTotals = {};
@@ -52,20 +110,46 @@ repairNutritionTotals();
 
 type PersistedNutritionSource = "manual" | "barcode" | "photo_ai";
 
-export async function persistNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, source: PersistedNutritionSource = "manual"): Promise<NutritionItem> {
+export async function persistNutritionItem(
+  item: Omit<NutritionItem, "id" | "qty"> & { qty?: number },
+  source: PersistedNutritionSource = "manual",
+  expectedUserId = activeNutritionAccountId(),
+): Promise<NutritionItem> {
+  if (!expectedUserId) throw new Error("Espace utilisateur indisponible.");
   const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (userError || !user) throw new Error("Session utilisateur indisponible.");
+  if (userError || !user || user.id !== expectedUserId ||
+      activeNutritionAccountId() !== expectedUserId) {
+    throw new Error("La session a changé ; l'ajout Nutrition a été interrompu.");
+  }
   const meta = { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } };
-  const { data, error } = await supabase.from("food_log").insert({ user_id: user.id, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source, meta }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
+  const foodLogSource = source === "photo_ai" ? "photo" : source;
+  const { data, error } = await supabase.from("food_log").insert({ user_id: expectedUserId, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source: foodLogSource, meta }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
   if (error || !data) throw new Error(error?.message ?? "Enregistrement nutritionnel impossible.");
   return { id: data.id, name: data.name, meal: data.meal, kcal: Number(data.kcal ?? 0), p: Number(data.protein_g ?? 0), c: Number(data.carbs_g ?? 0), f: Number(data.fat_g ?? 0), fiber: Number(data.fiber_g ?? 0), sugar: Number(data.sugar_g ?? 0), sodium: Number(data.sodium_mg ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1 };
 }
 
-export async function deletePersistedNutritionItem(id: string): Promise<void> {
+export async function deletePersistedNutritionItem(
+  id: string,
+  expectedUserId = activeNutritionAccountId(),
+): Promise<void> {
+  if (!expectedUserId) throw new Error("Espace utilisateur indisponible.");
   const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (userError || !user) throw new Error("Session utilisateur indisponible.");
-  const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
-  if (error) throw new Error(error.message);
+  if (userError || !user || user.id !== expectedUserId ||
+      activeNutritionAccountId() !== expectedUserId) {
+    throw new Error("La session a changé ; la suppression Nutrition a été interrompue.");
+  }
+  // Tombstone first, then drain any bridge snapshot already in flight. This
+  // makes the explicit SQL DELETE the final operation for this UUID.
+  rememberDeletedNutritionId(user.id, id);
+  await nutritionBridgeChain.catch(() => undefined);
+  // Historical Flutter entries used timestamp IDs and exist only in the
+  // user_state snapshot. They have no food_log row to delete.
+  if (!isFoodLogUuid(id)) return;
+  const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", expectedUserId);
+  if (error) {
+    forgetDeletedNutritionId(user.id, id);
+    throw new Error(error.message);
+  }
 }
 
 function nutritionRows(value: unknown) {
@@ -83,73 +167,274 @@ function nutritionRows(value: unknown) {
 }
 
 let lastBridgedNutrition = readNutritionItems();
-let nutritionBridgeRunning = false;
-
-async function bridgeLocalNutritionToFoodLog(value: unknown) {
-  if (nutritionBridgeRunning || typeof window === "undefined") return;
-  nutritionBridgeRunning = true;
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const nextRows = nutritionRows(value);
-    const previousRows = nutritionRows(lastBridgedNutrition);
-    const previousIds = new Set(previousRows.map((row) => row.id));
-    const nextIds = new Set(nextRows.map((row) => row.id));
-    const { data: existing, error: selectError } = await supabase.from("food_log").select("id").eq("user_id", user.id);
-    if (selectError) throw selectError;
-    const existingIds = new Set((existing ?? []).map((row) => row.id));
-    for (const { id, day, item } of nextRows) {
-      const payload = { id, user_id: user.id, log_date: day, meal: item.meal, name: item.name, kcal: Number(item.kcal || 0), protein_g: Number(item.p || 0), carbs_g: Number(item.c || 0), fat_g: Number(item.f || 0), fiber_g: Number(item.fiber || 0), sugar_g: Number(item.sugar || 0), sodium_mg: Number(item.sodium || 0), source: existingIds.has(id) ? undefined : "manual", meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } } };
-      if (existingIds.has(id)) {
-        const { source: _source, ...update } = payload;
-        const { error } = await supabase.from("food_log").update(update).eq("id", id).eq("user_id", user.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("food_log").insert(payload);
-        if (error) throw error;
-      }
-    }
-    for (const id of previousIds) {
-      if (nextIds.has(id)) continue;
-      const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", user.id);
-      if (error) throw error;
-    }
-    lastBridgedNutrition = value && typeof value === "object" && !Array.isArray(value) ? value as NutritionMap : {};
-  } catch (error) {
-    console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
-  } finally {
-    nutritionBridgeRunning = false;
+let lastBridgedUserId: string | null = null;
+async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<void> {
+  const { data: { user }, error: userError } = await supabase.auth.getUser();
+  if (userError) throw userError;
+  // A queued snapshot from a previous session must never be written under a
+  // different account after an account switch.
+  if (!user || user.id !== userId || activeNutritionAccountId() !== userId) return;
+  if (lastBridgedUserId !== userId) {
+    lastBridgedUserId = userId;
+    lastBridgedNutrition = readNutritionItems();
   }
+
+  const deletedIds = readDeletedNutritionIds(user.id);
+  const nextRows = nutritionRows(value).filter(({ id }) => isFoodLogUuid(id) && !deletedIds.has(id));
+  const previousById = new Map(nutritionRows(lastBridgedNutrition).map((row) => [row.id, row.item]));
+  // A missing ID is not a delete instruction. Only the explicit remove handler
+  // is allowed to delete a row from food_log.
+  const requestedIds = [...new Set(nextRows.map((row) => row.id))];
+  if (activeNutritionAccountId() !== userId) return;
+  const { data: existing, error: selectError } = requestedIds.length
+    ? await supabase.from("food_log").select("id").eq("user_id", userId).in("id", requestedIds)
+    : { data: [], error: null };
+  if (selectError) throw selectError;
+  if (activeNutritionAccountId() !== userId) return;
+  const existingIds = new Set((existing ?? []).map((row) => row.id));
+  for (const { id, day, item } of nextRows) {
+    if (activeNutritionAccountId() !== userId) return;
+    const previous = previousById.get(id);
+    const changed = previous !== undefined && JSON.stringify(previous) !== JSON.stringify(item);
+    if (existingIds.has(id) && !changed) continue;
+    const payload = { id, user_id: user.id, log_date: day, meal: item.meal, name: item.name, kcal: Number(item.kcal || 0), protein_g: Number(item.p || 0), carbs_g: Number(item.c || 0), fat_g: Number(item.f || 0), fiber_g: Number(item.fiber || 0), sugar_g: Number(item.sugar || 0), sodium_mg: Number(item.sodium || 0), source: existingIds.has(id) ? undefined : "manual", meta: { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } } };
+    if (existingIds.has(id)) {
+      const { source: _source, ...update } = payload;
+      const { error } = await supabase.from("food_log").update(update).eq("id", id).eq("user_id", user.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("food_log").insert(payload);
+      if (error) throw error;
+      existingIds.add(id);
+    }
+  }
+  lastBridgedNutrition = value && typeof value === "object" && !Array.isArray(value) ? value as NutritionMap : {};
+}
+
+function bridgeLocalNutritionToFoodLog(
+  value: unknown,
+  expectedUserId = activeNutritionAccountId(),
+): Promise<void> {
+  if (typeof window === "undefined" || !expectedUserId) return Promise.resolve();
+  const task = async () => {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    // Bind queued work to the account that owned the local mutation when it
+    // was scheduled. Never infer ownership from a later, possibly new session.
+    if (error || !user || user.id !== expectedUserId ||
+        activeNutritionAccountId() !== expectedUserId) return;
+    await bridgeNutritionSnapshot(value, expectedUserId);
+  };
+  // Serialize snapshots instead of dropping writes while a previous bridge
+  // operation is still in flight. Each snapshot is rechecked against food_log.
+  nutritionBridgeChain = nutritionBridgeChain.then(task, task);
+  return nutritionBridgeChain;
 }
 
 if (typeof window !== "undefined") {
   onLocalWrite((key, value) => {
     if (key !== "pace.nutrition.items") return;
-    void bridgeLocalNutritionToFoodLog(value);
+    void bridgeLocalNutritionToFoodLog(value).catch((error) => {
+      console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
+    });
   });
-  void bridgeLocalNutritionToFoodLog(lastBridgedNutrition);
+  void bridgeLocalNutritionToFoodLog(lastBridgedNutrition).catch((error) => {
+    console.error("[nutrition] initial food_log bridge failed", error instanceof Error ? error.message : error);
+  });
 }
 
-export function addNutritionItem(item: Omit<NutritionItem, "id" | "qty"> & { qty?: number }, operationId?: string): boolean {
-  const now = Date.now();
-  if (operationId) {
-    const previous = completedOperations.get(operationId);
-    if (previous && now - previous < 60_000) return false;
-    completedOperations.set(operationId, now);
-    for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
-  } else {
-    const fingerprint = addFingerprint(item);
-    const previous = recentAdds.get(fingerprint);
-    if (previous && now - previous < 2_000) return false;
-    recentAdds.set(fingerprint, now);
-    for (const [key, timestamp] of recentAdds) if (now - timestamp >= 2_000) recentAdds.delete(key);
+let nutritionRefreshChain: Promise<void> = Promise.resolve();
+
+export function refreshNutritionFromFoodLog(
+  day: string,
+  options: { bridgeLocalFirst?: boolean; expectedUserId?: string } = {},
+): Promise<void> {
+  const expectedUserId = options.expectedUserId ?? activeNutritionAccountId();
+  if (!expectedUserId) return Promise.resolve();
+  const task = async () => {
+    if (activeNutritionAccountId() !== expectedUserId) return;
+    if (options.bridgeLocalFirst !== false) {
+      await bridgeLocalNutritionToFoodLog(readNutritionItems(), expectedUserId);
+    }
+    if (activeNutritionAccountId() !== expectedUserId) return;
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError) throw userError;
+    if (!user || user.id !== expectedUserId ||
+        activeNutritionAccountId() !== expectedUserId) return;
+    const { data, error } = await supabase.from("food_log")
+      .select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta")
+      .eq("user_id", expectedUserId).eq("log_date", day).order("created_at", { ascending: true });
+    if (error) throw new Error(error.message);
+    // An in-flight read for account A must never be projected into account B's
+    // shared browser storage after an auth transition.
+    if (activeNutritionAccountId() !== expectedUserId) return;
+  const rows: NutritionItem[] = (data ?? []).map((row) => {
+    const meta = row.meta && typeof row.meta === "object" ? row.meta as Record<string, unknown> : {};
+    const nutrients = meta.client_nutrients && typeof meta.client_nutrients === "object" ? meta.client_nutrients as Record<string, unknown> : {};
+    return {
+      id: row.id, name: row.name, meal: row.meal,
+      kcal: Number(row.kcal ?? 0), p: Number(row.protein_g ?? 0),
+      c: Number(row.carbs_g ?? 0), f: Number(row.fat_g ?? 0),
+      fiber: Number(row.fiber_g ?? 0), sugar: Number(row.sugar_g ?? 0),
+      sodium: Number(row.sodium_mg ?? 0), sat: Number(nutrients.sat ?? 0) || undefined,
+      salt: Number(nutrients.salt ?? 0) || undefined, iron: Number(nutrients.iron ?? 0) || undefined,
+      calcium: Number(nutrients.calcium ?? 0) || undefined, vitC: Number(nutrients.vitC ?? 0) || undefined,
+      qty: 1,
+    };
+  });
+  const current = readNutritionItems();
+  const deletedIds = readDeletedNutritionIds(user.id);
+  // Older native Flutter releases stored manual meals only in user_state
+  // with timestamp IDs. Preserve those rows while food_log is canonical for
+  // UUID-backed meals; never mistake the legacy rows for SQL UUIDs.
+  const currentRows = current[day] ?? [];
+  const legacyRows = currentRows.filter((item) => !isFoodLogUuid(item.id) && !deletedIds.has(item.id));
+  const canonicalIds = new Set(rows.map((item) => item.id));
+  const pendingRows = currentRows.filter((item) =>
+    isFoodLogUuid(item.id) && (item as NutritionItem & { pendingFoodLog?: boolean }).pendingFoodLog === true &&
+    !canonicalIds.has(item.id) && !deletedIds.has(item.id)
+  );
+  const mergedRows = [
+    ...rows,
+    ...legacyRows.filter((item) => !canonicalIds.has(item.id)),
+    ...pendingRows,
+  ];
+  const nextSnapshot = { ...current, [day]: mergedRows };
+  // Mark the fetched canonical snapshot before writeDomain emits LOCAL_WRITE;
+  // the compatibility bridge must not upload its own remote refresh again.
+  lastBridgedNutrition = nextSnapshot;
+  const changed = JSON.stringify(current[day] ?? []) !== JSON.stringify(mergedRows);
+  if (changed) {
+    writeDomain(DOMAIN_ITEMS, nextSnapshot);
+    window.dispatchEvent(new Event("pace.nutrition.changed"));
   }
-  const today = todayKey();
-  const it: NutritionItem = { id: crypto.randomUUID(), qty: item.qty ?? 1, ...item };
-  const items = readNutritionItems();
-  const list = [...(items[today] ?? []), it];
-  const nextItems = { ...items, [today]: list };
-  writeDomain(DOMAIN_ITEMS, nextItems);
-  window.dispatchEvent(new Event("pace.nutrition.changed"));
-  return true;
+  // A pending native UUID is a durable local intent. Retry its idempotent
+  // bridge upload on Web too; never drop it merely because food_log is late.
+  if (pendingRows.length) await bridgeLocalNutritionToFoodLog(nextSnapshot, expectedUserId);
+  };
+  nutritionRefreshChain = nutritionRefreshChain.then(task, task);
+  return nutritionRefreshChain;
+}
+
+export function subscribeNutritionFoodLogChanges(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+  let disposed = false;
+  let generation = 0;
+  let channel: ReturnType<typeof supabase.channel> | null = null;
+
+  const detach = () => {
+    const current = channel;
+    channel = null;
+    if (current) void supabase.removeChannel(current);
+  };
+
+  const attach = async () => {
+    const currentGeneration = ++generation;
+    detach();
+    if (!isNutritionDeviceSyncEnabled()) return;
+
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (disposed || currentGeneration !== generation || error || !user) return;
+
+    const nextChannel = supabase
+      .channel(`pace-food-log-${user.id}`)
+      .on("postgres_changes", {
+        event: "INSERT",
+        schema: "public",
+        table: "food_log",
+        filter: `user_id=eq.${user.id}`,
+      }, () => onChange())
+      .on("postgres_changes", {
+        event: "UPDATE",
+        schema: "public",
+        table: "food_log",
+        filter: `user_id=eq.${user.id}`,
+      }, () => onChange())
+      // DELETE needs REPLICA IDENTITY FULL for its user_id filter. The
+      // additive migration enables it so deletions stay account-scoped.
+      .on("postgres_changes", {
+        event: "DELETE",
+        schema: "public",
+        table: "food_log",
+        filter: `user_id=eq.${user.id}`,
+      }, () => onChange());
+
+    channel = nextChannel;
+    nextChannel.subscribe((status) => {
+      if (!disposed && currentGeneration === generation && status === "SUBSCRIBED") {
+        onChange();
+      }
+    });
+    // Initial reconciliation is also required when Realtime is delayed or
+    // the project has not yet enabled food_log in supabase_realtime.
+    onChange();
+  };
+
+  const onConsentChanged = () => { void attach(); };
+  const authSubscription = supabase.auth.onAuthStateChange(() => {
+    queueMicrotask(() => { void attach(); });
+  });
+  window.addEventListener("pace.legal.changed", onConsentChanged);
+  void attach();
+
+  return () => {
+    disposed = true;
+    generation++;
+    window.removeEventListener("pace.legal.changed", onConsentChanged);
+    authSubscription.data.subscription.unsubscribe();
+    detach();
+  };
+}
+
+export function currentNutritionAccountId() { return activeNutritionAccountId(); }
+
+export function isNutritionDeviceSyncEnabled() { return isLegalCategoryAllowed("sync_cloud"); }
+
+export async function addNutritionItem(
+  item: Omit<NutritionItem, "id" | "qty"> & { qty?: number },
+  operationId?: string,
+  source: PersistedNutritionSource = "manual",
+): Promise<boolean> {
+  const expectedUserId = activeNutritionAccountId();
+  if (!expectedUserId) throw new Error("Espace utilisateur indisponible.");
+  const now = Date.now();
+  // Tool-call IDs are only unique inside their originating account/session.
+  const operationKey = operationId ? `${expectedUserId}:${operationId}` : null;
+  if (operationKey) {
+    const previous = completedOperations.get(operationKey);
+    if (previous && now - previous < 60_000) return false;
+    // Reserve the operation before awaiting I/O so two concurrent deliveries
+    // carrying the same operation ID cannot create duplicate rows.
+    completedOperations.set(operationKey, now);
+    for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
+  }
+
+  // food_log is canonical: persist before projecting the entry into local UI
+  // state, then rebuild the day's complete view from the database.
+  try {
+    const saved = await persistNutritionItem(item, source, expectedUserId);
+    if (operationKey) {
+      completedOperations.set(operationKey, now);
+      for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
+    }
+    if (activeNutritionAccountId() !== expectedUserId) return true;
+    try {
+      await refreshNutritionFromFoodLog(todayKey(), { expectedUserId });
+    } catch (refreshError) {
+      if (activeNutritionAccountId() !== expectedUserId) return true;
+      // The SQL insert already succeeded. Keep the returned row visible rather
+      // than telling the user to retry and accidentally inserting it again.
+      console.error("[nutrition] canonical refresh failed after successful insert", refreshError instanceof Error ? refreshError.message : refreshError);
+      const day = todayKey();
+      if (activeNutritionAccountId() !== expectedUserId) return true;
+      const current = readNutritionItems();
+      const list = current[day] ?? [];
+      if (!list.some((row) => row.id === saved.id)) {
+        writeDomain(DOMAIN_ITEMS, { ...current, [day]: [...list, saved] });
+      }
+    }
+    return true;
+  } catch (error) {
+    if (operationKey) completedOperations.delete(operationKey);
+    throw error;
+  }
 }

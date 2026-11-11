@@ -4,8 +4,13 @@ on:
   pull_request:
     paths:
       - "src/hooks/use-cloud-sync-engine.tsx"
+      - "src/components/CloudSyncSettings.tsx"
       - "src/hooks/use-cloud-sync.tsx"
       - "src/lib/storage.ts"
+      - "src/lib/ai-chat.server.ts"
+      - "src/lib/nutrition-log.ts"
+      - "src/routes/nutrition.tsx"
+      - "src/components/RecipesView.tsx"
       - "supabase/migrations/**"
       - "scripts/cloud-sync-contract-test.mjs"
       - "package.json"
@@ -14,8 +19,13 @@ on:
     branches: [main]
     paths:
       - "src/hooks/use-cloud-sync-engine.tsx"
+      - "src/components/CloudSyncSettings.tsx"
       - "src/hooks/use-cloud-sync.tsx"
       - "src/lib/storage.ts"
+      - "src/lib/ai-chat.server.ts"
+      - "src/lib/nutrition-log.ts"
+      - "src/routes/nutrition.tsx"
+      - "src/components/RecipesView.tsx"
       - "supabase/migrations/**"
       - "scripts/cloud-sync-contract-test.mjs"
       - "package.json"

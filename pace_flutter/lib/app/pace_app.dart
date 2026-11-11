@@ -91,21 +91,74 @@ class _AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<_AuthGate> {
   StreamSubscription<AuthState>? _subscription;
+  Future<void> _accountSwitchQueue = Future<void>.value();
   bool _configured = false;
   bool _signedIn = false;
+  bool _ready = false;
+  String? _activationError;
 
   @override
   void initState() {
     super.initState();
     _configured = widget.auth.client != null;
     _signedIn = widget.auth.currentUser != null;
+    _ready = false;
     if (_configured) {
       _subscription = widget.auth.authStateChanges.listen((state) {
-        if (!mounted) return;
-        setState(() => _signedIn = state.session != null);
-        if (state.session != null) unawaited(widget.sync.syncNow());
+        _scheduleAccountSwitch(state.session?.user.id);
       });
-      if (_signedIn) unawaited(widget.sync.syncNow());
+      _scheduleAccountSwitch(widget.auth.currentUser?.id);
+    } else {
+      // A build without Supabase configuration must not display a previously
+      // authenticated account's private local snapshot.
+      _scheduleAccountSwitch(null);
+    }
+  }
+
+  void _scheduleAccountSwitch(String? userId) {
+    if (!mounted) return;
+    setState(() {
+      _ready = false;
+      _activationError = null;
+    });
+    _accountSwitchQueue = _accountSwitchQueue.then<void>(
+      (_) => _applyAccountSwitch(userId),
+      onError: (Object _, StackTrace __) => _applyAccountSwitch(userId),
+    );
+  }
+
+  Future<void> _applyAccountSwitch(String? userId) async {
+    try {
+      // Auth events may arrive in quick succession. Ignore an obsolete event
+      // before it is allowed to switch the local namespace.
+      if (widget.auth.currentUser?.id != userId) return;
+      // Stop the previous account's Realtime listeners and invalidate its
+      // consent cache before changing the local snapshot or starting a sync.
+      await widget.sync.onAccountChanged(userId);
+      if (widget.auth.currentUser?.id != userId) return;
+      if (userId != null) {
+        await widget.localStore.activateAccount(userId);
+      } else if (widget.localStore.currentAccountId != null) {
+        // A cold launch after sign-out must never display the last account's
+        // local snapshot while the auth gate is showing the login screen.
+        await widget.localStore.activateAccount(null);
+      }
+      if (widget.auth.currentUser?.id != userId) return;
+      if (!mounted) return;
+      setState(() {
+        _signedIn = userId != null;
+        _ready = true;
+        _activationError = null;
+      });
+      if (userId != null) await widget.sync.syncNow();
+    } catch (error) {
+      if (!mounted) return;
+      // Fail closed: never render one account's local data after an account
+      // namespace switch failed.
+      setState(() {
+        _ready = true;
+        _activationError = error.toString();
+      });
     }
   }
 
@@ -116,15 +169,44 @@ class _AuthGateState extends State<_AuthGate> {
   }
 
   @override
-  Widget build(BuildContext context) => !_configured || _signedIn
-      ? PaceShell(
-          localStore: widget.localStore,
-          sync: widget.sync,
-          auth: widget.auth,
-          onThemeChanged: widget.onThemeChanged,
-          themeMode: widget.themeMode,
-        )
-      : AuthPage(auth: widget.auth);
+  Widget build(BuildContext context) {
+    if (!_ready) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (!_configured) {
+      return PaceShell(
+        localStore: widget.localStore,
+        sync: widget.sync,
+        auth: widget.auth,
+        onThemeChanged: widget.onThemeChanged,
+        themeMode: widget.themeMode,
+      );
+    }
+    if (_activationError != null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              'Impossible de sécuriser les données locales de ce compte. '
+              'Pace a bloqué leur affichage pour éviter un mélange entre comptes. '
+              'Détail : $_activationError',
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
+    return _signedIn
+        ? PaceShell(
+            localStore: widget.localStore,
+            sync: widget.sync,
+            auth: widget.auth,
+            onThemeChanged: widget.onThemeChanged,
+            themeMode: widget.themeMode,
+          )
+        : AuthPage(auth: widget.auth);
+  }
 }
 
 class PaceShell extends StatefulWidget {
@@ -166,7 +248,7 @@ class _PaceShellState extends State<PaceShell> {
   Widget build(BuildContext context) {
     final pages = <Widget>[
       DashboardPage(localStore: widget.localStore),
-      NutritionPage(localStore: widget.localStore),
+      NutritionPage(localStore: widget.localStore, sync: widget.sync),
       SportPage(localStore: widget.localStore),
       SleepPage(localStore: widget.localStore),
       MorePage(

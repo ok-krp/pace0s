@@ -112,6 +112,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   late bool _aiConfirmations;
   late bool _notifications;
   late bool _memory;
+  bool _syncCloudConsent = false;
   bool _healthConsent = false;
   bool _healthCloudConsent = false;
   bool _financialConsent = false;
@@ -131,13 +132,20 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   Future<void> _loadConsent() async {
     final client = widget.auth.client;
     final user = client?.auth.currentUser;
-    if (client == null || user == null) return;
+    if (client == null || user == null ||
+        widget.localStore.currentAccountId != user.id) return;
+    final userId = user.id;
     try {
       final rows = await client
           .from('consent_records')
           .select('consent_type,granted,created_at')
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
+      if (!mounted ||
+          widget.auth.currentUser?.id != userId ||
+          widget.localStore.currentAccountId != userId) {
+        return;
+      }
       final latest = <String, bool>{};
       for (final row in rows) {
         final type = row['consent_type'] as String?;
@@ -147,16 +155,21 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       }
       if (!mounted) return;
       setState(() {
+        _syncCloudConsent = latest['sync_cloud'] ?? false;
         _healthConsent = latest['health_data'] ?? false;
         _healthCloudConsent = latest['health_cloud_sync'] ?? false;
         _financialConsent = latest['financial_data'] ?? false;
         _aiConsent = latest['ai_processing'] ?? false;
         _marketingConsent = latest['marketing'] ?? false;
       });
+      await widget.sync.setCloudSyncConsent(_syncCloudConsent);
+      if (_syncCloudConsent) await widget.sync.syncNow();
     } catch (_) {}
   }
 
   Future<void> _setConsent(String type, bool value) async {
+    final userId = widget.auth.currentUser?.id;
+    if (userId == null || widget.localStore.currentAccountId != userId) return;
     final service = PaceComplianceService(widget.auth.client);
     try {
       await service.recordConsent(
@@ -165,14 +178,23 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
         legalVersion: '2026-09-20',
         policyVersion: '2026-09-20',
       );
-      if (!mounted) return;
+      if (!mounted ||
+          widget.auth.currentUser?.id != userId ||
+          widget.localStore.currentAccountId != userId) {
+        return;
+      }
       setState(() {
+        if (type == 'sync_cloud') _syncCloudConsent = value;
         if (type == 'health_data') _healthConsent = value;
         if (type == 'health_cloud_sync') _healthCloudConsent = value;
         if (type == 'financial_data') _financialConsent = value;
         if (type == 'ai_processing') _aiConsent = value;
         if (type == 'marketing') _marketingConsent = value;
       });
+      if (type == 'sync_cloud') {
+        await widget.sync.setCloudSyncConsent(value);
+        if (value) await widget.sync.syncNow();
+      }
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
     }
@@ -180,6 +202,8 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
 
   Future<void> _requestDeletion() async {
     if (_deleting) return;
+    final userId = widget.auth.currentUser?.id;
+    if (userId == null || widget.localStore.currentAccountId != userId) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -192,6 +216,11 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       ),
     );
     if (confirmed != true) return;
+    if (!mounted ||
+        widget.auth.currentUser?.id != userId ||
+        widget.localStore.currentAccountId != userId) {
+      return;
+    }
     setState(() => _deleting = true);
     try {
       await PaceComplianceService(widget.auth.client).requestAccountDeletion();
@@ -204,6 +233,8 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   }
 
   Future<void> _setNotification(bool value) async {
+    final userId = widget.auth.currentUser?.id;
+    if (userId != null && widget.localStore.currentAccountId != userId) return;
     if (value) {
       final granted = await PaceNotificationService.instance.requestPermissions();
       if (!granted) {
@@ -212,6 +243,12 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       }
     } else {
       await PaceNotificationService.instance.cancelAll();
+    }
+    if (!mounted ||
+        (userId != null &&
+            (widget.auth.currentUser?.id != userId ||
+                widget.localStore.currentAccountId != userId))) {
+      return;
     }
     setState(() => _notifications = value);
     await widget.localStore.write('pace.settings.notifications', value);
@@ -282,6 +319,12 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
               ),
             ]),
             _section('Données & confidentialité', [
+              SwitchListTile.adaptive(
+                title: const Text('Synchronisation entre appareils'),
+                subtitle: const Text('Autoriser la sauvegarde des préférences et données fonctionnelles sur les autres appareils Pace. Les opérations locales restent en attente tant que cette option est désactivée.'),
+                value: _syncCloudConsent,
+                onChanged: (value) => _setConsent('sync_cloud', value),
+              ),
               SwitchListTile.adaptive(title: const Text('Accès aux données de santé'), subtitle: const Text('Autoriser Pace à lire les données Santé / Health Connect sélectionnées.'), value: _healthConsent, onChanged: (value) => _setConsent('health_data', value)),
               SwitchListTile.adaptive(title: const Text('Synchronisation santé cloud'), subtitle: const Text('Autoriser l’envoi des données de santé vers votre compte Pace.'), value: _healthCloudConsent, onChanged: _healthConsent ? (value) => _setConsent('health_cloud_sync', value) : null),
               SwitchListTile.adaptive(title: const Text('Données financières'), subtitle: const Text('Autoriser le traitement des données financières connectées.'), value: _financialConsent, onChanged: (value) => _setConsent('financial_data', value)),

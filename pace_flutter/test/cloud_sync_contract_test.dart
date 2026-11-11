@@ -2,6 +2,55 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
+  group('Flutter Nutrition IDs', () {
+    test('creates valid UUID v4 IDs for canonical food_log rows', () {
+      final id = newFoodLogUuid();
+      expect(
+        RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$').hasMatch(id),
+        isTrue,
+      );
+    });
+
+    test('creates distinct IDs for separate manual meals', () {
+      expect(newFoodLogUuid(), isNot(newFoodLogUuid()));
+    });
+  });
+
+  group('Flutter cross-device sync consent', () {
+    test('does not sync without an authenticated account', () {
+      expect(shouldRunCloudSync(userId: null, activeAccountId: null, consentGranted: true), isFalse);
+    });
+
+    test('does not sync when functional cloud consent is disabled', () {
+      expect(shouldRunCloudSync(userId: 'user-a', activeAccountId: 'user-a', consentGranted: false), isFalse);
+    });
+
+    test('allows sync only when the account explicitly granted consent', () {
+      expect(shouldRunCloudSync(userId: 'user-a', activeAccountId: 'user-a', consentGranted: true), isTrue);
+    });
+    
+    test('never syncs one account using another account local snapshot', () {
+      expect(
+        shouldRunCloudSync(
+          userId: 'user-b',
+          activeAccountId: 'user-a',
+          consentGranted: true,
+        ),
+        isFalse,
+      );
+    });
+  });
+
+  group('Flutter cloud outbox acknowledgement', () {
+    test('does not acknowledge a rejected server mutation', () {
+      expect(shouldAcknowledgeSyncOperation(accepted: false), isFalse);
+    });
+
+    test('acknowledges only a server-accepted mutation', () {
+      expect(shouldAcknowledgeSyncOperation(accepted: true), isTrue);
+    });
+  });
+
   group('CloudSyncWriteResponse', () {
     test('accepts the ordered RPC response contract', () {
       final result = CloudSyncWriteResponse.fromRpc({
