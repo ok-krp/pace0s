@@ -126,3 +126,29 @@ A direct read of the tracked `supabase/config.toml` files and the non-decrypted 
 The connected Supabase account lists only `jayzswkabxfhzmftagku` (inactive) and `oqaqolvjxhrkvscsqhzp` (active `PaceOS-Migrated`). Neither `vqpnhqxrsmcyalotiypk` nor `cduyjejftorfuxuwhbqt` appears in that list; direct lookup of those refs is denied by the current Supabase connection. This is an access/identity gap, not proof that either project has been deleted.
 
 The CLI migration target (`vqp...`) and Vercel runtime target (`cduy...`) are therefore not aligned. Do not run `supabase link`, `db push`, migration repair, or OAuth setup against a guessed ref. Confirm the authoritative project and align the tracked CLI config and Vercel Preview/Production URLs deliberately, with the environment targets kept separate and reviewed.
+
+
+## 9. Canonical RPC/type parity review — 2026-11-11
+
+The generated Supabase database types were compared directly across the three branches:
+
+| Branch | Generated public `Functions` declarations |
+|---|---:|
+| `main` | 22 |
+| `application` | 0 |
+| PR #316 (after the review migration/type update) | 2 |
+
+The PR #316 branch contains the SQL for `upsert_user_state_if_newer` and now adds `has_current_health_e2ee_consent()`; its policy-only pairing predicate lives in `pace_private` and is deliberately not part of the exposed public database types. The generated types and static coverage test were updated to reflect that public/private boundary.
+
+Twenty public RPC declarations present in `main` are still absent from PR #316's generated type contract and from its current application migration chain:
+
+- Nutrition: `canonicalize_nutrition_meal`, `nutrition_macro_kcal_consistent`, `insert_coach_ai_food_idempotent`, `insert_coach_ai_food_idempotent_v2`.
+- Profile: `upsert_profile_if_newer`.
+- Sport: `sport_update_exercise`, `sport_delete_exercise`, `sport_update_program`, `sport_delete_program`, `sport_finish_workout`, `sport_delete_workout`.
+- Health/E2EE: `rotate_health_e2ee_key`, `migrate_health_legacy_chunk`, `backfill_health_e2ee_dedupe_hashes`, `create_pairing_session`, `join_pairing_session`, `confirm_pairing_session`, `complete_pairing_session`, `create_pairing_envelope`, `get_pairing_session`.
+
+The v2 Nutrition function is a separate source-of-truth defect: a repository-wide code search finds `insert_coach_ai_food_idempotent_v2` in the main application callsite and generated types, but not in a SQL migration. The checked-in canonical v1 migration `20260903100855_add_ai_food_tool_idempotency.sql` defines only `insert_coach_ai_food_idempotent` and has no `p_meta` argument. Migration files `20260913193556_add_coach_ai_food_idempotent_v2_meta.sql` and `20260913193605_fix_coach_ai_food_idempotent_v2_sodium.sql` are no-op compatibility markers, not function definitions. Do not substitute v1 for v2 or create a guessed replacement; recover the authoritative v2 SQL from the confirmed source database/change history, then add a reviewed canonical migration and tests.
+
+Some older migration filenames on `main` are also no-op compatibility markers whose SQL is represented by later canonical migrations. Migration recovery must use the actual SQL definitions and dependency order, not replay every filename or assume each historical marker contains its named change.
+
+**Release blocker remains:** no schema/RPC migration chain is complete for the intended target. The isolated RLS preflight is intentionally not a schema-restoration migration.
