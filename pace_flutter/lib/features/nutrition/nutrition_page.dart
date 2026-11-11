@@ -136,6 +136,16 @@ class _NutritionPageState extends State<NutritionPage> {
   }
 
   Future<void> _deleteItem(Map<String, dynamic> item) async {
+    try {
+      await widget.sync.deleteNutritionFoodLogItem(item['id']?.toString() ?? '');
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Suppression impossible ; le repas a été conservé.')),
+        );
+      }
+      return;
+    }
     final raw = widget.localStore.read('pace.nutrition.items');
     if (raw is! Map) return;
     final data = Map<String, dynamic>.from(raw);
@@ -168,7 +178,12 @@ class _NutritionPageState extends State<NutritionPage> {
       return value is num ? value.toStringAsFixed(1) : '—';
     }
     return RefreshIndicator(
-      onRefresh: () async => setState(() {}),
+      onRefresh: () async {
+        try {
+          await widget.sync.syncNow();
+        } catch (_) {}
+        if (mounted) setState(() {});
+      },
       child: ListView(padding: const EdgeInsets.all(20), children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('Nutrition', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),
