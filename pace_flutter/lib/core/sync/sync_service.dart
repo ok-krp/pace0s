@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -34,6 +35,9 @@ class SyncService {
         if (user == null || user.id != initialUserId) break;
 
         await _ensureRealtimeSubscription(user.id);
+        final hadNutritionMutation = localStore.pendingOperations().any(
+          (operation) => operation['key'] == 'pace.nutrition.items',
+        );
         final hadLocalAiPreferenceMutation = localStore.pendingOperations().any(
           (operation) =>
               operation['key'] == 'pace.settings.ai.confirm_actions' ||
@@ -42,6 +46,10 @@ class SyncService {
         await _pushPending();
         await _syncAiPreferences(pushLocal: hadLocalAiPreferenceMutation);
         await _pullRemote();
+        if (hadNutritionMutation) {
+          await _reconcileNutritionProjection(user.id);
+          await _pushPending();
+        }
       } while (_syncRequested && client?.auth.currentUser?.id == initialUserId);
     } finally {
       _running = false;
@@ -258,6 +266,90 @@ class SyncService {
     }
   }
 
+  Future<void> _reconcileNutritionProjection(String userId) async {
+    try {
+      final now = DateTime.now();
+      final day =
+          '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+      final rows = await client!
+          .from('food_log')
+          .select('id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg')
+          .eq('user_id', userId)
+          .eq('log_date', day)
+          .order('created_at');
+
+      final raw = localStore.read('pace.nutrition.items');
+      final itemsByDay =
+          Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
+      final currentDay = itemsByDay[day] is List
+          ? List<dynamic>.from(itemsByDay[day] as List)
+          : <dynamic>[];
+      final legacyRows = currentDay
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((item) => !_isFoodLogUuid(item['id']))
+          .toList();
+
+      final canonicalRows = rows.map((row) => <String, dynamic>{
+            'id': row['id'],
+            'name': row['name'],
+            'meal': row['meal'],
+            'kcal': (row['kcal'] as num?)?.toDouble() ?? 0,
+            'p': (row['protein_g'] as num?)?.toDouble() ?? 0,
+            'c': (row['carbs_g'] as num?)?.toDouble() ?? 0,
+            'f': (row['fat_g'] as num?)?.toDouble() ?? 0,
+            'fiber': (row['fiber_g'] as num?)?.toDouble() ?? 0,
+            'sugar': (row['sugar_g'] as num?)?.toDouble() ?? 0,
+            'sodium': (row['sodium_mg'] as num?)?.toDouble() ?? 0,
+            'qty': 1,
+          }).toList();
+      final canonicalIds =
+          canonicalRows.map((item) => item['id'] as String).toSet();
+      final nextRows = [
+        ...canonicalRows,
+        ...legacyRows.where((item) => !canonicalIds.contains(item['id'])),
+      ];
+
+      if (jsonEncode(currentDay) != jsonEncode(nextRows)) {
+        itemsByDay[day] = nextRows;
+        await localStore.write('pace.nutrition.items', itemsByDay);
+
+        final rawTotals = localStore.read('pace.nutrition.totals');
+        final totals =
+            Map<String, dynamic>.from(rawTotals is Map ? rawTotals : <String, dynamic>{});
+        double sum(String key) => nextRows.fold<double>(
+              0,
+              (total, item) => total +
+                  ((item is Map && item[key] is num)
+                      ? (item[key] as num).toDouble()
+                      : 0),
+            );
+        totals[day] = {
+          'kcal': sum('kcal'),
+          'p': sum('p'),
+          'c': sum('c'),
+          'f': sum('f'),
+        };
+        await localStore.write('pace.nutrition.totals', totals);
+      }
+    } catch (_) {
+      // Keep the local snapshot and its outbox intact if food_log is offline.
+    }
+  }
+
+  Future<void> deleteNutritionFoodLogItem(String id) async {
+    if (!_isFoodLogUuid(id)) return;
+    final user = client?.auth.currentUser;
+    if (client == null || user == null) {
+      throw StateError('Session utilisateur indisponible.');
+    }
+    await client!
+        .from('food_log')
+        .delete()
+        .eq('id', id)
+        .eq('user_id', user.id);
+  }
+
   Future<void> _pullRemote() async {
     final userId = client!.auth.currentUser!.id;
     final rows = await client!
@@ -288,6 +380,63 @@ class SyncService {
     }
   }
 }
+
+bool _isFoodLogUuid(dynamic id) =>
+    id is String &&
+    RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}
+bool shouldAcknowledgeSyncOperation({required bool accepted}) => accepted;
+
+/// Returns whether a Realtime user_state row is newer than the local
+/// checkpoint and safe to apply.
+///
+/// Pending local mutations always win over a Realtime event. The normal sync
+/// cycle will reconcile the cloud state after the local write has completed.
+bool shouldApplyRealtimeUserState({
+  required DateTime? remoteTime,
+  required DateTime? localTime,
+  required bool hasPendingMutation,
+}) {
+  if (hasPendingMutation || remoteTime == null) return false;
+  return localTime == null || remoteTime.isAfter(localTime);
+}
+
+/// Validated response contract returned by upsert_user_state_if_newer().
+class CloudSyncWriteResponse {
+  const CloudSyncWriteResponse({
+    required this.accepted,
+    required this.updatedAt,
+  });
+
+  final bool accepted;
+  final String updatedAt;
+
+  factory CloudSyncWriteResponse.fromRpc(dynamic response) {
+    if (response is! Map) {
+      throw const FormatException('invalid cloud sync write response');
+    }
+    final accepted = response['accepted'];
+    final updatedAt = response['updated_at'];
+    if (accepted is! bool || updatedAt is! String || updatedAt.isEmpty) {
+      throw const FormatException('invalid cloud sync write response');
+    }
+    return CloudSyncWriteResponse(
+      accepted: accepted,
+      updatedAt: updatedAt,
+    );
+  }
+}
+
+class _PushResult {
+  const _PushResult.accepted(this.serverUpdatedAt) : accepted = true;
+
+  const _PushResult.rejected()
+      : accepted = false,
+        serverUpdatedAt = null;
+
+  final bool accepted;
+  final String? serverUpdatedAt;
+}
+, caseSensitive: false).hasMatch(id);
 
 /// A local outbox operation is acknowledged only after server acceptance.
 bool shouldAcknowledgeSyncOperation({required bool accepted}) => accepted;
