@@ -54,7 +54,16 @@ CREATE TABLE public.health_e2ee_key_versions (id uuid PRIMARY KEY, user_id uuid 
 CREATE TABLE public.health_e2ee_pairing_sessions (
   id uuid PRIMARY KEY, user_id uuid NOT NULL, initiator_device_id uuid NOT NULL, recipient_device_id uuid
 );
-CREATE TABLE public.health_e2ee_recovery_envelopes (id uuid PRIMARY KEY, user_id uuid NOT NULL);
+CREATE TABLE public.health_e2ee_recovery_envelopes (
+  user_id uuid PRIMARY KEY,
+  envelope text NOT NULL,
+  nonce text NOT NULL,
+  algorithm text NOT NULL DEFAULT 'PBKDF2-SHA-256/AES-256-GCM',
+  key_version integer NOT NULL CHECK (key_version > 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (algorithm = 'PBKDF2-SHA-256/AES-256-GCM')
+);
 CREATE TABLE public.health_legacy_migration_map (legacy_sample_id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.health_samples (id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.health_samples_e2ee (
