@@ -200,8 +200,6 @@ function serialize(value: unknown): string | undefined {
     return undefined;
   }
 }
-function readConflicts(user.id): SyncConflict[] { try { const raw = JSON.parse(localStorage.getItem(CONFLICTS_KEY) ?? "[]") as SyncConflict[]; return Array.isArray(raw) ? raw.filter((item) => item?.id && item?.key) : []; } catch { return []; } }
-function writeConflicts(items: SyncConflict[]) { try { localStorage.setItem(CONFLICTS_KEY, JSON.stringify(items.slice(-20))); } catch {} }
 function unwrapNutritionValue(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const candidate = value as Record<string, unknown>;
@@ -326,7 +324,7 @@ export function useCloudSyncEngineInternal() {
         }
         if (cancelled) return;
         if (accepted) {
-          localStorage.setItem("pace.__last_sync_at", readMeta()[latest.key] ?? latest.updatedAt);
+          localStorage.setItem("pace.__last_sync_at", readMeta(user.id)[latest.key] ?? latest.updatedAt);
           // Remove only the exact mutation the server acknowledged.
           unqueueIfMutation(latest.key, latest.updatedAt, user.id);
           setStatus("ok");
@@ -359,7 +357,7 @@ export function useCloudSyncEngineInternal() {
       const domain = readDomainRecord(row.key);
       if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) return;
       applyRemoteAndRemember(row.key, row.value, row.updated_at);
-      markVersion(row.key, row.updated_at);
+      markVersion(row.key, row.updated_at, user.id);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
       setStatus("ok");
     };
@@ -465,7 +463,7 @@ export function useCloudSyncEngineInternal() {
               value: localDomain.value,
               updatedAt: localDomain.updatedAt,
               mutationId: localDomain.mutationId,
-            });
+            }, user.id);
             meta[key] = localDomain.updatedAt;
             newest = newest && Date.parse(newest) > Date.parse(localDomain.updatedAt) ? newest : localDomain.updatedAt;
           }
