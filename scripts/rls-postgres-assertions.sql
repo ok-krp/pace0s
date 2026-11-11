@@ -156,6 +156,9 @@ SELECT set_config('request.jwt.claim.sub','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 DO $user_a$
 DECLARE n integer;
 BEGIN
+  IF has_table_privilege('authenticated','public.health_e2ee_devices','UPDATE') THEN
+    RAISE EXCEPTION 'authenticated can directly UPDATE device revocation state';
+  END IF;
   IF has_column_privilege('authenticated','public.consent_records','id','INSERT') THEN
     RAISE EXCEPTION 'authenticated can choose consent record identifiers';
   END IF;
@@ -342,6 +345,13 @@ BEGIN
     AND consent_type IN ('health_data','health_cloud_sync')
     AND created_at=(SELECT now());
   IF n <> 2 THEN RAISE EXCEPTION 'database timestamp default not applied to consent records: %',n; END IF;
+
+  BEGIN
+    UPDATE public.health_e2ee_devices SET revoked_at=NULL
+    WHERE id='70000000-0000-0000-0000-000000000003';
+    RAISE EXCEPTION 'client directly reactivated revoked E2EE device';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
 
   BEGIN
     INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
