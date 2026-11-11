@@ -45,6 +45,8 @@ assert.match(engine, /const writeKey = user\.id \+ ':' \+ item\.key/, "In-flight
 
 const accountScope = read("src/lib/account-scope.ts");
 const authProvider = read("src/hooks/use-auth.tsx");
+const accountScopeRuntimeTest = read("scripts/account-scope-test.mjs");
+const packageScripts = JSON.parse(read("package.json")).scripts;
 assert.match(accountScope, /function accountSnapshotKey\(scope: string\)/, "Web local state must be stored in a separate snapshot for each account");
 assert.match(accountScope, /function isAccountLocalKey\(key: string\)/, "Web account switching must explicitly define which app data follows a user");
 assert.match(accountScope, /previousScope === null[\s\S]*if \(!userId\) return false[\s\S]*accountSnapshotKey\(nextScope\)/, "The first authenticated account must adopt legacy local data without deleting it");
@@ -73,6 +75,12 @@ assert.match(authProvider, /hasAuthEvent = true[\s\S]*!hasAuthEvent && authEvent
 assert.match(accountScope, /const restored = readAccountSnapshot\(nextScope\)[\s\S]*catch \(error\)[\s\S]*restoreAccountSnapshot\(currentSnapshot\)/, "A failed initial account restore must roll back to the legacy local snapshot");
 
 assert.match(authProvider, /scopeError/, "The app must not render account data if namespace restoration fails");
+
+assert.match(accountScopeRuntimeTest, /first authenticated account|legacy local/i, "Browser account-scope runtime test must cover legacy local data adoption");
+assert.match(accountScopeRuntimeTest, /user-a[\s\S]*user-b[\s\S]*__guest__/, "Browser account-scope runtime test must exercise separate users and guest data");
+assert.match(accountScopeRuntimeTest, /corrupt target snapshot[\s\S]*assert\.throws/, "Browser account-scope runtime test must prove failed restores do not erase the active user's data");
+assert.match(packageScripts["test:sync"], /node --experimental-strip-types scripts\/account-scope-test\.mjs/, "The standard sync test command must execute the browser account-scope runtime suite");
+
 
 
 
