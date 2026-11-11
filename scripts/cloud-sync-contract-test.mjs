@@ -10,6 +10,7 @@ const storage = read("src/lib/storage.ts");
 const nutritionAi = read("src/lib/ai-chat.server.ts");
 const nutritionLog = read("src/lib/nutrition-log.ts");
 const nutritionRoute = read("src/routes/nutrition.tsx");
+const domainStore = read("src/lib/domain-store.ts");
 
 // AI meal additions are append-only. Replaying the same tool call is handled
 // by the idempotency RPC; a later add must never merge/delete an older meal.
@@ -28,12 +29,12 @@ assert.match(nutritionAi, /Une demande d’ajout est toujours un ajout append-on
 
 // A local cache snapshot may be partial or stale. Only explicit UI deletion
 // is allowed to issue DELETE; the compatibility bridge is insert/update only.
-const bridgeStart = nutritionLog.indexOf("async function bridgeLocalNutritionToFoodLog");
+const bridgeStart = nutritionLog.indexOf("function bridgeLocalNutritionToFoodLog(value: unknown): Promise<void>");
 const bridgeEnd = nutritionLog.indexOf('\nif (typeof window !== "undefined")', bridgeStart);
 assert.ok(bridgeStart >= 0 && bridgeEnd > bridgeStart, "Nutrition bridge must remain identifiable");
 const bridge = nutritionLog.slice(bridgeStart, bridgeEnd);
 assert.doesNotMatch(bridge, /\.delete\s*\(/, "A missing local snapshot row must never delete canonical food_log data");
-assert.match(bridge, /absence from a local snapshot must never erase cloud data/);
+assert.match(bridge, /A missing ID is not a delete instruction/);
 assert.match(nutritionRoute, /await deletePersistedNutritionItem\(id\)/, "User-requested deletion must explicitly delete its exact SQL row");
 assert.match(nutritionLog, /await persistNutritionItem\(item, source\)/, "All nutrition additions must persist to food_log before updating local state");
 assert.doesNotMatch(domainStore, /MAX_IDENTICAL_NUTRITION_ITEMS_PER_DAY|MAX_NUTRITION_ITEMS_PER_DAY|count >=/, "Nutrition sanitization must not silently deduplicate or truncate valid meal entries");
@@ -42,8 +43,9 @@ assert.match(nutritionLog, /completedOperations\.set\(operationId, now\)/, "Only
 assert.match(nutritionRoute, /savingPending/, "Barcode and photo confirmation must prevent accidental duplicate clicks while the server write is pending");
 
 assert.match(nutritionLog, /refreshNutritionFromFoodLog\(todayKey\(\)\)/, "Nutrition projection must be rebuilt from canonical food_log after an addition");
-assert.match(nutritionLog, /Recover entries created by older app versions/, "Previously local-only manual entries must be recovered into food_log");
-assert.match(nutritionLog, /id: item\.id, user_id: user\.id, log_date: day/, "Legacy recovery must preserve each existing nutrition UUID");
+assert.match(nutritionLog, /async function bridgeNutritionSnapshot\(value: unknown, userId: string\)/, "Previously local-only manual entries must be recovered into food_log");
+assert.match(nutritionLog, /for \(const \{ id, day, item \} of nextRows\)/, "Legacy recovery must preserve each existing nutrition UUID");
+assert.match(nutritionLog, /id, user_id: user\.id, log_date: day/, "Legacy recovery must reuse each existing nutrition UUID in food_log");
 assert.doesNotMatch(nutritionLog.slice(nutritionLog.indexOf("async function refreshNutritionFromFoodLog"), nutritionLog.indexOf("export async function addNutritionItem")), /\.delete\s*\(/, "Canonical refresh and legacy recovery must never delete nutrition entries");
 assert.match(nutritionLog, /order\("created_at", \{ ascending: true \}\)/, "Canonical nutrition refresh must retain stable meal ordering");
 assert.match(nutritionLog, /let nutritionBridgeChain: Promise<void>/, "Legacy nutrition snapshots must be serialized instead of being dropped during an in-flight bridge");
@@ -62,7 +64,6 @@ assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconc
 assert.equal(/setInterval\s*\(/.test(storage), false, "storage must not poll for local changes");
 assert.match(storage, /pace\.local\.write/);
 assert.match(engine, /onLocalWrite\(/);
-const domainStore = read("src/lib/domain-store.ts");
 const domainLocalWriteStart = domainStore.indexOf("const onWrite =");
 const domainRemoteWriteStart = domainStore.indexOf("const onRemoteWrite =", domainLocalWriteStart);
 const domainWriteEnd = domainStore.indexOf("window.addEventListener(WRITE_EVENT", domainRemoteWriteStart);
@@ -113,7 +114,7 @@ assert.doesNotMatch(engine.slice(engine.indexOf("for (const [key, bucket] of gro
 assert.match(read("src/lib/legal.ts"), /sync_cloud: false/, "cloud sync must remain opt-in by default");
 assert.match(nutritionLog, /isNutritionDeviceSyncEnabled\(\).*isLegalCategoryAllowed\("sync_cloud"\)/s, "Nutrition UI must be able to explain when cross-device sync is disabled");
 assert.match(engine, /postgres_changes/);
-assert.equal((engine.match(/realtimeChannel\.subscribe\(/g) ?? []).length, 1, "Realtime channel must only be subscribed during initial channel setup");
+assert.equal((engine.match(/channel\.subscribe\(/g) ?? []).length, 1, "Realtime channel must only be subscribed during initial channel setup");
 assert.equal(/location\.reload\s*\(/.test(engine), false, "sync must never reload the page");
 
 // Internal persistence keys never become cloud records.
