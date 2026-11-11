@@ -47,6 +47,7 @@ const e2eeTables = [
   "health_samples_e2ee",
   "health_e2ee_key_envelopes",
   "health_e2ee_key_versions",
+  "health_e2ee_recovery_envelopes",
 ];
 
 const backendOnlyTables = [
@@ -82,7 +83,7 @@ const classified = Object.entries(classes).flatMap(([classification, tables]) =>
 const names = classified.map((item) => item.table);
 const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
 
-assert.equal(directUserTables.length, 16, "Expected 16 direct user-owned CRUD tables");
+assert.equal(directUserTables.length, 15, "Expected 15 direct user-owned CRUD tables");
 assert.equal(classes.ownerReadOnlyUserState.length, 1, "user_state must be owner-readable but RPC-write-only");
 assert.equal(childTables.length, 4, "Expected four child tables with parent ownership checks");
 assert.equal(catalogTables.length, 6, "Expected six public read-only nutrition catalogues");
@@ -310,6 +311,27 @@ assert.ok(consentGrantIndex >= 0 && revokedRecipientIndex > consentGrantIndex &&
   "Revoked-device checks must execute after consent is granted");
 assert.match(sql, /health_e2ee_key_versions_select_own[\s\S]*?for select to authenticated/i,
   "Key versions must be read-only through direct API access");
+assert.match(sql, /health_e2ee_recovery_select_own[\s\S]*?has_current_health_e2ee_consent/i,
+  "Recovery envelopes must be readable only by their owner with current health/cloud-sync consent");
+assert.match(sql, /health_e2ee_recovery_insert_own[\s\S]*?has_current_health_e2ee_consent/i,
+  "Recovery envelopes must be insertable only with current health/cloud-sync consent");
+assert.match(sql, /health_e2ee_recovery_update_own[\s\S]*?has_current_health_e2ee_consent/i,
+  "Recovery envelopes must be updateable only with current health/cloud-sync consent");
+assert.doesNotMatch(directBlock, /'health_e2ee_recovery_envelopes'/,
+  "Recovery envelopes must not receive generic owner CRUD grants");
+assert.doesNotMatch(sql, /grant [^;]*delete[^;]*on public\.health_e2ee_recovery_envelopes/i,
+  "Authenticated users must not directly delete recovery envelopes");
+const recoveryAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+for (const assertion of [
+  "E2EE recovery envelope visible without consent",
+  "E2EE recovery write succeeded without required consent",
+  "consented E2EE recovery envelope write failed",
+  "user B can read user A E2EE recovery envelope",
+  "revoked consent still exposes E2EE recovery envelope",
+  "E2EE recovery envelope update succeeded after consent revocation",
+]) {
+  assert.ok(recoveryAssertions.includes(assertion), "Missing E2EE recovery consent test: " + assertion);
+}
 
 for (const table of backendOnlyTables) {
   assert.doesNotMatch(sql, new RegExp(
