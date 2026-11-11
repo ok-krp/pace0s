@@ -131,7 +131,11 @@ CREATE TABLE public.profiles (
 );
 CREATE TABLE public.push_subscriptions (id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.reminder_debug_log (id uuid PRIMARY KEY, user_id uuid NOT NULL);
-CREATE TABLE public.reminder_settings (id uuid PRIMARY KEY, user_id uuid NOT NULL);
+CREATE TABLE public.reminder_settings (
+  id uuid PRIMARY KEY,
+  user_id uuid NOT NULL,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE public.sport_exercises (id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.sport_program_items (id uuid PRIMARY KEY, program_id uuid NOT NULL, exercise_id uuid NOT NULL);
 CREATE TABLE public.sport_programs (id uuid PRIMARY KEY, user_id uuid NOT NULL);
@@ -234,6 +238,62 @@ CREATE FUNCTION public.enforce_daily_nutrition_chat()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $routine$ BEGIN RETURN NEW; END $routine$;
 
+CREATE FUNCTION public.sport_update_exercise(
+  p_id uuid, p_name text DEFAULT NULL, p_muscle text DEFAULT NULL,
+  p_equipment text DEFAULT NULL, p_notes text DEFAULT NULL,
+  p_default_sets integer DEFAULT NULL, p_default_reps integer DEFAULT NULL,
+  p_default_weight numeric DEFAULT NULL, p_rest_sec integer DEFAULT NULL
+)
+RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=public
+AS $routine$ BEGIN
+  UPDATE public.sport_exercises SET user_id=sport_exercises.user_id
+  WHERE id=p_id AND user_id=(SELECT auth.uid());
+  RETURN FOUND;
+END $routine$;
+CREATE FUNCTION public.sport_delete_exercise(p_id uuid)
+RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=public
+AS $routine$ BEGIN
+  DELETE FROM public.sport_exercises WHERE id=p_id AND user_id=(SELECT auth.uid());
+  RETURN FOUND;
+END $routine$;
+CREATE FUNCTION public.sport_update_program(
+  p_id uuid, p_name text DEFAULT NULL, p_emoji text DEFAULT NULL, p_days integer[] DEFAULT NULL
+)
+RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=public
+AS $routine$ BEGIN
+  UPDATE public.sport_programs SET user_id=sport_programs.user_id
+  WHERE id=p_id AND user_id=(SELECT auth.uid());
+  RETURN FOUND;
+END $routine$;
+CREATE FUNCTION public.sport_delete_program(p_id uuid)
+RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=public
+AS $routine$ BEGIN
+  DELETE FROM public.sport_programs WHERE id=p_id AND user_id=(SELECT auth.uid());
+  RETURN FOUND;
+END $routine$;
+CREATE FUNCTION public.sport_finish_workout(
+  p_id uuid, p_ended_at timestamptz DEFAULT now(),
+  p_duration_min integer DEFAULT NULL, p_notes text DEFAULT NULL
+)
+RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=public
+AS $routine$ BEGIN
+  UPDATE public.sport_workout_sessions SET ended_at=p_ended_at
+  WHERE id=p_id AND user_id=(SELECT auth.uid());
+  RETURN FOUND;
+END $routine$;
+CREATE FUNCTION public.sport_delete_workout(p_id uuid)
+RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=public
+AS $routine$ BEGIN
+  DELETE FROM public.sport_workout_sessions WHERE id=p_id AND user_id=(SELECT auth.uid());
+  RETURN FOUND;
+END $routine$;
+CREATE FUNCTION public.touch_updated_at()
+RETURNS trigger LANGUAGE plpgsql SET search_path=public
+AS $routine$ BEGIN NEW.updated_at=now(); RETURN NEW; END $routine$;
+CREATE FUNCTION public.update_updated_at_column()
+RETURNS trigger LANGUAGE plpgsql SET search_path=public
+AS $routine$ BEGIN NEW.updated_at=now(); RETURN NEW; END $routine$;
+
 -- A real row trigger is attached before the follow-up migration revokes
 -- direct EXECUTE on its SECURITY DEFINER function.
 CREATE TRIGGER fixture_temporary_workout_trigger
@@ -241,6 +301,14 @@ AFTER UPDATE OF ended_at ON public.sport_workout_sessions
 FOR EACH ROW
 WHEN (NEW.ended_at IS NOT NULL AND NEW.is_temporary = true)
 EXECUTE FUNCTION public.delete_temporary_workout_after_finish();
+
+CREATE TRIGGER fixture_reminder_timestamp_trigger
+BEFORE UPDATE ON public.reminder_settings
+FOR EACH ROW EXECUTE FUNCTION public.touch_updated_at();
+
+CREATE TRIGGER fixture_legal_consent_timestamp_trigger
+BEFORE UPDATE ON public.legal_consent
+FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
 -- Simulate broad legacy grants and a stale permissive policy.
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO anon, authenticated;
