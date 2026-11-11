@@ -192,12 +192,18 @@ create policy health_e2ee_envelopes_insert_own on public.health_e2ee_key_envelop
   with check (
     user_id = (select auth.uid())
     and (select public.has_current_health_e2ee_consent())
+    -- Flutter writes directly through PostgREST; both endpoints must remain live.
     and exists (select 1 from public.health_e2ee_devices d
-                where d.id = health_e2ee_key_envelopes.device_id and d.user_id = (select auth.uid()))
-    and (sender_device_id is null or exists (
+                where d.id = health_e2ee_key_envelopes.device_id
+                  and d.user_id = (select auth.uid())
+                  and d.revoked_at is null)
+    and sender_device_id is not null
+    and exists (
       select 1 from public.health_e2ee_devices d
-      where d.id = health_e2ee_key_envelopes.sender_device_id and d.user_id = (select auth.uid())
-    ))
+      where d.id = health_e2ee_key_envelopes.sender_device_id
+        and d.user_id = (select auth.uid())
+        and d.revoked_at is null
+    )
     and (pairing_session_id is null or pace_private.owns_health_e2ee_pairing_session(pairing_session_id))
   );
 create policy health_e2ee_envelopes_delete_own on public.health_e2ee_key_envelopes
