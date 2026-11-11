@@ -15,6 +15,25 @@ function accountSnapshotKey(scope: string): string {
   return ACCOUNT_DATA_PREFIX + encodeURIComponent(scope);
 }
 
+const LEGACY_SYNC_KEYS = [
+  "pace.__sync_queue",
+  "pace.__sync_meta",
+  "pace.__sync_conflicts",
+] as const;
+
+function migrateLegacySyncState(scope: string): void {
+  for (const legacyKey of LEGACY_SYNC_KEYS) {
+    const legacyValue = localStorage.getItem(legacyKey);
+    if (legacyValue === null) continue;
+    const scopedKey = legacyKey + ":account:" + encodeURIComponent(scope);
+    if (localStorage.getItem(scopedKey) === null) {
+      localStorage.setItem(scopedKey, legacyValue);
+    }
+    // The global legacy slot must never remain available to a later account.
+    localStorage.removeItem(legacyKey);
+  }
+}
+
 function captureCurrentAccountState(): Record<string, string> {
   const snapshot: Record<string, string> = {};
   for (const key of Object.keys(localStorage)) {
@@ -75,6 +94,7 @@ export function switchLocalAccountScope(userId: string | null): boolean {
     // account. A signed-out initial render leaves it untouched as guest data.
     if (previousScope === null) {
       if (!userId) return false;
+      migrateLegacySyncState(nextScope);
       // If a prior browser session left an account snapshot but lost its
       // marker, that snapshot is authoritative; never replace it with whatever
       // unscoped values happen to be visible after the reset.
@@ -94,6 +114,10 @@ export function switchLocalAccountScope(userId: string | null): boolean {
       window.dispatchEvent(new Event("pace.remote.write"));
       return true;
     }
+
+    // Move any pre-account-scoping sync state to the namespace that owns
+    // the currently visible local app data before another user can sign in.
+    migrateLegacySyncState(previousScope);
 
     // Parse the target snapshot before mutating the current visible data.
     const nextSnapshot = readAccountSnapshot(nextScope);
