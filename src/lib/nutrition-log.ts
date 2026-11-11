@@ -28,18 +28,41 @@ const FOOD_LOG_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{
 function isFoodLogUuid(id: string) { return FOOD_LOG_UUID.test(id); }
 type DeletedNutritionIds = { userId: string; ids: string[] };
 
+function deletedIdsStorageKey(userId: string) {
+  return `${DELETED_IDS_KEY}:${encodeURIComponent(userId)}`;
+}
+
 function readDeletedNutritionIds(userId: string): Set<string> {
   if (typeof window === "undefined") return new Set();
   try {
-    const raw = JSON.parse(localStorage.getItem(DELETED_IDS_KEY) ?? "null") as DeletedNutritionIds | null;
-    return raw?.userId === userId && Array.isArray(raw.ids) ? new Set(raw.ids.filter((id) => typeof id === "string")) : new Set();
+    const scopedRaw = localStorage.getItem(deletedIdsStorageKey(userId));
+    if (scopedRaw !== null) {
+      const scoped = JSON.parse(scopedRaw) as DeletedNutritionIds;
+      return Array.isArray(scoped.ids)
+        ? new Set(scoped.ids.filter((id) => typeof id === "string"))
+        : new Set();
+    }
+
+    // Migrate the former single-user tombstone slot without allowing another
+    // account to claim or overwrite the previous account's deletion history.
+    const legacy = JSON.parse(localStorage.getItem(DELETED_IDS_KEY) ?? "null") as DeletedNutritionIds | null;
+    if (legacy?.userId === userId && Array.isArray(legacy.ids)) {
+      const ids = new Set(legacy.ids.filter((id) => typeof id === "string"));
+      writeDeletedNutritionIds(userId, ids);
+      localStorage.removeItem(DELETED_IDS_KEY);
+      return ids;
+    }
   } catch { return new Set(); }
+  return new Set();
 }
 
 function writeDeletedNutritionIds(userId: string, ids: Set<string>) {
   if (typeof window === "undefined") return;
-  // IDs are opaque UUIDs; cap the local tombstone list to bound device storage.
-  localStorage.setItem(DELETED_IDS_KEY, JSON.stringify({ userId, ids: [...ids].slice(-5000) } satisfies DeletedNutritionIds));
+  // IDs are opaque UUIDs; cap each account's tombstone list to bound storage.
+  localStorage.setItem(
+    deletedIdsStorageKey(userId),
+    JSON.stringify({ userId, ids: [...ids].slice(-5000) } satisfies DeletedNutritionIds),
+  );
 }
 
 function rememberDeletedNutritionId(userId: string, id: string) {
