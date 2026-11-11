@@ -397,12 +397,14 @@ export async function addNutritionItem(
   const expectedUserId = activeNutritionAccountId();
   if (!expectedUserId) throw new Error("Espace utilisateur indisponible.");
   const now = Date.now();
-  if (operationId) {
-    const previous = completedOperations.get(operationId);
+  // Tool-call IDs are only unique inside their originating account/session.
+  const operationKey = operationId ? `${expectedUserId}:${operationId}` : null;
+  if (operationKey) {
+    const previous = completedOperations.get(operationKey);
     if (previous && now - previous < 60_000) return false;
     // Reserve the operation before awaiting I/O so two concurrent deliveries
     // carrying the same operation ID cannot create duplicate rows.
-    completedOperations.set(operationId, now);
+    completedOperations.set(operationKey, now);
     for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
   }
 
@@ -410,8 +412,8 @@ export async function addNutritionItem(
   // state, then rebuild the day's complete view from the database.
   try {
     const saved = await persistNutritionItem(item, source, expectedUserId);
-    if (operationId) {
-      completedOperations.set(operationId, now);
+    if (operationKey) {
+      completedOperations.set(operationKey, now);
       for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
     }
     if (activeNutritionAccountId() !== expectedUserId) return true;
@@ -432,7 +434,7 @@ export async function addNutritionItem(
     }
     return true;
   } catch (error) {
-    if (operationId) completedOperations.delete(operationId);
+    if (operationKey) completedOperations.delete(operationKey);
     throw error;
   }
 }
