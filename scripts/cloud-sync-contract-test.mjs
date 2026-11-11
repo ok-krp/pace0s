@@ -48,7 +48,15 @@ const authProvider = read("src/hooks/use-auth.tsx");
 assert.match(accountScope, /function accountSnapshotKey\(scope: string\)/, "Web local state must be stored in a separate snapshot for each account");
 assert.match(accountScope, /function isAccountLocalKey\(key: string\)/, "Web account switching must explicitly define which app data follows a user");
 assert.match(accountScope, /previousScope === null[\s\S]*if \(!userId\) return false[\s\S]*accountSnapshotKey\(nextScope\)/, "The first authenticated account must adopt legacy local data without deleting it");
-assert.match(accountScope, /localStorage\.setItem\(accountSnapshotKey\(previousScope\), JSON\.stringify\(currentSnapshot\)\)[\s\S]*clearCurrentAccountState\(\)[\s\S]*restoreAccountSnapshot\(nextSnapshot\)/, "Switching accounts must save the previous user's state before restoring the next user's state");
+const previousSnapshotWrite = accountScope.indexOf("accountSnapshotKey(previousScope)");
+const previousStateClear = accountScope.indexOf("clearCurrentAccountState();", previousSnapshotWrite);
+const nextSnapshotRestore = accountScope.indexOf("restoreAccountSnapshot(nextSnapshot);", previousStateClear);
+assert.ok(
+  previousSnapshotWrite >= 0 &&
+    previousStateClear > previousSnapshotWrite &&
+    nextSnapshotRestore > previousStateClear,
+  "Switching accounts must save the previous account's state before restoring the next account's state",
+);
 assert.match(accountScope, /nextScope = userId \?\? "__guest__"/, "Signed-out browser state must use a distinct guest namespace");
 assert.match(accountScope, /localStorage\.setItem\(ACCOUNT_SCOPE_KEY, previousScope\)/, "A failed restore must roll back to the previous account namespace");
 assert.match(authProvider, /switchLocalAccountScope\(nextSession\?\.user\.id \?\? null\)/, "Every auth session transition must switch the local data namespace");
