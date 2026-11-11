@@ -161,3 +161,25 @@ The missing v2 definition was traced to merged PR [#178](https://github.com/ok-k
 At both PR #178's base commit (`5e6f61d`) and merge commit (`706febd`), `supabase/config.toml` pointed to `jayzswkabxfhzmftagku`. That inactive project is therefore the strongest historical candidate for the remote application of the v2 function, but this is not conclusive proof that the RPC still exists there or was never copied elsewhere.
 
 The connected Supabase migration-history read for the inactive `jayz...` project timed out. No project restart was attempted. The only safe recovery paths are an authorized SQL/schema export, a verified backup, or a reachable authoritative database snapshot. The v2 definition must then be committed as a canonical migration with tests for atomic `food_log.meta` persistence, replay idempotency, ownership checks and grants.
+
+
+## 11. Historical no-op migration inventory — 2026-11-11
+
+A repository code search on `main` returned 84 migration files containing compatibility/history-marker language. Of those results, 66 explicitly state that the remote migration version is already recorded and that the checked-in file is a no-op marker. Examples include:
+
+- `20260913193556_add_coach_ai_food_idempotent_v2_meta.sql`
+- `20260904085504_complete_sport_rpc_contract_and_lock_provider_secrets.sql`
+- `20260922182501_health_e2ee_device_pairing_v1.sql`
+- `20260903100937_add_ai_food_tool_idempotency.sql`
+- `20260918104801_billing_foundation.sql`
+- `20260929125532_harden_cloud_sync_rpc_search_path.sql`
+
+Other marker files say that their schema changes are represented by later canonical migrations. Search-result snippets also include at least one file with real DDL (`20260825180000_v4_backend_reconciliation.sql`), so the 84 search hits must not be treated as 84 no-op files. Each migration must be opened and classified by its effective SQL and dependency order.
+
+The replay inventory must distinguish:
+1. canonical SQL migrations that actually create/alter schema or functions;
+2. remote-history compatibility markers with no SQL;
+3. historical placeholders whose real implementation lives in a later canonical migration;
+4. migrations applied directly to remote projects whose SQL was never committed (the Nutrition v2 case above).
+
+Do not run the 184-file `main` directory as a fresh linear migration chain or use `migration repair` to paper over these categories without a target-specific plan.
