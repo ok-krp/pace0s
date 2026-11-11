@@ -159,6 +159,11 @@ BEGIN
   IF has_table_privilege('authenticated','public.health_e2ee_devices','UPDATE') THEN
     RAISE EXCEPTION 'authenticated can directly UPDATE device revocation state';
   END IF;
+  IF has_table_privilege('authenticated','public.user_state','INSERT')
+     OR has_table_privilege('authenticated','public.user_state','UPDATE')
+     OR has_table_privilege('authenticated','public.user_state','DELETE') THEN
+    RAISE EXCEPTION 'authenticated can bypass monotonic user_state RPC with direct writes';
+  END IF;
   IF has_column_privilege('authenticated','public.consent_records','id','INSERT') THEN
     RAISE EXCEPTION 'authenticated can choose consent record identifiers';
   END IF;
@@ -177,6 +182,25 @@ BEGIN
       VALUES ('b1000000-0000-0000-0000-000000000099','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
               'health_data',true,'2026-07-10','2026-07-10',now() + interval '1 day');
     RAISE EXCEPTION 'client overrode consent record id/timestamp';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  SELECT count(*) INTO n FROM public.user_state;
+  IF n <> 1 THEN RAISE EXCEPTION 'user_state owner SELECT isolation failed: expected 1 row, got %',n; END IF;
+  BEGIN
+    INSERT INTO public.user_state(user_id,key,value)
+      VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','rpc-bypass-insert','{}'::jsonb);
+    RAISE EXCEPTION 'direct user_state INSERT unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    UPDATE public.user_state SET value='{}'::jsonb WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    RAISE EXCEPTION 'direct user_state UPDATE unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    DELETE FROM public.user_state WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    RAISE EXCEPTION 'direct user_state DELETE unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
