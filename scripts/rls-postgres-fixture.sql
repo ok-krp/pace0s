@@ -45,10 +45,26 @@ CREATE TABLE public.data_deletion_requests (
 CREATE TABLE public.development_tasks (id uuid PRIMARY KEY, user_id uuid NOT NULL, conversation_id uuid);
 CREATE TABLE public.food_log (id uuid PRIMARY KEY, user_id uuid NOT NULL);
 CREATE TABLE public.food_scans (id uuid PRIMARY KEY, user_id uuid NOT NULL);
-CREATE TABLE public.health_e2ee_devices (id uuid PRIMARY KEY, user_id uuid NOT NULL, revoked_at timestamptz);
+CREATE TABLE public.health_e2ee_devices (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  device_name text NOT NULL DEFAULT 'Pace device',
+  public_key jsonb NOT NULL DEFAULT '{}'::jsonb,
+  algorithm text NOT NULL DEFAULT 'ECDH-P256',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  revoked_at timestamptz
+);
 CREATE TABLE public.health_e2ee_key_envelopes (
-  id uuid PRIMARY KEY, user_id uuid NOT NULL, device_id uuid NOT NULL,
-  sender_device_id uuid, pairing_session_id uuid
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  device_id uuid NOT NULL,
+  sender_device_id uuid,
+  pairing_session_id uuid,
+  envelope text NOT NULL DEFAULT 'cipher',
+  nonce text,
+  algorithm text NOT NULL DEFAULT 'ECDH-P256/AES-256-GCM',
+  key_version integer NOT NULL DEFAULT 1,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE TABLE public.health_e2ee_key_versions (id uuid PRIMARY KEY, user_id uuid NOT NULL, current_key_version integer NOT NULL DEFAULT 1);
 CREATE TABLE public.health_e2ee_pairing_sessions (
