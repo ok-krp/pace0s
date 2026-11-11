@@ -395,7 +395,14 @@ RETURNS TABLE (
 ) LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
 AS $routine$ BEGIN
   IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
-  RETURN;
+  RETURN QUERY
+  SELECT s.id,s.initiator_device_id,s.recipient_device_id,s.protocol_version,
+         s.status,s.challenge,s.initiator_ephemeral_public_key,
+         s.recipient_ephemeral_public_key,s.expires_at
+  FROM public.health_e2ee_pairing_sessions s
+  WHERE s.id=p_session_id
+    AND s.user_id=auth.uid()
+    AND s.status IN ('pending','joined','confirmed');
 END $routine$;
 CREATE FUNCTION public.migrate_health_legacy_chunk(p_records jsonb)
 RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
