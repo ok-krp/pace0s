@@ -261,8 +261,8 @@ for (const table of readOnlyLogTables) {
   ), table + " must not grant writes to authenticated");
 }
 
-assert.match(sql, /create or replace function public[.]has_current_health_e2ee_consent[(][)]/,
-  "The current health/cloud-sync consent helper must exist");
+assert.match(sql, /create or replace function public[.]has_current_health_e2ee_consent[(][)][\s\S]*?security invoker[\s\S]*?set search_path = ''/i,
+  "The consent helper must be SECURITY INVOKER with an empty search_path");
 assert.match(sql, /revoke all on function public[.]has_current_health_e2ee_consent[(][)] from public, anon, authenticated[\s\S]*?grant execute on function public[.]has_current_health_e2ee_consent[(][)] to authenticated/i,
   "The E2EE consent helper must be executable by authenticated users only");
 const normalizedSql = sql.replace(/\s+/g, " ");
@@ -327,8 +327,9 @@ for (const assertion of [
   "E2EE recovery write succeeded without required consent",
   "consented E2EE recovery envelope write failed",
   "user B can read user A E2EE recovery envelope",
-  "revoked consent still exposes E2EE recovery envelope",
-  "E2EE recovery envelope update succeeded after consent revocation",
+  "recovery envelopes remain visible after consent revocation",
+  "recovery envelope update succeeded after consent revocation",
+  "recovery envelope insert succeeded after consent revocation",
 ]) {
   assert.ok(recoveryAssertions.includes(assertion), "Missing E2EE recovery consent test: " + assertion);
 }
