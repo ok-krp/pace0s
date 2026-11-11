@@ -31,6 +31,7 @@ assert.doesNotMatch(writeItemBlock, /const rpc = supabase\.rpc as unknown as/, "
 
 const nutritionAi = read("src/lib/ai-chat.server.ts");
 const nutritionLog = read("src/lib/nutrition-log.ts");
+const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const nutritionRoute = read("src/routes/nutrition.tsx");
 const domainStore = read("src/lib/domain-store.ts");
 
@@ -134,6 +135,19 @@ assert.match(nutritionLog, /if \(!isFoodLogUuid\(id\)\) return/, "Legacy timesta
 
 assert.match(nutritionLog, /await persistNutritionItem\(item, source\)/, "All nutrition additions must persist to food_log before updating local state");
 assert.match(nutritionLog, /source === "photo_ai" \? "photo" : source/, "Photo AI writes must use a source value accepted by the food_log schema");
+
+assert.match(nutritionLog, /export function subscribeNutritionFoodLogChanges/, "Web Nutrition must subscribe to canonical food_log changes");
+assert.match(nutritionLog, /event: "INSERT"[\s\S]*table: "food_log"[\s\S]*filter: `user_id=eq\.\$\{user\.id\}`/, "Web Nutrition Realtime must be scoped to the authenticated account");
+assert.match(nutritionLog, /event: "UPDATE"[\s\S]*table: "food_log"/, "Web Nutrition must refresh when canonical meals are edited by AI or another device");
+assert.match(nutritionLog, /nutritionRefreshChain = nutritionRefreshChain\.then\(task, task\)/, "Concurrent Nutrition hydration requests must be serialized");
+assert.match(nutritionLog, /lastBridgedNutrition = nextSnapshot;[\s\S]*writeDomain\(DOMAIN_ITEMS, nextSnapshot\)/, "A Realtime refresh must not echo stale local rows back into food_log");
+assert.match(nutritionRoute, /subscribeNutritionFoodLogChanges\(refresh\)/, "The Nutrition route must bind its lifecycle to the Realtime subscription");
+assert.match(nutritionRoute, /setInterval\(refresh, 60_000\)/, "Nutrition must retain a bounded fallback when Realtime is unavailable");
+assert.match(flutterSync, /table: 'food_log'[\s\S]*callback: \(_\) => unawaited\(_handleFoodLogRealtime\(userId\)\)/, "Flutter must reconcile food_log INSERT and UPDATE events");
+assert.match(flutterSync, /_lastNutritionReconciledAt == null[\s\S]*_nutritionFallbackInterval/, "Flutter must refresh canonical Nutrition after login and on a bounded fallback interval");
+assert.match(nutritionRealtimeMigration, /ALTER PUBLICATION supabase_realtime ADD TABLE public\.food_log/, "Supabase migration must publish food_log for account-scoped Realtime");
+assert.match(nutritionRealtimeMigration, /duplicate_object/, "food_log Realtime publication migration must be idempotent");
+
 assert.doesNotMatch(domainStore, /MAX_IDENTICAL_NUTRITION_ITEMS_PER_DAY|MAX_NUTRITION_ITEMS_PER_DAY|count >=/, "Nutrition sanitization must not silently deduplicate or truncate valid meal entries");
 assert.doesNotMatch(nutritionLog, /recentAdds|addFingerprint/, "Identical intentional food entries must not be dropped by a client-side fingerprint cooldown");
 assert.match(nutritionLog, /completedOperations\.set\(operationId, now\)/, "Only explicit operation IDs should trigger idempotency suppression");
