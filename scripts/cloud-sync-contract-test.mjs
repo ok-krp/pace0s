@@ -40,6 +40,7 @@ const flutterNutrition = read("pace_flutter/lib/features/nutrition/nutrition_pag
 const flutterApp = read("pace_flutter/lib/app/pace_app.dart");
 const flutterSettings = read("pace_flutter/lib/features/more/more_page.dart");
 const flutterLocalStore = read("pace_flutter/lib/core/storage/local_store.dart");
+const flutterLocalStoreTest = read("pace_flutter/test/local_store_account_scope_test.dart");
 const flutterPushStart = flutterSync.indexOf("Future<void> _pushPending()");
 const flutterPushEnd = flutterSync.indexOf("Future<_PushResult> _push(", flutterPushStart);
 assert.ok(flutterPushStart >= 0 && flutterPushEnd > flutterPushStart, "Flutter outbox push path must remain identifiable");
@@ -62,6 +63,14 @@ assert.match(flutterSettings, /await widget\.sync\.setCloudSyncConsent\(value\)/
 
 assert.match(flutterLocalStore, /__local_store_version': 2[\s\S]*__accounts/, "Flutter local storage must persist independent versioned account snapshots");
 assert.match(flutterLocalStore, /Future<void> activateAccount\(String\? userId\)/, "Flutter must switch local snapshot and outbox atomically at account boundaries");
+
+assert.match(flutterLocalStore, /Future<void> acknowledgeOperationForAccount\([\s\S]*_accounts\[scope\]/, "Late acknowledgements must update the saved originating account snapshot");
+assert.match(flutterLocalStoreTest, /first authenticated account adopts the legacy v1 snapshot intact/, "Native storage tests must prove legacy v1 local nutrition data is preserved on upgrade");
+assert.match(flutterLocalStoreTest, /keeps account outboxes isolated when a late acknowledgement arrives/, "Native storage tests must prove account A acknowledgements cannot alter account B's outbox");
+assert.match(flutterLocalStoreTest, /expect\(store\.pendingOperations\(\), \[operationB\]\)/, "The account isolation test must assert that B's pending operation remains queued");
+assert.match(flutterNutrition, /isCurrentLocalAccount\(accountId\)/, "A pending Nutrition dialog must not write into a different account after session change");
+assert.match(flutterSettings, /widget\.auth\.currentUser\?\.id != userId[\s\S]*widget\.localStore\.currentAccountId != userId/, "Async settings operations must stop after their initiating account changes");
+
 assert.match(flutterLocalStore, /account:\$userId/, "Flutter local account namespaces must be bound to the authenticated user ID");
 assert.match(flutterApp, /await widget\.sync\.onAccountChanged\(userId\);[\s\S]*await widget\.localStore\.activateAccount\(userId\);[\s\S]*await widget\.sync\.syncNow\(\)/, "Flutter must switch account namespace before starting cloud sync");
 assert.match(flutterApp, /widget\.auth\.currentUser\?\.id != userId/, "Flutter must ignore obsolete queued auth events during rapid account switching");
