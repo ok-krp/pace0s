@@ -257,6 +257,20 @@ BEGIN
   IF NOT has_column_privilege('authenticated','public.data_deletion_requests','user_id','INSERT') THEN
     RAISE EXCEPTION 'owner cannot submit a deletion request';
   END IF;
+  IF has_table_privilege('authenticated','public.legal_consent','INSERT')
+     OR has_table_privilege('authenticated','public.legal_consent','UPDATE')
+     OR has_table_privilege('authenticated','public.legal_consent','DELETE')
+     OR has_column_privilege('authenticated','public.legal_consent','id','INSERT')
+     OR has_column_privilege('authenticated','public.legal_consent','created_at','INSERT')
+     OR has_column_privilege('authenticated','public.legal_consent','updated_at','INSERT')
+     OR has_column_privilege('authenticated','public.legal_consent','id','UPDATE')
+     OR has_column_privilege('authenticated','public.legal_consent','created_at','UPDATE') THEN
+    RAISE EXCEPTION 'authenticated has broader-than-needed legacy legal consent privileges';
+  END IF;
+  IF NOT has_column_privilege('authenticated','public.legal_consent','user_id','INSERT')
+     OR NOT has_column_privilege('authenticated','public.legal_consent','opts','UPDATE') THEN
+    RAISE EXCEPTION 'legacy legal consent UPSERT lost required column privileges';
+  END IF;
   IF has_column_privilege('authenticated','public.health_e2ee_key_envelopes','id','INSERT')
      OR has_column_privilege('authenticated','public.health_e2ee_key_envelopes','created_at','INSERT') THEN
     RAISE EXCEPTION 'authenticated can choose E2EE envelope ID or timestamp';
@@ -449,6 +463,30 @@ BEGIN
     INSERT INTO public.sport_workout_sessions(id,user_id,program_id)
       VALUES ('60000000-0000-0000-0000-000000000003','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','40000000-0000-0000-0000-000000000002');
     RAISE EXCEPTION 'cross-user workout program insert unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+
+  INSERT INTO public.legal_consent(
+    user_id, region, eula_version, privacy_version, ip_country, consented_at, opts
+  ) VALUES (
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','EU','eula-v1','privacy-v1','FR',now(),
+    '{"ai":true,"notifications":false}'::jsonb
+  )
+  ON CONFLICT (user_id,eula_version,privacy_version) DO UPDATE SET
+    user_id=EXCLUDED.user_id, region=EXCLUDED.region,
+    eula_version=EXCLUDED.eula_version, privacy_version=EXCLUDED.privacy_version,
+    ip_country=EXCLUDED.ip_country, consented_at=EXCLUDED.consented_at, opts=EXCLUDED.opts;
+  UPDATE public.legal_consent SET opts='{"ai":false,"notifications":true}'::jsonb
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  SELECT count(*) INTO n FROM public.legal_consent
+    WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+      AND opts='{"ai":false,"notifications":true}'::jsonb
+      AND id IS NOT NULL AND created_at IS NOT NULL AND updated_at IS NOT NULL;
+  IF n <> 1 THEN RAISE EXCEPTION 'legal consent owner UPSERT failed'; END IF;
+  BEGIN
+    DELETE FROM public.legal_consent WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+    RAISE EXCEPTION 'client deleted legal consent snapshot';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
