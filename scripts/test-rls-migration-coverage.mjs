@@ -154,6 +154,7 @@ assert.match(consentAssertions, /database timestamp default not applied to conse
   "PostgreSQL integration tests must prove database-generated consent timestamps");
 
 
+const nonceAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
 const envelopeNonceMigration = readFileSync(
   "supabase/migrations/20261111140000_allow_nullable_health_e2ee_envelope_nonce.sql", "utf8",
 );
@@ -169,7 +170,6 @@ assert.match(nonceTestBody, /AES Key Wrap envelope with a nonce unexpectedly suc
 const postgresWorkflow = readFileSync(".github/workflows/rls-postgres-preflight.yml", "utf8");
 assert.match(postgresWorkflow, /--file=supabase\/migrations\/20261111140000_allow_nullable_health_e2ee_envelope_nonce\.sql/,
   "PostgreSQL preflight must apply the E2EE nonce repair before envelope assertions");
-const nonceAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
 assert.match(nonceAssertions, /AES Key Wrap envelope must accept NULL nonce/,
   "PostgreSQL must exercise the null-nonce AES Key Wrap case");
 assert.match(nonceAssertions, /AES-GCM envelope must retain its nonce/,
