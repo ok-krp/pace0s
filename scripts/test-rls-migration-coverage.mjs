@@ -149,10 +149,14 @@ assert.match(sql, /alter default privileges in schema public revoke all on table
   "Future tables must not inherit API-role table grants");
 assert.match(sql, /alter default privileges in schema public revoke all on sequences from anon, authenticated/i,
   "Future sequences must not inherit API-role sequence grants");
-assert.match(sql, /alter default privileges revoke execute on functions from public/i,
-  "Future functions must not inherit the PostgreSQL PUBLIC EXECUTE grant");
-assert.match(sql, /alter default privileges in schema public revoke execute on functions from anon, authenticated/i,
-  "Future public-schema functions must not inherit API-role EXECUTE grants");
+assert.match(sql, /alter default privileges for role postgres revoke execute on functions from public/i,
+  "Future functions created by postgres must not inherit the PostgreSQL PUBLIC EXECUTE grant");
+assert.match(sql, /alter default privileges for role postgres in schema public revoke execute on functions from anon, authenticated/i,
+  "Future public-schema functions created by postgres must not inherit API-role EXECUTE grants");
+assert.match(sql, /alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated/i,
+  "Future public tables created by postgres must not inherit direct API-role grants");
+assert.match(sql, /alter default privileges for role postgres in schema public revoke all on sequences from anon, authenticated/i,
+  "Future public sequences created by postgres must not inherit direct API-role grants");
 
 for (const table of catalogTables) {
   assert.match(sql, new RegExp(
