@@ -157,14 +157,12 @@ class SyncService {
           continue;
         }
 
-        // A newer server value won. Apply it locally before acknowledging the
-        // stale mutation so it can never be retried over the newer state.
-        if (result.remoteValue != null && result.remoteUpdatedAt != null) {
-          await localStore.applyRemote(
-            operation['key'] as String,
-            result.remoteValue,
-            result.remoteUpdatedAt!,
-          );
+        // A rejected mutation is not an acknowledgement. Keep the durable
+        // local outbox entry and skip remote hydration for this key in
+        // _pullRemote; the next sync cycle can retry against server time.
+        // Never replace a pending local user edit with a remote snapshot.
+        if (!shouldAcknowledgeSyncOperation(accepted: result.accepted)) {
+          continue;
         }
         await localStore.acknowledgeOperation(operation);
       } catch (_) {
@@ -196,18 +194,10 @@ class SyncService {
       return _PushResult.accepted(write.updatedAt);
     }
 
-    final rows = await client!
-        .from('user_state')
-        .select('key,value,updated_at')
-        .eq('user_id', userId)
-        .eq('key', key)
-        .limit(1);
-    if (rows.isEmpty) return const _PushResult.rejected();
-    final row = Map<String, dynamic>.from(rows.first);
-    return _PushResult.rejectedWithRemote(
-      remoteValue: row['value'],
-      remoteUpdatedAt: row['updated_at'] as String?,
-    );
+    // The RPC already reports rejection and the authoritative timestamp.
+    // Do not fetch/apply remote state here: the local outbox remains canonical
+    // until the retry is accepted or an explicit conflict workflow is added.
+    return const _PushResult.rejected();
   }
 
   Future<void> _syncAiPreferences({required bool pushLocal}) async {
@@ -290,6 +280,9 @@ class SyncService {
   }
 }
 
+/// A local outbox operation is acknowledged only after server acceptance.
+bool shouldAcknowledgeSyncOperation({required bool accepted}) => accepted;
+
 /// Returns whether a Realtime user_state row is newer than the local
 /// checkpoint and safe to apply.
 ///
@@ -331,25 +324,12 @@ class CloudSyncWriteResponse {
 }
 
 class _PushResult {
-  const _PushResult.accepted(this.serverUpdatedAt)
-      : accepted = true,
-        remoteValue = null,
-        remoteUpdatedAt = null;
+  const _PushResult.accepted(this.serverUpdatedAt) : accepted = true;
 
   const _PushResult.rejected()
       : accepted = false,
-        serverUpdatedAt = null,
-        remoteValue = null,
-        remoteUpdatedAt = null;
-
-  const _PushResult.rejectedWithRemote({
-    required this.remoteValue,
-    required this.remoteUpdatedAt,
-  })  : accepted = false,
         serverUpdatedAt = null;
 
   final bool accepted;
   final String? serverUpdatedAt;
-  final dynamic remoteValue;
-  final String? remoteUpdatedAt;
 }
