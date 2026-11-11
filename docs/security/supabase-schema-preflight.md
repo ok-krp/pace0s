@@ -152,3 +152,12 @@ The v2 Nutrition function is a separate source-of-truth defect: a repository-wid
 Some older migration filenames on `main` are also no-op compatibility markers whose SQL is represented by later canonical migrations. Migration recovery must use the actual SQL definitions and dependency order, not replay every filename or assume each historical marker contains its named change.
 
 **Release blocker remains:** no schema/RPC migration chain is complete for the intended target. The isolated RLS preflight is intentionally not a schema-restoration migration.
+
+
+## 10. Historical provenance of the missing Nutrition v2 SQL — 2026-11-11
+
+The missing v2 definition was traced to merged PR [#178](https://github.com/ok-krp/pace0s/pull/178), merged on 2026-09-13. Its description states that `insert_coach_ai_food_idempotent_v2` was added in Supabase and that its function definition was verified. The PR patch itself changes only `src/components/AppSidebar.tsx`, `src/components/MobileNavSettings.tsx` and `src/lib/ai-chat.server.ts`; it contains no SQL migration.
+
+At both PR #178's base commit (`5e6f61d`) and merge commit (`706febd`), `supabase/config.toml` pointed to `jayzswkabxfhzmftagku`. That inactive project is therefore the strongest historical candidate for the remote application of the v2 function, but this is not conclusive proof that the RPC still exists there or was never copied elsewhere.
+
+The connected Supabase migration-history read for the inactive `jayz...` project timed out. No project restart was attempted. The only safe recovery paths are an authorized SQL/schema export, a verified backup, or a reachable authoritative database snapshot. The v2 definition must then be committed as a canonical migration with tests for atomic `food_log.meta` persistence, replay idempotency, ownership checks and grants.
