@@ -51,6 +51,9 @@ class SyncService {
     }
   }
 
+  bool _hasCachedCloudSyncConsent(String userId) =>
+      _cloudSyncConsentUserId == userId && _cloudSyncConsent == true;
+
   Future<void> setCloudSyncConsent(bool granted) async {
     final userId = client?.auth.currentUser?.id;
     if (userId == null) return;
@@ -91,7 +94,7 @@ class SyncService {
       do {
         _syncRequested = false;
         final user = client?.auth.currentUser;
-        if (user == null || user.id != initialUserId) break;
+        if (user == null || user.id != initialUserId || !_hasCachedCloudSyncConsent(initialUserId)) break;
 
         await _ensureRealtimeSubscription(user.id);
         final hadNutritionMutation = localStore.pendingOperations().any(
@@ -226,9 +229,12 @@ class SyncService {
   }
 
   Future<void> _pushPending() async {
+    final userId = client?.auth.currentUser?.id;
+    if (userId == null || !_hasCachedCloudSyncConsent(userId)) return;
     for (final operation in List<Map<String, dynamic>>.from(
       localStore.pendingOperations(),
     )) {
+      if (!_hasCachedCloudSyncConsent(userId)) return;
       try {
         final result = await _push(operation);
         if (!shouldAcknowledgeSyncOperation(accepted: result.accepted)) {
@@ -330,6 +336,7 @@ class SyncService {
   }
 
   Future<void> _reconcileNutritionProjection(String userId) async {
+    if (!_hasCachedCloudSyncConsent(userId)) return;
     try {
       final now = DateTime.now();
       final day =
@@ -415,6 +422,7 @@ class SyncService {
 
   Future<void> _pullRemote() async {
     final userId = client!.auth.currentUser!.id;
+    if (!_hasCachedCloudSyncConsent(userId)) return;
     final rows = await client!
         .from('user_state')
         .select('key,value,updated_at')
