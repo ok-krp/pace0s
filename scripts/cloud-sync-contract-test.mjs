@@ -7,6 +7,32 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
 
+const nutritionAi = read("src/lib/ai-chat.server.ts");
+const nutritionLog = read("src/lib/nutrition-log.ts");
+const nutritionRoute = read("src/routes/nutrition.tsx");
+
+// AI meal additions are append-only. Replaying the same tool call is handled
+// by the idempotency RPC; a later add must never merge/delete an older meal.
+const aiAddStart = nutritionAi.indexOf("const toolCallId = options.toolCallId");
+const aiAddEnd = nutritionAi.indexOf("await mirrorAiFoodToNutritionState", aiAddStart);
+assert.ok(aiAddStart >= 0 && aiAddEnd > aiAddStart, "AI add_food insert path must remain identifiable");
+const aiAddPath = nutritionAi.slice(aiAddStart, aiAddEnd);
+assert.match(aiAddPath, /insert_coach_ai_food_idempotent_v2/);
+assert.doesNotMatch(aiAddPath, /\\.delete\\s*\\(/, "AI add_food must never delete a previous food_log row");
+assert.doesNotMatch(aiAddPath, /\\.update\\s*\\(/, "AI add_food must never overwrite a previous food_log row");
+assert.match(nutritionAi, /AJOUT APPEND-ONLY/, "Coach IA must be instructed to preserve every existing meal during additions");
+assert.doesNotMatch(nutritionAi, /Si le même plat est ajouté au même repas, conserve un seul objet logique/);
+
+// A local cache snapshot may be partial or stale. Only explicit UI deletion
+// is allowed to issue DELETE; the compatibility bridge is insert/update only.
+const bridgeStart = nutritionLog.indexOf("async function bridgeLocalNutritionToFoodLog");
+const bridgeEnd = nutritionLog.indexOf('\\nif (typeof window !== "undefined")', bridgeStart);
+assert.ok(bridgeStart >= 0 && bridgeEnd > bridgeStart, "Nutrition bridge must remain identifiable");
+const bridge = nutritionLog.slice(bridgeStart, bridgeEnd);
+assert.doesNotMatch(bridge, /\\.delete\\s*\\(/, "A missing local snapshot row must never delete canonical food_log data");
+assert.match(bridge, /absence from a local snapshot must never erase cloud data/);
+assert.match(nutritionRoute, /await deletePersistedNutritionItem\\(id\\)/, "User-requested deletion must explicitly delete its exact SQL row");
+
 assert.match(engine, /setInterval\s*\(.*60(?:000|_000)/s, "sync engine must reconcile periodically");
 assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
 assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
