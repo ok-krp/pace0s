@@ -4,6 +4,7 @@
 -- New objects created by the migration owner must not inherit stale global
 -- or schema-local PUBLIC/API-role table and sequence defaults either.
 CREATE TABLE public.rls_default_acl_probe(id uuid PRIMARY KEY);
+ALTER TABLE public.rls_default_acl_probe ENABLE ROW LEVEL SECURITY;
 CREATE SEQUENCE public.rls_default_sequence_probe;
 
 -- A function created after the migration must not inherit PUBLIC or API-role
