@@ -173,9 +173,9 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
       if (!detail || detail.key !== key) return;
-      suppressPersistRef.current = true;
       const next = detail.value;
-      if (!hasCompatibleTopLevelShape(next, initial)) return;
+      if (!hasCompatibleTopLevelShape(next, initial) || Object.is(valueRef.current, next)) return;
+      suppressPersistRef.current = true;
       valueRef.current = next as T;
       setValue(next as T);
     };
