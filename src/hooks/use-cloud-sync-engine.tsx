@@ -270,7 +270,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const applyRemoteRow = (row: SyncRow) => {
-      if (cancelled || !isSyncableKey(row.key) || row.updated_by === DEVICE_ID) return;
+      if (cancelled || !allowed() || !isSyncableKey(row.key) || row.updated_by === DEVICE_ID) return;
       const remoteTime = Date.parse(row.updated_at);
       if (!Number.isFinite(remoteTime)) return;
       const meta = readMeta();
@@ -280,7 +280,7 @@ export function useCloudSyncEngineInternal() {
       if (queued) { recordConflict(row.key, queued.value, row.value, row.updated_at); return; }
       const domain = readDomainRecord(row.key);
       if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) return;
-      applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
+      applyRemoteAndRemember(row.key, row.value, row.updated_at);
       markVersion(row.key, row.updated_at);
       localStorage.setItem("pace.__last_sync_at", row.updated_at);
       setStatus("ok");
@@ -381,6 +381,31 @@ export function useCloudSyncEngineInternal() {
             newest = newest && Date.parse(newest) > Date.parse(localDomain.updatedAt) ? newest : localDomain.updatedAt;
           }
         } catch {}
+
+        // Recover pre-existing local app state written by useLocalState (raw
+        // pace.* keys). A key is bootstrapped only when no cloud/legacy row
+        // exists, so this cannot overwrite an existing server snapshot.
+        const localOnlyKeys = new Set([
+          "pace.legal.consent",
+          "pace.billing.device_id",
+          "pace.watch.last_metrics",
+          "pace.dark",
+          "pace.visual-theme",
+        ]);
+        try {
+          for (const key of Object.keys(localStorage)) {
+            if (!key.startsWith(PACE_PREFIX) || key.startsWith(INTERNAL_PREFIX) || key.startsWith(DOMAIN_PREFIX)) continue;
+            if (!isSyncableKey(key) || localOnlyKeys.has(key) || grouped.has(key) || getQueued(key) || readDomainRecord(key)) continue;
+            let value: unknown;
+            try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { continue; }
+            if (isEmptyRecoveredValue(value)) continue;
+            const updatedAt = new Date().toISOString();
+            const mutationId = `local-bootstrap-${updatedAt}-${key}`;
+            queueItem({ key, value, updatedAt, mutationId });
+            meta[key] = updatedAt;
+            newest = newest && Date.parse(newest) > Date.parse(updatedAt) ? newest : updatedAt;
+          }
+        } catch {}
         writeMeta(meta);
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (newest) setStatus("ok");
@@ -396,27 +421,42 @@ export function useCloudSyncEngineInternal() {
     };
 
     let realtimeHealthy = false;
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
 
-    const realtimeChannel = supabase.channel(`pace-user-state-${user.id}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow))
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow));
-    void realtimeChannel.subscribe((subscriptionStatus) => {
-      if (subscriptionStatus === "SUBSCRIBED") {
-        realtimeHealthy = true;
-        void pull();
-      } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
-        realtimeHealthy = false;
-        setStatus(navigator.onLine ? "error" : "offline");
-      }
-    });
+    const stopRealtime = () => {
+      const channel = realtimeChannel;
+      realtimeChannel = null;
+      realtimeHealthy = false;
+      if (channel) void supabase.removeChannel(channel);
+    };
+
+    const startRealtime = () => {
+      if (cancelled || !allowed() || !navigator.onLine || realtimeChannel) return;
+      const channel = supabase.channel(`pace-user-state-${user.id}`)
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow))
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow));
+      realtimeChannel = channel;
+      void channel.subscribe((subscriptionStatus) => {
+        if (cancelled || realtimeChannel !== channel || !allowed()) return;
+        if (subscriptionStatus === "SUBSCRIBED") {
+          realtimeHealthy = true;
+          void pull();
+        } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
+          realtimeChannel = null;
+          realtimeHealthy = false;
+          void supabase.removeChannel(channel);
+          setStatus(navigator.onLine ? "error" : "offline");
+        }
+      });
+    };
 
     const offLocal = onLocalWrite((key, value, updatedAt, mutationId) => {
-      if (!isSyncableKey(key) || !allowed() || !updatedAt) return;
+      if (!isSyncableKey(key) || !updatedAt) return;
       const encoded = serialize(value);
       if (encoded !== undefined && lastRemoteValues.current[key] === encoded) { delete lastRemoteValues.current[key]; return; }
       delete lastRemoteValues.current[key];
       queueItem({ key, value, updatedAt, mutationId });
-      void pushItem({ key, value, updatedAt, mutationId });
+      if (allowed()) void pushItem({ key, value, updatedAt, mutationId });
     });
 
     const onOnline = () => {
@@ -429,10 +469,10 @@ export function useCloudSyncEngineInternal() {
     // trigger an immediate reconciliation. This avoids full-table egress every
     // few seconds while preserving recovery when Realtime is unavailable.
     const reconcileTimer = window.setInterval(() => {
-      if (document.visibilityState === "visible" && !realtimeHealthy) void syncNow();
+      if (document.visibilityState === "visible" && allowed() && !realtimeHealthy) { startRealtime(); void syncNow(); }
     }, 60_000);
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") void syncNow();
+      if (document.visibilityState === "visible") { startRealtime(); void syncNow(); }
     };
     const onPageShow = () => {
       void syncNow();
@@ -456,7 +496,7 @@ export function useCloudSyncEngineInternal() {
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("pace.legal.changed", onLegalChanged);
       window.removeEventListener("pace.sync.conflict.resolved", onConflictResolved);
-      void supabase.removeChannel(realtimeChannel);
+      stopRealtime();
     };
   }, [user]);
 
