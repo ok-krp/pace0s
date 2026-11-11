@@ -46,8 +46,8 @@ void main() {
       expect(store.read('pace.nutrition.items'), legacyItems);
       expect(store.pendingOperations(), hasLength(1));
 
-      // Reproduce real app startup: AuthGate first activates the guest scope
-      // while Supabase resolves its initial session, then receives user A.
+      // Exercise the defensive guest-to-account migration path: even if a
+      // caller activates guest before login, the first user must inherit v1.
       await store.activateAccount(null);
       expect(store.currentAccountId, isNull);
       expect(store.read('pace.nutrition.items'), isNull);
