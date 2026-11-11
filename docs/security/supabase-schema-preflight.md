@@ -297,3 +297,8 @@ The RLS proposal previously made `health_samples` owner-readable but did not che
 ### Legacy legal-consent snapshot narrowed without breaking the app UPSERT
 
 The application still calls `saveLegalConsent` to upsert the current EULA/privacy version and option snapshot on `(user_id,eula_version,privacy_version)`; this is distinct from the append-only granular `consent_records` ledger. The generic CRUD policy has been replaced with owner SELECT and column-scoped INSERT/UPDATE for exactly `user_id, region, eula_version, privacy_version, ip_country, consented_at, opts`. ID, created/updated timestamps stay database-owned, and API DELETE is removed. PostgreSQL tests execute a real insert/conflict-update/update path and verify deletion and metadata overrides are denied.
+
+
+### Legacy legal-consent access class
+
+The 45-table access inventory now classifies `legal_consent` separately from ordinary CRUD: owner SELECT plus column-scoped owner INSERT/UPDATE required by the live version/options UPSERT; no API DELETE and no client control over ID or technical timestamps. The PostgreSQL fixture matches its composite unique key and defaults, exercises an UPSERT followed by an options update, rejects deletion, and tests that a second account cannot read the snapshot.
