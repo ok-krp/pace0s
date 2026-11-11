@@ -102,12 +102,16 @@ class _AuthGateState extends State<_AuthGate> {
     super.initState();
     _configured = widget.auth.client != null;
     _signedIn = widget.auth.currentUser != null;
-    _ready = !_configured;
+    _ready = false;
     if (_configured) {
       _subscription = widget.auth.authStateChanges.listen((state) {
         _scheduleAccountSwitch(state.session?.user.id);
       });
       _scheduleAccountSwitch(widget.auth.currentUser?.id);
+    } else {
+      // A build without Supabase configuration must not display a previously
+      // authenticated account's private local snapshot.
+      _scheduleAccountSwitch(null);
     }
   }
 
@@ -161,6 +165,9 @@ class _AuthGateState extends State<_AuthGate> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_ready) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     if (!_configured) {
       return PaceShell(
         localStore: widget.localStore,
@@ -169,9 +176,6 @@ class _AuthGateState extends State<_AuthGate> {
         onThemeChanged: widget.onThemeChanged,
         themeMode: widget.themeMode,
       );
-    }
-    if (!_ready) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (_activationError != null) {
       return Scaffold(
