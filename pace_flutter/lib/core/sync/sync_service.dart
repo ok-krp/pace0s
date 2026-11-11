@@ -25,6 +25,10 @@ class SyncService {
   String? _realtimeUserId;
 
   Future<bool> _hasCloudSyncConsent(String userId) async {
+    if (localStore.currentAccountId != userId ||
+        client?.auth.currentUser?.id != userId) {
+      return false;
+    }
     final now = DateTime.now();
     if (_cloudSyncConsentUserId == userId &&
         _cloudSyncConsentCheckedAt != null &&
@@ -101,6 +105,7 @@ class SyncService {
     if (client == null || initialUserId == null) return;
     if (!shouldRunCloudSync(
       userId: initialUserId,
+      activeAccountId: localStore.currentAccountId,
       consentGranted: await _hasCloudSyncConsent(initialUserId),
     )) {
       final channel = _realtimeChannel;
@@ -290,7 +295,10 @@ class SyncService {
 
   Future<void> _pushPending() async {
     final userId = client?.auth.currentUser?.id;
-    if (userId == null || !_hasCachedCloudSyncConsent(userId)) return;
+    if (userId == null ||
+        localStore.currentAccountId != userId ||
+        client?.auth.currentUser?.id != userId ||
+        !_hasCachedCloudSyncConsent(userId)) return;
     for (final operation in List<Map<String, dynamic>>.from(
       localStore.pendingOperations(),
     )) {
@@ -397,6 +405,7 @@ class SyncService {
 
   Future<void> _handleFoodLogRealtime(String userId) async {
     if (client?.auth.currentUser?.id != userId ||
+        localStore.currentAccountId != userId ||
         !_hasCachedCloudSyncConsent(userId)) {
       return;
     }
@@ -411,7 +420,9 @@ class SyncService {
   }
 
   Future<bool> _reconcileNutritionProjection(String userId) async {
-    if (!_hasCachedCloudSyncConsent(userId)) return false;
+    if (localStore.currentAccountId != userId ||
+        client?.auth.currentUser?.id != userId ||
+        !_hasCachedCloudSyncConsent(userId)) return false;
     try {
       final now = DateTime.now();
       final day =
@@ -559,8 +570,9 @@ class SyncService {
   Future<void> deleteNutritionFoodLogItem(String id) async {
     if (!_isFoodLogUuid(id)) return;
     final user = client?.auth.currentUser;
-    if (client == null || user == null) {
-      throw StateError('Session utilisateur indisponible.');
+    if (client == null || user == null ||
+        localStore.currentAccountId != user.id) {
+      throw StateError('Session ou espace local utilisateur indisponible.');
     }
     await client!
         .from('food_log')
@@ -571,7 +583,9 @@ class SyncService {
 
   Future<void> _pullRemote() async {
     final userId = client!.auth.currentUser!.id;
-    if (!_hasCachedCloudSyncConsent(userId)) return;
+    if (localStore.currentAccountId != userId ||
+        client?.auth.currentUser?.id != userId ||
+        !_hasCachedCloudSyncConsent(userId)) return;
     final rows = await client!
         .from('user_state')
         .select('key,value,updated_at')
@@ -681,8 +695,10 @@ class _PushResult {
 /// Native and web clients share the same explicit sync_cloud opt-in.
 bool shouldRunCloudSync({
   required String? userId,
+  required String? activeAccountId,
   required bool consentGranted,
-}) => userId != null && consentGranted;
+}) =>
+    userId != null && activeAccountId == userId && consentGranted;
 
 /// A local outbox operation is acknowledged only after server acceptance.
 bool shouldAcknowledgeSyncOperation({required bool accepted}) => accepted;
