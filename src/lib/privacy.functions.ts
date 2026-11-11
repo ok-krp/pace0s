@@ -14,7 +14,6 @@ const EXPORT_TABLES = [
   "health_e2ee_key_versions",
   "health_e2ee_key_envelopes",
   "health_e2ee_recovery_envelopes",
-  "health_legacy_migration_map",
   "legal_consent",
   "consent_records",
   "data_deletion_requests",
@@ -79,11 +78,9 @@ const DELETE_TABLES = [
 export const exportMyData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    // A privacy export must remain available after a user withdraws health-sync
-    // consent. Use the server-only admin client, with an explicit owner filter
-    // on every allowlisted table; never accept a user_id from the request.
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const db = supabaseAdmin as any;
+    // Use the authenticated client so every table and parent relationship is
+    // still constrained by the table's RLS policy, including E2EE consent gates.
+    const db = context.supabase as any;
     const tables: Record<string, unknown[]> = {};
 
     for (const table of EXPORT_TABLES) {
