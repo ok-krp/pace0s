@@ -416,7 +416,7 @@ export function useCloudSyncEngineInternal() {
       if (!allowed()) return;
       pruneEquivalentConflicts();
       if (!navigator.onLine) { setStatus("offline"); return; }
-      await flushQueue(); await pull();
+      await flushQueue(); await pull(); await flushQueue();
       pruneEquivalentConflicts();
     };
 
