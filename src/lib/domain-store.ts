@@ -26,10 +26,6 @@ export function useDomainState<T>(domain: string, fallback: T): [T, (next: T | (
     const hydrate = () => {
       const next = readDomain(domain, fallback);
       setRecord((current) => {
-        if (domain === "sleep" && current.value && typeof current.value === "object" && next.value && typeof next.value === "object" && !Array.isArray(current.value) && !Array.isArray(next.value)) {
-          const merged = { ...(current.value as Record<string, unknown>), ...(next.value as Record<string, unknown>) };
-          return { version: 1, updatedAt: next.updatedAt > current.updatedAt ? next.updatedAt : current.updatedAt, mutationId: next.mutationId, value: merged as T };
-        }
         return compareRecords(next, current) > 0 ? next : current;
       });
     };
