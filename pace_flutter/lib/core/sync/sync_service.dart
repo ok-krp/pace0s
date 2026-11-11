@@ -381,9 +381,17 @@ class SyncService {
   }
 }
 
-bool _isFoodLogUuid(dynamic id) =>
-    id is String &&
-    RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}
+bool _isFoodLogUuid(dynamic id) {
+  if (id is! String) return false;
+  final parts = id.split('-');
+  return parts.length == 5 &&
+      parts[0].length == 8 &&
+      parts[1].length == 4 &&
+      parts[2].length == 4 &&
+      parts[3].length == 4 &&
+      parts[4].length == 12;
+}
+
 bool shouldAcknowledgeSyncOperation({required bool accepted}) => accepted;
 
 /// Returns whether a Realtime user_state row is newer than the local
