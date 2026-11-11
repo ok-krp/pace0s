@@ -109,9 +109,9 @@ BEGIN
   INSERT INTO public.sport_exercises (id,user_id) VALUES
     ('50000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
     ('50000000-0000-0000-0000-000000000002','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb');
-  INSERT INTO public.sport_workout_sessions (id,user_id,program_id) VALUES
-    ('60000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','40000000-0000-0000-0000-000000000001'),
-    ('60000000-0000-0000-0000-000000000002','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','40000000-0000-0000-0000-000000000002');
+  INSERT INTO public.sport_workout_sessions (id,user_id,program_id,is_temporary) VALUES
+    ('60000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','40000000-0000-0000-0000-000000000001',true),
+    ('60000000-0000-0000-0000-000000000002','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','40000000-0000-0000-0000-000000000002',true);
   INSERT INTO public.user_state(id,user_id,key,value,updated_by) VALUES
     ('65000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','fixture','{}'::jsonb,'fixture'),
     ('65000000-0000-0000-0000-000000000002','bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','fixture','{}'::jsonb,'fixture');
