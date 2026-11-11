@@ -230,8 +230,11 @@ export function refreshNutritionFromFoodLog(
   // Mark the fetched canonical snapshot before writeDomain emits LOCAL_WRITE;
   // the compatibility bridge must not upload its own remote refresh again.
   lastBridgedNutrition = nextSnapshot;
-  writeDomain(DOMAIN_ITEMS, nextSnapshot);
-  window.dispatchEvent(new Event("pace.nutrition.changed"));
+  const changed = JSON.stringify(current[day] ?? []) !== JSON.stringify(mergedRows);
+  if (changed) {
+    writeDomain(DOMAIN_ITEMS, nextSnapshot);
+    window.dispatchEvent(new Event("pace.nutrition.changed"));
+  }
   };
   nutritionRefreshChain = nutritionRefreshChain.then(task, task);
   return nutritionRefreshChain;
