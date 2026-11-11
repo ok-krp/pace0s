@@ -119,6 +119,16 @@ const expectedPublicTables = [
 assert.deepEqual([...names].sort(), expectedPublicTables,
   "The RLS migration classifications must match the exact audited 45-table public schema");
 
+const assertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
+assert.ok(assertions.includes("anon unexpectedly read private profiles"),
+  "Anonymous SELECT on private user data must be denied");
+assert.ok(assertions.includes("profile owner reassignment unexpectedly succeeded"),
+  "Authenticated users must not reassign profile ownership");
+assert.ok(assertions.includes("user B profile isolation failed"),
+  "A separate authenticated user B context must verify reverse tenant isolation");
+assert.ok(assertions.includes("user B can read user A profile"),
+  "User B must not read user A's profile");
+
 assert.match(sql, /alter table %I\.%I enable row level security/i,
   "The migration must enable RLS for every public table");
 assert.match(sql, /from pg_policies\s+where schemaname = 'public'/i,
