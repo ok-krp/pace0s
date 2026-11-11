@@ -192,6 +192,8 @@ assert.match(sql, /alter default privileges for role postgres in schema public r
   "Future sequences created by postgres must not inherit API-role sequence grants");
 assert.match(sql, /alter default privileges for role postgres revoke execute on functions from public/i,
   "Future functions created by postgres must not inherit the PostgreSQL PUBLIC EXECUTE grant");
+assert.match(sql, /alter default privileges for role postgres in schema public revoke execute on functions from public/i,
+  "Future public-schema functions created by postgres must not inherit schema-level PUBLIC EXECUTE grants");
 assert.match(sql, /alter default privileges for role postgres in schema public revoke execute on functions from anon, authenticated/i,
   "Future public-schema functions created by postgres must not inherit API-role EXECUTE grants");
 assert.match(sql, /alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated/i,
