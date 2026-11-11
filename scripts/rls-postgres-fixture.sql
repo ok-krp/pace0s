@@ -294,6 +294,62 @@ CREATE FUNCTION public.update_updated_at_column()
 RETURNS trigger LANGUAGE plpgsql SET search_path=public
 AS $routine$ BEGIN NEW.updated_at=now(); RETURN NEW; END $routine$;
 
+CREATE FUNCTION public.create_pairing_session(
+  p_initiator_device_id uuid,p_secret_hash text,p_challenge text,
+  p_ephemeral_pub jsonb,p_expires_in_seconds integer DEFAULT 300
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $routine$ BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  RETURN '81000000-0000-0000-0000-000000000001'::uuid;
+END $routine$;
+CREATE FUNCTION public.join_pairing_session(
+  p_session_id uuid,p_secret_plaintext text,p_recipient_device_id uuid,p_ephemeral_pub jsonb
+) RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $routine$ BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+END $routine$;
+CREATE FUNCTION public.confirm_pairing_session(p_session_id uuid,p_initiator_device_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $routine$ BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+END $routine$;
+CREATE FUNCTION public.complete_pairing_session(p_session_id uuid,p_recipient_device_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $routine$ BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END $routine$;
+END $routine$;
+CREATE FUNCTION public.create_pairing_envelope(
+  p_session_id uuid,p_sender_device_id uuid,p_recipient_device_id uuid,
+  p_envelope text,p_key_version integer,p_algorithm text
+) RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $routine$ BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  RETURN '82000000-0000-0000-0000-000000000001'::uuid;
+END $routine$;
+CREATE FUNCTION public.get_pairing_session(p_session_id uuid)
+RETURNS TABLE (
+  id uuid, initiator_device_id uuid, recipient_device_id uuid,
+  protocol_version text, status text, challenge text,
+  initiator_ephemeral_public_key jsonb, recipient_ephemeral_public_key jsonb,
+  expires_at timestamptz
+) LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $routine$ BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  RETURN;
+END $routine$;
+CREATE FUNCTION public.migrate_health_legacy_chunk(p_records jsonb)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $routine$ BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  RETURN 0;
+END $routine$;
+CREATE FUNCTION public.backfill_health_e2ee_dedupe_hashes(p_updates jsonb)
+RETURNS integer LANGUAGE plpgsql SECURITY DEFINER SET search_path=''
+AS $routine$ BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Authentication required'; END IF;
+  RETURN 0;
+END $routine$;
+
 -- A real row trigger is attached before the follow-up migration revokes
 -- direct EXECUTE on its SECURITY DEFINER function.
 CREATE TRIGGER fixture_temporary_workout_trigger
