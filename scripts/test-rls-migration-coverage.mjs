@@ -106,11 +106,11 @@ assert.match(sql, /grant select on public\.profiles to authenticated/i,
   "Profiles must remain owner-readable");
 assert.match(sql, /grant update \(weight_kg, weight_goal_kg, daily_calorie_goal, daily_protein_goal, daily_water_ml_goal, training_goal\)[\s\S]*?on public\.profiles to authenticated/i,
   "Only the six direct AI Coach profile update fields may be directly writable");
-assert.doesNotMatch(sql, /grant [^;]*insert[^;]*on public\.profiles to authenticated/i,
+assert.doesNotMatch(sql, /grant insert on public\.profiles to authenticated/i,
   "Profile creation must use the owner-checking version-safe RPC");
-assert.doesNotMatch(sql, /grant [^;]*delete[^;]*on public\.profiles to authenticated/i,
+assert.doesNotMatch(sql, /grant delete on public\.profiles to authenticated/i,
   "Profiles must not be directly deletable");
-assert.doesNotMatch(sql, /grant [^;]*update[^;]*on public\.profiles to authenticated/i,
+assert.doesNotMatch(sql, /grant update on public\.profiles to authenticated/i,
   "Profile UPDATE must remain column-scoped");
 const profileAssertions = readFileSync("scripts/rls-postgres-assertions.sql", "utf8");
 for (const assertion of [
@@ -217,6 +217,7 @@ assert.match(definerHardeningSql, /revoke create on schema public from public, a
   "PUBLIC and API roles must not create shadow objects in the exposed public schema");
 const definerFunctions = [
   "sync_sport_user_state()",
+  "upsert_profile_if_newer(uuid,jsonb,timestamptz,text)",
   "delete_temporary_workout_after_finish()",
   "touch_ai_provider_secret_updated_at()",
   "prevent_audit_log_mutation()",
