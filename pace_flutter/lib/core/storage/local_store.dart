@@ -30,6 +30,12 @@ class LocalStore {
   /// tests; production callers should use [open].
   static Future<LocalStore> openAt(File file) async {
     final store = LocalStore._(file);
+    final backup = File('${file.path}.bak');
+    if (!await file.exists() && await backup.exists()) {
+      // Recover the previous complete snapshot if the process stopped after
+      // moving the original file aside but before promoting the new snapshot.
+      await backup.rename(file.path);
+    }
     if (await file.exists()) {
       try {
         final decoded = jsonDecode(await file.readAsString());
@@ -64,6 +70,8 @@ class LocalStore {
           'Le stockage local pace_local.json est illisible. Le fichier original a été conservé pour récupération.',
         );
       }
+      // A leftover backup is obsolete only after the promoted snapshot parsed.
+      if (await backup.exists()) await backup.delete();
     }
     return store;
   }
@@ -220,21 +228,44 @@ class LocalStore {
   }
 
   Future<void> _flush() {
-    // Network sync can overlap with a user write. Serializing filesystem
-    // replacement prevents an older flush from racing a newer one.
-    _flushQueue = _flushQueue.then((_) async {
+    // Capture the exact account state at the call boundary. Auth transitions
+    // can overlap an outstanding disk write, so queued flushes must never read
+    // a later account's mutable _scope/_data when they eventually execute.
+    final scope = _scope;
+    final accounts = <String, Map<String, dynamic>>{
+      for (final entry in _accounts.entries)
+        entry.key: Map<String, dynamic>.from(entry.value),
+    };
+    accounts[scope] = Map<String, dynamic>.from(_data);
+    final persisted = <String, dynamic>{
+      '__local_store_version': 2,
+      '__active_scope': scope,
+      '__accounts': accounts,
+    };
+
+    // A failed flush must not poison the queue forever; the next user mutation
+    // gets an opportunity to retry while the current caller still sees its
+    // own write error.
+    final next = _flushQueue.catchError((_) {}).then((_) async {
       await _file.parent.create(recursive: true);
       final temporary = File('${_file.path}.tmp');
-      _accounts[_scope] = Map<String, dynamic>.from(_data);
-      final persisted = <String, dynamic>{
-        '__local_store_version': 2,
-        '__active_scope': _scope,
-        '__accounts': _accounts,
-      };
+      final backup = File('${_file.path}.bak');
       await temporary.writeAsString(jsonEncode(persisted), flush: true);
-      if (await _file.exists()) await _file.delete();
-      await temporary.rename(_file.path);
+      if (await backup.exists()) await backup.delete();
+
+      final hadOriginal = await _file.exists();
+      if (hadOriginal) await _file.rename(backup.path);
+      try {
+        await temporary.rename(_file.path);
+      } catch (_) {
+        if (!await _file.exists() && await backup.exists()) {
+          await backup.rename(_file.path);
+        }
+        rethrow;
+      }
+      if (await backup.exists()) await backup.delete();
     });
-    return _flushQueue;
+    _flushQueue = next;
+    return next;
   }
 }
