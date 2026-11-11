@@ -460,9 +460,14 @@ export function useCloudSyncEngineInternal() {
     });
 
     const onOnline = () => {
+      stopRealtime();
+      startRealtime();
       void syncNow();
     };
-    const onOffline = () => setStatus("offline");
+    const onOffline = () => {
+      stopRealtime();
+      setStatus("offline");
+    };
 
     // Realtime is the fast path. Periodic polling is only a recovery path
     // for a channel that is not healthy; visible/online/page-show events still
@@ -475,9 +480,13 @@ export function useCloudSyncEngineInternal() {
       if (document.visibilityState === "visible") { startRealtime(); void syncNow(); }
     };
     const onPageShow = () => {
+      startRealtime();
       void syncNow();
     };
-    const onLegalChanged = () => { if (allowed()) void syncNow(); else setStatus("idle"); };
+    const onLegalChanged = () => {
+      if (allowed()) { startRealtime(); void syncNow(); }
+      else { stopRealtime(); setStatus("idle"); }
+    };
     const onConflictResolved = () => { void syncNow(); };
     window.addEventListener("online", onOnline);
     window.addEventListener("offline", onOffline);
@@ -485,6 +494,7 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("pageshow", onPageShow);
     window.addEventListener("pace.legal.changed", onLegalChanged);
     window.addEventListener("pace.sync.conflict.resolved", onConflictResolved);
+    if (allowed()) startRealtime();
     pruneEquivalentConflicts();
     void syncNow();
     return () => {
