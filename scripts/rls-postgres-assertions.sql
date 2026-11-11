@@ -1,6 +1,11 @@
 -- Integration assertions. Migration is applied before this file.
 \set ON_ERROR_STOP on
 
+-- New objects created by the migration owner must not inherit stale global
+-- or schema-local PUBLIC/API-role table and sequence defaults either.
+CREATE TABLE public.rls_default_acl_probe(id uuid PRIMARY KEY);
+CREATE SEQUENCE public.rls_default_sequence_probe;
+
 -- A function created after the migration must not inherit PUBLIC or API-role
 -- EXECUTE. The two RLS helpers retain only their explicit authenticated grant.
 create function public.rls_default_execute_probe()
@@ -12,6 +17,12 @@ $rls_default_probe$;
 
 DO $function_privileges$
 BEGIN
+  IF has_table_privilege('anon','public.rls_default_acl_probe','SELECT')
+     OR has_table_privilege('authenticated','public.rls_default_acl_probe','SELECT')
+     OR has_sequence_privilege('anon','public.rls_default_sequence_probe','USAGE')
+     OR has_sequence_privilege('authenticated','public.rls_default_sequence_probe','USAGE') THEN
+    RAISE EXCEPTION 'new public table or sequence inherited PUBLIC/API-role default ACL';
+  END IF;
   IF has_function_privilege('anon', 'public.rls_default_execute_probe()', 'EXECUTE') THEN
     RAISE EXCEPTION 'new public function inherited EXECUTE for anon';
   END IF;
