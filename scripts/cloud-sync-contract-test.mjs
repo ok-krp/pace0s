@@ -66,8 +66,11 @@ const aiNutritionSyncStart = nutritionAi.indexOf("async function syncNutritionSt
 const aiNutritionSyncEnd = nutritionAi.indexOf("async function mirrorAiFoodToNutritionState", aiNutritionSyncStart);
 assert.ok(aiNutritionSyncStart >= 0 && aiNutritionSyncEnd > aiNutritionSyncStart, "AI Nutrition DB projection must remain identifiable");
 const aiNutritionSync = nutritionAi.slice(aiNutritionSyncStart, aiNutritionSyncEnd);
-assert.match(aiNutritionSync, /const legacyRows = .*uuidPattern\.test\(item\.id\)/s, "AI projection must retain historical non-UUID native manual meals");
+assert.match(aiNutritionSync, /const existingDay = Array\.isArray\(itemsByDay\[day\]\) \? itemsByDay\[day\] : \[\]/, "AI projection must safely inspect an existing Nutrition day snapshot");
+assert.match(aiNutritionSync, /const legacyRows = existingDay\.filter\(\(item\) =>[\s\S]*!uuidPattern\.test\(item\.id\)/, "AI projection must retain historical non-UUID native manual meals");
 assert.match(aiNutritionSync, /itemsByDay\[day\] = \[\.\.\.canonicalRows, \.\.\.legacyRows\]/, "AI projection must not replace legacy manual entries with food_log-only rows");
+assert.match(aiNutritionSync, /writeNutritionStateSnapshot[\s\S]*upsert_user_state_if_newer/, "AI Nutrition snapshots must use the monotonic cloud sync RPC rather than a direct user_state update");
+assert.match(aiNutritionSync, /for \(let attempt = 0; attempt < 3; attempt\+\+\)[\s\S]*if \(!itemsAccepted\) continue/, "AI Nutrition must reread and retry when a concurrent newer user_state snapshot wins");
 assert.match(nutritionAi, /const legacyMeals = .*context\.todayNutrition = \[\.\.\.\(data \?\? \[\]\), \.\.\.legacyMeals\]/s, "Coach context must include legacy native manual meals");
 
 
