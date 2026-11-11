@@ -223,9 +223,18 @@ export function refreshNutritionFromFoodLog(
   // Older native Flutter releases stored manual meals only in user_state
   // with timestamp IDs. Preserve those rows while food_log is canonical for
   // UUID-backed meals; never mistake the legacy rows for SQL UUIDs.
-  const legacyRows = (current[day] ?? []).filter((item) => !isFoodLogUuid(item.id) && !deletedIds.has(item.id));
+  const currentRows = current[day] ?? [];
+  const legacyRows = currentRows.filter((item) => !isFoodLogUuid(item.id) && !deletedIds.has(item.id));
   const canonicalIds = new Set(rows.map((item) => item.id));
-  const mergedRows = [...rows, ...legacyRows.filter((item) => !canonicalIds.has(item.id))];
+  const pendingRows = currentRows.filter((item) =>
+    isFoodLogUuid(item.id) && item.pendingFoodLog === true &&
+    !canonicalIds.has(item.id) && !deletedIds.has(item.id)
+  );
+  const mergedRows = [
+    ...rows,
+    ...legacyRows.filter((item) => !canonicalIds.has(item.id)),
+    ...pendingRows,
+  ];
   const nextSnapshot = { ...current, [day]: mergedRows };
   // Mark the fetched canonical snapshot before writeDomain emits LOCAL_WRITE;
   // the compatibility bridge must not upload its own remote refresh again.
@@ -235,6 +244,9 @@ export function refreshNutritionFromFoodLog(
     writeDomain(DOMAIN_ITEMS, nextSnapshot);
     window.dispatchEvent(new Event("pace.nutrition.changed"));
   }
+  // A pending native UUID is a durable local intent. Retry its idempotent
+  // bridge upload on Web too; never drop it merely because food_log is late.
+  if (pendingRows.length) await bridgeLocalNutritionToFoodLog(nextSnapshot);
   };
   nutritionRefreshChain = nutritionRefreshChain.then(task, task);
   return nutritionRefreshChain;
