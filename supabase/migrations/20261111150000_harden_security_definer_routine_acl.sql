@@ -26,7 +26,9 @@ revoke all on function public.upsert_profile_if_newer(uuid, jsonb, timestamptz, 
 grant execute on function public.upsert_profile_if_newer(uuid, jsonb, timestamptz, text)
   to authenticated;
 
--- E2EE key rotation remains SECURITY INVOKER and enforces ownership via auth.uid().
+-- E2EE key rotation remains SECURITY DEFINER by design; its body explicitly
+-- requires auth.uid(), validates sequential key versions, and checks device
+-- ownership before revocation. Never grant EXECUTE to anon or PUBLIC.
 alter function public.rotate_health_e2ee_key(integer, uuid)
   set search_path = '';
 revoke all on function public.rotate_health_e2ee_key(integer, uuid)
