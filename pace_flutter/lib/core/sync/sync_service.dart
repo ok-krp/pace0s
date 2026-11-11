@@ -376,21 +376,19 @@ class SyncService {
     }
   }
 
-  Future<bool> _handleFoodLogRealtime(String userId) async {
+  Future<void> _handleFoodLogRealtime(String userId) async {
     if (client?.auth.currentUser?.id != userId ||
         !_hasCachedCloudSyncConsent(userId)) {
-      return false;
+      return;
     }
     final reconciled = await _reconcileNutritionProjection(userId);
-    if (reconciled) {
-      _lastNutritionReconciledAt = DateTime.now();
-      if (localStore.pendingOperations().any(
-        (operation) => operation['key'] == 'pace.nutrition.items',
-      )) {
-        await syncNow();
-      }
+    if (!reconciled) return;
+    _lastNutritionReconciledAt = DateTime.now();
+    if (localStore.pendingOperations().any(
+      (operation) => operation['key'] == 'pace.nutrition.items',
+    )) {
+      await syncNow();
     }
-    return reconciled;
   }
 
   Future<bool> _reconcileNutritionProjection(String userId) async {
