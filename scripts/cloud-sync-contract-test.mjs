@@ -205,6 +205,15 @@ assert.match(storage, /if \(!hydratedRef\.current\) \{\n      hydratedRef\.curre
 assert.doesNotMatch(storage, /suppressPersistRef/, "A stale boolean must not suppress a later independent local mutation");
 
 assert.match(storage, /CustomEvent<LocalWriteDetail>\(LOCAL_WRITE_EVENT/);
+
+const synchronousSetStart = storage.indexOf("const set = useCallback");
+const synchronousSetEnd = storage.indexOf("return [value, set]", synchronousSetStart);
+assert.ok(synchronousSetStart >= 0 && synchronousSetEnd > synchronousSetStart, "useLocalState setter must remain identifiable");
+const synchronousSet = storage.slice(synchronousSetStart, synchronousSetEnd);
+assert.match(synchronousSet, /localStorage\.setItem\(key, serialized\)/, "Every useLocalState mutation must be persisted before React schedules the next effect");
+assert.match(synchronousSet, /window\.dispatchEvent\(new CustomEvent<LocalWriteDetail>\(LOCAL_WRITE_EVENT/, "Every useLocalState mutation must enter the cloud outbox immediately");
+assert.doesNotMatch(synchronousSet, /key === "pace\.recipes\.custom"/, "Immediate persistence must apply to all local state keys, not only recipes");
+
 assert.match(engine, /lastRemoteValues/);
 
 assert.match(engine, /Object\.keys\(object\)\.sort\(\)/, "sync comparisons must be key-order independent");
