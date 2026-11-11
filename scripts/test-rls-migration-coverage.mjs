@@ -431,7 +431,7 @@ assert.ok(
   privacySource.indexOf("auth.admin.signOut") < privacySource.indexOf("const [{ data: programs"),
   "Account sessions must be revoked before destructive Sport/account cleanup begins",
 );
-assert.match(privacySource, /access JWTs remain valid until exp/i,
+assert.match(privacySource, /access JWTs (?:that were already issued )?remain valid until exp/i,
   "Account deletion must document that an already-issued access JWT remains valid until expiry");
 
 assert.match(privacySource, /db\.from\(table\)\.select\("\*"\)\.eq\("user_id", context\.userId\)/,
