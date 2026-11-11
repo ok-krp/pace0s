@@ -203,6 +203,10 @@ for (const table of [
 }
 assert.doesNotMatch(privacyExportBlock, /ai_provider_secrets|ai_tool_idempotency/,
   "Provider credentials and idempotency internals must never be included in a user export");
+assert.doesNotMatch(privacyExportBlock, /health_legacy_migration_map|health_e2ee_pairing_sessions/,
+  "RPC-only E2EE internals must not be exported through direct PostgREST access");
+assert.match(privacySource, /const db = context\.supabase as any/,
+  "Privacy export must execute through the authenticated client so RLS relationship checks remain active");
 assert.match(privacySource, /db\.from\(table\)\.select\("\*"\)\.eq\("user_id", context\.userId\)/,
   "Admin-backed export must filter every owner table by the authenticated server context");
 assert.match(privacySource, /\.from\("sport_program_items"\)[\s\S]*?\.in\("program_id", programIds\)/,
