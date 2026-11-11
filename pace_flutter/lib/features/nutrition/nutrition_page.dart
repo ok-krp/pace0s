@@ -98,6 +98,11 @@ class _NutritionPageState extends State<NutritionPage> {
     await _recalculateTotals(data);
     try {
       await widget.sync.syncNow();
+      if (mounted && !widget.sync.cloudSyncConsentGranted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Repas enregistré sur cet appareil. Active « Synchronisation entre appareils » dans Plus → Paramètres pour le retrouver sur tes autres appareils.')),
+        );
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -159,6 +164,11 @@ class _NutritionPageState extends State<NutritionPage> {
     await _recalculateTotals(data);
     try {
       await widget.sync.syncNow();
+      if (mounted && !widget.sync.cloudSyncConsentGranted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Modification enregistrée sur cet appareil. Active « Synchronisation entre appareils » dans Plus → Paramètres pour la transmettre aux autres appareils.')),
+        );
+      }
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
