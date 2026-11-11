@@ -245,3 +245,24 @@ The public consent helper now uses an empty `search_path` with fully-qualified t
 The canonical E2EE device/envelope table migration declares `health_e2ee_key_envelopes.nonce NOT NULL`. However, the tracked `create_pairing_envelope(...)` SECURITY DEFINER RPC inserts `NULL` for the `ECDH-P256/HKDF-SHA256/AES-256-KW` algorithm, and the Flutter direct insert path also sends `nonce: null` for AES Key Wrap key bundles. AES-GCM envelopes still require a nonce. No tracked migration previously changed this nullability.
 
 Added canonical migration `20261111140000_allow_nullable_health_e2ee_envelope_nonce.sql` to drop the NOT NULL constraint while documenting that NULL is valid only for key-wrap formats at the application contract level. The disposable PostgreSQL 16 fixture now starts with the historical NOT NULL constraint, applies the RLS proposal, then applies this repair. Its assertions insert both an AES-GCM envelope with a nonce and an AES Key Wrap envelope with a NULL nonce. This migration remains unmerged and unexecuted against Supabase.
+
+
+## 15. Generated Supabase table-type drift — 2026-11-11
+
+The generated `src/integrations/supabase/types.ts` files were counted by parsing the actual `Tables` and `Functions` sections on each branch:
+
+| Branch | Table definitions | Function/RPC definitions |
+|---|---:|---:|
+| `main` | 45 | 22 |
+| `application` | 14 | 0 |
+| Current PR #316 | 15 | 2 |
+
+Therefore 31 of the 45 audited public tables are not represented in the current PR branch's generated TypeScript contract, and 20 of the 22 `main` RPC definitions are absent. The PR currently includes only the consent helper and `upsert_user_state_if_newer` in its function section. Many code paths consequently cast Supabase clients to `any`, hiding schema mismatches from TypeScript.
+
+Do not blindly copy `main`'s generated types into `application`: the 22-function contract includes the Nutrition v2 RPC whose SQL body is missing from all tracked migrations, as well as other functions absent from the application's 16-migration chain. Regenerate the client types only after the target database schema and complete canonical migration chain have been recovered, replayed in an isolated clone, and reconciled to the actual app contract.
+
+## 16. Privacy export and deletion coverage expanded
+
+The current PR branch's prior `privacy.functions.ts` exported/deleted only a small nine-table owner list. It now has separate explicit allowlists: a direct authenticated/RLS export list and a broader service-role deletion list. The export covers owner-readable E2EE recovery material, key versions, encrypted biometrics, AI data, billing, consent and Sport; relationship-only Sport child rows are fetched through owner-filtered parent IDs under RLS. RPC-only pairing sessions and migration maps are not exposed through the direct export API. The deletion flow removes child sets/exercises/program items before their parents and deletes owned E2EE/service tables by `context.userId`; it refuses to delete the Auth user if any cleanup fails. Provider secrets and idempotency state are deleted but are never included in user exports.
+
+The export deliberately uses the authenticated Supabase client, not `service_role`, so row and parent-ownership RLS remains active. The account deletion flow uses the service client only on a server-side fixed allowlist and always applies the authenticated user's ID; user-provided IDs are not accepted.
