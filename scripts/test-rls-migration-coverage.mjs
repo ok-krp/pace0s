@@ -159,6 +159,13 @@ const envelopeNonceMigration = readFileSync(
 );
 assert.match(envelopeNonceMigration, /alter table public\.health_e2ee_key_envelopes\s+alter column nonce drop not null/i,
   "AES Key Wrap pairing requires a nullable nonce column");
+assert.match(envelopeNonceMigration, /health_e2ee_key_envelopes_nonce_algorithm_check[\s\S]*?not valid/i,
+  "The database must enforce the nonce contract for new rows without assuming historic rows are already clean");
+const nonceTestBody = nonceAssertions.match(/DO \$envelope_nonce_contract\$[\s\S]*?\$envelope_nonce_contract\$;/)?.[0] ?? "";
+assert.match(nonceTestBody, /AES-GCM envelope without a nonce unexpectedly succeeded/,
+  "PostgreSQL must reject AES-GCM envelopes without a nonce");
+assert.match(nonceTestBody, /AES Key Wrap envelope with a nonce unexpectedly succeeded/,
+  "PostgreSQL must reject AES Key Wrap envelopes with a nonce");
 const postgresWorkflow = readFileSync(".github/workflows/rls-postgres-preflight.yml", "utf8");
 assert.match(postgresWorkflow, /--file=supabase\/migrations\/20261111140000_allow_nullable_health_e2ee_envelope_nonce\.sql/,
   "PostgreSQL preflight must apply the E2EE nonce repair before envelope assertions");
