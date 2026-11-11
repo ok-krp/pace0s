@@ -183,3 +183,17 @@ The replay inventory must distinguish:
 4. migrations applied directly to remote projects whose SQL was never committed (the Nutrition v2 case above).
 
 Do not run the 184-file `main` directory as a fresh linear migration chain or use `migration repair` to paper over these categories without a target-specific plan.
+
+
+## 12. Explicit migration-owner ACLs and routine audit — 2026-11-11
+
+The proposed migration now scopes all default-privilege hardening explicitly to `FOR ROLE postgres`. This avoids silently changing the defaults for whichever role happens to run the migration in another environment. The disposable CI fixture connects as `postgres`, matching this assumption.
+
+Added `scripts/rls-postgres-function-acl-audit.sql`, a read-only target preflight that reports:
+
+- current database/session role and the available PostgREST exposed-schema settings;
+- each `public` / `pace_private` routine, owner, identity arguments, result, `SECURITY DEFINER` / `INVOKER`, function settings, explicit `PUBLIC EXECUTE`, and effective `anon`, `authenticated`, and `service_role` execution rights;
+- default ACL entries grouped by object owner and schema, so `postgres` and `supabase_admin` are reviewed separately;
+- schema USAGE and public-table RLS/SELECT privileges.
+
+The PostgreSQL CI preflight now runs this inventory after the isolation assertions. Its static coverage test verifies that the audit script remains read-only. This does **not** revoke EXECUTE from existing functions: the target's routines must first be inventoried and classified against the canonical RPC list, then each function must receive an explicit intended grant/revoke decision. The current visible audit project has zero public routines, which cannot substitute for the inaccessible runtime target.
