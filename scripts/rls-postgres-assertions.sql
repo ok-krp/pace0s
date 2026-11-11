@@ -590,6 +590,19 @@ BEGIN
   END;
   IF NOT denied THEN RAISE EXCEPTION 'pairing join accepted an invalid secret'; END IF;
 
+  denied := false;
+  BEGIN
+    PERFORM public.join_pairing_session(
+      '80000000-0000-0000-0000-000000000004',
+      NULL,
+      '70000000-0000-0000-0000-000000000004',
+      '{"kty":"EC","crv":"P-256","x":"x","y":"y"}'::jsonb
+    );
+  EXCEPTION WHEN OTHERS THEN
+    denied := true;
+  END;
+  IF NOT denied THEN RAISE EXCEPTION 'pairing join accepted a NULL secret'; END IF;
+
   PERFORM public.complete_pairing_session(
     '80000000-0000-0000-0000-000000000003',
     '70000000-0000-0000-0000-000000000004'
