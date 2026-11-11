@@ -152,6 +152,14 @@ BEGIN
      OR has_schema_privilege('authenticated','public','CREATE') THEN
     RAISE EXCEPTION 'API roles can CREATE objects in exposed public schema';
   END IF;
+  IF has_table_privilege('anon','public.ai_provider_secrets','SELECT')
+     OR has_table_privilege('authenticated','public.ai_provider_secrets','SELECT')
+     OR has_table_privilege('anon','public.ai_provider_secrets','INSERT')
+     OR has_table_privilege('authenticated','public.ai_provider_secrets','INSERT')
+     OR has_sequence_privilege('anon','public.fixture_public_sequence','USAGE')
+     OR has_sequence_privilege('authenticated','public.fixture_public_sequence','USAGE') THEN
+    RAISE EXCEPTION 'PUBLIC-inherited table or sequence privileges survived the RLS privilege reset';
+  END IF;
   IF has_column_privilege('anon','public.ai_provider_secrets','user_id','SELECT')
      OR has_column_privilege('anon','public.ai_provider_secrets','user_id','INSERT')
      OR has_column_privilege('anon','public.ai_provider_secrets','user_id','UPDATE')
