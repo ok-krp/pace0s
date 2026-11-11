@@ -116,6 +116,9 @@ BEGIN
     ('94000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','30000000-0000-0000-0000-000000000001');
   INSERT INTO public.audit_log(id) VALUES ('95000000-0000-0000-0000-000000000001');
   INSERT INTO public.billing_events(id) VALUES ('96000000-0000-0000-0000-000000000001');
+  INSERT INTO public.consent_records(user_id,consent_type,granted,legal_version,policy_version) VALUES
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','health_data',true,'2026-07-10','2026-07-10'),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb','health_cloud_sync',true,'2026-07-10','2026-07-10');
 END;
 $fixture_seed$;
 
@@ -509,6 +512,21 @@ BEGIN
   IF n <> 0 THEN RAISE EXCEPTION 'encrypted samples remain visible after consent revocation'; END IF;
   SELECT count(*) INTO n FROM public.health_e2ee_key_envelopes;
   IF n <> 0 THEN RAISE EXCEPTION 'key envelopes remain visible after consent revocation'; END IF;
+  SELECT count(*) INTO n FROM public.health_e2ee_recovery_envelopes;
+  IF n <> 0 THEN RAISE EXCEPTION 'recovery envelopes remain visible after consent revocation'; END IF;
+
+  UPDATE public.health_e2ee_recovery_envelopes
+  SET envelope='revoked-update-must-affect-zero-rows'
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
+  GET DIAGNOSTICS n = ROW_COUNT;
+  IF n <> 0 THEN RAISE EXCEPTION 'recovery envelope update succeeded after consent revocation'; END IF;
+
+  BEGIN
+    INSERT INTO public.health_e2ee_recovery_envelopes(user_id,envelope,nonce,algorithm,key_version)
+      VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','after-revoke','nonce','PBKDF2-SHA-256/AES-256-GCM',2);
+    RAISE EXCEPTION 'recovery envelope insert succeeded after consent revocation';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
 
   BEGIN
     INSERT INTO public.health_samples_e2ee(id,user_id)
