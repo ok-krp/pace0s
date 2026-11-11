@@ -285,22 +285,7 @@ BEGIN
   END;
 
   BEGIN
-    BEGIN
-    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id)
-      VALUES ('72000000-0000-0000-0000-000000000010','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-              '70000000-0000-0000-0000-000000000003','70000000-0000-0000-0000-000000000001');
-    RAISE EXCEPTION 'envelope for revoked recipient device unexpectedly succeeded';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
-  END;
-  BEGIN
-    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id)
-      VALUES ('72000000-0000-0000-0000-000000000011','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-              '70000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000003');
-    RAISE EXCEPTION 'envelope from revoked sender device unexpectedly succeeded';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
-  END;
-
-  INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
+    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_session_id)
       VALUES ('72000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','70000000-0000-0000-0000-000000000001','80000000-0000-0000-0000-000000000002');
     RAISE EXCEPTION 'cross-user pairing envelope INSERT unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
@@ -332,6 +317,21 @@ BEGIN
     INSERT INTO public.data_deletion_requests(id,user_id,status,completed_at)
       VALUES ('90000000-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','completed',now());
     RAISE EXCEPTION 'client submitted a completed deletion request';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id)
+      VALUES ('72000000-0000-0000-0000-000000000010','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+              '70000000-0000-0000-0000-000000000003','70000000-0000-0000-0000-000000000001');
+    RAISE EXCEPTION 'envelope for revoked recipient device unexpectedly succeeded';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,sender_device_id)
+      VALUES ('72000000-0000-0000-0000-000000000011','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+              '70000000-0000-0000-0000-000000000001','70000000-0000-0000-0000-000000000003');
+    RAISE EXCEPTION 'envelope from revoked sender device unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
