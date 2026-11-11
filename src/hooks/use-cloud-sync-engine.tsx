@@ -202,8 +202,6 @@ function serialize(value: unknown): string | undefined {
 }
 function readConflicts(user.id): SyncConflict[] { try { const raw = JSON.parse(localStorage.getItem(CONFLICTS_KEY) ?? "[]") as SyncConflict[]; return Array.isArray(raw) ? raw.filter((item) => item?.id && item?.key) : []; } catch { return []; } }
 function writeConflicts(items: SyncConflict[]) { try { localStorage.setItem(CONFLICTS_KEY, JSON.stringify(items.slice(-20))); } catch {} }
-function conflictForKey(key: string): SyncConflict | undefined { return readConflicts().find((item) => item.key === key); }
-
 function unwrapNutritionValue(value: unknown) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const candidate = value as Record<string, unknown>;
@@ -226,13 +224,13 @@ export function useCloudSyncEngineInternal() {
   const keyWrites = useRef<Record<string, Promise<void>>>({});
   const lastRemoteValues = useRef<Record<string, string>>({});
 
-  const rememberRemote = (key: string, value: unknown) => {
+  const rememberRemote = (key: string, value: unknown, userId: string) => {
     const encoded = serialize(value);
-    if (encoded !== undefined) lastRemoteValues.current[key] = encoded;
+    if (encoded !== undefined) lastRemoteValues.current[userId + ":" + key] = encoded;
   };
   const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string) => {
     const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value) : value;
-    rememberRemote(key, safeValue);
+    if (user) rememberRemote(key, safeValue, user.id);
     applyRemoteWrite(key, safeValue, updatedAt);
   };
 
@@ -270,7 +268,7 @@ export function useCloudSyncEngineInternal() {
       const currentConflicts = readConflicts(user.id);
       const remaining = currentConflicts.filter((item) => serialize(item.localValue) !== serialize(item.remoteValue));
       if (remaining.length !== currentConflicts.length) {
-        writeConflicts(remaining);
+        writeConflicts(remaining, user.id);
         setConflicts(remaining);
       }
       return remaining;
@@ -367,7 +365,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const pull = async () => {
-      if (cancelled || !allowed() || !navigator.onLine || running.current) return;
+      if (cancelled || !allowed() || !navigator.onLine || running.current[user.id]) return;
       try {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
         if (error || !data || cancelled) return;
@@ -402,13 +400,13 @@ export function useCloudSyncEngineInternal() {
           const queued = getQueued(key, user.id);
           if (queued) {
             if (serialize(queued.value) === serialize(remoteValue)) {
-              const currentConflicts = readConflicts();
+              const currentConflicts = readConflicts(user.id);
               const remainingConflicts = currentConflicts.filter((item) => item.key !== key);
               if (remainingConflicts.length !== currentConflicts.length) {
-                writeConflicts(remainingConflicts);
+                writeConflicts(remainingConflicts, user.id);
                 setConflicts(remainingConflicts);
               }
-              unqueueIfMutation(key, queued.updatedAt);
+              unqueueIfMutation(key, queued.updatedAt, user.id);
               meta[key] = updatedAt;
               newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
               continue;
@@ -426,7 +424,7 @@ export function useCloudSyncEngineInternal() {
               value: localDomain.value,
               updatedAt: localDomain.updatedAt,
               mutationId: localDomain.mutationId,
-            });
+            }, user.id);
             meta[key] = localDomain.updatedAt;
             newest = newest && Date.parse(newest) > localDomainTime ? newest : localDomain.updatedAt;
             continue;
@@ -558,8 +556,9 @@ export function useCloudSyncEngineInternal() {
     const offLocal = onLocalWrite((key, value, updatedAt, mutationId) => {
       if (!isSyncableKey(key) || !updatedAt) return;
       const encoded = serialize(value);
-      if (encoded !== undefined && lastRemoteValues.current[key] === encoded) { delete lastRemoteValues.current[key]; return; }
-      delete lastRemoteValues.current[key];
+      const memoryKey = user.id + ':' + key;
+      if (encoded !== undefined && lastRemoteValues.current[memoryKey] === encoded) { delete lastRemoteValues.current[memoryKey]; return; }
+      delete lastRemoteValues.current[memoryKey];
       queueItem({ key, value, updatedAt, mutationId }, user.id);
       if (allowed()) void pushItem({ key, value, updatedAt, mutationId });
     });
@@ -621,7 +620,7 @@ export function useCloudSyncEngineInternal() {
     if (choice === "remote") { applyRemoteWrite(conflict.key, conflict.remoteValue, conflict.remoteUpdatedAt); unqueueIfMutation(conflict.key, getQueued(conflict.key, userId)?.updatedAt ?? "", userId); markVersion(conflict.key, conflict.remoteUpdatedAt, userId); }
     else { const updatedAt = new Date().toISOString(); applyRemoteWrite(conflict.key, merged, updatedAt); queueItem({ key: conflict.key, value: merged, updatedAt, mutationId: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : updatedAt }, userId); }
     const remaining = readConflicts(userId).filter((item) => item.id !== conflictId); writeConflicts(remaining, userId); setConflicts(remaining); window.dispatchEvent(new Event("pace.sync.conflict.resolved"));
-  }, []);
+  }, [user?.id]);
 
   return { status, queuedCount: user ? readQueue(user.id).length : 0, conflicts, resolveConflict };
 }
