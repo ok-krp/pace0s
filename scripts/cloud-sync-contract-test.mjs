@@ -146,6 +146,11 @@ assert.match(nutritionRoute, /subscribeNutritionFoodLogChanges\(refresh\)/, "The
 assert.match(nutritionRoute, /setInterval\(refresh, 60_000\)/, "Nutrition must retain a bounded fallback when Realtime is unavailable");
 assert.match(flutterSync, /table: 'food_log'[\s\S]*callback: \(_\) => unawaited\(_handleFoodLogRealtime\(userId\)\)/, "Flutter must reconcile food_log INSERT and UPDATE events");
 assert.match(flutterSync, /_lastNutritionReconciledAt == null[\s\S]*_nutritionFallbackInterval/, "Flutter must refresh canonical Nutrition after login and on a bounded fallback interval");
+
+assert.match(flutterSync, /Future<void> upsertNutritionFoodLogItem\([\s\S]*from\('food_log'\)\.upsert[\s\S]*onConflict: 'id'/, "Flutter manual Nutrition inserts must be idempotent in canonical food_log");
+assert.match(flutterSync, /pendingFoodLog[\s\S]*upsertNutritionFoodLogItem[\s\S]*final rows = await client!/, "Flutter must retry pending canonical meal inserts and retain them locally until visible in food_log");
+assert.match(flutterNutrition, /'id': newFoodLogUuid\(\),[\s\S]*'pendingFoodLog': true/, "Flutter must give a manual meal a stable UUID before network persistence");
+
 assert.match(nutritionRealtimeMigration, /ALTER PUBLICATION supabase_realtime ADD TABLE public\.food_log/, "Supabase migration must publish food_log for account-scoped Realtime");
 assert.match(nutritionRealtimeMigration, /duplicate_object/, "food_log Realtime publication migration must be idempotent");
 
