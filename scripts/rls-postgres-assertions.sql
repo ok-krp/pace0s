@@ -226,6 +226,26 @@ BEGIN
   IF has_table_privilege('authenticated','public.health_e2ee_recovery_envelopes','DELETE') THEN
     RAISE EXCEPTION 'authenticated can directly delete an E2EE recovery envelope';
   END IF;
+  IF has_table_privilege('authenticated','public.health_e2ee_recovery_envelopes','INSERT')
+     OR has_table_privilege('authenticated','public.health_e2ee_recovery_envelopes','UPDATE')
+     OR has_column_privilege('authenticated','public.health_e2ee_recovery_envelopes','created_at','INSERT')
+     OR has_column_privilege('authenticated','public.health_e2ee_recovery_envelopes','created_at','UPDATE')
+     OR has_column_privilege('authenticated','public.health_e2ee_recovery_envelopes','user_id','UPDATE') THEN
+    RAISE EXCEPTION 'authenticated has broader-than-needed E2EE recovery column privileges';
+  END IF;
+  IF NOT has_column_privilege('authenticated','public.health_e2ee_recovery_envelopes','user_id','INSERT')
+     OR NOT has_column_privilege('authenticated','public.health_e2ee_recovery_envelopes','envelope','UPDATE') THEN
+    RAISE EXCEPTION 'E2EE recovery upsert lost its required field privileges';
+  END IF;
+  IF has_table_privilege('authenticated','public.data_deletion_requests','INSERT')
+     OR has_column_privilege('authenticated','public.data_deletion_requests','id','INSERT')
+     OR has_column_privilege('authenticated','public.data_deletion_requests','status','INSERT')
+     OR has_column_privilege('authenticated','public.data_deletion_requests','requested_at','INSERT') THEN
+    RAISE EXCEPTION 'authenticated can control deletion request metadata';
+  END IF;
+  IF NOT has_column_privilege('authenticated','public.data_deletion_requests','user_id','INSERT') THEN
+    RAISE EXCEPTION 'owner cannot submit a deletion request';
+  END IF;
   IF has_column_privilege('authenticated','public.health_e2ee_key_envelopes','id','INSERT')
      OR has_column_privilege('authenticated','public.health_e2ee_key_envelopes','created_at','INSERT') THEN
     RAISE EXCEPTION 'authenticated can choose E2EE envelope ID or timestamp';
