@@ -86,6 +86,14 @@ class SyncService {
       _cloudSyncConsentUserId == client?.auth.currentUser?.id &&
       _cloudSyncConsent == false;
 
+  String? get activeAccountId => localStore.currentAccountId;
+
+  bool isCurrentLocalAccount(String? accountId) {
+    if (localStore.currentAccountId != accountId) return false;
+    if (client == null) return accountId == null;
+    return accountId != null && client!.auth.currentUser?.id == accountId;
+  }
+
   Future<void> setCloudSyncConsent(bool granted) async {
     final userId = client?.auth.currentUser?.id;
     if (userId == null || localStore.currentAccountId != userId) return;
@@ -165,7 +173,15 @@ class SyncService {
         }
       } while (_syncRequested && client?.auth.currentUser?.id == initialUserId);
     } finally {
+      final shouldRerunForActiveAccount = _syncRequested;
+      _syncRequested = false;
       _running = false;
+      // If account B requested sync while account A's in-flight request was
+      // draining, immediately start a fresh cycle once B's namespace is active.
+      if (shouldRerunForActiveAccount &&
+          isCurrentLocalAccount(client?.auth.currentUser?.id)) {
+        unawaited(syncNow());
+      }
     }
   }
 
@@ -411,6 +427,10 @@ class SyncService {
           .select('confirm_actions,memory_level')
           .eq('user_id', user.id)
           .limit(1);
+      if (!isCurrentLocalAccount(user.id) ||
+          !_hasCachedCloudSyncConsent(user.id)) {
+        return;
+      }
       if (rows.isEmpty) return;
       final row = Map<String, dynamic>.from(rows.first);
       final remoteConfirm = row['confirm_actions'];
