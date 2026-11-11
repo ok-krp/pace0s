@@ -318,13 +318,22 @@ with check (user_id = (select auth.uid()) and (program_id is null or exists (
 -- 5) Cross-account relationship guards for child tables without user_id.
 -- Parent ownership is checked at every hop; child IDs alone are never trusted.
 -- Consent records are immutable audit evidence: owner SELECT/INSERT only.
-grant select, insert on public.consent_records to authenticated;
+-- Keep the audit ledger append-only and let PostgreSQL own ordering metadata.
+-- The clients may supply the consent decision/version but never id or created_at.
+grant select on public.consent_records to authenticated;
+revoke insert on public.consent_records from authenticated;
+grant insert (user_id, consent_type, granted, legal_version, policy_version)
+  on public.consent_records to authenticated;
 drop policy if exists consent_records_select_own on public.consent_records;
 drop policy if exists consent_records_insert_own on public.consent_records;
 create policy consent_records_select_own on public.consent_records
   for select to authenticated using (user_id = (select auth.uid()));
 create policy consent_records_insert_own on public.consent_records
-  for insert to authenticated with check (user_id = (select auth.uid()));
+  for insert to authenticated
+  with check (
+    user_id = (select auth.uid())
+    and created_at = (select now())
+  );
 
 grant select, insert, update, delete on public.ai_messages to authenticated;
 drop policy if exists ai_messages_user_isolation on public.ai_messages;
