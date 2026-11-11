@@ -233,7 +233,7 @@ SET LOCAL ROLE authenticated;
 SELECT set_config('request.jwt.claim.sub','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',true);
 
 DO $user_a$
-DECLARE n integer;
+DECLARE n integer; accepted boolean; denied boolean;
 BEGIN
   IF has_table_privilege('authenticated','public.profiles','INSERT')
      OR has_table_privilege('authenticated','public.profiles','UPDATE')
@@ -363,6 +363,37 @@ BEGIN
     WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
       AND weight_kg=54.5 AND training_goal='hypertrophy';
   IF n <> 1 THEN RAISE EXCEPTION 'AI Coach profile field update failed'; END IF;
+  SELECT public.upsert_profile_if_newer(
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    '{"weight_kg":55.25,"training_goal":"hypertrophy"}'::jsonb,
+    '2050-01-01T00:00:00Z'::timestamptz,
+    'device-A'
+  ) INTO accepted;
+  IF NOT accepted THEN RAISE EXCEPTION 'newer owner profile RPC write was rejected'; END IF;
+  SELECT public.upsert_profile_if_newer(
+    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    '{"weight_kg":40,"training_goal":"cut"}'::jsonb,
+    '2049-01-01T00:00:00Z'::timestamptz,
+    'stale-device'
+  ) INTO accepted;
+  IF accepted THEN RAISE EXCEPTION 'stale profile RPC write unexpectedly won'; END IF;
+  SELECT count(*) INTO n FROM public.profiles
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    AND weight_kg=55.25 AND training_goal='hypertrophy';
+  IF n <> 1 THEN RAISE EXCEPTION 'profile RPC did not preserve newest mutation'; END IF;
+
+  denied := false;
+  BEGIN
+    PERFORM public.upsert_profile_if_newer(
+      'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb',
+      '{"weight_kg":99,"training_goal":"cut"}'::jsonb,
+      '2051-01-01T00:00:00Z'::timestamptz,
+      'forged-device'
+    );
+  EXCEPTION WHEN OTHERS THEN
+    denied := true;
+  END;
+  IF NOT denied THEN RAISE EXCEPTION 'profile RPC accepted another account ID'; END IF;
   BEGIN
     UPDATE public.profiles SET user_id='bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'
       WHERE id='10000000-0000-0000-0000-000000000001';
