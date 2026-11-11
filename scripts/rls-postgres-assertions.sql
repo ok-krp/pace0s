@@ -145,6 +145,27 @@ SELECT set_config('request.jwt.claim.sub','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
 DO $user_a$
 DECLARE n integer;
 BEGIN
+  IF has_column_privilege('authenticated','public.consent_records','id','INSERT') THEN
+    RAISE EXCEPTION 'authenticated can choose consent record identifiers';
+  END IF;
+  IF has_column_privilege('authenticated','public.consent_records','created_at','INSERT') THEN
+    RAISE EXCEPTION 'authenticated can choose consent record timestamps';
+  END IF;
+  IF NOT has_column_privilege('authenticated','public.consent_records','consent_type','INSERT')
+     OR NOT has_column_privilege('authenticated','public.consent_records','granted','INSERT')
+     OR NOT has_column_privilege('authenticated','public.consent_records','legal_version','INSERT')
+     OR NOT has_column_privilege('authenticated','public.consent_records','policy_version','INSERT') THEN
+    RAISE EXCEPTION 'authenticated is missing required consent decision columns';
+  END IF;
+
+  BEGIN
+    INSERT INTO public.consent_records(id,user_id,consent_type,granted,legal_version,policy_version,created_at)
+      VALUES ('b1000000-0000-0000-0000-000000000099','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+              'health_data',true,'2026-07-10','2026-07-10',now() + interval '1 day');
+    RAISE EXCEPTION 'client overrode consent record id/timestamp';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+
   SELECT count(*) INTO n FROM public.profiles;
   IF n <> 1 THEN RAISE EXCEPTION 'profile isolation failed: expected 1 row, got %', n; END IF;
   SELECT count(*) INTO n FROM public.health_samples;
@@ -307,9 +328,15 @@ BEGIN
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
-  INSERT INTO public.consent_records(id,user_id,consent_type,granted,created_at) VALUES
-    ('b0000000-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','health_data',true,now()),
-    ('b0000000-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','health_cloud_sync',true,now());
+  INSERT INTO public.consent_records(user_id,consent_type,granted,legal_version,policy_version) VALUES
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','health_data',true,'2026-07-10','2026-07-10'),
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','health_cloud_sync',true,'2026-07-10','2026-07-10');
+
+  SELECT count(*) INTO n FROM public.consent_records
+  WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    AND consent_type IN ('health_data','health_cloud_sync')
+    AND created_at=(SELECT now());
+  IF n <> 2 THEN RAISE EXCEPTION 'database timestamp default not applied to consent records: %',n; END IF;
 
   INSERT INTO public.health_samples_e2ee(id,user_id)
     VALUES ('a0000000-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
@@ -317,7 +344,8 @@ BEGIN
   IF n <> 1 THEN RAISE EXCEPTION 'consented E2EE sample write/read failed'; END IF;
 
   BEGIN
-    UPDATE public.consent_records SET granted=false WHERE id='b0000000-0000-0000-0000-000000000001';
+    UPDATE public.consent_records SET granted=false
+    WHERE user_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' AND consent_type='health_data';
     RAISE EXCEPTION 'consent UPDATE unexpectedly succeeded';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
@@ -374,9 +402,8 @@ INSERT INTO public.health_e2ee_key_envelopes(id,user_id,device_id,pairing_sessio
 
 -- Simulate the user revoking health-data consent. This row has the same
 -- transaction timestamp but a higher UUID tie-breaker than the earlier grant.
-INSERT INTO public.consent_records(id,user_id,consent_type,granted,created_at)
-  VALUES ('b0000000-0000-0000-0000-000000000003',
-          'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','health_data',false,now());
+INSERT INTO public.consent_records(user_id,consent_type,granted,legal_version,policy_version)
+  VALUES ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','health_data',false,'2026-07-10','2026-07-10');
 
 DO $health_consent_revoked$
 DECLARE n integer;
