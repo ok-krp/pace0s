@@ -216,3 +216,8 @@ Review of tracked `main` migration definitions and later SQL markers identified 
 The new read-only audit script now reports whether `anon` or `authenticated` can `CREATE` in `public` or `pace_private`, in addition to function `proconfig`, owner and effective EXECUTE ACLs. This is necessary to quantify the risk of a mutable `search_path = public`; the connected project did not respond to the read-only SQL request, so no current ACL conclusion is claimed.
 
 Do not infer effective target ACLs from source migrations alone. The target audit must be executed against the positively confirmed runtime project and every result compared to the canonical RPC/trigger inventory.
+
+
+### Default ACL nuance added after review
+
+The function default-privilege hardening now revokes `EXECUTE` from `PUBLIC` both globally for `postgres` and specifically in schema `public`. Per-schema default ACL entries are additive to global defaults; a pre-existing schema-scoped PUBLIC grant must not survive a global revoke. The PostgreSQL integration test inspects `aclexplode(proacl)` for the new probe function and fails if a direct PUBLIC EXECUTE entry is present, in addition to checking effective `anon` and `authenticated` execution.
