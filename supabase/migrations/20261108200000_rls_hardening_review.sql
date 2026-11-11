@@ -142,6 +142,23 @@ $health_consent$;
 revoke all on function public.has_current_health_e2ee_consent() from public, anon, authenticated;
 grant execute on function public.has_current_health_e2ee_consent() to authenticated;
 
+-- Encrypted biometrics are health data, not generic user profile fields.
+-- Keep access owner-scoped and require both granular health/cloud-sync consents.
+grant select, insert, update, delete on public.user_biometrics_e2ee to authenticated;
+create policy user_biometrics_e2ee_select_own on public.user_biometrics_e2ee
+  for select to authenticated
+  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+create policy user_biometrics_e2ee_insert_own on public.user_biometrics_e2ee
+  for insert to authenticated
+  with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+create policy user_biometrics_e2ee_update_own on public.user_biometrics_e2ee
+  for update to authenticated
+  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()))
+  with check (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+create policy user_biometrics_e2ee_delete_own on public.user_biometrics_e2ee
+  for delete to authenticated
+  using (user_id = (select auth.uid()) and (select public.has_current_health_e2ee_consent()));
+
 -- Encrypted health samples can be read, inserted, updated for conflict-safe
 -- upserts, or deleted only by their owner while both required consents are live.
 grant select, insert, update, delete on public.health_samples_e2ee to authenticated;
@@ -311,7 +328,6 @@ begin
     'sport_programs',
     'sport_progression_targets',
     'sport_workout_sessions',
-    'user_biometrics_e2ee'
   ] loop
     execute format('grant select, insert, update, delete on public.%I to authenticated', t);
     execute format('drop policy if exists %I on public.%I', t || '_user_isolation', t);
