@@ -327,7 +327,7 @@ begin
     'sport_exercises',
     'sport_programs',
     'sport_progression_targets',
-    'sport_workout_sessions',
+    'sport_workout_sessions'
   ] loop
     execute format('grant select, insert, update, delete on public.%I to authenticated', t);
     execute format('drop policy if exists %I on public.%I', t || '_user_isolation', t);
