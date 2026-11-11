@@ -547,6 +547,34 @@ BEGIN
     AND algorithm='ECDH-P256/AES-256-GCM'
     AND nonce IS NOT NULL;
   IF n <> 1 THEN RAISE EXCEPTION 'AES-GCM envelope must retain its nonce'; END IF;
+
+  BEGIN
+    INSERT INTO public.health_e2ee_key_envelopes(
+      user_id,device_id,sender_device_id,pairing_session_id,envelope,nonce,algorithm,key_version
+    ) VALUES (
+      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      '70000000-0000-0000-0000-000000000001',
+      '70000000-0000-0000-0000-000000000001',
+      '80000000-0000-0000-0000-000000000001',
+      'invalid-gcm-no-nonce',NULL,'ECDH-P256/AES-256-GCM',1
+    );
+    RAISE EXCEPTION 'AES-GCM envelope without a nonce unexpectedly succeeded';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
+
+  BEGIN
+    INSERT INTO public.health_e2ee_key_envelopes(
+      user_id,device_id,sender_device_id,pairing_session_id,envelope,nonce,algorithm,key_version
+    ) VALUES (
+      'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+      '70000000-0000-0000-0000-000000000001',
+      '70000000-0000-0000-0000-000000000001',
+      '80000000-0000-0000-0000-000000000001',
+      'invalid-kw-with-nonce','must-not-exist','ECDH-P256/AES-256-KW',1
+    );
+    RAISE EXCEPTION 'AES Key Wrap envelope with a nonce unexpectedly succeeded';
+  EXCEPTION WHEN check_violation THEN NULL;
+  END;
 END;
 $envelope_nonce_contract$;
 
