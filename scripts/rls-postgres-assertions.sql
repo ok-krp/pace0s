@@ -44,6 +44,14 @@ BEGIN
      OR has_schema_privilege('authenticated','public','CREATE') THEN
     RAISE EXCEPTION 'API roles can CREATE objects in exposed public schema';
   END IF;
+  IF has_column_privilege('anon','public.ai_provider_secrets','user_id','SELECT')
+     OR has_column_privilege('anon','public.ai_provider_secrets','user_id','INSERT')
+     OR has_column_privilege('anon','public.ai_provider_secrets','user_id','UPDATE')
+     OR has_column_privilege('authenticated','public.ai_provider_secrets','user_id','SELECT')
+     OR has_column_privilege('authenticated','public.ai_provider_secrets','user_id','INSERT')
+     OR has_column_privilege('authenticated','public.ai_provider_secrets','user_id','UPDATE') THEN
+    RAISE EXCEPTION 'legacy column-level grants survived the RLS privilege reset';
+  END IF;
 
   IF EXISTS (
     SELECT 1
