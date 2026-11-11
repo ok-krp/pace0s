@@ -206,12 +206,20 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     hasPendingRemoteValueRef.current = false;
     pendingRemoteValueRef.current = undefined;
     valueRef.current = resolved;
-    if (key === "pace.recipes.custom" && typeof window !== "undefined") {
+    // Persist every local mutation synchronously at the setter boundary.
+    // The follow-up React effect remains a safety net, but now observes the
+    // exact value already stored and does not emit a duplicate cloud mutation.
+    if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(key, JSON.stringify(resolved));
-        const updatedAt = new Date().toISOString();
-        const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
-        window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, { detail: { key, value: resolved, updatedAt, mutationId } }));
+        const serialized = JSON.stringify(resolved);
+        const previous = localStorage.getItem(key);
+        if (previous !== serialized) {
+          localStorage.setItem(key, serialized);
+          if (key === "pace.sport.overload") syncLatestOverloadRowsToTraining(resolved);
+          const updatedAt = new Date().toISOString();
+          const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
+          window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, { detail: { key, value: resolved, updatedAt, mutationId } }));
+        }
       } catch {}
     }
     setValue(resolved);
