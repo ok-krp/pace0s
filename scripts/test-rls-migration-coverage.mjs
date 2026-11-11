@@ -267,6 +267,14 @@ assert.match(e2eeAssertions, /envelope for revoked recipient device unexpectedly
   "PostgreSQL tests must reject envelopes targeting revoked devices");
 assert.match(e2eeAssertions, /envelope from revoked sender device unexpectedly succeeded/,
   "PostgreSQL tests must reject envelopes sent by revoked devices");
+const consentGrantIndex = e2eeAssertions.indexOf("'health_cloud_sync',true");
+const crossAccountEnvelopeIndex = e2eeAssertions.indexOf("cross-user pairing envelope INSERT");
+const revokedRecipientIndex = e2eeAssertions.indexOf("envelope for revoked recipient device unexpectedly succeeded");
+const revokedSenderIndex = e2eeAssertions.indexOf("envelope from revoked sender device unexpectedly succeeded");
+assert.ok(consentGrantIndex >= 0 && crossAccountEnvelopeIndex > consentGrantIndex,
+  "Cross-account pairing envelope policy must be tested after consent is granted");
+assert.ok(consentGrantIndex >= 0 && revokedRecipientIndex > consentGrantIndex && revokedSenderIndex > consentGrantIndex,
+  "Revoked-device checks must execute after consent is granted");
 assert.match(sql, /health_e2ee_key_versions_select_own[\s\S]*?for select to authenticated/i,
   "Key versions must be read-only through direct API access");
 
