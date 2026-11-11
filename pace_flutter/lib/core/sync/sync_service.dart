@@ -442,6 +442,10 @@ class SyncService {
           enqueueSync: false,
         );
       }
+      if (!isCurrentLocalAccount(user.id) ||
+          !_hasCachedCloudSyncConsent(user.id)) {
+        return;
+      }
       if (remoteMemory is String) {
         await localStore.write(
           'pace.settings.ai.memory',
@@ -561,6 +565,10 @@ class SyncService {
       if (jsonEncode(currentDay) != jsonEncode(nextRows)) {
         itemsByDay[day] = nextRows;
         await localStore.write('pace.nutrition.items', itemsByDay);
+        if (!isCurrentLocalAccount(userId) ||
+            !_hasCachedCloudSyncConsent(userId)) {
+          return false;
+        }
 
         final rawTotals = localStore.read('pace.nutrition.totals');
         final totals =
