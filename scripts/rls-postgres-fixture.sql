@@ -66,7 +66,12 @@ CREATE TABLE public.health_e2ee_key_envelopes (
   key_version integer NOT NULL DEFAULT 1,
   created_at timestamptz NOT NULL DEFAULT now()
 );
-CREATE TABLE public.health_e2ee_key_versions (id uuid PRIMARY KEY, user_id uuid NOT NULL, current_key_version integer NOT NULL DEFAULT 1);
+CREATE TABLE public.health_e2ee_key_versions (
+  id uuid PRIMARY KEY,
+  user_id uuid NOT NULL,
+  current_key_version integer NOT NULL DEFAULT 1,
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
 CREATE TABLE public.health_e2ee_pairing_sessions (
   id uuid PRIMARY KEY, user_id uuid NOT NULL, initiator_device_id uuid NOT NULL, recipient_device_id uuid
 );
