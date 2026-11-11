@@ -26,13 +26,54 @@ revoke all on function public.upsert_profile_if_newer(uuid, jsonb, timestamptz, 
 grant execute on function public.upsert_profile_if_newer(uuid, jsonb, timestamptz, text)
   to authenticated;
 
--- E2EE key rotation is a user RPC with auth.uid() and device-ownership checks.
+-- E2EE key rotation remains SECURITY INVOKER and enforces ownership via auth.uid().
 alter function public.rotate_health_e2ee_key(integer, uuid)
   set search_path = '';
 revoke all on function public.rotate_health_e2ee_key(integer, uuid)
   from public, anon, authenticated;
 grant execute on function public.rotate_health_e2ee_key(integer, uuid)
   to authenticated;
+
+-- The following Sport RPCs intentionally remain SECURITY INVOKER. Their
+-- bodies fully qualify public tables and auth.uid(); an empty path removes
+-- unnecessary name-resolution risk without bypassing table RLS.
+alter function public.sport_update_exercise(uuid,text,text,text,text,integer,integer,numeric,integer)
+  set search_path = '';
+revoke all on function public.sport_update_exercise(uuid,text,text,text,text,integer,integer,numeric,integer)
+  from public, anon, authenticated;
+grant execute on function public.sport_update_exercise(uuid,text,text,text,text,integer,integer,numeric,integer)
+  to authenticated;
+
+alter function public.sport_delete_exercise(uuid) set search_path = '';
+revoke all on function public.sport_delete_exercise(uuid) from public, anon, authenticated;
+grant execute on function public.sport_delete_exercise(uuid) to authenticated;
+
+alter function public.sport_update_program(uuid,text,text,integer[]) set search_path = '';
+revoke all on function public.sport_update_program(uuid,text,text,integer[]) from public, anon, authenticated;
+grant execute on function public.sport_update_program(uuid,text,text,integer[]) to authenticated;
+
+alter function public.sport_delete_program(uuid) set search_path = '';
+revoke all on function public.sport_delete_program(uuid) from public, anon, authenticated;
+grant execute on function public.sport_delete_program(uuid) to authenticated;
+
+alter function public.sport_finish_workout(uuid,timestamptz,integer,text) set search_path = '';
+revoke all on function public.sport_finish_workout(uuid,timestamptz,integer,text) from public, anon, authenticated;
+grant execute on function public.sport_finish_workout(uuid,timestamptz,integer,text) to authenticated;
+
+alter function public.sport_delete_workout(uuid) set search_path = '';
+revoke all on function public.sport_delete_workout(uuid) from public, anon, authenticated;
+grant execute on function public.sport_delete_workout(uuid) to authenticated;
+
+-- Consent is queried from RLS policies and remains an invoker function.
+alter function public.has_current_health_e2ee_consent() set search_path = '';
+revoke all on function public.has_current_health_e2ee_consent() from public, anon, authenticated;
+grant execute on function public.has_current_health_e2ee_consent() to authenticated;
+
+-- Timestamp helpers are trigger-only implementation details.
+alter function public.touch_updated_at() set search_path = '';
+revoke all on function public.touch_updated_at() from public, anon, authenticated;
+alter function public.update_updated_at_column() set search_path = '';
+revoke all on function public.update_updated_at_column() from public, anon, authenticated;
 
 -- Trigger-only functions: PostgreSQL triggers invoke these without granting
 -- EXECUTE to the role that caused the row event.
