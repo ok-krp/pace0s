@@ -109,3 +109,20 @@ The disposable PostgreSQL assertion suite now explicitly models two separate aut
 - Existing checks for cross-user inserts, billing immutability, parent-child Sport relationships, E2EE consent, and server-only tables remain in the suite.
 
 The assertions and static coverage guard were updated on the PR #316 branch. The workflow run for the latest code head is the release signal; do not mark these new tests passed until that exact run completes successfully.
+
+
+## 8. Supabase project-reference drift across Git and Vercel — 2026-11-11
+
+A direct read of the tracked `supabase/config.toml` files and the non-decrypted Vercel environment inventory found three different project refs:
+
+| Source | Configured project ref |
+|---|---|
+| Git `main` `supabase/config.toml` | `jayzswkabxfhzmftagku` |
+| Git `application` `supabase/config.toml` | `vqpnhqxrsmcyalotiypk` |
+| PR #316 branch `supabase/config.toml` | `vqpnhqxrsmcyalotiypk` |
+| Vercel Preview `SUPABASE_URL` + `VITE_SUPABASE_URL` | `cduyjejftorfuxuwhbqt` |
+| Vercel Production `SUPABASE_URL` + `VITE_SUPABASE_URL` | `cduyjejftorfuxuwhbqt` |
+
+The connected Supabase account lists only `jayzswkabxfhzmftagku` (inactive) and `oqaqolvjxhrkvscsqhzp` (active `PaceOS-Migrated`). Neither `vqpnhqxrsmcyalotiypk` nor `cduyjejftorfuxuwhbqt` appears in that list; direct lookup of those refs is denied by the current Supabase connection. This is an access/identity gap, not proof that either project has been deleted.
+
+The CLI migration target (`vqp...`) and Vercel runtime target (`cduy...`) are therefore not aligned. Do not run `supabase link`, `db push`, migration repair, or OAuth setup against a guessed ref. Confirm the authoritative project and align the tracked CLI config and Vercel Preview/Production URLs deliberately, with the environment targets kept separate and reviewed.
