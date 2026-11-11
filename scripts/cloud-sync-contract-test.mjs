@@ -69,6 +69,15 @@ assert.match(flutterSync, /localStore\.currentAccountId != userId\) return;/, "E
 assert.match(flutterSync, /localStore\.currentAccountId != userId/, "Flutter cloud operations must stop when the active local scope does not match the authenticated user");
 assert.match(flutterSync, /localStore\.currentAccountId != initialUserId/, "An in-flight sync must abort as soon as the authenticated account changes");
 assert.match(flutterSync, /if \(localStore\.currentAccountId != userId\) \{[\s\S]*Espace local différent du compte authentifié/, "The final push RPC must recheck account scope at the write boundary");
+
+assert.match(flutterLocalStore, /Future<void> acknowledgeOperationForAccount\([\s\S]*final scope = 'account:\$userId'[\s\S]*_accounts\[scope\]/, "Late accepted cloud acknowledgements must update the originating account snapshot rather than the active one");
+assert.match(flutterSync, /acknowledgeOperationForAccount\([\s\S]*userId,[\s\S]*operation,[\s\S]*result\.serverUpdatedAt/, "Flutter must acknowledge accepted mutations inside their originating account after async requests finish");
+assert.match(flutterSync, /final shouldRerunForActiveAccount = _syncRequested[\s\S]*unawaited\(syncNow\(\)\)/, "A new account sync request must be resumed after an old in-flight account cycle drains");
+assert.match(flutterSync, /final userId = client\?\.auth\.currentUser\?\.id;[\s\S]*localStore\.currentAccountId != userId[\s\S]*_cloudSyncConsentUserId != userId/, "Late user_state Realtime events must not apply across account scopes");
+assert.match(flutterApp, /if \(widget\.auth\.currentUser\?\.id != userId\) return;[\s\S]*await widget\.sync\.onAccountChanged\(userId\)/, "Obsolete auth stream events must not activate an account after a newer session has arrived");
+assert.match(flutterNutrition, /final accountId = widget\.sync\.activeAccountId[\s\S]*isCurrentLocalAccount\(accountId\)/, "Nutrition dialogs must stay bound to the account that opened them");
+assert.match(flutterSettings, /final userId = widget\.auth\.currentUser\?\.id[\s\S]*localStore\.currentAccountId != userId/, "Settings mutations must be attributed to the account that initiated them");
+
 assert.match(flutterSync, /Future<void> onAccountChanged\(String\? userId\)[\s\S]*_cloudSyncConsent = null[\s\S]*_lastNutritionReconciledAt = null/, "Account changes must close old Realtime channels and invalidate the previous consent cache");
 
 
