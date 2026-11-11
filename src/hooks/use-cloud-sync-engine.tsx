@@ -165,7 +165,7 @@ export function useCloudSyncEngineInternal() {
     const encoded = serialize(value);
     if (encoded !== undefined) lastRemoteValues.current[key] = encoded;
   };
-  const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string, updatedBy?: string | null) => {
+  const applyRemoteAndRemember = (key: string, value: unknown, updatedAt: string) => {
     const safeValue = key === "pace.nutrition.items" ? mergeNutritionRemoteValue(value) : value;
     rememberRemote(key, safeValue);
     applyRemoteWrite(key, safeValue, updatedAt);
@@ -228,7 +228,7 @@ export function useCloudSyncEngineInternal() {
         if (error) throw error;
         const row = data?.[0] as SyncRow | undefined;
         if (!row) throw new Error("cloud sync row disappeared");
-        applyRemoteAndRemember(row.key, row.value, row.updated_at, row.updated_by);
+        applyRemoteAndRemember(row.key, row.value, row.updated_at);
         markVersion(row.key, row.updated_at);
         return false;
       }
@@ -343,7 +343,7 @@ export function useCloudSyncEngineInternal() {
             continue;
           }
           if (sourceTime <= localTime && !localIsEmpty) continue;
-          applyRemoteAndRemember(key, mergedValue, updatedAt, canonical?.updated_by ?? legacy?.updated_by);
+          applyRemoteAndRemember(key, mergedValue, updatedAt);
           meta[key] = updatedAt;
           newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
           if (legacy && canonical && serialize(mergedValue) !== serialize(canonical.value)) {
