@@ -34,6 +34,29 @@ end $drop_policy_cleanup$;
 -- 2) Remove inherited API-role privileges. Service role remains owner/bypass-RLS.
 revoke all privileges on all tables in schema public from anon, authenticated;
 revoke all privileges on all sequences in schema public from anon, authenticated;
+
+-- Table ACL revocation does not clear independently granted column ACLs.
+-- Remove every legacy column grant from PUBLIC and the API roles before the
+-- migration re-grants the small, explicit set of column privileges below.
+do $revoke_legacy_column_acl$
+declare c record;
+begin
+  for c in
+    select n.nspname, t.relname, a.attname
+    from pg_class t
+    join pg_namespace n on n.oid = t.relnamespace
+    join pg_attribute a on a.attrelid = t.oid
+    where n.nspname = 'public'
+      and t.relkind in ('r', 'p')
+      and a.attnum > 0
+      and not a.attisdropped
+  loop
+    execute format(
+      'revoke all privileges (%I) on table %I.%I from public, anon, authenticated',
+      c.attname, c.nspname, c.relname
+    );
+  end loop;
+end $revoke_legacy_column_acl$;
 revoke all privileges on schema public from anon, authenticated;
 grant usage on schema public to anon, authenticated;
 -- The audited schema has no public sequences. Do not grant sequence access globally.
