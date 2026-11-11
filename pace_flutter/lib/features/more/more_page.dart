@@ -132,13 +132,20 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   Future<void> _loadConsent() async {
     final client = widget.auth.client;
     final user = client?.auth.currentUser;
-    if (client == null || user == null) return;
+    if (client == null || user == null ||
+        widget.localStore.currentAccountId != user.id) return;
+    final userId = user.id;
     try {
       final rows = await client
           .from('consent_records')
           .select('consent_type,granted,created_at')
           .eq('user_id', user.id)
           .order('created_at', ascending: false);
+      if (!mounted ||
+          widget.auth.currentUser?.id != userId ||
+          widget.localStore.currentAccountId != userId) {
+        return;
+      }
       final latest = <String, bool>{};
       for (final row in rows) {
         final type = row['consent_type'] as String?;
@@ -161,6 +168,8 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   }
 
   Future<void> _setConsent(String type, bool value) async {
+    final userId = widget.auth.currentUser?.id;
+    if (userId == null || widget.localStore.currentAccountId != userId) return;
     final service = PaceComplianceService(widget.auth.client);
     try {
       await service.recordConsent(
@@ -169,7 +178,11 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
         legalVersion: '2026-09-20',
         policyVersion: '2026-09-20',
       );
-      if (!mounted) return;
+      if (!mounted ||
+          widget.auth.currentUser?.id != userId ||
+          widget.localStore.currentAccountId != userId) {
+        return;
+      }
       setState(() {
         if (type == 'sync_cloud') _syncCloudConsent = value;
         if (type == 'health_data') _healthConsent = value;
@@ -189,6 +202,8 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
 
   Future<void> _requestDeletion() async {
     if (_deleting) return;
+    final userId = widget.auth.currentUser?.id;
+    if (userId == null || widget.localStore.currentAccountId != userId) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -201,6 +216,11 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       ),
     );
     if (confirmed != true) return;
+    if (!mounted ||
+        widget.auth.currentUser?.id != userId ||
+        widget.localStore.currentAccountId != userId) {
+      return;
+    }
     setState(() => _deleting = true);
     try {
       await PaceComplianceService(widget.auth.client).requestAccountDeletion();
@@ -213,6 +233,8 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   }
 
   Future<void> _setNotification(bool value) async {
+    final userId = widget.auth.currentUser?.id;
+    if (userId != null && widget.localStore.currentAccountId != userId) return;
     if (value) {
       final granted = await PaceNotificationService.instance.requestPermissions();
       if (!granted) {
@@ -221,6 +243,12 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       }
     } else {
       await PaceNotificationService.instance.cancelAll();
+    }
+    if (!mounted ||
+        (userId != null &&
+            (widget.auth.currentUser?.id != userId ||
+                widget.localStore.currentAccountId != userId))) {
+      return;
     }
     setState(() => _notifications = value);
     await widget.localStore.write('pace.settings.notifications', value);
