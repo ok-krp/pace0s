@@ -169,6 +169,9 @@ CREATE TABLE public.user_state (
 
 -- Minimal legacy SECURITY DEFINER routine stubs. The follow-up hardening
 -- migration must empty their search_path and remove caller EXECUTE grants.
+CREATE FUNCTION public.upsert_profile_if_newer(uuid,jsonb,timestamptz,text)
+RETURNS boolean LANGUAGE plpgsql SECURITY INVOKER SET search_path=public
+AS $routine$ BEGIN RETURN true; END $routine$;
 CREATE FUNCTION public.upsert_user_state_if_newer(uuid,text,jsonb,timestamptz,text)
 RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path=public
 AS $routine$ SELECT '{}'::jsonb $routine$;
