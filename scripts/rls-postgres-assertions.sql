@@ -42,6 +42,41 @@ BEGIN
     RAISE EXCEPTION 'health consent helper must use an empty search_path';
   END IF;
 
+  IF has_function_privilege('anon','public.create_pairing_session(uuid,text,text,jsonb,integer)','EXECUTE')
+     OR has_function_privilege('anon','public.join_pairing_session(uuid,text,uuid,jsonb)','EXECUTE')
+     OR has_function_privilege('anon','public.confirm_pairing_session(uuid,uuid)','EXECUTE')
+     OR has_function_privilege('anon','public.complete_pairing_session(uuid,uuid)','EXECUTE')
+     OR has_function_privilege('anon','public.create_pairing_envelope(uuid,uuid,uuid,text,integer,text)','EXECUTE')
+     OR has_function_privilege('anon','public.get_pairing_session(uuid)','EXECUTE')
+     OR has_function_privilege('anon','public.migrate_health_legacy_chunk(jsonb)','EXECUTE')
+     OR has_function_privilege('anon','public.backfill_health_e2ee_dedupe_hashes(jsonb)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.create_pairing_session(uuid,text,text,jsonb,integer)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.join_pairing_session(uuid,text,uuid,jsonb)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.confirm_pairing_session(uuid,uuid)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.complete_pairing_session(uuid,uuid)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.create_pairing_envelope(uuid,uuid,uuid,text,integer,text)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.get_pairing_session(uuid)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.migrate_health_legacy_chunk(jsonb)','EXECUTE')
+     OR NOT has_function_privilege('authenticated','public.backfill_health_e2ee_dedupe_hashes(jsonb)','EXECUTE') THEN
+    RAISE EXCEPTION 'E2EE pairing and health migration RPC EXECUTE grants are not least-privilege';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    WHERE p.oid = ANY (ARRAY[
+      'public.create_pairing_session(uuid,text,text,jsonb,integer)'::regprocedure,
+      'public.join_pairing_session(uuid,text,uuid,jsonb)'::regprocedure,
+      'public.confirm_pairing_session(uuid,uuid)'::regprocedure,
+      'public.complete_pairing_session(uuid,uuid)'::regprocedure,
+      'public.create_pairing_envelope(uuid,uuid,uuid,text,integer,text)'::regprocedure,
+      'public.get_pairing_session(uuid)'::regprocedure,
+      'public.migrate_health_legacy_chunk(jsonb)'::regprocedure,
+      'public.backfill_health_e2ee_dedupe_hashes(jsonb)'::regprocedure
+    ])
+    AND (NOT p.prosecdef OR p.proconfig IS NULL OR NOT p.proconfig @> ARRAY['search_path=""'])
+  ) THEN
+    RAISE EXCEPTION 'E2EE pairing or migration SECURITY DEFINER RPC lacks its protected mode/search_path';
+  END IF;
+
   IF has_function_privilege('anon','public.sport_delete_workout(uuid)','EXECUTE')
      OR has_function_privilege('anon','public.sport_delete_program(uuid)','EXECUTE')
      OR has_function_privilege('anon','public.sport_delete_exercise(uuid)','EXECUTE')
