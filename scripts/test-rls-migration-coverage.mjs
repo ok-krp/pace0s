@@ -215,6 +215,14 @@ const definerFunctions = [
   "sync_sport_user_state()",
   "upsert_profile_if_newer(uuid,jsonb,timestamptz,text)",
   "rotate_health_e2ee_key(integer,uuid)",
+  "create_pairing_session(uuid,text,text,jsonb,integer)",
+  "join_pairing_session(uuid,text,uuid,jsonb)",
+  "confirm_pairing_session(uuid,uuid)",
+  "complete_pairing_session(uuid,uuid)",
+  "create_pairing_envelope(uuid,uuid,uuid,text,integer,text)",
+  "get_pairing_session(uuid)",
+  "migrate_health_legacy_chunk(jsonb)",
+  "backfill_health_e2ee_dedupe_hashes(jsonb)",
   "sport_update_exercise(uuid,text,text,text,text,integer,integer,numeric,integer)",
   "sport_delete_exercise(uuid)",
   "sport_update_program(uuid,text,text,integer[])",
@@ -255,6 +263,8 @@ for (const assertion of [
   "user A revoked user B device through SECURITY DEFINER key rotation",
   "failed cross-account key rotation changed user A key version",
   "user A SECURITY DEFINER RPC revoked user B device",
+  "E2EE pairing and health migration RPC EXECUTE grants are not least-privilege",
+  "E2EE pairing or migration SECURITY DEFINER RPC lacks its protected mode/search_path",
 ]) {
   assert.ok(rotationAssertions.includes(assertion),
     "PostgreSQL must verify E2EE key rotation ownership: " + assertion);
