@@ -113,6 +113,7 @@ async function bridgeLocalNutritionToFoodLog(value: unknown) {
       } else {
         const { error } = await supabase.from("food_log").insert(payload);
         if (error) throw error;
+        existingIds.add(id);
       }
     }
     // Deliberately no DELETE here. Only an explicit delete action may remove
