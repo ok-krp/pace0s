@@ -175,7 +175,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
         .eq(guard.column, userId)
         .limit(1);
       if (error) {
-        if (isMissingOptionalWorkspaceRelation(error.code)) continue;
+        if (isMissingOptionalSchemaRelation(error.code)) continue;
         throw new Error(`Unable to verify shared resource ${guard.table}: ${error.message}`);
       }
       if (data?.length) blockers.push(guard.label);
