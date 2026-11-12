@@ -16,7 +16,7 @@ export type LocalPaceCleanupResult = {
  * account deletion; unrelated application storage keys are never touched.
  */
 export async function clearLocalPaceData(
-  storage: LocalStorageLike,
+  storage: LocalStorageLike | null,
   clearDeviceCache: () => Promise<void>,
 ): Promise<LocalPaceCleanupResult> {
   const errors: string[] = [];
@@ -32,29 +32,45 @@ export async function clearLocalPaceData(
 
   const paceKeys: string[] = [];
   let localStorageCleared = true;
-  try {
-    const initialLength = storage.length;
-    for (let index = 0; index < initialLength; index += 1) {
-      const key = storage.key(index);
-      if (key?.startsWith("pace.") || key?.startsWith("lt.")) paceKeys.push(key);
-    }
-  } catch (error) {
+  if (!storage) {
     localStorageCleared = false;
-    errors.push(
-      `localStorage enumeration: ${error instanceof Error ? error.message : "storage unavailable"}`,
-    );
-  }
-
-  for (const key of paceKeys) {
+    errors.push("localStorage: inaccessible on this device");
+  } else {
     try {
-      storage.removeItem(key);
+      const initialLength = storage.length;
+      for (let index = 0; index < initialLength; index += 1) {
+        const key = storage.key(index);
+        if (key?.startsWith("pace.") || key?.startsWith("lt.")) paceKeys.push(key);
+      }
     } catch (error) {
       localStorageCleared = false;
       errors.push(
-        `localStorage key ${key}: ${error instanceof Error ? error.message : "remove failed"}`,
+        `localStorage enumeration: ${error instanceof Error ? error.message : "storage unavailable"}`,
       );
+    }
+
+    for (const key of paceKeys) {
+      try {
+        storage.removeItem(key);
+      } catch (error) {
+        localStorageCleared = false;
+        errors.push(
+          `localStorage key ${key}: ${error instanceof Error ? error.message : "remove failed"}`,
+        );
+      }
     }
   }
 
   return { deviceCacheCleared, localStorageCleared, errors };
+}
+
+
+/** Access localStorage without letting a blocked getter abort other cleanup. */
+export function getLocalStorageSafely(): LocalStorageLike | null {
+  try {
+    if (typeof window === "undefined") return null;
+    return window.localStorage;
+  } catch {
+    return null;
+  }
 }
