@@ -40,7 +40,7 @@ export const DEVICE_LOCAL_REMOTE_KEY_PATTERNS = [
   "^(pace|lt)\\.ai\\.pending:",
 ] as const;
 
-const DEVICE_LOCAL_KEYS = new Set(
+const DEVICE_LOCAL_KEYS = new Set<string>(
   DEVICE_LOCAL_EXACT_KEYS.filter((key) => key.startsWith("pace.")),
 );
 
