@@ -897,10 +897,10 @@ class SyncService {
           .eq('user_id', userId)
           .not('key', 'in', excludedRemotePullKeysFilter)
           // Filter internal/device-local data before it leaves PostgREST.
-          .not('key', 'match', r'^pace\.__sync_')
-          .not('key', 'match', r'^pace\.__nutrition_cache:')
-          .not('key', 'match', r'^(pace|lt)\.(privacy|ble|import|local-ai)\.')
-          .not('key', 'match', r'^(pace|lt)\.ai\.pending:');
+          .not('key', 'match', excludedRemotePullKeyPatterns[0])
+          .not('key', 'match', excludedRemotePullKeyPatterns[1])
+          .not('key', 'match', excludedRemotePullKeyPatterns[2])
+          .not('key', 'match', excludedRemotePullKeyPatterns[3])
       if (!fullPull) {
         query = query.gte('updated_at', cursorAt!.toIso8601String());
       }
