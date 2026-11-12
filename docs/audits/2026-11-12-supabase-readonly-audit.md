@@ -105,6 +105,16 @@ No Health advisor notices were returned for either project.
 | P1 | Enable Leaked Password Protection after reviewing the intended Auth settings. | Auth configuration verified in the selected target |
 | P2 | Tune RLS initplans, foreign-key indexes, duplicate indexes and unused indexes on `ohk…`. | Query plans/workload measurements confirm improvement; no blind index removal |
 
+## Production deployment and runtime incident history
+
+Read-only Vercel deployment inventory shows the latest Production target is still the `main` branch at commit `dd66333ac6228849ca39092beee52a30154fb0a5`, deployed on **2026-10-11 17:03:35 UTC**. Its current aliases include `pace0s.vercel.app`. The active audit/correction branch is a separate Draft PR and has not been promoted; no Production deployment was created.
+
+The last-7-day Vercel runtime-error aggregation returned:
+- Two SSR failures affecting two users on route `/__server`, last seen **2026-11-09 20:46:20 UTC**: `TypeError: createServerFn(...).middleware(...).inputValidator is not a function`, followed by an unhandled SSR HTTP 500.
+- One server timeout cluster on `/__server`, last seen **2026-11-11 19:42:45 UTC** (300-second runtime timeout).
+
+The most recent Preview build is healthy and its queried Preview runtime log window returned no error/fatal records, but that does not erase the historical Production incidents. The stale Production deployment and the failure history are **P0/P1 release items**: reproduce against the actual current Production build in a safe Preview/isolated environment, prove the fix, then plan a separately approved release. No Production deployment or configuration has been changed.
+
 ## CI integration limitation
 
 The latest GitHub Actions Flutter preflight had neither `SUPABASE_URL` nor a public Supabase client key configured. It explicitly selected **offline/local-only** build artifacts. The Web and Flutter CI suites pass, but those results do not establish authenticated cloud synchronization.
