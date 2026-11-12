@@ -1020,3 +1020,14 @@ void main() {
     });
   });
 }
+
+  test('excludes legacy internal sync and Nutrition cache aliases before pull', () {
+    expect(
+      SyncService.excludedRemotePullKeyPatterns,
+      contains(r'^(pace|lt)\.__sync_'),
+    );
+    expect(
+      SyncService.excludedRemotePullKeyPatterns,
+      contains(r'^(pace|lt)\.__nutrition_cache:'),
+    );
+  });
