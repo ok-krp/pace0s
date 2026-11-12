@@ -10,7 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { openConsentSheet } from "@/components/LegalConsentGate";
 import { clearWallpaperCache } from "@/lib/wallpaper-cache";
-import { clearLocalPaceData } from "@/lib/local-data-cleanup";
+import { clearLocalPaceData, getLocalStorageSafely } from "@/lib/local-data-cleanup";
 
 export function PrivacyDataSection() {
   const runExport = useServerFn(exportMyData);
@@ -53,7 +53,7 @@ export function PrivacyDataSection() {
       await runDelete();
       // Server deletion has succeeded. Always attempt both local stores even if
       // IndexedDB is unavailable, then report any residual local cache clearly.
-      const cleanup = await clearLocalPaceData(window.localStorage, clearWallpaperCache);
+      const cleanup = await clearLocalPaceData(getLocalStorageSafely(), clearWallpaperCache);
       try {
         await supabase.auth.signOut();
       } catch {
