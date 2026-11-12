@@ -128,10 +128,25 @@ The latest application branch now includes the following code-level hardening:
 - Portable export reads the user-owned data allowlist in **500-row pages**, with deterministic primary-key ordering; it also collects sport program items, workout exercises and sets through IDs of the signed-in user's own parent rows.
 - Server-only provider secrets, idempotency internals, audit internals, Health E2EE pairing sessions and the legacy migration map are deliberately not placed in the downloadable client export.
 - Account deletion explicitly purges the legacy tables that are not all protected by an FK to `auth.users` (including AI conversations/messages/preferences/action logs, development tasks, provider secrets, food logs/scans, health samples, reminders, notifications and user_state). It stops before Auth deletion when a table purge reports an error.
-- The request JWT is used to revoke refresh-token sessions globally before deleting account rows. Supabase documents that already-issued access JWTs remain valid until their `exp`; immediate JWT invalidation is not promised.
+- Personal rows are removed first; Auth user deletion runs last. That prevents future token refresh after the identity is deleted, but already-issued access JWTs can remain valid until their `exp`; immediate invalidation is not promised.
 
-**Important current-target caveat:** the `ohk…` workspace/grocery/pantry tables expose `owner_user_id` or `created_by` references, but a direct read-only `pg_constraint` query returned no foreign-key constraints on those five workspace-related tables. The guard is therefore a deliberate application-level ownership safeguard, not evidence of `ON DELETE RESTRICT`. Account deletion blocks when the account owns a workspace or created shared list/items/pantry rows, rather than deleting shared records for other members. `workspace_members` and `nutrition_calibration_feedback` are now included in export/deletion as optional user-owned tables; the older `cduy…` schema lacks them, so only missing-relation codes are skipped. Shared workspace content itself is not exported as if it belonged to one user.
+**Important current-target caveat:** read-only `pg_constraint` inspection confirms the current `ohk…` project has:
+- `workspaces.owner_user_id → auth.users(id) ON DELETE CASCADE`
+- `grocery_lists.created_by → auth.users(id) ON DELETE RESTRICT`
+- `grocery_list_items.created_by → auth.users(id) ON DELETE RESTRICT`
+- `pantry_items.created_by → auth.users(id) ON DELETE RESTRICT`
+- `workspace_members.user_id → auth.users(id) ON DELETE CASCADE`
 
-The cross-project schema difference matters to portability: `workspace_members` (composite primary key `workspace_id,user_id`) and `nutrition_calibration_feedback` (primary key `id`) exist on `ohk…` but not `cduy…`. The export orders workspace memberships by both key columns and applies `user_id` filtering; optional missing relations are tolerated only for the two named tables. These two user-owned tables are also included in the explicit deletion list.
+The application blocks account deletion while the account owns a workspace or created shared grocery/pantry rows, rather than deleting shared records for other members. It explicitly removes the account's own membership. `workspace_members` (composite primary key `workspace_id,user_id`) and `nutrition_calibration_feedback` (primary key `id`) exist on `ohk…` but not `cduy…`; only these two optional tables tolerate missing-relation codes on the older schema. Shared workspace content itself is not exported as if it belonged to one user.
+
+The sport schema on both projects also has `ON DELETE RESTRICT` references from `sport_program_items.exercise_id` and `sport_workout_exercises.exercise_id` to `sport_exercises(id)`. The current application checks cross-account programme/session/exercise references and deletes the user's workout sets, workout exercises and programme items before the sport parents.
+
+## Latest application-side sync and deletion safeguards — 12 November 2026
+
+- Automatic Web sync, manual Cloud Backup/Restore and Flutter native pulls share canonical and legacy device-local exact keys and regex prefixes.
+- Server-side PostgREST filters exclude those keys before download: device-local privacy/PIN, BLE, import and local AI drafts; wallpaper; Sport local state; AI transcript caches/tombstones; finance PIN/debug values; billing device identifiers; watch metrics; internal sync outboxes and Nutrition caches, including legacy `lt.*` aliases.
+- Local reset/account cleanup attempts both IndexedDB and localStorage and reports partial failure without skipping the other store.
+- Account deletion blocks if another account still references the deleting user's programme/exercise. It removes own workout sets, workout exercises and program items first, then progression targets, sessions, programmes and exercises.
+- Web and Flutter CI validates code and unit tests. It does **not** run a real-user export/deletion or a two-account RLS/sync integration test on either connected Supabase project.
 
 The code changes are validated by TypeScript and pure unit tests only. No account was deleted, no export was run against a live user, and no database writes were performed during this audit.
