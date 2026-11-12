@@ -16,6 +16,8 @@ test("portable export includes core user-owned AI, sport, health and billing dat
     "billing_subscriptions",
     "consent_records",
     "user_state",
+    "workspace_members",
+    "nutrition_calibration_feedback",
   ]) {
     assert.ok((USER_EXPORT_TABLES as readonly string[]).includes(table), table);
   }
@@ -41,6 +43,8 @@ test("account deletion explicitly removes legacy user-owned AI rows before delet
     "ai_conversations",
     "ai_preferences",
     "ai_provider_secrets",
+    "workspace_members",
+    "nutrition_calibration_feedback",
   ]) {
     assert.ok((USER_DELETE_TABLES as readonly string[]).includes(table), table);
   }
@@ -49,6 +53,7 @@ test("account deletion explicitly removes legacy user-owned AI rows before delet
 import {
   USER_EXPORT_ORDER_COLUMNS,
   USER_EXPORT_RELATIONS,
+  OPTIONAL_USER_SCHEMA_TABLES,
 } from "./privacy-data-scope.ts";
 import { collectUserExportPages, USER_EXPORT_PAGE_SIZE } from "./privacy-data-export.ts";
 
@@ -65,8 +70,9 @@ test("sport child records are exported through user-owned parent ids only", () =
     parent: "sport_workout_exercises",
     foreignKey: "workout_exercise_id",
   });
-  assert.equal(USER_EXPORT_ORDER_COLUMNS.ai_preferences, "user_id");
-  assert.equal(USER_EXPORT_ORDER_COLUMNS.health_e2ee_key_versions, "user_id");
+  assert.deepEqual(USER_EXPORT_ORDER_COLUMNS.ai_preferences, ["user_id"]);
+  assert.deepEqual(USER_EXPORT_ORDER_COLUMNS.health_e2ee_key_versions, ["user_id"]);
+  assert.deepEqual(USER_EXPORT_ORDER_COLUMNS.workspace_members, ["workspace_id", "user_id"]);
 });
 
 test("export pagination fetches every row beyond multiple server pages", async () => {
@@ -107,7 +113,7 @@ test("export pagination fails closed on page errors and invalid sizes", async ()
 
 import {
   ACCOUNT_DELETE_SHARED_RESOURCE_GUARDS,
-  isMissingOptionalWorkspaceRelation,
+  isMissingOptionalSchemaRelation,
 } from "./privacy-data-scope.ts";
 
 test("account deletion protects shared workspace ownership and creator references", () => {
@@ -123,8 +129,10 @@ test("account deletion protects shared workspace ownership and creator reference
 });
 
 test("only missing optional workspace relations are ignored on legacy schemas", () => {
-  assert.equal(isMissingOptionalWorkspaceRelation("PGRST205"), true);
-  assert.equal(isMissingOptionalWorkspaceRelation("42P01"), true);
-  assert.equal(isMissingOptionalWorkspaceRelation("42501"), false);
-  assert.equal(isMissingOptionalWorkspaceRelation("23503"), false);
+  assert.equal(isMissingOptionalSchemaRelation("PGRST205"), true);
+  assert.equal(isMissingOptionalSchemaRelation("42P01"), true);
+  assert.equal(isMissingOptionalSchemaRelation("42501"), false);
+  assert.equal(isMissingOptionalSchemaRelation("23503"), false);
+  assert.equal(OPTIONAL_USER_SCHEMA_TABLES.has("workspace_members"), true);
+  assert.equal(OPTIONAL_USER_SCHEMA_TABLES.has("nutrition_calibration_feedback"), true);
 });

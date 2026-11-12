@@ -34,6 +34,8 @@ export const USER_EXPORT_TABLES = [
   "sport_programs",
   "sport_progression_targets",
   "sport_workout_sessions",
+  "workspace_members",
+  "nutrition_calibration_feedback",
 ] as const;
 
 /**
@@ -57,20 +59,23 @@ export const USER_DELETE_TABLES = [
   "reminder_settings",
   "reminder_debug_log",
   "user_state",
+  "workspace_members",
+  "nutrition_calibration_feedback",
 ] as const;
 
 /**
- * Tables with user_id but no id primary key. All other export tables use id.
+ * Tables with composite or non-id primary keys. All other export tables use id.
  */
 export const USER_EXPORT_ORDER_COLUMNS: Partial<
-  Record<(typeof USER_EXPORT_TABLES)[number], string>
+  Record<(typeof USER_EXPORT_TABLES)[number], readonly string[]>
 > = {
-  ai_preferences: "user_id",
-  billing_customers: "user_id",
-  billing_subscriptions: "user_id",
-  billing_trials: "user_id",
-  health_e2ee_key_versions: "user_id",
-  health_e2ee_recovery_envelopes: "user_id",
+  ai_preferences: ["user_id"],
+  billing_customers: ["user_id"],
+  billing_subscriptions: ["user_id"],
+  billing_trials: ["user_id"],
+  health_e2ee_key_versions: ["user_id"],
+  health_e2ee_recovery_envelopes: ["user_id"],
+  workspace_members: ["workspace_id", "user_id"],
 };
 
 /**
@@ -95,6 +100,11 @@ export const ACCOUNT_DELETE_SHARED_RESOURCE_GUARDS = [
   { table: "pantry_items", column: "created_by", label: "éléments de garde-manger partagés que vous avez créés" },
 ] as const;
 
-export function isMissingOptionalWorkspaceRelation(code: string | undefined): boolean {
+export const OPTIONAL_USER_SCHEMA_TABLES = new Set<string>([
+  "workspace_members",
+  "nutrition_calibration_feedback",
+]);
+
+export function isMissingOptionalSchemaRelation(code: string | undefined): boolean {
   return code === "PGRST205" || code === "42P01";
 }

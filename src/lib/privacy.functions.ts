@@ -6,7 +6,8 @@ import {
   USER_DELETE_TABLES,
   USER_EXPORT_ORDER_COLUMNS,
   USER_EXPORT_TABLES,
-  isMissingOptionalWorkspaceRelation,
+  OPTIONAL_USER_SCHEMA_TABLES,
+  isMissingOptionalSchemaRelation,
 } from "./privacy-data-scope";
 import { collectUserExportPages } from "./privacy-data-export";
 
@@ -17,7 +18,7 @@ interface PrivacyExportQuery {
   order(column: string, options: { ascending: boolean }): PrivacyExportQuery;
   range(from: number, to: number): Promise<{
     data: unknown[] | null;
-    error: { message: string } | null;
+    error: { message: string; code?: string } | null;
   }>;
 }
 
@@ -36,7 +37,7 @@ interface PrivacyAdminSelectQuery extends PromiseLike<PrivacyAdminResponse> {
 }
 
 interface PrivacyAdminDeleteResponse {
-  error: { message: string } | null;
+  error: { message: string; code?: string } | null;
 }
 
 interface PrivacyAdminDeleteQuery extends PromiseLike<PrivacyAdminDeleteResponse> {
@@ -74,14 +75,24 @@ export const exportMyData = createServerFn({ method: "POST" })
     // interface because the generated Database union cannot model a dynamic table loop.
     const exportClient = context.supabase as unknown as PrivacyExportClient;
     for (const table of USER_EXPORT_TABLES) {
-      const orderColumn = USER_EXPORT_ORDER_COLUMNS[table] ?? "id";
+      const orderColumns = USER_EXPORT_ORDER_COLUMNS[table] ?? ["id"];
       tables[table] = await collectUserExportPages(async (from, to) => {
-        const { data, error } = await exportClient
+        const baseQuery = exportClient
           .from(table)
           .select("*")
-          .eq("user_id", context.userId)
-          .order(orderColumn as never, { ascending: true })
-          .range(from, to);
+          .eq("user_id", context.userId);
+        const orderedQuery = orderColumns.reduce(
+          (query, column) => query.order(column, { ascending: true }),
+          baseQuery,
+        );
+        const { data, error } = await orderedQuery.range(from, to);
+        if (
+          error &&
+          OPTIONAL_USER_SCHEMA_TABLES.has(table) &&
+          isMissingOptionalSchemaRelation(error.code)
+        ) {
+          return { data: [], error: null };
+        }
         return { data, error };
       });
     }
@@ -182,7 +193,12 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
 
     for (const table of USER_DELETE_TABLES) {
       const { error } = await adminData.from(table).delete().eq("user_id", userId);
-      if (error) throw new Error(`Unable to erase ${table}: ${error.message}`);
+      if (error) {
+        if (OPTIONAL_USER_SCHEMA_TABLES.has(table) && isMissingOptionalSchemaRelation(error.code)) {
+          continue;
+        }
+        throw new Error(`Unable to erase ${table}: ${error.message}`);
+      }
     }
 
     const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(userId);
