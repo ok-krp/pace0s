@@ -2,9 +2,11 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
+  ACCOUNT_DELETE_SHARED_RESOURCE_GUARDS,
   USER_DELETE_TABLES,
   USER_EXPORT_ORDER_COLUMNS,
   USER_EXPORT_TABLES,
+  isMissingOptionalWorkspaceRelation,
 } from "./privacy-data-scope";
 import { collectUserExportPages } from "./privacy-data-export";
 
@@ -23,15 +25,31 @@ interface PrivacyExportClient {
   from(table: string): PrivacyExportQuery;
 }
 
-interface PrivacyDeleteQuery {
-  delete(): PrivacyDeleteQuery;
-  eq(column: "user_id", value: string): Promise<{
-    error: { message: string } | null;
-  }>;
+interface PrivacyAdminResponse {
+  data: unknown[] | null;
+  error: { message: string; code?: string } | null;
+}
+
+interface PrivacyAdminSelectQuery extends PromiseLike<PrivacyAdminResponse> {
+  eq(column: string, value: string): PrivacyAdminSelectQuery;
+  limit(count: number): PrivacyAdminSelectQuery;
+}
+
+interface PrivacyAdminDeleteResponse {
+  error: { message: string } | null;
+}
+
+interface PrivacyAdminDeleteQuery extends PromiseLike<PrivacyAdminDeleteResponse> {
+  eq(column: "user_id", value: string): PrivacyAdminDeleteQuery;
+}
+
+interface PrivacyAdminQuery {
+  select(columns: "id"): PrivacyAdminSelectQuery;
+  delete(): PrivacyAdminDeleteQuery;
 }
 
 interface PrivacyAdminDataClient {
-  from(table: string): PrivacyDeleteQuery;
+  from(table: string): PrivacyAdminQuery;
 }
 
 function stringIds(rows: readonly unknown[]): string[] {
@@ -135,8 +153,30 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const adminData = supabaseAdmin as unknown as PrivacyAdminDataClient;
 
+    // Never cascade-delete shared workspaces or records created for other
+    // members. These relations exist on the newer schema, but not the legacy
+    // Vercel-bound source schema; only "relation missing" is safely ignored.
+    const blockers: string[] = [];
+    for (const guard of ACCOUNT_DELETE_SHARED_RESOURCE_GUARDS) {
+      const { data, error } = await adminData
+        .from(guard.table)
+        .select("id")
+        .eq(guard.column, userId)
+        .limit(1);
+      if (error) {
+        if (isMissingOptionalWorkspaceRelation(error.code)) continue;
+        throw new Error(`Unable to verify shared resource ${guard.table}: ${error.message}`);
+      }
+      if (data?.length) blockers.push(guard.label);
+    }
+    if (blockers.length) {
+      throw new Error(
+        `Transférez ou supprimez d'abord les ressources partagées suivantes avant la suppression du compte : ${blockers.join(", ")}.`,
+      );
+    }
+
     // Revoke refresh-token sessions before deletion. Already-issued access JWTs
-    // remain cryptographically valid until exp; the UI does not promise otherwise.
+    // remain cryptographically valid until exp; immediate JWT invalidation is not promised.
     const { error: revokeError } = await supabaseAdmin.auth.admin.signOut(token, "global");
     if (revokeError) throw new Error(`Unable to revoke account sessions: ${revokeError.message}`);
 
