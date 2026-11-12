@@ -1,12 +1,29 @@
 
 /**
- * Keys under the reserved sync namespace are client bookkeeping, not user
- * domain state. The native client already excludes this namespace; the Web
- * queue and remote pull must enforce the same boundary.
+ * Device-bound values must never enter user_state. These include PIN hashes,
+ * WebAuthn credential IDs, BLE identities, device import history and unsent
+ * AI drafts. They remain local to the browser/device by design.
  */
+const DEVICE_LOCAL_KEY_PREFIXES = [
+  "pace.privacy.",
+  "pace.ble.",
+  "pace.import.",
+  "pace.local-ai.",
+  "pace.ai.pending:",
+] as const;
+
+const DEVICE_LOCAL_KEYS = new Set([
+  "pace.wallpaper",
+  "pace.finance.pin.hash",
+  "pace.ai.debug",
+  "pace.billing.device_id",
+  "pace.watch.last_metrics",
+]);
+
 export function isSyncableLocalKey(key: string): boolean {
   return key.startsWith("pace.") &&
-    key !== "pace.wallpaper" &&
+    !DEVICE_LOCAL_KEYS.has(key) &&
+    !DEVICE_LOCAL_KEY_PREFIXES.some((prefix) => key.startsWith(prefix)) &&
     !key.startsWith("pace.__sync_") &&
     !key.startsWith("pace.__nutrition_cache:");
 }

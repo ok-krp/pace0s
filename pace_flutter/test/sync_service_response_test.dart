@@ -45,6 +45,22 @@ void main() {
   test('never syncs account-private Nutrition caches or local food-log outboxes', () {
     expect(SyncService.isSyncableKey('pace.nutrition.items'), isTrue);
     expect(SyncService.isSyncableKey('pace.wallpaper'), isFalse);
+    for (final key in [
+      'pace.privacy.pin.hash',
+      'pace.privacy.bioCredentialId',
+      'pace.ble.devices',
+      'pace.ble.mapping',
+      'pace.ble.seen',
+      'pace.import.log',
+      'pace.local-ai.enabled',
+      'pace.ai.pending:conversation-1',
+      'pace.ai.debug',
+      'pace.billing.device_id',
+      'pace.watch.last_metrics',
+      'pace.finance.pin.hash',
+    ]) {
+      expect(SyncService.isSyncableKey(key), isFalse, reason: key);
+    }
     expect(SyncService.isSyncableKey('pace.__nutrition_cache:user-a:items'), isFalse);
     expect(SyncService.isSyncableKey('pace.__nutrition_cache:user-a:food_log_cursor'), isFalse);
     expect(SyncService.isSyncableKey('pace.__sync_food_log_outbox:user-a'), isFalse);
@@ -245,6 +261,26 @@ void main() {
       );
       expect(SyncService.excludedRemotePullKeysFilter, contains('"pace.wallpaper"'));
       expect(SyncService.excludedRemotePullKeysFilter, contains('"lt.wallpaper"'));
+      expect(
+        SyncService.excludedRemotePullKeyPatterns,
+        contains(r'^(pace|lt)\.(privacy|ble|import|local-ai)\.'),
+      );
+      expect(
+        SyncService.excludedRemotePullKeyPatterns,
+        contains(r'^(pace|lt)\.ai\.pending:'),
+      );
+      for (final key in [
+        '"pace.finance.pin.hash"',
+        '"pace.ai.debug"',
+        '"pace.billing.device_id"',
+        '"pace.watch.last_metrics"',
+        '"lt.finance.pin.hash"',
+        '"lt.ai.debug"',
+        '"lt.billing.device_id"',
+        '"lt.watch.last_metrics"',
+      ]) {
+        expect(SyncService.excludedRemotePullKeysFilter, contains(key));
+      }
     });
 
     test('keeps all account-local sync metadata out of the cloud outbox', () {

@@ -272,8 +272,10 @@ export function useCloudSyncEngineInternal() {
               // cannot consume egress before the client-side key guard runs.
               .not("key", "match", "^pace\\.__sync_")
               .not("key", "match", "^pace\\.__nutrition_cache:")
-              // Legacy wallpaper values may be large Data URLs. Wallpapers are now device-local IndexedDB data.
-              .not("key", "in", "(pace.wallpaper,lt.wallpaper)");
+              // Device-bound credentials, BLE identities, import logs and unsent drafts stay on this device.
+              .not("key", "match", "^(pace|lt)\\.(privacy|ble|import|local-ai)\\.")
+              .not("key", "match", "^(pace|lt)\\.ai\\.pending:")
+              .not("key", "in", "(pace.wallpaper,lt.wallpaper,pace.finance.pin.hash,lt.finance.pin.hash,pace.ai.debug,lt.ai.debug,pace.billing.device_id,lt.billing.device_id,pace.watch.last_metrics,lt.watch.last_metrics)");
             if (!fullReconciliation) {
               query = query.gte("updated_at", incrementalCursor!);
             }
