@@ -900,7 +900,7 @@ class SyncService {
           .not('key', 'match', excludedRemotePullKeyPatterns[0])
           .not('key', 'match', excludedRemotePullKeyPatterns[1])
           .not('key', 'match', excludedRemotePullKeyPatterns[2])
-          .not('key', 'match', excludedRemotePullKeyPatterns[3])
+          .not('key', 'match', excludedRemotePullKeyPatterns[3]);
       if (!fullPull) {
         query = query.gte('updated_at', cursorAt!.toIso8601String());
       }
