@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   ACCOUNT_DELETE_SHARED_RESOURCE_GUARDS,
@@ -154,13 +153,6 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const userId = context.userId;
-    const request = getRequest();
-    const authorization = request?.headers.get("authorization");
-    const token = authorization?.startsWith("Bearer ")
-      ? authorization.slice("Bearer ".length)
-      : "";
-    if (!token) throw new Error("Unable to revoke account sessions: request token missing.");
-
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const adminData = supabaseAdmin as unknown as PrivacyAdminDataClient;
 
@@ -186,11 +178,9 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
       );
     }
 
-    // Revoke refresh-token sessions before deletion. Already-issued access JWTs
-    // remain cryptographically valid until exp; immediate JWT invalidation is not promised.
-    const { error: revokeError } = await supabaseAdmin.auth.admin.signOut(token, "global");
-    if (revokeError) throw new Error(`Unable to revoke account sessions: ${revokeError.message}`);
-
+    // Keep the caller's session retryable until every personal table is purged.
+    // Deleting the Auth user last revokes future refreshes without trapping the
+    // user in a partially completed deletion if one table request fails.
     for (const table of USER_DELETE_TABLES) {
       const { error } = await adminData.from(table).delete().eq("user_id", userId);
       if (error) {
