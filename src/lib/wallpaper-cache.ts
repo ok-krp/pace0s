@@ -23,3 +23,12 @@ function writeCache(mutator:(store:IDBObjectStore)=>void):Promise<void>{
 }
 export function saveWallpaperPreset(id:string):Promise<void>{if(!id.trim())return Promise.reject(new Error("Invalid wallpaper preset."));return writeCache((store)=>{store.put({kind:"preset",id},SELECTION_KEY);store.delete(CUSTOM_KEY);});}
 export function saveCustomWallpaper(blob:Blob):Promise<void>{if(!isCustomWallpaperFileAllowed(blob))return Promise.reject(new Error("Image invalide ou supérieure à 20 Mo."));return writeCache((store)=>{store.put({kind:"custom"},SELECTION_KEY);store.put(blob,CUSTOM_KEY);});}
+
+
+/** Remove the wallpaper selection and image from this device cache. */
+export function clearWallpaperCache(): Promise<void> {
+  return writeCache((store) => {
+    store.delete(SELECTION_KEY);
+    store.delete(CUSTOM_KEY);
+  });
+}

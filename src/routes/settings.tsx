@@ -18,6 +18,7 @@ import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
+import { clearWallpaperCache } from "@/lib/wallpaper-cache";
 import { AiSettings } from "@/components/AiSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
 
@@ -75,11 +76,16 @@ function SettingsPage() {
     toast.success("Export téléchargé");
   };
 
-  const reset = () => {
+  const reset = async () => {
     if (!confirm("Réinitialiser TOUTES vos données ?")) return;
-    Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k));
-    toast.success("Données effacées");
-    setTimeout(() => location.reload(), 600);
+    try {
+      await clearWallpaperCache();
+      Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k));
+      toast.success("Données effacées");
+      setTimeout(() => location.reload(), 600);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible de réinitialiser le stockage local.");
+    }
   };
 
   return (
