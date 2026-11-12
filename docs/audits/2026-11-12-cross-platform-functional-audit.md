@@ -131,3 +131,15 @@ No pre-existing `user_state` rows were deleted, and neither connected Supabase p
 - Pas de migration, d'écriture de données, de modification RLS ni d'action d'egress sur Supabase Production.
 - Pas de déploiement Production ni de changement DNS.
 - Les artefacts Vercel cités sont des Preview.
+
+
+## Corrections added after the first audit pass
+
+- Device-local cleanup now removes both `pace.*` and legacy `lt.*` localStorage keys. It always attempts the localStorage purge even when IndexedDB fails, and returns explicit partial-cleanup errors.
+- Account deletion also invokes the device-local cleanup after the server-side deletion succeeds; it no longer leaves the IndexedDB wallpaper behind silently.
+- The authenticated data export now covers the verified user-owned AI, health/E2EE, consent, billing, sport, nutrition and profile tables, and pages table reads in 500-row chunks rather than silently stopping at the first REST response page.
+- Sport child records without their own `user_id` are exported only through program/session/exercise identifiers fetched from the current user's own parent rows.
+- Account deletion explicitly removes legacy user-owned rows from AI tables and other tables without an `auth.users` foreign key before deleting the Auth identity. A failure in any purge blocks Auth deletion so the operation can be retried.
+- Refresh-token sessions are globally revoked before account data deletion. Existing access JWTs cannot be revoked before their `exp`; the app must not promise immediate invalidation of already-issued access tokens.
+
+These changes have Web type-check and unit-test coverage. They have **not** been exercised against a real authenticated user in the active Supabase projects; CI has no dedicated isolated Supabase credentials.
