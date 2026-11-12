@@ -3,6 +3,7 @@ import { Check, Upload, RotateCcw, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWallpaper } from "@/hooks/use-wallpaper";
 import { toast } from "sonner";
+import { isCustomWallpaperFileAllowed } from "@/lib/wallpaper-cache";
 
 export function WallpaperSettings() {
   const { choice, presets, set, setCustom, reset } = useWallpaper();
@@ -11,18 +12,21 @@ export function WallpaperSettings() {
   const isCustom = "kind" in choice && choice.kind === "custom";
   const activeId = "id" in choice ? choice.id : null;
 
-  const onFile = (f: File | null) => {
+  const onFile = async (f: File | null) => {
     if (!f) return;
-    if (f.size > 4 * 1024 * 1024) {
-      toast.error("Image trop lourde (max 4 Mo)");
+    if (!isCustomWallpaperFileAllowed(f)) {
+      toast.error("Image invalide ou trop lourde (maximum 20 Mo).");
+      if (inputRef.current) inputRef.current.value = "";
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setCustom(String(reader.result));
-      toast.success("Fond d'écran mis à jour");
-    };
-    reader.readAsDataURL(f);
+    try {
+      await setCustom(f);
+      toast.success("Fond enregistré dans le cache de cet appareil.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible d’enregistrer le fond localement.");
+    } finally {
+      if (inputRef.current) inputRef.current.value = "";
+    }
   };
 
   return (
@@ -33,7 +37,7 @@ export function WallpaperSettings() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-medium">Fond d'écran</div>
-          <div className="text-xs text-muted-foreground">Le verre adapte sa teinte au fond choisi.</div>
+          <div className="text-xs text-muted-foreground">Image conservée uniquement dans le cache de cet appareil (20 Mo maximum).</div>
         </div>
       </div>
 
@@ -44,7 +48,7 @@ export function WallpaperSettings() {
             <button
               key={p.id}
               type="button"
-              onClick={() => set(p.id)}
+              onClick={() => { void set(p.id).catch((error) => toast.error(error instanceof Error ? error.message : "Impossible d’enregistrer ce fond.")); }}
               aria-pressed={active}
               className={`group relative aspect-square rounded-2xl overflow-hidden ring-1 ring-black/5 dark:ring-white/10 transition-transform hover:scale-[1.03] active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60`}
               style={{ background: p.swatch }}
@@ -80,7 +84,7 @@ export function WallpaperSettings() {
           <Upload className="size-3.5 mr-1.5" />
           {isCustom ? "Remplacer" : "Importer une image"}
         </Button>
-        <Button size="sm" variant="ghost" onClick={reset} className="rounded-xl">
+        <Button size="sm" variant="ghost" onClick={() => { void reset().catch((error) => toast.error(error instanceof Error ? error.message : "Impossible de réinitialiser le fond.")); }} className="rounded-xl">
           <RotateCcw className="size-3.5 mr-1.5" />
           Défaut
         </Button>

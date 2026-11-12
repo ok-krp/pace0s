@@ -10,7 +10,7 @@ import { LegalConsentGate } from "@/components/LegalConsentGate";
 import { CommandPalette } from "@/components/CommandPalette";
 import { GlobalErrorBoundary } from "@/components/GlobalErrorBoundary";
 import { BleDeviceManager } from "@/components/BleDeviceManager";
-import { applyWallpaper, readWallpaperChoice } from "@/hooks/use-wallpaper";
+import { applyWallpaper, loadWallpaperChoice, readWallpaperChoice } from "@/hooks/use-wallpaper";
 import { useGlassPointer } from "@/hooks/use-glass-pointer";
 import { applyGlassQuality } from "@/hooks/use-glass-quality";
 import { initHealthConnectBridge, requestHealthConnectSync } from "@/lib/health-connect-bridge";
@@ -60,6 +60,7 @@ function AuthGate() {
 
   useEffect(() => {
     applyGlassQuality("balanced"); applyWallpaper(readWallpaperChoice());
+    void loadWallpaperChoice().catch((error) => console.warn("Pace local wallpaper cache unavailable", error));
     initPwaInstallPrompt();
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch((error) => console.warn("Pace PWA service worker registration failed", error));

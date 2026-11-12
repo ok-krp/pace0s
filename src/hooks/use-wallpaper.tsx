@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { useLocalState } from "@/lib/storage";
+import { useEffect, useState } from "react";
+import { isCustomWallpaperFileAllowed, readCachedWallpaper, saveCustomWallpaper, saveWallpaperPreset, type CachedWallpaper } from "@/lib/wallpaper-cache";
 
 /**
  * Wallpaper system — drives `--wallpaper` and adaptive `--glass-tint`
@@ -112,65 +112,60 @@ export const WALLPAPERS: WallpaperPreset[] = [
   },
 ];
 
-type CustomWallpaper = { kind: "custom"; dataUrl: string };
+
+type CustomWallpaper = { kind: "custom"; url: string };
 type WallpaperChoice = { id: string } | CustomWallpaper;
-
-const KEY = "pace.wallpaper";
 const DEFAULT: WallpaperChoice = { id: "graphite" };
-
-export function useWallpaper() {
-  const [choice, setChoice] = useLocalState<WallpaperChoice>(KEY, DEFAULT);
-
-  useEffect(() => {
-    applyWallpaper(choice);
-  }, [choice]);
-
-  return {
-    choice,
-    presets: WALLPAPERS,
-    set: (id: string) => setChoice({ id }),
-    setCustom: (dataUrl: string) => setChoice({ kind: "custom", dataUrl }),
-    reset: () => setChoice(DEFAULT),
-  };
+let cachedChoice: WallpaperChoice = DEFAULT;
+let cacheLoaded = false;
+let cacheLoadPromise: Promise<WallpaperChoice> | null = null;
+let cacheRevision = 0;
+function dataUrlToBlob(dataUrl: string): Blob | null {
+  const match = /^data:(image\/[^;,]+);base64,([A-Za-z0-9+/=\s]+)$/.exec(dataUrl);
+  if (!match) return null;
+  try { const binary=atob(match[2].replace(/\s/g,"")); const bytes=new Uint8Array(binary.length); for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i); return new Blob([bytes],{type:match[1]}); } catch { return null; }
 }
-
-/** Apply wallpaper + adaptive glass tint to <html>. Safe to call on mount. */
-export function applyWallpaper(choice: WallpaperChoice) {
-  if (typeof document === "undefined") return;
-  const root = document.documentElement;
-  const isDark = root.classList.contains("dark");
-
-  if ("kind" in choice && choice.kind === "custom") {
-    root.style.setProperty(
-      "--wallpaper",
-      `linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.15)), url("${choice.dataUrl}") center/cover no-repeat`,
-    );
-    // Neutral tint for custom photos + a slightly stronger floor so text stays
-    // readable on busy imagery (accessibility guard).
-    root.style.setProperty("--glass-tint", isDark ? "10 14 22" : "255 255 255");
-    root.style.setProperty("--glass-tint-base", isDark ? "0.34" : "0.2");
-    root.setAttribute("data-wallpaper", "custom");
-    return;
-  }
-
-  const preset = WALLPAPERS.find((w) => w.id === (choice as { id: string }).id) ?? WALLPAPERS[0];
-  const css = (isDark && preset.cssDark) ? preset.cssDark : preset.css;
-  const tint = (isDark && preset.tintDark) ? preset.tintDark : preset.tint;
-  root.style.setProperty("--wallpaper", css.trim());
-  root.style.setProperty("--glass-tint", tint);
-  root.style.setProperty("--glass-tint-base", isDark ? "0.26" : "0.13");
-  root.setAttribute("data-wallpaper", preset.id);
-
-}
-
-/** Read choice synchronously from storage (for early paint in root). */
-export function readWallpaperChoice(): WallpaperChoice {
-  if (typeof window === "undefined") return DEFAULT;
+async function migrateLegacyLocalWallpaper(): Promise<CachedWallpaper | null> {
+  if(typeof window==="undefined") return null;
+  let parsed: unknown;
+  try { const raw=window.localStorage.getItem("pace.wallpaper"); if(!raw)return null; parsed=JSON.parse(raw); } catch { return null; }
   try {
-    const raw = window.localStorage.getItem(KEY);
-    if (!raw) return DEFAULT;
-    return JSON.parse(raw) as WallpaperChoice;
-  } catch {
-    return DEFAULT;
+    if(parsed&&typeof parsed==="object"&&"id" in parsed&&typeof parsed.id==="string"){await saveWallpaperPreset(parsed.id);window.localStorage.removeItem("pace.wallpaper");return{kind:"preset",id:parsed.id};}
+    if(parsed&&typeof parsed==="object"&&"kind" in parsed&&parsed.kind==="custom"&&"dataUrl" in parsed&&typeof parsed.dataUrl==="string"){const blob=dataUrlToBlob(parsed.dataUrl);if(!blob||!isCustomWallpaperFileAllowed(blob))return null;await saveCustomWallpaper(blob);window.localStorage.removeItem("pace.wallpaper");return{kind:"custom",blob};}
+  } catch { /* Keep the legacy local copy if IndexedDB migration fails. */ }
+  return null;
+}
+export function readWallpaperChoice(): WallpaperChoice { return cachedChoice; }
+export function loadWallpaperChoice(): Promise<WallpaperChoice> {
+  if(cacheLoaded)return Promise.resolve(cachedChoice);
+  if(cacheLoadPromise)return cacheLoadPromise;
+  const revisionAtStart=cacheRevision;
+  cacheLoadPromise=(async()=>{let cached=await readCachedWallpaper();if(!cached)cached=await migrateLegacyLocalWallpaper();if(revisionAtStart!==cacheRevision)return cachedChoice;if(cached?.kind==="custom")cachedChoice={kind:"custom",url:URL.createObjectURL(cached.blob)};else if(cached?.kind==="preset")cachedChoice={id:cached.id};else cachedChoice=DEFAULT;cacheLoaded=true;applyWallpaper(cachedChoice);return cachedChoice;})().catch((error)=>{cacheLoadPromise=null;throw error;});
+  return cacheLoadPromise;
+}
+export function useWallpaper() {
+  const [choice,setChoice]=useState<WallpaperChoice>(()=>readWallpaperChoice());
+  useEffect(()=>{let active=true;void loadWallpaperChoice().then((next)=>{if(active)setChoice(next);}).catch(()=>{});return()=>{active=false;};},[]);
+  useEffect(()=>{applyWallpaper(choice);},[choice]);
+  const set=async(id:string)=>{const normalizedId=WALLPAPERS.some((preset)=>preset.id===id)?id:"graphite";await saveWallpaperPreset(normalizedId);cacheRevision++;if("kind" in cachedChoice&&cachedChoice.kind==="custom")URL.revokeObjectURL(cachedChoice.url);const next={id:normalizedId};cachedChoice=next;cacheLoaded=true;cacheLoadPromise=Promise.resolve(next);setChoice(next);};
+  const setCustom=async(file:Blob)=>{if(!isCustomWallpaperFileAllowed(file))throw new Error("Image invalide ou supérieure à 20 Mo.");await saveCustomWallpaper(file);cacheRevision++;if("kind" in cachedChoice&&cachedChoice.kind==="custom")URL.revokeObjectURL(cachedChoice.url);const next={kind:"custom" as const,url:URL.createObjectURL(file)};cachedChoice=next;cacheLoaded=true;cacheLoadPromise=Promise.resolve(next);setChoice(next);};
+  const reset=()=>set("graphite");
+  return {choice,presets:WALLPAPERS,set,setCustom,reset};
+}
+export function applyWallpaper(choice: WallpaperChoice) {
+  if(typeof document==="undefined")return;
+  const root=document.documentElement,isDark=root.classList.contains("dark");
+  if("kind" in choice&&choice.kind==="custom"){
+    root.style.setProperty("--wallpaper",'linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.15)), url("'+choice.url+'") center/cover no-repeat');
+    root.style.setProperty("--glass-tint",isDark?"10 14 22":"255 255 255");
+    root.style.setProperty("--glass-tint-base",isDark?"0.34":"0.2");
+    root.setAttribute("data-wallpaper","custom");return;
   }
+  const preset=WALLPAPERS.find((w)=>w.id===choice.id)??WALLPAPERS[0];
+  const css=(isDark&&preset.cssDark)?preset.cssDark:preset.css;
+  const tint=(isDark&&preset.tintDark)?preset.tintDark:preset.tint;
+  root.style.setProperty("--wallpaper",css.trim());
+  root.style.setProperty("--glass-tint",tint);
+  root.style.setProperty("--glass-tint-base",isDark?"0.26":"0.13");
+  root.setAttribute("data-wallpaper",preset.id);
 }

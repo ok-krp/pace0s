@@ -137,6 +137,7 @@ test("per-key write timestamps recover from invalid previous metadata", () => {
 test("reserved internal sync keys are never treated as user domain state", () => {
   assert.equal(isSyncableLocalKey("pace.nutrition.items"), true);
   assert.equal(isSyncableLocalKey("pace.settings.theme"), true);
+  assert.equal(isSyncableLocalKey("pace.wallpaper"), false);
   assert.equal(isSyncableLocalKey("pace.__sync_queue"), false);
   assert.equal(isSyncableLocalKey("pace.__sync_meta:user-a"), false);
   assert.equal(isSyncableLocalKey("pace.__sync_food_log_outbox:user-a"), false);

@@ -7,6 +7,7 @@ const LT_PREFIX = "pace.";
 // Keys excluded from sync (volatile / device-specific)
 const EXCLUDED = new Set<string>([
   "pace.sport.active", // ongoing workout — device-local
+  "pace.wallpaper", // wallpaper is device-local IndexedDB cache only
 ]);
 
 export type SyncStatus = "idle" | "syncing" | "ok" | "error";

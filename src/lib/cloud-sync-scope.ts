@@ -6,6 +6,7 @@
  */
 export function isSyncableLocalKey(key: string): boolean {
   return key.startsWith("pace.") &&
+    key !== "pace.wallpaper" &&
     !key.startsWith("pace.__sync_") &&
     !key.startsWith("pace.__nutrition_cache:");
 }
