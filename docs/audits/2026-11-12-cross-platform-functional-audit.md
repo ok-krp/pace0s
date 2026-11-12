@@ -54,6 +54,10 @@ Le dépôt permet les deux premiers niveaux. Les sessions physiques PC/télépho
 | Synchronisation multi-appareils | Moteur Web + Realtime / pull | Non testée sur appareil | SyncService + LocalStore + tests d'isolation | P0 — backend réel non exercé ; exige un environnement Supabase isolé |
 | Export / réinitialisation | Export local et reset Web présents | Non testés sur appareil | Stockage local persistant présent, scénarios d'export/reset à compléter | P2 |
 
+### Wallpaper: legacy cloud data caveat
+
+New wallpaper selection and image data are now stored only in device-local IndexedDB; both Web and native sync exclude the current and legacy wallpaper keys from pushes and pulls. The code deliberately does **not** delete any pre-existing `user_state` wallpaper row from either live Supabase project. If an old cloud copy exists, it remains untouched and is excluded from subsequent client reconciliation until a separate, explicitly approved cleanup plan is run in the correct isolated/production target.
+
 ## Corrections livrées dans cette branche
 
 | Correction | Priorité | État |
