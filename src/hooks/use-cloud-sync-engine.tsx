@@ -272,6 +272,8 @@ export function useCloudSyncEngineInternal() {
               // cannot consume egress before the client-side key guard runs.
               .not("key", "match", "^pace\\.__sync_")
               .not("key", "match", "^pace\\.__nutrition_cache:");
+              // Legacy wallpaper values may be large Data URLs. Wallpapers are now device-local IndexedDB data.
+              .not("key", "in", "(pace.wallpaper,lt.wallpaper)");
             if (!fullReconciliation) {
               query = query.gte("updated_at", incrementalCursor!);
             }

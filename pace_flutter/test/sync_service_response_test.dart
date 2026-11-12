@@ -44,6 +44,7 @@ void main() {
 
   test('never syncs account-private Nutrition caches or local food-log outboxes', () {
     expect(SyncService.isSyncableKey('pace.nutrition.items'), isTrue);
+    expect(SyncService.isSyncableKey('pace.wallpaper'), isFalse);
     expect(SyncService.isSyncableKey('pace.__nutrition_cache:user-a:items'), isFalse);
     expect(SyncService.isSyncableKey('pace.__nutrition_cache:user-a:food_log_cursor'), isFalse);
     expect(SyncService.isSyncableKey('pace.__sync_food_log_outbox:user-a'), isFalse);
@@ -242,6 +243,8 @@ void main() {
         SyncService.excludedRemotePullKeysFilter,
         contains('"lt.ai.conversations"'),
       );
+      expect(SyncService.excludedRemotePullKeysFilter, contains('"pace.wallpaper"'));
+      expect(SyncService.excludedRemotePullKeysFilter, contains('"lt.wallpaper"'));
     });
 
     test('keeps all account-local sync metadata out of the cloud outbox', () {

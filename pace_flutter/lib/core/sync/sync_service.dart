@@ -77,6 +77,7 @@ class SyncService {
     'pace.sport.active',
     'pace.ai.conversations',
     'pace.ai.deleted_conversations',
+    'pace.wallpaper',
   };
 
   // Exclude both canonical and legacy aliases in the database query itself.
@@ -92,14 +93,15 @@ class SyncService {
     'lt.sport.active',
     'lt.ai.conversations',
     'lt.ai.deleted_conversations',
+    'lt.wallpaper',
   };
 
   static const String excludedRemotePullKeysFilter =
       '("pace.sport.active","pace.ai.conversations",'
-      '"pace.ai.deleted_conversations","pace.__sync_food_log_outbox",'
+      '"pace.ai.deleted_conversations","pace.wallpaper","pace.__sync_food_log_outbox",'
       '"pace.__sync_food_log_quarantine","pace.__sync_ai_preferences_pending",'
       '"pace.__sync_last_pull_at","pace.__sync_last_full_pull_at","lt.sport.active",'
-      '"lt.ai.conversations","lt.ai.deleted_conversations")';
+      '"lt.ai.conversations","lt.ai.deleted_conversations","lt.wallpaper")';
 
   static bool isSyncableKey(String key) =>
       key.startsWith('pace.') &&
