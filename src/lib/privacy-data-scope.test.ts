@@ -136,3 +136,14 @@ test("only missing optional workspace relations are ignored on legacy schemas", 
   assert.equal(OPTIONAL_USER_SCHEMA_TABLES.has("workspace_members"), true);
   assert.equal(OPTIONAL_USER_SCHEMA_TABLES.has("nutrition_calibration_feedback"), true);
 });
+
+test("account deletion explicitly orders sport parent cleanup after child rows", () => {
+  for (const table of [
+    "sport_progression_targets",
+    "sport_workout_sessions",
+    "sport_programs",
+    "sport_exercises",
+  ]) {
+    assert.ok((USER_DELETE_TABLES as readonly string[]).includes(table), table);
+  }
+});
