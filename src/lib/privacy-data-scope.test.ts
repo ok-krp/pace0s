@@ -147,3 +147,24 @@ test("account deletion explicitly orders sport parent cleanup after child rows",
     assert.ok((USER_DELETE_TABLES as readonly string[]).includes(table), table);
   }
 });
+
+test("portable export table allowlist contains no duplicate table names", () => {
+  assert.equal(new Set(USER_EXPORT_TABLES).size, USER_EXPORT_TABLES.length);
+});
+
+test("sport parent deletion order keeps RESTRICTed children ahead of exercises", () => {
+  const sportOrder = USER_DELETE_TABLES.filter((table) =>
+    [
+      "sport_progression_targets",
+      "sport_workout_sessions",
+      "sport_programs",
+      "sport_exercises",
+    ].includes(table),
+  );
+  assert.deepEqual(sportOrder, [
+    "sport_progression_targets",
+    "sport_workout_sessions",
+    "sport_programs",
+    "sport_exercises",
+  ]);
+});
