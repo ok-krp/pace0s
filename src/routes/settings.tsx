@@ -19,7 +19,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
 import { clearWallpaperCache } from "@/lib/wallpaper-cache";
-import { clearLocalPaceData } from "@/lib/local-data-cleanup";
+import { clearLocalPaceData, getLocalStorageSafely } from "@/lib/local-data-cleanup";
 import { AiSettings } from "@/components/AiSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
 
@@ -80,7 +80,7 @@ function SettingsPage() {
   const reset = async () => {
     if (!confirm("Réinitialiser TOUTES vos données ?")) return;
     try {
-      const result = await clearLocalPaceData(window.localStorage, clearWallpaperCache);
+      const result = await clearLocalPaceData(getLocalStorageSafely(), clearWallpaperCache);
       if (!result.deviceCacheCleared || !result.localStorageCleared) {
         const detail = result.errors.join(" ");
         toast.error(`Données Pace supprimées partiellement. Vérifiez le cache local : ${detail || "une partie du stockage n'a pas pu être effacée"}`);
