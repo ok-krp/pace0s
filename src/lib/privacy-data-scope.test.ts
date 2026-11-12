@@ -104,3 +104,27 @@ test("export pagination fails closed on page errors and invalid sizes", async ()
     RangeError,
   );
 });
+
+import {
+  ACCOUNT_DELETE_SHARED_RESOURCE_GUARDS,
+  isMissingOptionalWorkspaceRelation,
+} from "./privacy-data-scope.ts";
+
+test("account deletion protects shared workspace ownership and creator references", () => {
+  assert.deepEqual(
+    ACCOUNT_DELETE_SHARED_RESOURCE_GUARDS.map(({ table, column }) => [table, column]),
+    [
+      ["workspaces", "owner_user_id"],
+      ["grocery_lists", "created_by"],
+      ["grocery_list_items", "created_by"],
+      ["pantry_items", "created_by"],
+    ],
+  );
+});
+
+test("only missing optional workspace relations are ignored on legacy schemas", () => {
+  assert.equal(isMissingOptionalWorkspaceRelation("PGRST205"), true);
+  assert.equal(isMissingOptionalWorkspaceRelation("42P01"), true);
+  assert.equal(isMissingOptionalWorkspaceRelation("42501"), false);
+  assert.equal(isMissingOptionalWorkspaceRelation("23503"), false);
+});
