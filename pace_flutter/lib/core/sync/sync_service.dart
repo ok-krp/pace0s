@@ -115,6 +115,8 @@ class SyncService {
       '"lt.ai.debug","lt.billing.device_id","lt.watch.last_metrics")';
 
   static const List<String> excludedRemotePullKeyPatterns = [
+    r'^(pace|lt)\.__sync_',
+    r'^(pace|lt)\.__nutrition_cache:',
     r'^(pace|lt)\.(privacy|ble|import|local-ai)\.',
     r'^(pace|lt)\.ai\.pending:',
   ];
