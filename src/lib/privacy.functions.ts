@@ -4,7 +4,6 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import {
   USER_DELETE_TABLES,
   USER_EXPORT_ORDER_COLUMNS,
-  USER_EXPORT_RELATIONS,
   USER_EXPORT_TABLES,
 } from "./privacy-data-scope";
 import { collectUserExportPages } from "./privacy-data-export";
@@ -101,7 +100,7 @@ export const exportMyData = createServerFn({ method: "POST" })
       generated_at: new Date().toISOString(),
       user_id: context.userId,
       email: (context.claims?.email as string | undefined) ?? null,
-      schema_version: 2,
+      schema_version: 3,
       json: JSON.stringify(tables),
     };
   });

@@ -96,7 +96,7 @@ export function PrivacyDataSection() {
         <div className="size-10 rounded-xl bg-muted grid place-items-center"><Download className="size-4" /></div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium">Exporter mes données</div>
-          <div className="text-xs text-muted-foreground">JSON complet : sport, finance, santé, nutrition, préférences.</div>
+          <div className="text-xs text-muted-foreground">JSON des données personnelles : sport, finance, santé, nutrition, IA et préférences. Les secrets techniques ne sont pas exportés.</div>
         </div>
         <Button variant="secondary" size="sm" onClick={handleExport} disabled={busy !== null} className="rounded-xl">
           {busy === "export" ? "Génération…" : "Exporter"}
