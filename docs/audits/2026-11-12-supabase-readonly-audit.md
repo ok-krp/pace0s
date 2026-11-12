@@ -120,3 +120,16 @@ The most recent Preview build is healthy and its queried Preview runtime log win
 The latest GitHub Actions Flutter preflight had neither `SUPABASE_URL` nor a public Supabase client key configured. It explicitly selected **offline/local-only** build artifacts. The Web and Flutter CI suites pass, but those results do not establish authenticated cloud synchronization.
 
 The source audit and app code therefore remain validated independently of the live backend. The next cloud-sync verification must use an isolated Supabase target with test accounts; this report does not authorize changes to either connected project.
+
+
+## Account export and deletion — application correction and remaining target drift
+
+The latest application branch now includes the following code-level hardening:
+- Portable export reads the user-owned data allowlist in **500-row pages**, with deterministic primary-key ordering; it also collects sport program items, workout exercises and sets through IDs of the signed-in user's own parent rows.
+- Server-only provider secrets, idempotency internals, audit internals, Health E2EE pairing sessions and the legacy migration map are deliberately not placed in the downloadable client export.
+- Account deletion explicitly purges the legacy tables that are not all protected by an FK to `auth.users` (including AI conversations/messages/preferences/action logs, development tasks, provider secrets, food logs/scans, health samples, reminders, notifications and user_state). It stops before Auth deletion when a table purge reports an error.
+- The request JWT is used to revoke refresh-token sessions globally before deleting account rows. Supabase documents that already-issued access JWTs remain valid until their `exp`; immediate JWT invalidation is not promised.
+
+**Important current-target caveat:** `ohk…` has workspace-related `created_by` foreign keys using `ON DELETE RESTRICT` on grocery lists, grocery items and pantry items. A user who created records in a shared workspace may therefore be unable to delete their Auth user until ownership/creator transfer or a safe shared-data retention policy is designed. The application does not auto-delete shared workspace data. The old Vercel-bound `cduy…` schema has no such workspace tables in its inventory, but the two projects must not be treated as schema-equivalent.
+
+The code changes are validated by TypeScript and pure unit tests only. No account was deleted, no export was run against a live user, and no database writes were performed during this audit.
