@@ -4,7 +4,7 @@
  * WebAuthn credential IDs, BLE identities, device import history and unsent
  * AI drafts. They remain local to the browser/device by design.
  */
-const DEVICE_LOCAL_KEY_PREFIXES = [
+export const DEVICE_LOCAL_KEY_PREFIXES = [
   "pace.privacy.",
   "pace.ble.",
   "pace.import.",
@@ -12,7 +12,8 @@ const DEVICE_LOCAL_KEY_PREFIXES = [
   "pace.ai.pending:",
 ] as const;
 
-const DEVICE_LOCAL_KEYS = new Set([
+/** Canonical and legacy exact keys excluded before cloud rows are downloaded. */
+export const DEVICE_LOCAL_EXACT_KEYS = [
   "pace.wallpaper",
   "pace.sport.active",
   "pace.ai.conversations",
@@ -21,7 +22,25 @@ const DEVICE_LOCAL_KEYS = new Set([
   "pace.ai.debug",
   "pace.billing.device_id",
   "pace.watch.last_metrics",
-]);
+  "lt.wallpaper",
+  "lt.sport.active",
+  "lt.ai.conversations",
+  "lt.ai.deleted_conversations",
+  "lt.finance.pin.hash",
+  "lt.ai.debug",
+  "lt.billing.device_id",
+  "lt.watch.last_metrics",
+] as const;
+
+/** PostgREST-compatible patterns shared by automatic and manual cloud pulls. */
+export const DEVICE_LOCAL_REMOTE_KEY_PATTERNS = [
+  "^(pace|lt)\\.(privacy|ble|import|local-ai)\\.",
+  "^(pace|lt)\\.ai\\.pending:",
+] as const;
+
+const DEVICE_LOCAL_KEYS = new Set(
+  DEVICE_LOCAL_EXACT_KEYS.filter((key) => key.startsWith("pace.")),
+);
 
 export function isSyncableLocalKey(key: string): boolean {
   return key.startsWith("pace.") &&
