@@ -1019,7 +1019,6 @@ void main() {
       );
     });
   });
-}
 
   test('excludes legacy internal sync and Nutrition cache aliases before pull', () {
     expect(
