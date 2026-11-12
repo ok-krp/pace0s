@@ -126,8 +126,9 @@ export function PrivacyDataSection() {
             </div>
             <DialogTitle>Supprimer définitivement votre compte ?</DialogTitle>
             <DialogDescription>
-              Cette action est irréversible. Toutes vos données (sport, finance, santé, nutrition, préférences, consentements)
-              seront effacées de nos serveurs. Vous serez déconnecté immédiatement.
+              Cette action est irréversible. Vos données personnelles seront effacées de nos serveurs. Les espaces de travail,
+              listes et éléments partagés que vous avez créés doivent d'abord être transférés ou supprimés ; ils ne seront pas
+              détruits automatiquement pour préserver les autres membres.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
