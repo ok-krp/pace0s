@@ -138,6 +138,9 @@ test("reserved internal sync keys are never treated as user domain state", () =>
   assert.equal(isSyncableLocalKey("pace.nutrition.items"), true);
   assert.equal(isSyncableLocalKey("pace.settings.theme"), true);
   assert.equal(isSyncableLocalKey("pace.wallpaper"), false);
+  assert.equal(isSyncableLocalKey("pace.sport.active"), false);
+  assert.equal(isSyncableLocalKey("pace.ai.conversations"), false);
+  assert.equal(isSyncableLocalKey("pace.ai.deleted_conversations"), false);
   for (const key of [
     "pace.privacy.pin.hash",
     "pace.privacy.bioCredentialId",

@@ -14,6 +14,9 @@ const DEVICE_LOCAL_KEY_PREFIXES = [
 
 const DEVICE_LOCAL_KEYS = new Set([
   "pace.wallpaper",
+  "pace.sport.active",
+  "pace.ai.conversations",
+  "pace.ai.deleted_conversations",
   "pace.finance.pin.hash",
   "pace.ai.debug",
   "pace.billing.device_id",
