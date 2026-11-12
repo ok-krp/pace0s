@@ -9,6 +9,21 @@ import {
 } from "./privacy-data-scope";
 import { collectUserExportPages } from "./privacy-data-export";
 
+interface PrivacyExportQuery {
+  select(columns: "*"): PrivacyExportQuery;
+  eq(column: string, value: string): PrivacyExportQuery;
+  in(column: string, values: string[]): PrivacyExportQuery;
+  order(column: string, options: { ascending: boolean }): PrivacyExportQuery;
+  range(from: number, to: number): Promise<{
+    data: unknown[] | null;
+    error: { message: string } | null;
+  }>;
+}
+
+interface PrivacyExportClient {
+  from(table: string): PrivacyExportQuery;
+}
+
 function stringIds(rows: readonly unknown[]): string[] {
   return rows.flatMap((row) => {
     if (!row || typeof row !== "object" || !("id" in row)) return [];
@@ -27,10 +42,13 @@ export const exportMyData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const tables: Record<string, unknown[]> = {};
+    // The export table names are a reviewed allowlist; use a narrow structural
+    // interface because the generated Database union cannot model a dynamic table loop.
+    const exportClient = context.supabase as unknown as PrivacyExportClient;
     for (const table of USER_EXPORT_TABLES) {
       const orderColumn = USER_EXPORT_ORDER_COLUMNS[table] ?? "id";
       tables[table] = await collectUserExportPages(async (from, to) => {
-        const { data, error } = await context.supabase
+        const { data, error } = await exportClient
           .from(table)
           .select("*")
           .eq("user_id", context.userId)
@@ -43,7 +61,7 @@ export const exportMyData = createServerFn({ method: "POST" })
     const programIds = stringIds(tables.sport_programs ?? []);
     tables.sport_program_items = programIds.length
       ? await collectUserExportPages(async (from, to) => {
-          const { data, error } = await context.supabase
+          const { data, error } = await exportClient
             .from("sport_program_items")
             .select("*")
             .in("program_id", programIds)
@@ -56,7 +74,7 @@ export const exportMyData = createServerFn({ method: "POST" })
     const sessionIds = stringIds(tables.sport_workout_sessions ?? []);
     tables.sport_workout_exercises = sessionIds.length
       ? await collectUserExportPages(async (from, to) => {
-          const { data, error } = await context.supabase
+          const { data, error } = await exportClient
             .from("sport_workout_exercises")
             .select("*")
             .in("session_id", sessionIds)
@@ -69,7 +87,7 @@ export const exportMyData = createServerFn({ method: "POST" })
     const workoutExerciseIds = stringIds(tables.sport_workout_exercises);
     tables.sport_workout_sets = workoutExerciseIds.length
       ? await collectUserExportPages(async (from, to) => {
-          const { data, error } = await context.supabase
+          const { data, error } = await exportClient
             .from("sport_workout_sets")
             .select("*")
             .in("workout_exercise_id", workoutExerciseIds)
