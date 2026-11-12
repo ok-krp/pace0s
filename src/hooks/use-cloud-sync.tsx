@@ -2,17 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
-
-const LT_PREFIX = "pace.";
-// Keys excluded from sync (volatile / device-specific)
-const EXCLUDED = new Set<string>([
-  "pace.sport.active", // ongoing workout — device-local
-]);
+import { DEVICE_LOCAL_EXACT_KEYS, DEVICE_LOCAL_REMOTE_KEY_PATTERNS, isSyncableLocalKey } from "@/lib/cloud-sync-scope";
 
 export type SyncStatus = "idle" | "syncing" | "ok" | "error";
 
 function localKeys(): string[] {
-  return Object.keys(localStorage).filter((k) => k.startsWith(LT_PREFIX) && !EXCLUDED.has(k));
+  return Object.keys(localStorage).filter(isSyncableLocalKey);
 }
 
 export function useCloudSync() {
@@ -61,7 +56,16 @@ export function useCloudSync() {
     }
     setStatus("syncing");
     try {
-      const { data, error } = await supabase.from("user_state").select("key,value").eq("user_id", user.id);
+      const { data, error } = await supabase.from("user_state")
+        .select("key,value")
+        .eq("user_id", user.id)
+        // Apply the same canonical + legacy device-local boundary before rows
+        // are downloaded so old PIN/BLE/AI draft values do not consume egress.
+        .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[0])
+        .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[1])
+        .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[2])
+        .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[3])
+        .not("key", "in", `(${DEVICE_LOCAL_EXACT_KEYS.join(",")})`);
       if (error) throw error;
       let n = 0;
       (data ?? []).forEach((row) => {
@@ -69,7 +73,7 @@ export function useCloudSync() {
         // on remappe la clé à la volée pour que la restauration retombe sur les
         // bonnes clés, celles que useLocalState lit réellement aujourd'hui.
         const key = row.key.startsWith("lt.") ? "pace." + row.key.slice(3) : row.key;
-        if (EXCLUDED.has(key)) return;
+        if (!isSyncableLocalKey(key)) return;
         if (!overwrite && localStorage.getItem(key) !== null) return;
         localStorage.setItem(key, JSON.stringify(row.value));
         n++;

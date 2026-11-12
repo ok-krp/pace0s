@@ -9,6 +9,8 @@ import { exportMyData, deleteMyAccount } from "@/lib/privacy.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { openConsentSheet } from "@/components/LegalConsentGate";
+import { clearWallpaperCache } from "@/lib/wallpaper-cache";
+import { clearLocalPaceData, getLocalStorageSafely } from "@/lib/local-data-cleanup";
 
 export function PrivacyDataSection() {
   const runExport = useServerFn(exportMyData);
@@ -49,11 +51,21 @@ export function PrivacyDataSection() {
     setBusy("delete");
     try {
       await runDelete();
-      // Purge locale
-      Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k));
-      await supabase.auth.signOut();
-      toast.success("Compte supprimé. À bientôt.");
-      setTimeout(() => { window.location.href = "/login"; }, 400);
+      // Server deletion has succeeded. Always attempt both local stores even if
+      // IndexedDB is unavailable, then report any residual local cache clearly.
+      const cleanup = await clearLocalPaceData(getLocalStorageSafely(), clearWallpaperCache);
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // The account deletion is already committed server-side. Navigation
+        // replaces the local app state even if remote sign-out cannot complete.
+      }
+      if (!cleanup.deviceCacheCleared || !cleanup.localStorageCleared) {
+        toast.error(`Compte supprimé ; nettoyage local incomplet : ${cleanup.errors.join(" ") || "vérifiez le cache de cet appareil"}`);
+      } else {
+        toast.success("Compte supprimé. À bientôt.");
+      }
+      window.setTimeout(() => { window.location.href = "/login"; }, 1200);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Suppression impossible");
       setBusy(null);
@@ -84,7 +96,7 @@ export function PrivacyDataSection() {
         <div className="size-10 rounded-xl bg-muted grid place-items-center"><Download className="size-4" /></div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium">Exporter mes données</div>
-          <div className="text-xs text-muted-foreground">JSON complet : sport, finance, santé, nutrition, préférences.</div>
+          <div className="text-xs text-muted-foreground">JSON des données personnelles : sport, finance, santé, nutrition, IA et préférences. Les secrets techniques ne sont pas exportés.</div>
         </div>
         <Button variant="secondary" size="sm" onClick={handleExport} disabled={busy !== null} className="rounded-xl">
           {busy === "export" ? "Génération…" : "Exporter"}
@@ -114,8 +126,9 @@ export function PrivacyDataSection() {
             </div>
             <DialogTitle>Supprimer définitivement votre compte ?</DialogTitle>
             <DialogDescription>
-              Cette action est irréversible. Toutes vos données (sport, finance, santé, nutrition, préférences, consentements)
-              seront effacées de nos serveurs. Vous serez déconnecté immédiatement.
+              Cette action est irréversible. Vos données personnelles seront effacées de nos serveurs. Les espaces de travail,
+              listes et éléments partagés que vous avez créés doivent d'abord être transférés ou supprimés ; ils ne seront pas
+              détruits automatiquement pour préserver les autres membres.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">

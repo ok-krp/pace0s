@@ -4,13 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
-import { accountSyncStorageKeys, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
+import { accountSyncStorageKeys, DEVICE_LOCAL_EXACT_KEYS, DEVICE_LOCAL_REMOTE_KEY_PATTERNS, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
 import { fetchAllKeysetPages } from "@/lib/user-state-pagination";
 import { flushNutritionFoodLogOutbox } from "@/lib/nutrition-log";
 import { NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys } from "@/lib/nutrition-sync";
 
 const PACE_PREFIX = "pace.";
-const EXCLUDED = new Set<string>(["pace.sport.active"]);
+const EXCLUDED = new Set<string>(DEVICE_LOCAL_EXACT_KEYS.filter((key) => key.startsWith("pace.")));
 // When Realtime is unhealthy, poll only rows changed since the per-account
 // watermark. Keep a short overlap for equal/late timestamps and do a full
 // reconciliation at startup and at least once every 24 hours.
@@ -270,8 +270,11 @@ export function useCloudSyncEngineInternal() {
               // Client bookkeeping and account-private Nutrition caches are
               // never domain state. Exclude them in PostgREST so stale rows
               // cannot consume egress before the client-side key guard runs.
-              .not("key", "match", "^pace\\.__sync_")
-              .not("key", "match", "^pace\\.__nutrition_cache:");
+              .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[0])
+              .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[1])
+              .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[2])
+              .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[3])
+              .not("key", "in", `(${DEVICE_LOCAL_EXACT_KEYS.join(",")})`);
             if (!fullReconciliation) {
               query = query.gte("updated_at", incrementalCursor!);
             }

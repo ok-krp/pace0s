@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { accountSyncStorageKeys, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullCursor, syncPullPlan } from "./cloud-sync-scope.ts";
+import { accountSyncStorageKeys, DEVICE_LOCAL_EXACT_KEYS, DEVICE_LOCAL_REMOTE_KEY_PATTERNS, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullCursor, syncPullPlan } from "./cloud-sync-scope.ts";
 
 test("sync queue and metadata storage are isolated by authenticated user", () => {
   const alice = accountSyncStorageKeys("user/alice");
@@ -137,6 +137,27 @@ test("per-key write timestamps recover from invalid previous metadata", () => {
 test("reserved internal sync keys are never treated as user domain state", () => {
   assert.equal(isSyncableLocalKey("pace.nutrition.items"), true);
   assert.equal(isSyncableLocalKey("pace.settings.theme"), true);
+  assert.equal(isSyncableLocalKey("pace.wallpaper"), false);
+  assert.equal(isSyncableLocalKey("pace.sport.active"), false);
+  assert.equal(isSyncableLocalKey("pace.ai.conversations"), false);
+  assert.equal(isSyncableLocalKey("pace.ai.deleted_conversations"), false);
+  for (const key of [
+    "pace.privacy.pin.hash",
+    "pace.privacy.bioCredentialId",
+    "pace.privacy.lockOnEnter",
+    "pace.ble.devices",
+    "pace.ble.mapping",
+    "pace.ble.seen",
+    "pace.import.log",
+    "pace.local-ai.enabled",
+    "pace.ai.pending:conversation-1",
+    "pace.ai.debug",
+    "pace.billing.device_id",
+    "pace.watch.last_metrics",
+    "pace.finance.pin.hash",
+  ]) {
+    assert.equal(isSyncableLocalKey(key), false, key);
+  }
   assert.equal(isSyncableLocalKey("pace.__sync_queue"), false);
   assert.equal(isSyncableLocalKey("pace.__sync_meta:user-a"), false);
   assert.equal(isSyncableLocalKey("pace.__sync_food_log_outbox:user-a"), false);
@@ -145,4 +166,49 @@ test("reserved internal sync keys are never treated as user domain state", () =>
   assert.equal(isSyncableLocalKey("pace.__nutrition_cache:user-a:deleted_ids"), false);
   assert.equal(isSyncableLocalKey("lt.water"), false);
   assert.equal(isSyncableLocalKey("__outbox"), false);
+});
+
+test("automatic and manual PostgREST pulls share all exact device-local aliases", () => {
+  for (const key of [
+    "pace.sport.active",
+    "lt.sport.active",
+    "pace.ai.conversations",
+    "lt.ai.conversations",
+    "pace.ai.deleted_conversations",
+    "lt.ai.deleted_conversations",
+    "pace.wallpaper",
+    "lt.wallpaper",
+    "pace.finance.pin.hash",
+    "lt.finance.pin.hash",
+    "pace.ai.debug",
+    "lt.ai.debug",
+    "pace.billing.device_id",
+    "lt.billing.device_id",
+    "pace.watch.last_metrics",
+    "lt.watch.last_metrics",
+  ]) {
+    assert.ok((DEVICE_LOCAL_EXACT_KEYS as readonly string[]).includes(key), key);
+    assert.equal(isSyncableLocalKey(key), false, key);
+  }
+  const prefixes = DEVICE_LOCAL_REMOTE_KEY_PATTERNS.map((pattern) => new RegExp(pattern));
+  for (const key of ["pace.privacy.pin.hash", "lt.ble.devices", "pace.import.log", "lt.local-ai.enabled"]) {
+    assert.ok(prefixes.some((pattern) => pattern.test(key)), key);
+  }
+  for (const key of ["pace.ai.pending:conversation-1", "lt.ai.pending:conversation-1"]) {
+    assert.ok(prefixes.some((pattern) => pattern.test(key)), key);
+  }
+});
+
+test("remote filters include canonical and legacy internal sync/cache prefixes", () => {
+  const patterns = DEVICE_LOCAL_REMOTE_KEY_PATTERNS.map((pattern) => new RegExp(pattern));
+  for (const key of [
+    "pace.__sync_queue",
+    "lt.__sync_food_log_outbox:user-a",
+    "pace.__nutrition_cache:user-a:items",
+    "lt.__nutrition_cache:user-b:deleted_ids",
+    "pace.privacy.pin.hash",
+    "lt.ai.pending:conversation-1",
+  ]) {
+    assert.ok(patterns.some((pattern) => pattern.test(key)), key);
+  }
 });

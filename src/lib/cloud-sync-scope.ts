@@ -1,11 +1,53 @@
 
 /**
- * Keys under the reserved sync namespace are client bookkeeping, not user
- * domain state. The native client already excludes this namespace; the Web
- * queue and remote pull must enforce the same boundary.
+ * Device-bound values must never enter user_state. These include PIN hashes,
+ * WebAuthn credential IDs, BLE identities, device import history and unsent
+ * AI drafts. They remain local to the browser/device by design.
  */
+export const DEVICE_LOCAL_KEY_PREFIXES = [
+  "pace.privacy.",
+  "pace.ble.",
+  "pace.import.",
+  "pace.local-ai.",
+  "pace.ai.pending:",
+] as const;
+
+/** Canonical and legacy exact keys excluded before cloud rows are downloaded. */
+export const DEVICE_LOCAL_EXACT_KEYS = [
+  "pace.wallpaper",
+  "pace.sport.active",
+  "pace.ai.conversations",
+  "pace.ai.deleted_conversations",
+  "pace.finance.pin.hash",
+  "pace.ai.debug",
+  "pace.billing.device_id",
+  "pace.watch.last_metrics",
+  "lt.wallpaper",
+  "lt.sport.active",
+  "lt.ai.conversations",
+  "lt.ai.deleted_conversations",
+  "lt.finance.pin.hash",
+  "lt.ai.debug",
+  "lt.billing.device_id",
+  "lt.watch.last_metrics",
+] as const;
+
+/** PostgREST-compatible patterns shared by automatic and manual cloud pulls. */
+export const DEVICE_LOCAL_REMOTE_KEY_PATTERNS = [
+  "^(pace|lt)\\.__sync_",
+  "^(pace|lt)\\.__nutrition_cache:",
+  "^(pace|lt)\\.(privacy|ble|import|local-ai)\\.",
+  "^(pace|lt)\\.ai\\.pending:",
+] as const;
+
+const DEVICE_LOCAL_KEYS = new Set<string>(
+  DEVICE_LOCAL_EXACT_KEYS.filter((key) => key.startsWith("pace.")),
+);
+
 export function isSyncableLocalKey(key: string): boolean {
   return key.startsWith("pace.") &&
+    !DEVICE_LOCAL_KEYS.has(key) &&
+    !DEVICE_LOCAL_KEY_PREFIXES.some((prefix) => key.startsWith(prefix)) &&
     !key.startsWith("pace.__sync_") &&
     !key.startsWith("pace.__nutrition_cache:");
 }

@@ -77,6 +77,11 @@ class SyncService {
     'pace.sport.active',
     'pace.ai.conversations',
     'pace.ai.deleted_conversations',
+    'pace.wallpaper',
+    'pace.finance.pin.hash',
+    'pace.ai.debug',
+    'pace.billing.device_id',
+    'pace.watch.last_metrics',
   };
 
   // Exclude both canonical and legacy aliases in the database query itself.
@@ -92,20 +97,43 @@ class SyncService {
     'lt.sport.active',
     'lt.ai.conversations',
     'lt.ai.deleted_conversations',
+    'lt.wallpaper',
+    'lt.finance.pin.hash',
+    'lt.ai.debug',
+    'lt.billing.device_id',
+    'lt.watch.last_metrics',
   };
 
   static const String excludedRemotePullKeysFilter =
       '("pace.sport.active","pace.ai.conversations",'
-      '"pace.ai.deleted_conversations","pace.__sync_food_log_outbox",'
-      '"pace.__sync_food_log_quarantine","pace.__sync_ai_preferences_pending",'
-      '"pace.__sync_last_pull_at","pace.__sync_last_full_pull_at","lt.sport.active",'
-      '"lt.ai.conversations","lt.ai.deleted_conversations")';
+      '"pace.ai.deleted_conversations","pace.wallpaper","pace.finance.pin.hash",'
+      '"pace.ai.debug","pace.billing.device_id","pace.watch.last_metrics",'
+      '"pace.__sync_food_log_outbox","pace.__sync_food_log_quarantine",'
+      '"pace.__sync_ai_preferences_pending","pace.__sync_last_pull_at",'
+      '"pace.__sync_last_full_pull_at","lt.sport.active","lt.ai.conversations",'
+      '"lt.ai.deleted_conversations","lt.wallpaper","lt.finance.pin.hash",'
+      '"lt.ai.debug","lt.billing.device_id","lt.watch.last_metrics")';
+
+  static const List<String> excludedRemotePullKeyPatterns = [
+    r'^(pace|lt)\.__sync_',
+    r'^(pace|lt)\.__nutrition_cache:',
+    r'^(pace|lt)\.(privacy|ble|import|local-ai)\.',
+    r'^(pace|lt)\.ai\.pending:',
+  ];
+
+  static bool isDeviceLocalKey(String key) =>
+      key.startsWith('pace.privacy.') ||
+      key.startsWith('pace.ble.') ||
+      key.startsWith('pace.import.') ||
+      key.startsWith('pace.local-ai.') ||
+      key.startsWith('pace.ai.pending:') ||
+      excludedSyncKeys.contains(key);
 
   static bool isSyncableKey(String key) =>
       key.startsWith('pace.') &&
       !key.startsWith('pace.__sync_') &&
       !key.startsWith('pace.__nutrition_cache:') &&
-      !excludedSyncKeys.contains(key);
+      !isDeviceLocalKey(key);
 
   /// Reject malformed persisted operations before any network request. Such
   /// entries are quarantined locally so one poison record cannot retry forever.
@@ -869,8 +897,10 @@ class SyncService {
           .eq('user_id', userId)
           .not('key', 'in', excludedRemotePullKeysFilter)
           // Filter internal/device-local data before it leaves PostgREST.
-          .not('key', 'match', r'^pace\.__sync_')
-          .not('key', 'match', r'^pace\.__nutrition_cache:');
+          .not('key', 'match', excludedRemotePullKeyPatterns[0])
+          .not('key', 'match', excludedRemotePullKeyPatterns[1])
+          .not('key', 'match', excludedRemotePullKeyPatterns[2])
+          .not('key', 'match', excludedRemotePullKeyPatterns[3]);
       if (!fullPull) {
         query = query.gte('updated_at', cursorAt!.toIso8601String());
       }

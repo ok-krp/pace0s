@@ -18,6 +18,8 @@ import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
+import { clearWallpaperCache } from "@/lib/wallpaper-cache";
+import { clearLocalPaceData, getLocalStorageSafely } from "@/lib/local-data-cleanup";
 import { AiSettings } from "@/components/AiSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
 
@@ -75,11 +77,21 @@ function SettingsPage() {
     toast.success("Export téléchargé");
   };
 
-  const reset = () => {
+  const reset = async () => {
     if (!confirm("Réinitialiser TOUTES vos données ?")) return;
-    Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k));
-    toast.success("Données effacées");
-    setTimeout(() => location.reload(), 600);
+    try {
+      const result = await clearLocalPaceData(getLocalStorageSafely(), clearWallpaperCache);
+      if (!result.deviceCacheCleared || !result.localStorageCleared) {
+        const detail = result.errors.join(" ");
+        toast.error(`Données Pace supprimées partiellement. Vérifiez le cache local : ${detail || "une partie du stockage n'a pas pu être effacée"}`);
+        window.setTimeout(() => window.location.reload(), 1800);
+        return;
+      }
+      toast.success("Données effacées");
+      window.setTimeout(() => window.location.reload(), 600);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Impossible de réinitialiser le stockage local.");
+    }
   };
 
   return (
