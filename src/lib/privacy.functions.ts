@@ -192,7 +192,6 @@ async function assertNoSharedSportReferences(
  */
 async function deleteOwnedSportChildren(
   adminData: PrivacyAdminDataClient,
-  userId: string,
   programIds: string[],
   sessionIds: string[],
 ): Promise<void> {
@@ -353,7 +352,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     // Keep the caller's session retryable until every personal table is purged.
     // Deleting the Auth user last revokes future refreshes without trapping the
     // user in a partially completed deletion if one table request fails.
-    await deleteOwnedSportChildren(adminData, userId, programIds, sessionIds);
+    await deleteOwnedSportChildren(adminData, programIds, sessionIds);
 
     for (const table of USER_DELETE_TABLES) {
       const { error } = await adminData.from(table).delete().eq("user_id", userId);
