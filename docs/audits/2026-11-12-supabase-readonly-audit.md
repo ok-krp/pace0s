@@ -31,6 +31,10 @@ The recorded migration histories are not interchangeable. The older project cont
 - Sensitive service tables such as `ai_provider_secrets`, `ai_tool_idempotency`, `audit_log`, and `billing_events` have explicit client-deny policies in the queried policy set.
 - The E2EE pairing-session and legacy-migration-map tables also have client-deny policies; the older project uses restrictive deny policies for these two tables.
 
+- The current project's AI conversation/message policies also contain a special `agent_type = 'coach'` OR a hard-coded email claim exception for the build/admin path. This is an explicit privileged access path; it should be moved to a controlled `app_metadata` role/claim or server-side authorization policy with audited grant/revocation, rather than being embedded as a mailbox string in several RLS policies.
+- The `ohk…` multiple-permissive-policy warnings were inspected further. `push_subscriptions` has an authenticated `ALL` owner policy plus four command-specific `public` policies using `auth.uid() = user_id`; `reminder_settings` has an authenticated `ALL` owner policy plus separate SELECT/INSERT/UPDATE/DELETE policies with the same owner predicate. These are redundant policy paths and explain the advisor warning; the queried predicates do not themselves indicate an unowned-row bypass. Consolidation should preserve existing semantics and be tested with owner/non-owner/anon roles.
+- The `cduy…` function `insert_coach_ai_food_idempotent_v2` is callable by authenticated, not anon; it checks `p_user_id = auth.uid()` before writing and uses idempotency. However, it remains `SECURITY DEFINER` with `search_path = public`, so it should be pinned to an empty path after its body is changed to fully qualify every object/function reference.
+
 This is a metadata/policy-definition review, not a two-user RLS penetration test. Ownership predicates still need to be exercised with two distinct authenticated test users in an isolated project before sign-off.
 
 ## Vercel environment binding
