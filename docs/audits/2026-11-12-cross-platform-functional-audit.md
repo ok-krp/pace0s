@@ -1,0 +1,101 @@
+# Audit fonctionnel croisé PaceOS — 12 novembre 2026
+
+## Périmètre et niveau de preuve
+
+Cet audit distingue trois niveaux qui ne doivent pas être confondus :
+
+- **Code présent** : route, écran ou adaptateur retrouvé dans le dépôt.
+- **Validation automatisée** : analyse, tests ou compilation exécutés par GitHub Actions / Vercel.
+- **Validation sur appareil / compte réel** : interaction réelle avec caméra, Bluetooth, Health Connect/HealthKit, notifications ou deux sessions Supabase authentifiées.
+
+Le dépôt permet les deux premiers niveaux. Les sessions physiques PC/téléphone et la session Supabase de test ne sont pas disponibles dans cette exécution. Aucun résultat n'est donc marqué « validé sur appareil » sans preuve.
+
+## Résumé des validations techniques
+
+| Contrôle | Résultat | Portée exacte |
+|---|---|---|
+| Build Vercel Preview, commit `d46efe5` | Réussi — READY | Compilation et déploiement Preview, pas test utilisateur connecté |
+| TypeScript `tsc --noEmit` | Réussi | Vérification statique du dépôt Web |
+| Tests Web | Réussis | AI tool approval, remote domain state, sync scope, pagination, Nutrition, hydration, wallpaper 20 MiB, MCP |
+| Lint des points d'entrée IA/Nutrition | Réussi | Lint du périmètre indiqué dans le workflow |
+| Flutter analyze | Réussi | Android, Windows, Linux, Apple |
+| Flutter tests | Réussis | Android, Windows, Linux, Apple |
+| Builds natifs | En cours lors de la rédaction | APK/AAB, Windows, Linux, iOS/macOS |
+| Runtime logs Preview | Aucun error/fatal retourné sur la fenêtre récente interrogée | Ne remplace pas un parcours fonctionnel |
+| Tests physiques PC / téléphone | Non exécutés | Nécessitent un navigateur/appareil interactif |
+| Synchronisation Supabase réelle | Non vérifiée | La CI n'a ni SUPABASE_URL ni clé publique ; preflight explicite « offline/local-only » |
+
+## Matrice fonctionnelle PC / téléphone
+
+| Domaine | Web PC | Web mobile | Flutter natif | Priorité / constat |
+|---|---|---|---|---|
+| Authentification / changement de compte | Route et flux présents | Même application responsive, non testée sur appareil | Écran Auth + tests d'isolation | P1 — parcours réel encore à exécuter |
+| Dashboard | Route présente | Responsive non testé | DashboardPage présent | P2 — test tactile / tailles d'écran à faire |
+| Nutrition — saisie manuelle | Présente | Non testée sur appareil | NutritionPage présente, FoodLogSync et tests | P1 — valider le cycle complet sur deux sessions réelles |
+| Nutrition — analyse photo / ajout IA | Parcours Web présent | Non testée sur appareil | Aucune UI de sélection photo identifiée dans NutritionPage | P1 — parité native absente ou à spécifier |
+| Assistant IA / conversations | Assistant et routes IA présentes | Non testés sur appareil | AiPage et PaceAiService présents | P1 — tester avec fournisseur réellement configuré |
+| Sport / exercices / séances | Route présente | Non testée sur appareil | SportPage présente | P2 — tests widget / scénario complet à étendre |
+| Sommeil | Route présente | Non testé sur appareil | SleepPage présente | P2 — tests de saisie et persistance à étendre |
+| Habitudes / routine | Route présente | Non testée sur appareil | RoutinePage présente | P2 |
+| Calendrier | Route présente | Non testé sur appareil | CalendarPage présente | P2 |
+| Notes | Route présente | Non testées sur appareil | NotesPage présente | P2 |
+| Courses | Pas de route dédiée identifiée | — | ShoppingPage présente | P2 — divergence fonctionnelle à clarifier |
+| Santé / Health Connect / HealthKit | Sources santé Web présentes | Permissions réelles non testées | HealthPage + NativeHealthAdapter présents | P1 — tester permissions et échantillons réels sur Android/iOS |
+| Watch / Bluetooth | Route Watch présente | Non testé sur appareil | L'entrée « Watch & Bluetooth » ouvre actuellement un dialogue d'information, pas un écran de gestion des appareils | P1 — gestion Bluetooth native incomplète |
+| Finance | Route présente | Non testée sur appareil | Aucun module natif Finance identifié | P1 — parité fonctionnelle absente |
+| Investissements | Route présente | Non testée sur appareil | Aucun module natif identifié | P2 — parité fonctionnelle absente |
+| Recettes / rappels | Routes présentes | Non testés sur appareil | Aucun module natif correspondant identifié | P2 — parité fonctionnelle absente |
+| Scanner QR / code-barres | Route Scan présente | Caméra non testée | Aucun écran natif Scan identifié | P1 — scanner natif absent |
+| Eau / hydratation | Route Water présente | Non testée sur appareil | Données eau manipulées depuis le Dashboard, sans écran natif dédié identifié | P2 |
+| Travail / développement / productivité | Routes Work et Development présentes | Non testées sur appareil | Aucun module natif dédié identifié | P2 — parité fonctionnelle absente |
+| Profil / poids / données corporelles | Routes Profile et Body présentes | Non testées sur appareil | Poids présent dans les données Dashboard ; pas de pages natives dédiées identifiées | P2 |
+| Paramètres / notifications | Paramètres Web détaillés | Permissions push non testées | Paramètres natifs plus réduits ; notifications locales présentes | P1 — parité et permissions à tester |
+| Fonds d'écran personnalisés | Import Web jusqu'à 20 MiB, IndexedDB local | Même code Web, non testé physiquement | Aucun écran de fond d'écran natif identifié | P1 — Web corrigé ; parité Flutter à décider |
+| Synchronisation multi-appareils | Moteur Web + Realtime / pull | Non testée sur appareil | SyncService + LocalStore + tests d'isolation | P0 — backend réel non exercé ; exige un environnement Supabase isolé |
+| Export / réinitialisation | Export local et reset Web présents | Non testés sur appareil | Stockage local persistant présent, scénarios d'export/reset à compléter | P2 |
+
+## Corrections livrées dans cette branche
+
+| Correction | Priorité | État |
+|---|---|---|
+| Limite de fond d'écran de 4 MiB → 20 MiB (20 × 1024 × 1024 octets) | P1 | Commitée |
+| Stockage de l'image en Blob dans IndexedDB sur l'appareil, pas en Data URL dans localStorage | P1 | Commitée |
+| Migration de l'ancienne préférence locale uniquement après écriture IndexedDB réussie | P1 | Commitée |
+| Exclusion `pace.wallpaper` et `lt.wallpaper` des synchronisations Web et Flutter | P1 | Commitée |
+| Exclusion serveur des anciens fonds de la réconciliation Web/Flutter pour éviter leur téléchargement | P1 | Commitée |
+| Suppression du cache du fond lors du reset local | P1 | Commitée |
+| Tests de limite 20 MiB et types de fichiers dans la CI Web | P1 | Passés |
+| Test d'exclusion des fonds de la synchronisation native | P1 | Passé |
+| Correction du narrowing TypeScript du type WallpaperChoice | P1 | Type-check passé |
+| Migration Flutter 3.50 vers le paquet officiel `material_ui` | P2 | Analyze/tests passés |
+| Suppression du doublon généré `src/routes/routeTree.gen.ts` qui déclenchait un avertissement de découverte de route | P2 | Supprimé |
+
+## Backlog priorisé
+
+### P0 — Avant toute validation de synchronisation réelle
+
+1. Créer ou restaurer un environnement Supabase isolé avec le schéma/RPC correspondant exactement au commit testé.
+2. Configurer uniquement les secrets/variables de cet environnement de test dans CI/Preview.
+3. Vérifier connexion, ajout manuel sur PC, lecture sur téléphone, ajout sur téléphone, lecture sur PC, édition, suppression, conflit hors ligne et changement de compte.
+4. Mesurer l'egress de test avant/après ; ne pas utiliser l'instance de production pour ce test.
+
+### P1 — Fonctionnalités et parité
+
+1. Terminer le parcours Watch/Bluetooth natif : découverte, permissions, connexion, déconnexion, reprise et mesure réelle.
+2. Décider et implémenter la parité native des domaines Finance, Scanner, photo Nutrition IA et des autres fonctions Web prioritaires.
+3. Effectuer les tests de permissions Health Connect / HealthKit, appareil photo, notifications et sélection de fichier sur de vrais appareils.
+4. Tester les fonds personnalisés de 5, 10, 19 et 20 MiB, le refus au-dessus de 20 MiB, le redémarrage, le cache vidé et le changement de compte.
+
+### P2 — Robustesse et performances
+
+1. Réduire le bundle Web principal (environ 640 KiB non compressés dans le build observé) et découper les modules lourds Nutrition/Graphiques/IA.
+2. Ajouter des tests widget dédiés aux pages Flutter Calendar, Notes, Routine, Sleep, Sport, Settings et Shopping.
+3. Ajouter des tests E2E Web desktop/mobile avec compte de test isolé et des captures de viewport de référence.
+4. Compléter les tests d'accessibilité, clavier mobile, focus, scroll et navigation tactile.
+
+## Garde-fous
+
+- Cette branche est une PR Draft ; aucune fusion n'est demandée.
+- Pas de migration, d'écriture de données, de modification RLS ni d'action d'egress sur Supabase Production.
+- Pas de déploiement Production ni de changement DNS.
+- Les artefacts Vercel cités sont des Preview.
