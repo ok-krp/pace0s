@@ -82,3 +82,14 @@ test("reports a failed localStorage removal without stopping later removals", as
   assert.equal(result.localStorageCleared, false);
   assert.match(result.errors.join(" "), /pace.blocked: permission denied/);
 });
+
+test("still clears IndexedDB when localStorage itself is inaccessible", async () => {
+  let cacheCleared = false;
+  const result = await clearLocalPaceData(null, async () => {
+    cacheCleared = true;
+  });
+  assert.equal(cacheCleared, true);
+  assert.equal(result.deviceCacheCleared, true);
+  assert.equal(result.localStorageCleared, false);
+  assert.match(result.errors.join(" "), /localStorage: inaccessible/);
+});
