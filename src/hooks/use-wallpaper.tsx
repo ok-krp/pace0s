@@ -161,7 +161,8 @@ export function applyWallpaper(choice: WallpaperChoice) {
     root.style.setProperty("--glass-tint-base",isDark?"0.34":"0.2");
     root.setAttribute("data-wallpaper","custom");return;
   }
-  const preset=WALLPAPERS.find((w)=>w.id===choice.id)??WALLPAPERS[0];
+  const presetId = "id" in choice ? choice.id : "graphite";
+  const preset = WALLPAPERS.find((w) => w.id === presetId) ?? WALLPAPERS[0];
   const css=(isDark&&preset.cssDark)?preset.cssDark:preset.css;
   const tint=(isDark&&preset.tintDark)?preset.tintDark:preset.tint;
   root.style.setProperty("--wallpaper",css.trim());

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'app/pace_app.dart';
 import 'core/notifications/notification_service.dart';
