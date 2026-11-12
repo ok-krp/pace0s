@@ -34,6 +34,8 @@ export const DEVICE_LOCAL_EXACT_KEYS = [
 
 /** PostgREST-compatible patterns shared by automatic and manual cloud pulls. */
 export const DEVICE_LOCAL_REMOTE_KEY_PATTERNS = [
+  "^(pace|lt)\\.__sync_",
+  "^(pace|lt)\\.__nutrition_cache:",
   "^(pace|lt)\\.(privacy|ble|import|local-ai)\\.",
   "^(pace|lt)\\.ai\\.pending:",
 ] as const;
