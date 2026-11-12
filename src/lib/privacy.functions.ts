@@ -23,6 +23,17 @@ interface PrivacyExportClient {
   from(table: string): PrivacyExportQuery;
 }
 
+interface PrivacyDeleteQuery {
+  delete(): PrivacyDeleteQuery;
+  eq(column: "user_id", value: string): Promise<{
+    error: { message: string } | null;
+  }>;
+}
+
+interface PrivacyAdminDataClient {
+  from(table: string): PrivacyDeleteQuery;
+}
+
 function stringIds(rows: readonly unknown[]): string[] {
   return rows.flatMap((row) => {
     if (!row || typeof row !== "object" || !("id" in row)) return [];
@@ -122,6 +133,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     if (!token) throw new Error("Unable to revoke account sessions: request token missing.");
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const adminData = supabaseAdmin as unknown as PrivacyAdminDataClient;
 
     // Revoke refresh-token sessions before deletion. Already-issued access JWTs
     // remain cryptographically valid until exp; the UI does not promise otherwise.
@@ -129,7 +141,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     if (revokeError) throw new Error(`Unable to revoke account sessions: ${revokeError.message}`);
 
     for (const table of USER_DELETE_TABLES) {
-      const { error } = await supabaseAdmin.from(table).delete().eq("user_id", userId);
+      const { error } = await adminData.from(table).delete().eq("user_id", userId);
       if (error) throw new Error(`Unable to erase ${table}: ${error.message}`);
     }
 
