@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
-import { isSyncableLocalKey } from "@/lib/cloud-sync-scope";
+import { DEVICE_LOCAL_EXACT_KEYS, DEVICE_LOCAL_REMOTE_KEY_PATTERNS, isSyncableLocalKey } from "@/lib/cloud-sync-scope";
 
 export type SyncStatus = "idle" | "syncing" | "ok" | "error";
 
@@ -63,9 +63,9 @@ export function useCloudSync() {
         // are downloaded so old PIN/BLE/AI draft values do not consume egress.
         .not("key", "match", "^pace\\.__sync_")
         .not("key", "match", "^pace\\.__nutrition_cache:")
-        .not("key", "match", "^(pace|lt)\\.(privacy|ble|import|local-ai)\\.")
-        .not("key", "match", "^(pace|lt)\\.ai\\.pending:")
-        .not("key", "in", "(pace.sport.active,lt.sport.active,pace.ai.conversations,lt.ai.conversations,pace.ai.deleted_conversations,lt.ai.deleted_conversations,pace.wallpaper,lt.wallpaper,pace.finance.pin.hash,lt.finance.pin.hash,pace.ai.debug,lt.ai.debug,pace.billing.device_id,lt.billing.device_id,pace.watch.last_metrics,lt.watch.last_metrics)");
+        .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[0])
+        .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[1])
+        .not("key", "in", `(${DEVICE_LOCAL_EXACT_KEYS.join(",")})`);
       if (error) throw error;
       let n = 0;
       (data ?? []).forEach((row) => {
