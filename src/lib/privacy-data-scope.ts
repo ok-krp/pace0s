@@ -82,3 +82,19 @@ export const USER_EXPORT_RELATIONS = {
   sport_workout_exercises: { parent: "sport_workout_sessions", foreignKey: "session_id" },
   sport_workout_sets: { parent: "sport_workout_exercises", foreignKey: "workout_exercise_id" },
 } as const;
+
+/**
+ * Shared workspace rows may belong to or be used by other members. They must
+ * be transferred or deliberately removed before deleting the creator/owner.
+ * These relations are absent from the older pre-workspace schema.
+ */
+export const ACCOUNT_DELETE_SHARED_RESOURCE_GUARDS = [
+  { table: "workspaces", column: "owner_user_id", label: "espaces de travail dont vous êtes propriétaire" },
+  { table: "grocery_lists", column: "created_by", label: "listes de courses partagées que vous avez créées" },
+  { table: "grocery_list_items", column: "created_by", label: "éléments de listes de courses partagées que vous avez créés" },
+  { table: "pantry_items", column: "created_by", label: "éléments de garde-manger partagés que vous avez créés" },
+] as const;
+
+export function isMissingOptionalWorkspaceRelation(code: string | undefined): boolean {
+  return code === "PGRST205" || code === "42P01";
+}
