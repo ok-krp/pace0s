@@ -15,7 +15,7 @@ test("TanStack Start function middleware exposes validator and not the removed i
 
   const serverFunction = builder
     .validator((data: unknown) => data)
-    .handler(async ({ data }) => data);
+    .handler(async () => ({ ok: true }));
 
   assert.equal(typeof serverFunction, "function");
 });
