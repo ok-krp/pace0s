@@ -1,17 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-const USER_TABLES = [
-  "profiles",
-  "food_log",
-  "food_scans",
-  "health_samples",
-  "legal_consent",
-  "notification_log",
-  "reminder_settings",
-  "reminder_debug_log",
-  "user_state",
-] as const;
+import { USER_DELETE_TABLES, USER_EXPORT_TABLES } from "./privacy-data-scope";
 
 /**
  * Portabilité (RGPD Art. 20 / LGPD Art. 18 / CCPA §1798.110)
@@ -22,7 +12,7 @@ export const exportMyData = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const tables: Record<string, unknown[]> = {};
-    for (const t of USER_TABLES) {
+    for (const t of USER_EXPORT_TABLES) {
       const { data, error } = await context.supabase.from(t).select("*").eq("user_id", context.userId);
       if (error) throw new Error(`${t}: ${error.message}`);
       tables[t] = (data ?? []) as unknown[];
@@ -50,9 +40,12 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     const userId = context.userId;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
-    // Safety net — best-effort scrub before dropping the auth row (cascade covers it too).
-    for (const t of USER_TABLES) {
-      await supabaseAdmin.from(t).delete().eq("user_id", userId);
+    // Legacy AI tables do not all have a foreign key to auth.users. Delete
+    // their user-owned rows explicitly, and stop before Auth deletion if any
+    // table purge fails so the caller can safely retry.
+    for (const t of USER_DELETE_TABLES) {
+      const { error: deleteError } = await supabaseAdmin.from(t).delete().eq("user_id", userId);
+      if (deleteError) throw new Error(`Unable to erase ${t}: ${deleteError.message}`);
     }
 
     const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
