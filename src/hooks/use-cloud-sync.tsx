@@ -61,10 +61,10 @@ export function useCloudSync() {
         .eq("user_id", user.id)
         // Apply the same canonical + legacy device-local boundary before rows
         // are downloaded so old PIN/BLE/AI draft values do not consume egress.
-        .not("key", "match", "^pace\\.__sync_")
-        .not("key", "match", "^pace\\.__nutrition_cache:")
         .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[0])
         .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[1])
+        .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[2])
+        .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[3])
         .not("key", "in", `(${DEVICE_LOCAL_EXACT_KEYS.join(",")})`);
       if (error) throw error;
       let n = 0;
