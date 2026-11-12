@@ -36,6 +36,10 @@ export const USER_EXPORT_TABLES = [
   "sport_workout_sessions",
   "workspace_members",
   "nutrition_calibration_feedback",
+  "sport_progression_targets",
+  "sport_workout_sessions",
+  "sport_programs",
+  "sport_exercises",
 ] as const;
 
 /**
