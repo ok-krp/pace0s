@@ -281,6 +281,8 @@ jobs:
         run: node --experimental-strip-types --test src/lib/local-state-hydration.test.ts
       - name: Test device-local wallpaper size and MIME policy
         run: node --experimental-strip-types --test src/lib/wallpaper-cache.test.ts
+      - name: Test TanStack server-function validator API
+        run: node --experimental-strip-types --test src/lib/tanstack-start-api.test.ts
       - name: Test MCP input validation
         run: node --experimental-strip-types --test src/lib/mcp/validation.test.ts
       - name: Test MCP OAuth issuer resolution
