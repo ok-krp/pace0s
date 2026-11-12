@@ -4,13 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
-import { accountSyncStorageKeys, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
+import { accountSyncStorageKeys, DEVICE_LOCAL_EXACT_KEYS, DEVICE_LOCAL_REMOTE_KEY_PATTERNS, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullPlan } from "@/lib/cloud-sync-scope";
 import { fetchAllKeysetPages } from "@/lib/user-state-pagination";
 import { flushNutritionFoodLogOutbox } from "@/lib/nutrition-log";
 import { NUTRITION_CACHE_OWNER_KEY, NUTRITION_UNASSIGNED_BACKUP_KEY, nutritionAccountCacheKeys } from "@/lib/nutrition-sync";
 
 const PACE_PREFIX = "pace.";
-const EXCLUDED = new Set<string>(["pace.sport.active"]);
+const EXCLUDED = new Set<string>(DEVICE_LOCAL_EXACT_KEYS.filter((key) => key.startsWith("pace.")));
 // When Realtime is unhealthy, poll only rows changed since the per-account
 // watermark. Keep a short overlap for equal/late timestamps and do a full
 // reconciliation at startup and at least once every 24 hours.
@@ -273,9 +273,9 @@ export function useCloudSyncEngineInternal() {
               .not("key", "match", "^pace\\.__sync_")
               .not("key", "match", "^pace\\.__nutrition_cache:")
               // Device-bound credentials, BLE identities, import logs and unsent drafts stay on this device.
-              .not("key", "match", "^(pace|lt)\\.(privacy|ble|import|local-ai)\\.")
-              .not("key", "match", "^(pace|lt)\\.ai\\.pending:")
-              .not("key", "in", "(pace.wallpaper,lt.wallpaper,pace.finance.pin.hash,lt.finance.pin.hash,pace.ai.debug,lt.ai.debug,pace.billing.device_id,lt.billing.device_id,pace.watch.last_metrics,lt.watch.last_metrics)");
+              .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[0])
+              .not("key", "match", DEVICE_LOCAL_REMOTE_KEY_PATTERNS[1])
+              .not("key", "in", `(${DEVICE_LOCAL_EXACT_KEYS.join(",")})`);
             if (!fullReconciliation) {
               query = query.gte("updated_at", incrementalCursor!);
             }
