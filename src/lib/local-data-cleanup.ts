@@ -11,9 +11,9 @@ export type LocalPaceCleanupResult = {
 };
 
 /**
- * Clears Pace-owned browser state without allowing an IndexedDB failure to
- * block the localStorage purge. This is used by both per-device reset and
- * account deletion; non-Pace storage keys are never touched.
+ * Clears current and legacy Pace-owned browser state without allowing an IndexedDB
+ * failure to block the localStorage purge. This is used by per-device reset and
+ * account deletion; unrelated application storage keys are never touched.
  */
 export async function clearLocalPaceData(
   storage: LocalStorageLike,
@@ -36,7 +36,7 @@ export async function clearLocalPaceData(
     const initialLength = storage.length;
     for (let index = 0; index < initialLength; index += 1) {
       const key = storage.key(index);
-      if (key?.startsWith("pace.")) paceKeys.push(key);
+      if (key?.startsWith("pace.") || key?.startsWith("lt.")) paceKeys.push(key);
     }
   } catch (error) {
     localStorageCleared = false;

@@ -30,6 +30,8 @@ test("clears Pace keys and preserves unrelated application storage", async () =>
   const storage = new MemoryStorage([
     ["pace.profile.name", '"Pace"'],
     ["pace.privacy.pin.hash", '"local-secret-hash"'],
+    ["lt.water", '"legacy-water"'],
+    ["lt.nutrition.items", '"legacy-nutrition"'],
     ["other.application.key", '"keep"'],
   ]);
 
