@@ -25,6 +25,22 @@ Le dépôt permet les deux premiers niveaux. Les sessions physiques PC/télépho
 | Tests physiques PC / téléphone | Non exécutés | Nécessitent un navigateur/appareil interactif |
 | Synchronisation Supabase réelle | Non vérifiée | La CI n'a ni SUPABASE_URL ni clé publique ; preflight explicite « offline/local-only » |
 
+## Production SSR — cause probable de l'incident
+
+Le dernier déploiement Production est sur le commit `dd66333` (11 octobre 2026), avec le verrouillage de dépendances suivant :
+- `@tanstack/react-start` : **1.168.60**
+- `@tanstack/start-server-core` : **1.169.39**
+
+Ce mélange de versions est suspect. Les notes officielles TanStack indiquent que `.inputValidator()` a été déprécié au sein de la famille 1.168 (1.168.25), puis supprimé en 1.169.0 au profit de `.validator()`. Les erreurs Production observées sont exactement `createServerFn(...).middleware(...).inputValidator is not a function`.
+
+La branche d'audit a un verrouillage plus cohérent :
+- `@tanstack/react-start` : **1.169.2**
+- `@tanstack/start-server-core` : **1.169.43**
+
+Le build Vercel Preview et le type-check réussissent avec ce verrouillage. **Cause probable, pas encore preuve de correction runtime** : il manque un appel réel et authentifié à une server function sur le Preview afin de vérifier l'initialisation SSR et l'exécution de la validation. Le Preview est protégé par le SSO du projet dans l'outil d'accès actuel.
+
+Référence officielle : [TanStack React Start changelog — 1.168.25 et 1.169.0](https://github.com/TanStack/router/blob/main/packages/react-start/CHANGELOG.md).
+
 ## Matrice fonctionnelle PC / téléphone
 
 | Domaine | Web PC | Web mobile | Flutter natif | Priorité / constat |
