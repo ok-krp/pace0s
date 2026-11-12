@@ -45,6 +45,8 @@ void main() {
   test('never syncs account-private Nutrition caches or local food-log outboxes', () {
     expect(SyncService.isSyncableKey('pace.nutrition.items'), isTrue);
     expect(SyncService.isSyncableKey('pace.wallpaper'), isFalse);
+      expect(SyncService.excludedRemotePullKeyPatterns, contains(r'^(pace|lt)\.__sync_'));
+      expect(SyncService.excludedRemotePullKeyPatterns, contains(r'^(pace|lt)\.__nutrition_cache:'));
     for (final key in [
       'pace.privacy.pin.hash',
       'pace.privacy.bioCredentialId',
@@ -1018,15 +1020,4 @@ void main() {
         isFalse,
       );
     });
-  });
-
-  test('excludes legacy internal sync and Nutrition cache aliases before pull', () {
-    expect(
-      SyncService.excludedRemotePullKeyPatterns,
-      contains(r'^(pace|lt)\.__sync_'),
-    );
-    expect(
-      SyncService.excludedRemotePullKeyPatterns,
-      contains(r'^(pace|lt)\.__nutrition_cache:'),
-    );
   });
