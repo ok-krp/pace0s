@@ -76,13 +76,13 @@ New wallpaper selection and image data are now stored only in device-local Index
 
 ### Device-local privacy data — synchronization boundary
 
-The cross-platform sync audit found that the previous broad `pace.*` allow rule could send device-bound records into `user_state`. The Web and Flutter push filters now explicitly keep these keys local:
+The cross-platform sync audit found that the previous broad `pace.*` allow rule could send device-bound records into `user_state`. The automatic Web sync engine, the manual Cloud Sync backup/restore buttons, and Flutter push filters now explicitly keep these keys local:
 - `pace.privacy.*`: Finance PIN hash, WebAuthn credential ID and local lock preferences.
 - `pace.ble.*` and `pace.import.*`: paired-device identifiers, sensor mappings, import dedupe hashes and import history.
 - `pace.local-ai.*` and `pace.ai.pending:*`: device-local model state and unsent AI draft text.
 - Exact local-only keys: `pace.wallpaper`, `pace.finance.pin.hash`, `pace.ai.debug`, `pace.billing.device_id`, `pace.watch.last_metrics`.
 
-The Web and Flutter server-side pull queries also filter canonical and legacy `lt.*` aliases before downloading values, including exact aliases for billing, watch cache, debug and old Finance PIN data. Unit tests cover the syncable-key allow/deny rules in both clients.
+The automatic Web sync engine, manual Cloud Sync restore, and Flutter server-side pull queries also filter canonical and legacy `lt.*` aliases before downloading values, including exact aliases for billing, watch cache, debug and old Finance PIN data. Unit tests cover the syncable-key allow/deny rules in both clients.
 
 No pre-existing `user_state` rows were deleted, and neither connected Supabase project was modified. Historical values already uploaded to a cloud project, if any, remain there until a separate reviewed cleanup is approved. The new client filters prevent further push/pull but do not erase historical cloud copies.
 
