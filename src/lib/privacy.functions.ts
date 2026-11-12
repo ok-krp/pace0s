@@ -32,6 +32,10 @@ interface PrivacyAdminResponse {
 
 interface PrivacyAdminSelectQuery extends PromiseLike<PrivacyAdminResponse> {
   eq(column: string, value: string): PrivacyAdminSelectQuery;
+  neq(column: string, value: string): PrivacyAdminSelectQuery;
+  in(column: string, values: string[]): PrivacyAdminSelectQuery;
+  order(column: string, options: { ascending: boolean }): PrivacyAdminSelectQuery;
+  range(from: number, to: number): PrivacyAdminSelectQuery;
   limit(count: number): PrivacyAdminSelectQuery;
 }
 
@@ -40,11 +44,12 @@ interface PrivacyAdminDeleteResponse {
 }
 
 interface PrivacyAdminDeleteQuery extends PromiseLike<PrivacyAdminDeleteResponse> {
-  eq(column: "user_id", value: string): PrivacyAdminDeleteQuery;
+  eq(column: string, value: string): PrivacyAdminDeleteQuery;
+  in(column: string, values: string[]): PrivacyAdminDeleteQuery;
 }
 
 interface PrivacyAdminQuery {
-  select(columns: "id"): PrivacyAdminSelectQuery;
+  select(columns: string): PrivacyAdminSelectQuery;
   delete(): PrivacyAdminDeleteQuery;
 }
 
@@ -58,6 +63,163 @@ function stringIds(rows: readonly unknown[]): string[] {
     const id = (row as { id?: unknown }).id;
     return typeof id === "string" ? [id] : [];
   });
+}
+
+const PRIVACY_DELETE_PAGE_SIZE = 500;
+
+async function readOwnedIds(
+  adminData: PrivacyAdminDataClient,
+  table: string,
+  userId: string,
+): Promise<string[]> {
+  const rows = await collectUserExportPages(async (from, to) => {
+    const { data, error } = await adminData
+      .from(table)
+      .select("id")
+      .eq("user_id", userId)
+      .order("id", { ascending: true })
+      .range(from, to);
+    return { data, error };
+  }, PRIVACY_DELETE_PAGE_SIZE);
+  return stringIds(rows);
+}
+
+async function readChildIds(
+  adminData: PrivacyAdminDataClient,
+  table: string,
+  parentColumn: string,
+  parentIds: string[],
+): Promise<string[]> {
+  const result: string[] = [];
+  for (let start = 0; start < parentIds.length; start += PRIVACY_DELETE_PAGE_SIZE) {
+    const parentChunk = parentIds.slice(start, start + PRIVACY_DELETE_PAGE_SIZE);
+    const rows = await collectUserExportPages(async (from, to) => {
+      const { data, error } = await adminData
+        .from(table)
+        .select("id")
+        .in(parentColumn, parentChunk)
+        .order("id", { ascending: true })
+        .range(from, to);
+      return { data, error };
+    }, PRIVACY_DELETE_PAGE_SIZE);
+    result.push(...stringIds(rows));
+  }
+  return result;
+}
+
+async function deleteRowsByIds(
+  adminData: PrivacyAdminDataClient,
+  table: string,
+  column: string,
+  ids: string[],
+): Promise<void> {
+  for (let start = 0; start < ids.length; start += PRIVACY_DELETE_PAGE_SIZE) {
+    const chunk = ids.slice(start, start + PRIVACY_DELETE_PAGE_SIZE);
+    const { error } = await adminData.from(table).delete().in(column, chunk);
+    if (error) throw new Error(`Unable to erase ${table}: ${error.message}`);
+  }
+}
+
+/**
+ * Check for user-owned sport catalog entries still referenced by another
+ * account. Those references must be transferred/removed before account
+ * deletion; no other user's workout or program data is rewritten.
+ */
+async function assertNoSharedSportReferences(
+  adminData: PrivacyAdminDataClient,
+  userId: string,
+  programIds: string[],
+  exerciseIds: string[],
+): Promise<void> {
+  const blockers: string[] = [];
+
+  for (let start = 0; start < programIds.length; start += PRIVACY_DELETE_PAGE_SIZE) {
+    const chunk = programIds.slice(start, start + PRIVACY_DELETE_PAGE_SIZE);
+    const { data, error } = await adminData
+      .from("sport_workout_sessions")
+      .select("id")
+      .in("program_id", chunk)
+      .neq("user_id", userId)
+      .limit(1);
+    if (error) throw new Error(`Unable to verify shared sport programs: ${error.message}`);
+    if (data?.length) blockers.push("programmes d'entraînement référencés par les séances d'un autre compte");
+  }
+
+  for (let start = 0; start < exerciseIds.length; start += PRIVACY_DELETE_PAGE_SIZE) {
+    const chunk = exerciseIds.slice(start, start + PRIVACY_DELETE_PAGE_SIZE);
+    const checks = await Promise.all([
+      adminData
+        .from("sport_program_items")
+        .select("id,sport_programs!inner(user_id)")
+        .in("exercise_id", chunk)
+        .neq("sport_programs.user_id", userId)
+        .limit(1),
+      adminData
+        .from("sport_workout_exercises")
+        .select("id,sport_workout_sessions!inner(user_id)")
+        .in("exercise_id", chunk)
+        .neq("sport_workout_sessions.user_id", userId)
+        .limit(1),
+      adminData
+        .from("sport_progression_targets")
+        .select("id")
+        .in("exercise_id", chunk)
+        .neq("user_id", userId)
+        .limit(1),
+    ]);
+    for (let i = 0; i < checks.length; i += 1) {
+      const result = checks[i];
+      if (result.error) {
+        throw new Error(`Unable to verify shared sport exercises: ${result.error.message}`);
+      }
+      if (result.data?.length) {
+        blockers.push("exercices personnels encore utilisés par les programmes, séances ou objectifs d'un autre compte");
+      }
+    }
+  }
+
+  if (blockers.length) {
+    throw new Error(
+      `Transférez ou supprimez d'abord les ressources sport partagées suivantes : ${[...new Set(blockers)].join(", ")}.`,
+    );
+  }
+}
+
+/**
+ * Remove this account's sport child rows before its parent catalogue rows.
+ * Two FKs to sport_exercises use ON DELETE RESTRICT, so relying only on
+ * auth.users cascades can make account deletion fail based on trigger order.
+ */
+async function deleteOwnedSportChildren(
+  adminData: PrivacyAdminDataClient,
+  userId: string,
+  programIds: string[],
+  sessionIds: string[],
+): Promise<void> {
+  const workoutExerciseIds = await readChildIds(
+    adminData,
+    "sport_workout_exercises",
+    "session_id",
+    sessionIds,
+  );
+  await deleteRowsByIds(
+    adminData,
+    "sport_workout_sets",
+    "workout_exercise_id",
+    workoutExerciseIds,
+  );
+  await deleteRowsByIds(
+    adminData,
+    "sport_workout_exercises",
+    "session_id",
+    sessionIds,
+  );
+  await deleteRowsByIds(
+    adminData,
+    "sport_program_items",
+    "program_id",
+    programIds,
+  );
 }
 
 /**
@@ -178,9 +340,21 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
       );
     }
 
+    // Sport exercises are referenced by RESTRICT FKs from program/workout
+    // children. Check shared references before any personal data is purged,
+    // then delete this user's child rows before deleting the parent catalogue.
+    const [programIds, sessionIds, exerciseIds] = await Promise.all([
+      readOwnedIds(adminData, "sport_programs", userId),
+      readOwnedIds(adminData, "sport_workout_sessions", userId),
+      readOwnedIds(adminData, "sport_exercises", userId),
+    ]);
+    await assertNoSharedSportReferences(adminData, userId, programIds, exerciseIds);
+
     // Keep the caller's session retryable until every personal table is purged.
     // Deleting the Auth user last revokes future refreshes without trapping the
     // user in a partially completed deletion if one table request fails.
+    await deleteOwnedSportChildren(adminData, userId, programIds, sessionIds);
+
     for (const table of USER_DELETE_TABLES) {
       const { error } = await adminData.from(table).delete().eq("user_id", userId);
       if (error) {
