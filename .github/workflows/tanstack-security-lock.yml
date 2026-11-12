@@ -136,8 +136,37 @@ jobs:
           }
           echo "Resolved @tanstack/react-start=$start"
           echo "Resolved @tanstack/start-server-core=$core"
-          at_least "$start" "1.168.60" || { echo "::error::Unpatched @tanstack/react-start: $start"; exit 1; }
-          at_least "$core" "1.169.39" || { echo "::error::Unpatched @tanstack/start-server-core: $core"; exit 1; }
+          at_least "$start" "1.169.2" || { echo "::error::Unpatched @tanstack/react-start: $start"; exit 1; }
+          at_least "$core" "1.169.43" || { echo "::error::Unpatched @tanstack/start-server-core: $core"; exit 1; }
+          node <<'NODE'
+          const fs = require("node:fs");
+          const lock = JSON.parse(fs.readFileSync("package-lock.json", "utf8"));
+          const minimums = {
+            "@tanstack/react-start": [1, 169, 2],
+            "@tanstack/start-server-core": [1, 169, 43],
+          };
+          function compare(actual, minimum) {
+            const parts = actual.split(".").map(Number);
+            if (parts.length !== 3 || parts.some((part) => !Number.isSafeInteger(part))) return -1;
+            for (let i = 0; i < 3; i++) {
+              if (parts[i] !== minimum[i]) return parts[i] > minimum[i] ? 1 : -1;
+            }
+            return 0;
+          }
+          for (const [name, minimum] of Object.entries(minimums)) {
+            const actual = lock.packages?.[`node_modules/${name}`]?.version;
+            if (!actual || compare(actual, minimum) < 0) {
+              console.error(`::error::Unpatched npm lock entry for ${name}: ${actual ?? "missing"}; minimum ${minimum.join(".")}`);
+              process.exitCode = 1;
+            } else {
+              console.log(`npm lock ${name}=${actual}`);
+            }
+          }
+          NODE
+          if grep -R -nE --include='*.ts' --include='*.tsx' '\\.inputValidator[[:space:]]*\\(' src; then
+            echo "::error::Deprecated TanStack .inputValidator() call found in src; use .validator()"
+            exit 1
+          fi
       - name: Export regenerated shell-quote lock entries
         run: |
           node <<'NODE'
