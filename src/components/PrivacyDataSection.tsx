@@ -9,6 +9,8 @@ import { exportMyData, deleteMyAccount } from "@/lib/privacy.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { openConsentSheet } from "@/components/LegalConsentGate";
+import { clearWallpaperCache } from "@/lib/wallpaper-cache";
+import { clearLocalPaceData } from "@/lib/local-data-cleanup";
 
 export function PrivacyDataSection() {
   const runExport = useServerFn(exportMyData);
@@ -49,11 +51,21 @@ export function PrivacyDataSection() {
     setBusy("delete");
     try {
       await runDelete();
-      // Purge locale
-      Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k));
-      await supabase.auth.signOut();
-      toast.success("Compte supprimé. À bientôt.");
-      setTimeout(() => { window.location.href = "/login"; }, 400);
+      // Server deletion has succeeded. Always attempt both local stores even if
+      // IndexedDB is unavailable, then report any residual local cache clearly.
+      const cleanup = await clearLocalPaceData(window.localStorage, clearWallpaperCache);
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // The account deletion is already committed server-side. Navigation
+        // replaces the local app state even if remote sign-out cannot complete.
+      }
+      if (!cleanup.deviceCacheCleared || !cleanup.localStorageCleared) {
+        toast.error(`Compte supprimé ; nettoyage local incomplet : ${cleanup.errors.join(" ") || "vérifiez le cache de cet appareil"}`);
+      } else {
+        toast.success("Compte supprimé. À bientôt.");
+      }
+      window.setTimeout(() => { window.location.href = "/login"; }, 1200);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Suppression impossible");
       setBusy(null);

@@ -19,6 +19,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
 import { clearWallpaperCache } from "@/lib/wallpaper-cache";
+import { clearLocalPaceData } from "@/lib/local-data-cleanup";
 import { AiSettings } from "@/components/AiSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
 
@@ -79,10 +80,15 @@ function SettingsPage() {
   const reset = async () => {
     if (!confirm("Réinitialiser TOUTES vos données ?")) return;
     try {
-      await clearWallpaperCache();
-      Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k));
+      const result = await clearLocalPaceData(window.localStorage, clearWallpaperCache);
+      if (!result.deviceCacheCleared || !result.localStorageCleared) {
+        const detail = result.errors.join(" ");
+        toast.error(`Données Pace supprimées partiellement. Vérifiez le cache local : ${detail || "une partie du stockage n'a pas pu être effacée"}`);
+        window.setTimeout(() => window.location.reload(), 1800);
+        return;
+      }
       toast.success("Données effacées");
-      setTimeout(() => location.reload(), 600);
+      window.setTimeout(() => window.location.reload(), 600);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Impossible de réinitialiser le stockage local.");
     }
