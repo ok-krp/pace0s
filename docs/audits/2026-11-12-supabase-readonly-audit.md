@@ -33,6 +33,14 @@ The recorded migration histories are not interchangeable. The older project cont
 
 This is a metadata/policy-definition review, not a two-user RLS penetration test. Ownership predicates still need to be exercised with two distinct authenticated test users in an isolated project before sign-off.
 
+## Vercel environment binding
+
+A read-only inventory of the Vercel project environment variables shows that both **Preview** and **Production** currently have `SUPABASE_URL` and `VITE_SUPABASE_URL` set to the older `cduyjejftorfuxuwhbqt` project. The corresponding public publishable-key variables are also present in those scopes. The current `ohkmiqkhzqekavypiugf` project is not the URL currently bound to those Vercel scopes.
+
+This is a P0 environment-target mismatch if `ohk…` is the intended current backend: a Preview build will test against `cduy…`, not `ohk…`. Production is also still configured for `cduy…`. **No Vercel environment variable was changed.** Do not change Production until the intended target, schema lineage and isolated test plan are confirmed. Do not use Production for validation writes.
+
+The latest GitHub Actions preflight is a separate configuration surface: its `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` are both missing, so native CI builds are offline/local-only even though Vercel Preview has its own project variables.
+
 ## Security advisor findings
 
 ### Older/source project `cduy…`
