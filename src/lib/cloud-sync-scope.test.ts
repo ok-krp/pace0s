@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { accountSyncStorageKeys, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullCursor, syncPullPlan } from "./cloud-sync-scope.ts";
+import { accountSyncStorageKeys, DEVICE_LOCAL_EXACT_KEYS, DEVICE_LOCAL_REMOTE_KEY_PATTERNS, isLatestKeyWrite, isSyncableLocalKey, nextSyncWriteTimestamp, parseSyncMetadata, parseSyncQueue, syncPullCursor, syncPullPlan } from "./cloud-sync-scope.ts";
 
 test("sync queue and metadata storage are isolated by authenticated user", () => {
   const alice = accountSyncStorageKeys("user/alice");
@@ -166,4 +166,35 @@ test("reserved internal sync keys are never treated as user domain state", () =>
   assert.equal(isSyncableLocalKey("pace.__nutrition_cache:user-a:deleted_ids"), false);
   assert.equal(isSyncableLocalKey("lt.water"), false);
   assert.equal(isSyncableLocalKey("__outbox"), false);
+});
+
+test("automatic and manual PostgREST pulls share all exact device-local aliases", () => {
+  for (const key of [
+    "pace.sport.active",
+    "lt.sport.active",
+    "pace.ai.conversations",
+    "lt.ai.conversations",
+    "pace.ai.deleted_conversations",
+    "lt.ai.deleted_conversations",
+    "pace.wallpaper",
+    "lt.wallpaper",
+    "pace.finance.pin.hash",
+    "lt.finance.pin.hash",
+    "pace.ai.debug",
+    "lt.ai.debug",
+    "pace.billing.device_id",
+    "lt.billing.device_id",
+    "pace.watch.last_metrics",
+    "lt.watch.last_metrics",
+  ]) {
+    assert.ok((DEVICE_LOCAL_EXACT_KEYS as readonly string[]).includes(key), key);
+    assert.equal(isSyncableLocalKey(key), false, key);
+  }
+  const prefixes = DEVICE_LOCAL_REMOTE_KEY_PATTERNS.map((pattern) => new RegExp(pattern));
+  for (const key of ["pace.privacy.pin.hash", "lt.ble.devices", "pace.import.log", "lt.local-ai.enabled"]) {
+    assert.ok(prefixes.some((pattern) => pattern.test(key)), key);
+  }
+  for (const key of ["pace.ai.pending:conversation-1", "lt.ai.pending:conversation-1"]) {
+    assert.ok(prefixes.some((pattern) => pattern.test(key)), key);
+  }
 });
