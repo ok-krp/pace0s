@@ -198,3 +198,17 @@ test("automatic and manual PostgREST pulls share all exact device-local aliases"
     assert.ok(prefixes.some((pattern) => pattern.test(key)), key);
   }
 });
+
+test("remote filters include canonical and legacy internal sync/cache prefixes", () => {
+  const patterns = DEVICE_LOCAL_REMOTE_KEY_PATTERNS.map((pattern) => new RegExp(pattern));
+  for (const key of [
+    "pace.__sync_queue",
+    "lt.__sync_food_log_outbox:user-a",
+    "pace.__nutrition_cache:user-a:items",
+    "lt.__nutrition_cache:user-b:deleted_ids",
+    "pace.privacy.pin.hash",
+    "lt.ai.pending:conversation-1",
+  ]) {
+    assert.ok(patterns.some((pattern) => pattern.test(key)), key);
+  }
+});
