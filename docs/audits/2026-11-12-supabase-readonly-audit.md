@@ -62,6 +62,19 @@ Remediation references:
 - [Mutable function search_path](https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable)
 - [Leaked Password Protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection)
 
+### Migration and ACL drift confirmed by read-only function inspection
+
+The current `ohk…` migration history ends with these 12 November entries:
+- `20261112094030_additive_reconcile_source_schema_20261112`
+- `20261112113842_allow_source_food_log_provenance_values_20261112`
+- `20261112125259_add_missing_nutrition_reference_read_policies_20261112`
+
+It does **not** contain the proposed `20261111150000_harden_security_definer_routine_acl` migration currently present in the unmerged security-review work. This aligns with the observed live ACL/search-path warnings: the current project's `delete_temporary_workout_after_finish()` and `rls_auto_enable()` still have client execute privileges in their ACL metadata, and `upsert_user_state_if_newer` still has `search_path = public`.
+
+On `cduy…`, the inspected `upsert_user_state_if_newer` already checks `auth.uid() = p_user_id` and uses an empty search path. Most inspected E2EE functions also use an empty search path. The two projects therefore differ in both schema history and routine hardening.
+
+The trigger/event-trigger return types matter: the advisor's execute-ACL warning does not itself prove ordinary PostgREST callers can invoke those routines. Still, least-privilege ACL revocation is warranted and should be verified in a disposable/test database before any Production rollout.
+
 ## Performance advisor findings
 
 | Project | Finding | Count / severity | Interpretation |
