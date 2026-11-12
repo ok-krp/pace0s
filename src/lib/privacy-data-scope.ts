@@ -58,3 +58,27 @@ export const USER_DELETE_TABLES = [
   "reminder_debug_log",
   "user_state",
 ] as const;
+
+/**
+ * Tables with user_id but no id primary key. All other export tables use id.
+ */
+export const USER_EXPORT_ORDER_COLUMNS: Partial<
+  Record<(typeof USER_EXPORT_TABLES)[number], string>
+> = {
+  ai_preferences: "user_id",
+  billing_customers: "user_id",
+  billing_subscriptions: "user_id",
+  billing_trials: "user_id",
+  health_e2ee_key_versions: "user_id",
+  health_e2ee_recovery_envelopes: "user_id",
+};
+
+/**
+ * Child rows have no user_id column. They are exported only through IDs
+ * already selected from the current user's own programs/sessions/exercises.
+ */
+export const USER_EXPORT_RELATIONS = {
+  sport_program_items: { parent: "sport_programs", foreignKey: "program_id" },
+  sport_workout_exercises: { parent: "sport_workout_sessions", foreignKey: "session_id" },
+  sport_workout_sets: { parent: "sport_workout_exercises", foreignKey: "workout_exercise_id" },
+} as const;
