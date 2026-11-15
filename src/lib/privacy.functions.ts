@@ -220,15 +220,83 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const adminDb = supabaseAdmin as any;
 
-    const { data: request, error: requestError } = await adminDb
-      .from("data_deletion_requests")
-      .insert({ user_id: userId, status: "processing" })
-      .select("id")
-      .single();
+    let requestId: string;
 
-    if (requestError) {
-      console.error("account deletion request failed", { error: requestError.message });
-      throw new Error("Une suppression est déjà en cours ou ne peut pas être démarrée.");
+    // Flutter can create a pending request before the user reaches the Web
+    // deletion flow. Claim that row instead of colliding with the unique
+    // one-active-request-per-user index.
+    const { data: activeRequest, error: activeRequestError } = await adminDb
+      .from("data_deletion_requests")
+      .select("id,status,updated_at")
+      .eq("user_id", userId)
+      .in("status", ["pending", "processing"])
+      .order("requested_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (activeRequestError) {
+      console.error("account deletion request lookup failed", { error: activeRequestError.message });
+      throw new Error("Impossible de vérifier la demande de suppression.");
+    }
+
+    if (activeRequest?.status === "pending") {
+      const { data: claimedRequest, error: claimError } = await adminDb
+        .from("data_deletion_requests")
+        .update({
+          status: "processing",
+          completed_at: null,
+          error_code: null,
+        })
+        .eq("id", activeRequest.id)
+        .eq("status", "pending")
+        .select("id")
+        .maybeSingle();
+
+      if (claimError || !claimedRequest) {
+        console.error("account deletion pending request claim failed", {
+          error: claimError?.message ?? "request was claimed concurrently",
+        });
+        throw new Error("Une suppression est déjà en cours.");
+      }
+      requestId = claimedRequest.id;
+    } else if (activeRequest?.status === "processing") {
+      const staleBefore = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+      const { data: reclaimedRequest, error: reclaimError } = await adminDb
+        .from("data_deletion_requests")
+        .update({
+          updated_at: new Date().toISOString(),
+          completed_at: null,
+          error_code: null,
+        })
+        .eq("id", activeRequest.id)
+        .eq("status", "processing")
+        .lt("updated_at", staleBefore)
+        .select("id")
+        .maybeSingle();
+
+      if (reclaimError || !reclaimedRequest) {
+        console.error("account deletion processing request is still active", {
+          error: reclaimError?.message ?? "request is not stale or was claimed concurrently",
+        });
+        throw new Error("Une suppression est déjà en cours.");
+      }
+      requestId = reclaimedRequest.id;
+    } else if (activeRequest) {
+      throw new Error("Une demande de suppression existe déjà.");
+    } else {
+      const { data: createdRequest, error: createError } = await adminDb
+        .from("data_deletion_requests")
+        .insert({ user_id: userId, status: "processing" })
+        .select("id")
+        .single();
+
+      if (createError || !createdRequest) {
+        console.error("account deletion request creation failed", {
+          error: createError?.message ?? "request id missing",
+        });
+        throw new Error("Une suppression est déjà en cours ou ne peut pas être démarrée.");
+      }
+      requestId = createdRequest.id;
     }
 
     try {
@@ -279,7 +347,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
           completed_at: new Date().toISOString(),
           error_code: null,
         })
-        .eq("id", request.id);
+        .eq("id", requestId);
       if (completedError) throw new Error("cleanup:deletion_request");
 
       const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
@@ -294,7 +362,7 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
           completed_at: null,
           error_code: error instanceof Error ? error.message : "unknown",
         })
-        .eq("id", request.id);
+        .eq("id", requestId);
       console.error("account deletion failed", { error });
       throw new Error("Impossible de supprimer le compte.");
     }
