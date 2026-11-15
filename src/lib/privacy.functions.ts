@@ -232,14 +232,6 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
     }
 
     try {
-      // Ownership handoff is atomic and runs before the Auth user is deleted.
-      // It preserves shared workspaces and deletes only workspaces with no
-      // surviving member.
-      const { error: workspaceError } = await adminDb.rpc("prepare_account_deletion", {
-        p_user_id: userId,
-      });
-      if (workspaceError) throw new Error("cleanup:workspaces");
-
       const [{ data: programs, error: programsError }, { data: sessions, error: sessionsError }] = await Promise.all([
         adminDb.from("sport_programs").select("id").eq("user_id", userId),
         adminDb.from("sport_workout_sessions").select("id").eq("user_id", userId),
@@ -272,6 +264,13 @@ export const deleteMyAccount = createServerFn({ method: "POST" })
         const { error } = await adminDb.from(table).delete().eq("user_id", userId);
         if (error) throw new Error(`cleanup:${table}`);
       }
+
+      // Transfer collaborative workspace ownership only after all user-owned
+      // rows and Storage objects have been cleaned successfully.
+      const { error: workspaceError } = await adminDb.rpc("prepare_account_deletion", {
+        p_user_id: userId,
+      });
+      if (workspaceError) throw new Error("cleanup:workspaces");
 
       const { error: completedError } = await adminDb
         .from("data_deletion_requests")
