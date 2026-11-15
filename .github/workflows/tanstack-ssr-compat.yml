@@ -1,0 +1,40 @@
+name: TanStack SSR compatibility
+
+on:
+  push:
+    branches: [fix/main-tanstack-start-alignment-20261115]
+  pull_request:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "bun.lock"
+      - "src/**"
+      - "scripts/tanstack-start-compat-test.mjs"
+      - ".github/workflows/tanstack-ssr-compat.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify Bun lockfile matches the manifest
+        run: |
+          bun install --lockfile-only
+          git diff --exit-code -- bun.lock
+      - name: Verify compatible TanStack versions and API usage
+        run: node scripts/tanstack-start-compat-test.mjs
+      - name: Install exactly from the committed lockfile
+        run: bun install --frozen-lockfile
+      - run: bun run test:sync
+      - run: bun run build
+      - run: bun run typecheck
+      - run: bun run lint
