@@ -28,76 +28,8 @@ begin
      or p_ephemeral_pub->>'crv' <> 'P-256'
      or coalesce(length(p_ephemeral_pub->>'x'), 0) <> 43
      or coalesce(length(p_ephemeral_pub->>'y'), 0) <> 43
-     or coalesce(p_ephemeral_pub->>'x', '') !~ '^[A-Za-z0-9_-]{43}
-
-  if not exists (
-    select 1
-    from public.health_e2ee_devices d
-    where d.id = p_initiator_device_id
-      and d.user_id = auth.uid()
-      and d.revoked_at is null
-      and d.algorithm = 'ECDH-P256'
-  ) then
-    raise exception 'Unauthorized device';
-  end if;
-
-  insert into public.health_e2ee_pairing_sessions (
-    user_id,
-    initiator_device_id,
-    secret_hash,
-    challenge,
-    initiator_ephemeral_public_key,
-    expires_at
-  )
-  values (
-    auth.uid(),
-    p_initiator_device_id,
-    p_secret_hash,
-    p_challenge,
-    p_ephemeral_pub,
-    now() + make_interval(secs => p_expires_in_seconds)
-  )
-  returning id into v_session_id;
-
-  return v_session_id;
-end;
-$function$
-
-     or coalesce(p_ephemeral_pub->>'y', '') !~ '^[A-Za-z0-9_-]{43}
-
-  if not exists (
-    select 1
-    from public.health_e2ee_devices d
-    where d.id = p_initiator_device_id
-      and d.user_id = auth.uid()
-      and d.revoked_at is null
-      and d.algorithm = 'ECDH-P256'
-  ) then
-    raise exception 'Unauthorized device';
-  end if;
-
-  insert into public.health_e2ee_pairing_sessions (
-    user_id,
-    initiator_device_id,
-    secret_hash,
-    challenge,
-    initiator_ephemeral_public_key,
-    expires_at
-  )
-  values (
-    auth.uid(),
-    p_initiator_device_id,
-    p_secret_hash,
-    p_challenge,
-    p_ephemeral_pub,
-    now() + make_interval(secs => p_expires_in_seconds)
-  )
-  returning id into v_session_id;
-
-  return v_session_id;
-end;
-$function$
- then
+     or coalesce(p_ephemeral_pub->>'x', '') !~ '^[A-Za-z0-9_-]{43}$'
+     or coalesce(p_ephemeral_pub->>'y', '') !~ '^[A-Za-z0-9_-]{43}$' then
     raise exception 'Invalid initiator ephemeral public key';
   end if;
 
