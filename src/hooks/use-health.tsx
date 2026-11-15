@@ -108,9 +108,28 @@ export function useHealthToday() {
     setLoading(true);
     try {
       const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+      // Backfill existing encrypted records before migrating plaintext rows.
+      // Otherwise legacy samples can be re-encrypted before older rows have stable
+      // dedupe hashes, which may create duplicate encrypted records.
+      const dedupeBackfillKey = `pace-health-e2ee-dedupe-backfilled:${user.id}`;
+      let dedupeBackfillReady = localStorage.getItem(dedupeBackfillKey) === "1";
+      if (!dedupeBackfillReady) {
+        try {
+          const backfill = await backfillHealthE2eeDedupeHashes();
+          if (backfill.skipped === 0) {
+            localStorage.setItem(dedupeBackfillKey, "1");
+            dedupeBackfillReady = true;
+          } else {
+            console.warn("health E2EE dedupe backfill incomplete", backfill);
+          }
+        } catch (error) {
+          console.warn("health E2EE dedupe backfill deferred", error);
+        }
+      }
+
       const migrationKey = `pace-health-e2ee-migrated:${user.id}`;
       const migrationAttemptsKey = `pace-health-e2ee-migration-attempts:${user.id}`;
-      if (localStorage.getItem(migrationKey) !== "1") {
+      if (dedupeBackfillReady && localStorage.getItem(migrationKey) !== "1") {
         let migrationAttempts = 0;
         try {
           migrationAttempts = Number(sessionStorage.getItem(migrationAttemptsKey) ?? "0");
@@ -134,16 +153,6 @@ export function useHealthToday() {
           } catch {
             // Legacy migration is best-effort. Continue loading already-encrypted health data.
           }
-        }
-      }
-
-      const dedupeBackfillKey = `pace-health-e2ee-dedupe-backfilled:${user.id}`;
-      if (localStorage.getItem(dedupeBackfillKey) !== "1") {
-        try {
-          const backfill = await backfillHealthE2eeDedupeHashes();
-          if (backfill.skipped === 0) localStorage.setItem(dedupeBackfillKey, "1");
-        } catch (error) {
-          console.warn("health E2EE dedupe backfill deferred", error);
         }
       }
 
