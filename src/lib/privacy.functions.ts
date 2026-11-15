@@ -22,6 +22,7 @@ const EXPORT_USER_TABLES = [
   "reminder_settings",
   "reminder_debug_log",
   "user_state",
+  "audit_log",
   "ai_action_log",
   "ai_conversations",
   "ai_messages",
