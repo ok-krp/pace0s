@@ -104,12 +104,8 @@ async function readRowsForIds(
 
 async function removeOwnedStorageObjects(adminDb: any, userId: string): Promise<void> {
   const objects = await readAllRows(
-    "storage.objects",
-    () => adminDb
-      .schema("storage")
-      .from("objects")
-      .select("bucket_id,name")
-      .or(`owner_id.eq.${userId},owner.eq.${userId}`),
+    "list_account_storage_objects",
+    () => adminDb.rpc("list_account_storage_objects", { p_user_id: userId }),
   );
 
   const byBucket = new Map<string, string[]>();
@@ -120,7 +116,8 @@ async function removeOwnedStorageObjects(adminDb: any, userId: string): Promise<
     byBucket.set(object.bucket_id, paths);
   }
 
-  for (const [bucket, paths] of byBucket) {
+  for (const [bucket, rawPaths] of byBucket) {
+    const paths = [...new Set(rawPaths)];
     for (let offset = 0; offset < paths.length; offset += 100) {
       const { error } = await adminDb.storage.from(bucket).remove(paths.slice(offset, offset + 100));
       if (error) {
