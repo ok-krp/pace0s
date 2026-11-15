@@ -111,7 +111,6 @@ export const saveLegalConsent = createServerFn({ method: "POST" })
       granted: data.opts[consentType],
       legal_version: LEGAL_VERSIONS.eula,
       policy_version: LEGAL_VERSIONS.privacy,
-      created_at: now,
     }));
 
     const { error: recordsError } = await context.supabase.from("consent_records").insert(records);
