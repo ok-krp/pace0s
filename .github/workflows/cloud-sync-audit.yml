@@ -5,16 +5,26 @@ on:
     paths:
       - "src/hooks/use-cloud-sync-engine.tsx"
       - "src/hooks/use-cloud-sync.tsx"
+      - "src/hooks/use-health.tsx"
+      - "src/lib/health.functions.ts"
+      - "src/lib/legal.functions.ts"
+      - "src/lib/privacy.functions.ts"
       - "src/lib/storage.ts"
       - "supabase/migrations/**"
       - "scripts/cloud-sync-contract-test.mjs"
       - "package.json"
       - ".github/workflows/cloud-sync-audit.yml"
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/**"
     paths:
       - "src/hooks/use-cloud-sync-engine.tsx"
       - "src/hooks/use-cloud-sync.tsx"
+      - "src/hooks/use-health.tsx"
+      - "src/lib/health.functions.ts"
+      - "src/lib/legal.functions.ts"
+      - "src/lib/privacy.functions.ts"
       - "src/lib/storage.ts"
       - "supabase/migrations/**"
       - "scripts/cloud-sync-contract-test.mjs"
