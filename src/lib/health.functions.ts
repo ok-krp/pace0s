@@ -278,6 +278,17 @@ export const joinHealthPairingSession = createServerFn({ method: "POST" })
       p_ephemeral_pub: data.ephemeral_public_key,
     });
     if (error) throw new Error("Impossible de rejoindre la session de couplage.");
+
+    // Invalid secrets deliberately return from the SQL function after saving
+    // the brute-force counter (raising would roll that UPDATE back). Verify the
+    // persisted session state before acknowledging a successful pairing.
+    const { data: sessions, error: stateError } = await context.supabase.rpc(
+      "get_pairing_session",
+      { p_session_id: data.session_id },
+    );
+    if (stateError || sessions?.[0]?.status !== "joined") {
+      throw new Error("Secret incorrect, session expirée ou verrouillée.");
+    }
     return { joined: true };
   });
 
