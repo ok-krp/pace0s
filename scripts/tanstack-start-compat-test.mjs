@@ -4,14 +4,10 @@ import { join } from "node:path";
 
 const lock = readFileSync("bun.lock", "utf8");
 
-function resolvedVersion(packageName) {
-  const prefix = '"' + packageName + '": ["' + packageName + "@";
-  const line = lock.split(/\r?\n/).find((candidate) => candidate.trimStart().startsWith(prefix));
-  assert.ok(line, "Missing " + packageName + " in bun.lock");
-  const start = line.indexOf(prefix) + prefix.length;
-  const end = line.indexOf('"', start);
-  assert.ok(end > start, "Could not parse resolved version for " + packageName);
-  return line.slice(start, end);
+function resolvedVersions(packageName) {
+  const escaped = packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const pattern = new RegExp('\\["' + escaped + '@([0-9]+(?:\\.[0-9]+){2})"', "g");
+  return [...new Set([...lock.matchAll(pattern)].map((match) => match[1]))];
 }
 
 function atLeast(actual, minimum) {
@@ -24,10 +20,19 @@ function atLeast(actual, minimum) {
   return true;
 }
 
-const reactStart = resolvedVersion("@tanstack/react-start");
-const serverCore = resolvedVersion("@tanstack/start-server-core");
-assert.ok(atLeast(reactStart, "1.169.5"), "TanStack React Start must be >=1.169.5; found " + reactStart);
-assert.ok(atLeast(serverCore, "1.169.43"), "TanStack server core must be >=1.169.43; found " + serverCore);
+function assertSingleVersion(packageName, minimum) {
+  const versions = resolvedVersions(packageName);
+  assert.equal(versions.length, 1, packageName + " must resolve to exactly one version; found: " + versions.join(", "));
+  const version = versions[0];
+  assert.ok(atLeast(version, minimum), packageName + " must be >= " + minimum + "; found " + version);
+  return version;
+}
+
+const reactStart = assertSingleVersion("@tanstack/react-start", "1.169.5");
+const reactRouter = assertSingleVersion("@tanstack/react-router", "1.170.46");
+const routerCore = assertSingleVersion("@tanstack/router-core", "1.171.39");
+const routerPlugin = assertSingleVersion("@tanstack/router-plugin", "1.169.0");
+const serverCore = assertSingleVersion("@tanstack/start-server-core", "1.169.45");
 
 function filesUnder(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -45,4 +50,4 @@ for (const file of filesUnder("src")) {
 }
 assert.deepEqual(deprecatedApiReferences, [], "Removed TanStack .inputValidator API remains in: " + deprecatedApiReferences.join(", "));
 
-console.log("TanStack SSR compatibility OK: react-start=" + reactStart + ", start-server-core=" + serverCore + "; no removed .inputValidator API references.");
+console.log("TanStack SSR compatibility OK: react-start=" + reactStart + ", react-router=" + reactRouter + ", router-core=" + routerCore + ", router-plugin=" + routerPlugin + ", start-server-core=" + serverCore + "; no removed API references.");
