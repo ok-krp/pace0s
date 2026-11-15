@@ -64,8 +64,7 @@ begin
 
   return v_session_id;
 end;
-$function$
-
+$function$;
 
 CREATE OR REPLACE FUNCTION public.join_pairing_session(p_session_id uuid, p_secret_plaintext text, p_recipient_device_id uuid, p_ephemeral_pub jsonb)
  RETURNS void
@@ -164,8 +163,7 @@ begin
       updated_at = now()
   where id = p_session_id;
 end;
-$function$
-
+$function$;
 
 CREATE OR REPLACE FUNCTION public.confirm_pairing_session(p_session_id uuid, p_initiator_device_id uuid)
  RETURNS void
@@ -217,8 +215,7 @@ begin
       updated_at = now()
   where id = p_session_id;
 end;
-$function$
-
+$function$;
 
 CREATE OR REPLACE FUNCTION public.create_pairing_envelope(p_session_id uuid, p_sender_device_id uuid, p_recipient_device_id uuid, p_envelope text, p_key_version integer, p_algorithm text)
  RETURNS uuid
@@ -295,8 +292,7 @@ begin
 
   return v_envelope_id;
 end;
-$function$
-
+$function$;
 
 CREATE OR REPLACE FUNCTION public.complete_pairing_session(p_session_id uuid, p_recipient_device_id uuid)
  RETURNS void
@@ -338,8 +334,7 @@ begin
       secret_hash = encode(extensions.digest(extensions.gen_random_bytes(32), 'sha256'), 'hex')
   where id = p_session_id;
 end;
-$function$
-
+$function$;
 
 CREATE OR REPLACE FUNCTION public.get_pairing_session(p_session_id uuid)
  RETURNS TABLE(id uuid, initiator_device_id uuid, recipient_device_id uuid, protocol_version text, status text, challenge text, initiator_ephemeral_public_key jsonb, recipient_ephemeral_public_key jsonb, expires_at timestamp with time zone)
@@ -356,5 +351,4 @@ begin
   from public.health_e2ee_pairing_sessions s
   where s.id=p_session_id and s.user_id=auth.uid() and s.status in ('pending','joined','confirmed');
 end;
-$function$
-
+$function$;
