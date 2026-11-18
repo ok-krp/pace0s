@@ -214,7 +214,7 @@ assert.ok(bridgeStart >= 0 && bridgeEnd > bridgeStart, "Nutrition bridge must re
 const bridge = nutritionLog.slice(bridgeStart, bridgeEnd);
 assert.doesNotMatch(bridge, /\.delete\s*\(/, "A missing local snapshot row must never delete canonical food_log data");
 assert.match(bridge, /A missing ID is not a delete instruction/);
-assert.match(nutritionRoute, /await deletePersistedNutritionItem\(id\)/, "User-requested deletion must explicitly delete its exact SQL row");
+assert.match(nutritionRoute, /await deletePersistedNutritionItem\(id, expectedUserId \?\? undefined\)/, "User-requested deletion must explicitly delete its exact SQL row under the account that initiated the action");
 assert.match(nutritionLog, /DELETED_IDS_KEY = "pace\.__nutrition_deleted_ids_v1"/, "Explicit nutrition deletions must leave an account-local tombstone");
 assert.match(nutritionLog, /rememberDeletedNutritionId\(user\.id, id\)/, "A successful SQL deletion must tombstone the deleted UUID");
 assert.match(nutritionLog, /nutritionRows\(value\)\.filter\(\(\{ id \}\) => isFoodLogUuid\(id\) && !deletedIds\.has\(id\)\)/, "Only UUID-backed rows may be bridged, and explicitly deleted IDs stay excluded");
