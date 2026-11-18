@@ -129,6 +129,9 @@ assert.match(flutterSettings, /Synchronisation entre appareils[\s\S]*_setConsent
 assert.match(flutterSettings, /await widget\.sync\.setCloudSyncConsent\(value\)/, "Changing consent must immediately update native sync behavior");
 
 assert.match(flutterLocalStore, /__local_store_version': 2[\s\S]*__accounts/, "Flutter local storage must persist independent versioned account snapshots");
+assert.match(flutterLocalStore, /void addMutationListener\(LocalMutationListener listener\)[\s\S]*_notifyMutation\(key\)/, "Durable native local mutations must expose a sync notification without coupling storage to Supabase");
+assert.match(flutterSync, /localStore\.addMutationListener\(_onLocalMutation\)[\s\S]*void _onLocalMutation\(String key\)[\s\S]*if \(!isSyncableKey\(key\)\) return[\s\S]*unawaited\(syncNow\(\)\)/, "Flutter must sync each queued cloud-eligible local mutation immediately while keeping device-only keys local");
+assert.match(flutterApp, /Timer\.periodic\(const Duration\(seconds: 60\)/, "Flutter's periodic reconciliation must be a 60-second fallback, not the primary write-delivery mechanism");
 assert.match(flutterLocalStore, /Future<void> activateAccount\(String\? userId\)/, "Flutter must switch local snapshot and outbox atomically at account boundaries");
 
 assert.match(flutterLocalStore, /Future<void> acknowledgeOperationForAccount\([\s\S]*_accounts\[scope\]/, "Late acknowledgements must update the saved originating account snapshot");

@@ -6,6 +6,8 @@ import 'package:path_provider/path_provider.dart';
 
 /// Durable local state used by the native app. It is independent from the web
 /// application and is safe to use while completely offline.
+typedef LocalMutationListener = void Function(String key);
+
 class LocalStore {
   LocalStore._(this._file);
 
@@ -14,6 +16,25 @@ class LocalStore {
   final Map<String, Map<String, dynamic>> _accounts = {};
   String _scope = '__unscoped__';
   Future<void> _flushQueue = Future<void>.value();
+  final Set<LocalMutationListener> _mutationListeners = <LocalMutationListener>{};
+
+  void addMutationListener(LocalMutationListener listener) {
+    _mutationListeners.add(listener);
+  }
+
+  void removeMutationListener(LocalMutationListener listener) {
+    _mutationListeners.remove(listener);
+  }
+
+  void _notifyMutation(String key) {
+    for (final listener in List<LocalMutationListener>.from(_mutationListeners)) {
+      // Notification is best-effort and happens only after the durable write.
+      // A listener must never make a persisted local edit appear to fail.
+      try {
+        listener(key);
+      } catch (_) {}
+    }
+  }
 
   /// The signed-in account owning the currently active local snapshot.
   /// Null means the unscoped legacy/guest workspace is active.
@@ -128,6 +149,7 @@ class LocalStore {
       _data['__outbox'] = outbox;
     }
     await _flush();
+    if (enqueueSync) _notifyMutation(key);
   }
 
   Future<void> remove(String key, {bool enqueueSync = true}) async {
@@ -143,6 +165,7 @@ class LocalStore {
       _data['__outbox'] = outbox;
     }
     await _flush();
+    if (enqueueSync) _notifyMutation(key);
   }
 
   Future<void> applyRemote(String key, dynamic value, String updatedAt) async {

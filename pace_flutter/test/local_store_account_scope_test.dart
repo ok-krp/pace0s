@@ -5,6 +5,39 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/storage/local_store.dart';
 
 void main() {
+  group('LocalStore mutation notifications', () {
+    test('notifies sync listeners after durable queued writes and deletes only', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-mutations-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final store = await LocalStore.openAt(
+        File('${directory.path}/pace_local.json'),
+      );
+      await store.activateAccount('user-a');
+      final mutations = <String>[];
+      void onMutation(String key) => mutations.add(key);
+      store.addMutationListener(onMutation);
+
+      await store.write('pace.notes', {'id': 'note-a'});
+      await store.write('pace.device.cache', true, enqueueSync: false);
+      await store.remove('pace.shopping',);
+      await store.remove('pace.device.cache', enqueueSync: false);
+      await store.applyRemote(
+        'pace.sleep',
+        {'hours': 8},
+        '2026-11-18T12:00:00.000Z',
+      );
+
+      expect(mutations, ['pace.notes', 'pace.shopping']);
+      store.removeMutationListener(onMutation);
+      await store.write('pace.routine.list', [{'id': 'habit-a'}]);
+      expect(mutations, ['pace.notes', 'pace.shopping']);
+    });
+  });
+
   group('LocalStore account namespaces', () {
     test('first authenticated account adopts the legacy v1 snapshot intact', () async {
       final directory = await Directory.systemTemp.createTemp('pace-local-v1-');

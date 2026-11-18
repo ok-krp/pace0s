@@ -9,7 +9,16 @@ import '../storage/local_store.dart';
 /// Replays local mutations through Pace's existing user_state RPC and pulls
 /// newer remote state. Local writes remain durable while offline.
 class SyncService {
-  SyncService({required this.localStore, required this.client});
+  SyncService({required this.localStore, required this.client}) {
+    localStore.addMutationListener(_onLocalMutation);
+  }
+
+  /// A durable local write should start its sync cycle immediately. Device-only
+  /// keys stay local and must not trigger a network reconciliation.
+  void _onLocalMutation(String key) {
+    if (!isSyncableKey(key)) return;
+    unawaited(syncNow());
+  }
 
   final LocalStore localStore;
   final SupabaseClient? client;
