@@ -41,7 +41,7 @@ assert.doesNotMatch(engine, /readQueue\(\)/, "No Web sync path may read an unsco
 assert.doesNotMatch(engine, /readMeta\(\)/, "No Web sync path may read unscoped sync versions");
 assert.doesNotMatch(engine, /readConflicts\(\)/, "No Web sync path may read another account's conflicts");
 assert.match(engine, /running\.current\[user\.id\]/, "Concurrent sync locks must be isolated per authenticated account");
-assert.match(engine, /const writeKey = user\.id \+ ':' \+ item\.key/, "In-flight key writes must be isolated per authenticated account");
+assert.match(engine, /const writeKey = `\$\{user\.id\}:\$\{item\.key\}`/, "in-flight key writes must be isolated per authenticated account");
 
 const accountScope = read("src/lib/account-scope.ts");
 const authProvider = read("src/hooks/use-auth.tsx");
