@@ -133,7 +133,9 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     final client = widget.auth.client;
     final user = client?.auth.currentUser;
     if (client == null || user == null ||
-        widget.localStore.currentAccountId != user.id) return;
+        widget.localStore.currentAccountId != user.id) {
+      return;
+    }
     final userId = user.id;
     try {
       final rows = await client

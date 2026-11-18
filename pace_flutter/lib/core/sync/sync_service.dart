@@ -341,7 +341,9 @@ class SyncService {
     if (userId == null ||
         localStore.currentAccountId != userId ||
         client?.auth.currentUser?.id != userId ||
-        !_hasCachedCloudSyncConsent(userId)) return;
+        !_hasCachedCloudSyncConsent(userId)) {
+      return;
+    }
     for (final operation in List<Map<String, dynamic>>.from(
       localStore.pendingOperations(),
     )) {
@@ -414,7 +416,9 @@ class SyncService {
     if (user == null ||
         localStore.currentAccountId != user.id ||
         client?.auth.currentUser?.id != user.id ||
-        !_hasCachedCloudSyncConsent(user.id)) return;
+        !_hasCachedCloudSyncConsent(user.id)) {
+      return;
+    }
 
     try {
       if (pushLocal) {
@@ -488,7 +492,9 @@ class SyncService {
   Future<bool> _reconcileNutritionProjection(String userId) async {
     if (localStore.currentAccountId != userId ||
         client?.auth.currentUser?.id != userId ||
-        !_hasCachedCloudSyncConsent(userId)) return false;
+        !_hasCachedCloudSyncConsent(userId)) {
+      return false;
+    }
     try {
       final now = DateTime.now();
       final day =
@@ -660,7 +666,9 @@ class SyncService {
     final userId = client!.auth.currentUser!.id;
     if (localStore.currentAccountId != userId ||
         client?.auth.currentUser?.id != userId ||
-        !_hasCachedCloudSyncConsent(userId)) return;
+        !_hasCachedCloudSyncConsent(userId)) {
+      return;
+    }
     final rows = await client!
         .from('user_state')
         .select('key,value,updated_at')
