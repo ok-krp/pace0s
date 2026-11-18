@@ -233,7 +233,7 @@ assert.match(bridge, /isFoodLogUuid\(id\) && !deletedIds\.has\(id\)/, "Legacy ti
 assert.match(nutritionLog, /const currentRows = current\[day\] \?\? \[\][\s\S]*const legacyRows = currentRows\.filter\(\(item\) => !isFoodLogUuid\(item\.id\) && !deletedIds\.has\(item\.id\)\)/, "Web refresh must retain legacy Flutter meals absent from food_log unless the same account explicitly deleted them");
 assert.match(nutritionLog, /const pendingRows = currentRows\.filter\(\(item\) =>[\s\S]*pendingFoodLog === true[\s\S]*!canonicalIds\.has\(item\.id\)/, "Web refresh must retain pending native UUID rows absent from food_log");
 assert.match(nutritionLog, /const pendingRows = currentRows\.filter\(\(item\) =>[\s\S]*pendingFoodLog === true[\s\S]*!canonicalIds\.has\(item\.id\)/, "Web refresh must preserve native UUID rows while their canonical food_log insert is pending");
-assert.match(nutritionLog, /if \(pendingRows\.length\) await bridgeLocalNutritionToFoodLog\(nextSnapshot\)/, "Web must retry pending native meal inserts through the idempotent UUID bridge");
+assert.match(nutritionLog, /if \(pendingRows\.length\) await bridgeLocalNutritionToFoodLog\(nextSnapshot, expectedUserId\)/, "Web must retry pending native meal inserts through the idempotent account-bound UUID bridge");
 assert.match(nutritionLog, /if \(!isFoodLogUuid\(id\)\) return/, "Legacy timestamp meal deletion must not query the UUID food_log key");
 
 assert.match(nutritionLog, /await persistNutritionItem\(item, source\)/, "All nutrition additions must persist to food_log before updating local state");
