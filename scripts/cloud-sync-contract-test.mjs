@@ -89,7 +89,7 @@ assert.match(packageScripts["test:sync"], /node --experimental-strip-types scrip
 const nutritionAi = read("src/lib/ai-chat.server.ts");
 const nutritionLog = read("src/lib/nutrition-log.ts");
 assert.match(nutritionLog, /function activeNutritionAccountId\(\)[\s\S]*pace\.__account_scope[\s\S]*scope !== "__guest__"/, "Nutrition local bridge must identify the account whose local snapshot is active");
-assert.match(nutritionLog, /refreshNutritionFromFoodLog\([\s\S]*expectedUserId = activeNutritionAccountId\(\)[\s\S]*user\.id !== expectedUserId[\s\S]*activeNutritionAccountId\(\) !== expectedUserId/, "An in-flight Nutrition refresh must not project one account's rows into another account's local snapshot");
+assert.match(nutritionLog, /refreshNutritionFromFoodLog\([\s\S]*expectedUserId = options\.expectedUserId \?\? activeNutritionAccountId\(\)[\s\S]*activeNutritionAccountId\(\) !== expectedUserId[\s\S]*user\.id !== expectedUserId/, "An in-flight Nutrition refresh must remain bound to the user who started it");
 assert.match(nutritionLog, /persistNutritionItem\([\s\S]*expectedUserId = activeNutritionAccountId\(\)[\s\S]*user\.id !== expectedUserId/, "Manual Nutrition inserts must remain bound to the account active when the action started");
 assert.match(nutritionLog, /addNutritionItem\([\s\S]*const expectedUserId = activeNutritionAccountId\(\)[\s\S]*refreshNutritionFromFoodLog\(todayKey\(\), \{ expectedUserId \}\)/, "A completed insert must not refresh another account after a session switch");
 assert.match(nutritionLog, /const operationKey = operationId \? `\$\{expectedUserId\}:\$\{operationId\}` : null[\s\S]*completedOperations\.get\(operationKey\)/, "Nutrition idempotency reservations must be scoped to the originating account");
