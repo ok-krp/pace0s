@@ -5,10 +5,11 @@ void main() {
   group('Flutter Nutrition IDs', () {
     test('creates valid UUID v4 IDs for canonical food_log rows', () {
       final id = newFoodLogUuid();
-      expect(
-        RegExp('^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$').hasMatch(id),
-        isTrue,
+      final uuidV4 = RegExp(
+        r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        caseSensitive: false,
       );
+      expect(uuidV4.hasMatch(id), isTrue);
     });
 
     test('creates distinct IDs for separate manual meals', () {
