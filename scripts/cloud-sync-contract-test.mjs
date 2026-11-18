@@ -88,6 +88,7 @@ assert.match(packageScripts["test:sync"], /node --experimental-strip-types scrip
 
 const nutritionAi = read("src/lib/ai-chat.server.ts");
 const nutritionLog = read("src/lib/nutrition-log.ts");
+const nutritionRoute = read("src/routes/nutrition.tsx");
 assert.match(nutritionLog, /function activeNutritionAccountId\(\)[\s\S]*pace\.__account_scope[\s\S]*scope !== "__guest__"/, "Nutrition local bridge must identify the account whose local snapshot is active");
 assert.match(nutritionLog, /refreshNutritionFromFoodLog\([\s\S]*expectedUserId = options\.expectedUserId \?\? activeNutritionAccountId\(\)[\s\S]*activeNutritionAccountId\(\) !== expectedUserId[\s\S]*user\.id !== expectedUserId/, "An in-flight Nutrition refresh must remain bound to the user who started it");
 assert.match(nutritionLog, /persistNutritionItem\([\s\S]*expectedUserId = activeNutritionAccountId\(\)[\s\S]*user\.id !== expectedUserId/, "Manual Nutrition inserts must remain bound to the account active when the action started");
@@ -99,7 +100,6 @@ assert.match(nutritionLog, /for \(const \{ id, day, item \} of nextRows\)[\s\S]*
 assert.match(nutritionLog, /function deletedIdsStorageKey\(userId: string\)[\s\S]*encodeURIComponent\(userId\)/, "Nutrition deletion tombstones must use a distinct storage namespace per account");
 assert.match(nutritionLog, /localStorage\.getItem\(deletedIdsStorageKey\(userId\)\)[\s\S]*legacy\?\.userId === userId[\s\S]*localStorage\.removeItem\(DELETED_IDS_KEY\)/, "Legacy single-account tombstones must migrate only to their owning account");
 const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
-const nutritionRoute = read("src/routes/nutrition.tsx");
 const domainStore = read("src/lib/domain-store.ts");
 
 const flutterSync = read("pace_flutter/lib/core/sync/sync_service.dart");
