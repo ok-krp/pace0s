@@ -262,7 +262,7 @@ assert.match(nutritionRealtimeMigration, /duplicate_object/, "food_log Realtime 
 
 assert.doesNotMatch(domainStore, /MAX_IDENTICAL_NUTRITION_ITEMS_PER_DAY|MAX_NUTRITION_ITEMS_PER_DAY|count >=/, "Nutrition sanitization must not silently deduplicate or truncate valid meal entries");
 assert.doesNotMatch(nutritionLog, /recentAdds|addFingerprint/, "Identical intentional food entries must not be dropped by a client-side fingerprint cooldown");
-assert.match(nutritionLog, /completedOperations\.set\(operationId, now\)/, "Only explicit operation IDs should trigger idempotency suppression");
+assert.match(nutritionLog, /const operationKey = operationId \? `\$\{expectedUserId\}:\$\{operationId\}` : null[\s\S]*if \(operationKey\)[\s\S]*completedOperations\.set\(operationKey, now\)/, "Only explicit operation IDs should trigger account-scoped idempotency suppression");
 assert.match(nutritionRoute, /savingPending/, "Barcode and photo confirmation must prevent accidental duplicate clicks while the server write is pending");
 
 assert.match(nutritionLog, /await refreshNutritionFromFoodLog\(todayKey\(\), \{ expectedUserId \}\)/, "Nutrition projection must be rebuilt from canonical food_log under the original account");
