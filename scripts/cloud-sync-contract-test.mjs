@@ -16,7 +16,7 @@ const writeItemBlock = engine.slice(writeItemStart, pushItemStart);
 const pushItemBlock = engine.slice(pushItemStart, flushQueueStart);
 assert.match(writeItemBlock, /if \(!payload\.accepted\)[\s\S]*recordConflict\(row\.key, item\.value, row\.value, row\.updated_at\)/, "a stale server rejection must create a resolvable conflict without replacing the local value");
 assert.doesNotMatch(writeItemBlock, /applyRemoteAndRemember\(row\.key/, "a rejected local write must not overwrite the user's local snapshot with remote data");
-assert.match(pushItemBlock, /if \(accepted\) \{[\s\S]*unqueueIfMutation\(latest\.key, latest\.updatedAt\)/, "only server-accepted mutations may leave the outbox");
+assert.match(pushItemBlock, /if \(accepted\) \{[\s\S]*unqueueIfMutation\(latest\.key,\s*latest\.updatedAt,\s*user\.id\)/, "only the exact server-accepted mutation for the active account may leave the outbox");
 assert.match(pushItemBlock, /else \{[\s\S]*Rejected writes remain durable in the outbox/, "a rejected mutation must remain queued until conflict resolution");
 assert.doesNotMatch(pushItemBlock, /\}\s*unqueueIfMutation\(latest\.key, latest\.updatedAt\)/, "outbox entries must not be removed unconditionally after a rejected write");
 
