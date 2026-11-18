@@ -130,7 +130,11 @@ assert.match(flutterSettings, /await widget\.sync\.setCloudSyncConsent\(value\)/
 
 assert.match(flutterLocalStore, /__local_store_version': 2[\s\S]*__accounts/, "Flutter local storage must persist independent versioned account snapshots");
 assert.match(flutterLocalStore, /void addMutationListener\(LocalMutationListener listener\)[\s\S]*_notifyMutation\(key\)/, "Durable native local mutations must expose a sync notification without coupling storage to Supabase");
-assert.match(flutterSync, /localStore\.addMutationListener\(_onLocalMutation\)[\s\S]*void _onLocalMutation\(String key\)[\s\S]*if \(!isSyncableKey\(key\)\) return[\s\S]*unawaited\(syncNow\(\)\)/, "Flutter must sync each queued cloud-eligible local mutation immediately while keeping device-only keys local");
+assert.match(flutterSync, /localStore\.addMutationListener\(_onLocalMutation\)[\s\S]*void _onLocalMutation\(String key\)[\s\S]*!SyncService\.isSyncableKey\(key\)[\s\S]*discardOperationForAccount\(userId, operation\)[\s\S]*unawaited\(syncNow\(\)\)/, "Flutter must immediately sync eligible local writes and purge device-local outbox items without uploading them");
+assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.wallpaper\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27[\s\S]*\x27pace\.ai\.conversations\x27/, "Native user_state writes must explicitly exclude wallpaper, finance PIN and AI transcript keys");
+assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeyPatterns/, "Native pulls must exclude canonical/legacy device-local keys in PostgREST before downloading rows");
+assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableKey\(key\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys must be removed from the owning outbox without reaching Supabase");
+assert.match(flutterLocalStore, /Future<void> discardOperationForAccount\([\s\S]*final scope = \x27account:\$userId\x27[\s\S]*snapshot\[\x27__outbox\x27\] = outbox/, "Device-local outbox cleanup must update the originating account only");
 assert.match(flutterApp, /Timer\.periodic\(const Duration\(seconds: 60\)/, "Flutter's periodic reconciliation must be a 60-second fallback, not the primary write-delivery mechanism");
 assert.match(flutterLocalStore, /Future<void> activateAccount\(String\? userId\)/, "Flutter must switch local snapshot and outbox atomically at account boundaries");
 

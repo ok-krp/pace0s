@@ -17,6 +17,34 @@ void main() {
     });
   });
 
+  group('Flutter device-local sync exclusions', () {
+    test('keeps wallpapers, finance PINs and device-only records out of user_state', () {
+      for (final key in [
+        'pace.wallpaper',
+        'lt.wallpaper',
+        'pace.finance.pin.hash',
+        'pace.privacy.pin.hash',
+        'pace.ble.devices',
+        'pace.ai.conversations',
+        'pace.ai.deleted_conversations',
+        'pace.sport.active',
+        'pace.__sync_food_log_outbox',
+      ]) {
+        expect(SyncService.isSyncableKey(key), isFalse, reason: key);
+      }
+      expect(SyncService.isSyncableKey('pace.notes'), isTrue);
+      expect(SyncService.isSyncableKey('pace.nutrition.items'), isTrue);
+    });
+
+    test('filters canonical and legacy device-local aliases before a remote pull', () {
+      expect(SyncService.excludedRemotePullKeys, contains('pace.wallpaper'));
+      expect(SyncService.excludedRemotePullKeys, contains('lt.wallpaper'));
+      expect(SyncService.excludedRemotePullKeysFilter, contains('"pace.wallpaper"'));
+      expect(SyncService.excludedRemotePullKeysFilter, contains('"lt.wallpaper"'));
+      expect(SyncService.excludedRemotePullKeyPatterns, hasLength(4));
+    });
+  });
+
   group('Flutter cross-device sync consent', () {
     test('does not sync without an authenticated account', () {
       expect(shouldRunCloudSync(userId: null, activeAccountId: null, consentGranted: true), isFalse);

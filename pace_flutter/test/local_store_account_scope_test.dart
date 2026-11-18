@@ -142,6 +142,37 @@ void main() {
       expect(await file.readAsString(), corrupted);
     });
 
+    test('discards device-local outbox entries without marking them synced', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-discard-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final file = File('${directory.path}/pace_local.json');
+      final store = await LocalStore.openAt(file);
+
+      await store.activateAccount('user-a');
+      final wallpaper = {'cacheKey': 'local-wallpaper-1'};
+      await store.write('pace.wallpaper', wallpaper);
+      final operationA = store.pendingOperations().single;
+
+      await store.activateAccount('user-b');
+      await store.write('pace.notes', {'id': 'note-b'});
+      final operationB = store.pendingOperations().single;
+
+      await store.discardOperationForAccount('user-a', operationA);
+
+      expect(store.currentAccountId, 'user-b');
+      expect(store.pendingOperations(), [operationB]);
+      expect(store.lastSyncedAt('pace.wallpaper'), isNull);
+
+      await store.activateAccount('user-a');
+      expect(store.read('pace.wallpaper'), wallpaper);
+      expect(store.pendingOperations(), isEmpty);
+      expect(store.lastSyncedAt('pace.wallpaper'), isNull);
+    });
+
     test('keeps account outboxes isolated when a late acknowledgement arrives', () async {
       final directory = await Directory.systemTemp.createTemp('pace-local-v2-');
       addTearDown(() async {

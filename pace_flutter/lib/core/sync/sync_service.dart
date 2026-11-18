@@ -16,7 +16,17 @@ class SyncService {
   /// A durable local write should start its sync cycle immediately. Device-only
   /// keys stay local and must not trigger a network reconciliation.
   void _onLocalMutation(String key) {
-    if (!SyncService.isSyncableKey(key)) return;
+    final userId = client?.auth.currentUser?.id;
+    if (userId == null || localStore.currentAccountId != userId) return;
+    if (!SyncService.isSyncableKey(key)) {
+      final obsolete = localStore.pendingOperations()
+          .where((operation) => operation['key'] == key)
+          .toList();
+      for (final operation in obsolete) {
+        unawaited(localStore.discardOperationForAccount(userId, operation));
+      }
+      return;
+    }
     unawaited(syncNow());
   }
 
@@ -32,6 +42,70 @@ class SyncService {
   static const _nutritionFallbackInterval = Duration(minutes: 1);
   RealtimeChannel? _realtimeChannel;
   String? _realtimeUserId;
+
+  /// Keys that must never be mirrored into user_state.
+  /// Device-bound secrets and large AI transcripts remain on this device or in
+  /// their dedicated backend tables; they are not generic cross-device state.
+  static const Set<String> excludedSyncKeys = {
+    'pace.sport.active',
+    'pace.ai.conversations',
+    'pace.ai.deleted_conversations',
+    'pace.wallpaper',
+    'pace.finance.pin.hash',
+    'pace.ai.debug',
+    'pace.billing.device_id',
+    'pace.watch.last_metrics',
+  };
+
+  /// Exact aliases and sync bookkeeping excluded before PostgREST returns rows.
+  static const Set<String> excludedRemotePullKeys = {
+    ...excludedSyncKeys,
+    'pace.__sync_food_log_outbox',
+    'pace.__sync_food_log_quarantine',
+    'pace.__sync_ai_preferences_pending',
+    'pace.__sync_last_pull_at',
+    'pace.__sync_last_full_pull_at',
+    'lt.sport.active',
+    'lt.ai.conversations',
+    'lt.ai.deleted_conversations',
+    'lt.wallpaper',
+    'lt.finance.pin.hash',
+    'lt.ai.debug',
+    'lt.billing.device_id',
+    'lt.watch.last_metrics',
+  };
+
+  static const String excludedRemotePullKeysFilter =
+      '("pace.sport.active","pace.ai.conversations",'
+      '"pace.ai.deleted_conversations","pace.wallpaper","pace.finance.pin.hash",'
+      '"pace.ai.debug","pace.billing.device_id","pace.watch.last_metrics",'
+      '"pace.__sync_food_log_outbox","pace.__sync_food_log_quarantine",'
+      '"pace.__sync_ai_preferences_pending","pace.__sync_last_pull_at",'
+      '"pace.__sync_last_full_pull_at","lt.sport.active","lt.ai.conversations",'
+      '"lt.ai.deleted_conversations","lt.wallpaper","lt.finance.pin.hash",'
+      '"lt.ai.debug","lt.billing.device_id","lt.watch.last_metrics")';
+
+  static const List<String> excludedRemotePullKeyPatterns = [
+    r'^(pace|lt)\.__sync_',
+    r'^(pace|lt)\.__nutrition_cache:',
+    r'^(pace|lt)\.(privacy|ble|import|local-ai)\.',
+    r'^(pace|lt)\.ai\.pending:',
+  ];
+
+  static bool isDeviceLocalKey(String key) =>
+      key.startsWith('pace.privacy.') ||
+      key.startsWith('pace.ble.') ||
+      key.startsWith('pace.import.') ||
+      key.startsWith('pace.local-ai.') ||
+      key.startsWith('pace.ai.pending:') ||
+      excludedSyncKeys.contains(key);
+
+  static bool isSyncableKey(String key) =>
+      key.startsWith('pace.') &&
+      !key.startsWith('pace.__sync_') &&
+      !key.startsWith('pace.__nutrition_cache:') &&
+      !isDeviceLocalKey(key);
+
 
   Future<bool> _hasCloudSyncConsent(String userId) async {
     if (localStore.currentAccountId != userId ||
@@ -362,6 +436,11 @@ class SyncService {
         return;
       }
       try {
+        final key = operation['key'];
+        if (key is! String || !SyncService.isSyncableKey(key)) {
+          await localStore.discardOperationForAccount(userId, operation);
+          continue;
+        }
         final result = await _push(operation);
         if (!shouldAcknowledgeSyncOperation(accepted: result.accepted)) {
           // A rejected mutation is not an acknowledgement. Keep the durable
@@ -681,7 +760,12 @@ class SyncService {
     final rows = await client!
         .from('user_state')
         .select('key,value,updated_at')
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .not('key', 'in', SyncService.excludedRemotePullKeysFilter)
+        .not('key', 'match', SyncService.excludedRemotePullKeyPatterns[0])
+        .not('key', 'match', SyncService.excludedRemotePullKeyPatterns[1])
+        .not('key', 'match', SyncService.excludedRemotePullKeyPatterns[2])
+        .not('key', 'match', SyncService.excludedRemotePullKeyPatterns[3]);
 
     for (final raw in rows) {
       if (client?.auth.currentUser?.id != userId ||
@@ -690,6 +774,10 @@ class SyncService {
       }
       final row = Map<String, dynamic>.from(raw);
       final key = row['key'] as String;
+      if (!SyncService.isSyncableKey(key) ||
+          SyncService.excludedRemotePullKeys.contains(key)) {
+        continue;
+      }
       final remoteUpdatedAt = row['updated_at'] as String?;
       if (remoteUpdatedAt == null ||
           localStore.pendingOperations().any((op) => op['key'] == key)) {

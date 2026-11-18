@@ -250,6 +250,37 @@ class LocalStore {
     await _flush();
   }
 
+  /// Remove an obsolete/device-local operation from the originating
+  /// account's outbox without marking the value as server-synchronized.
+  /// The local value itself is retained.
+  Future<void> discardOperationForAccount(
+    String userId,
+    Map<String, dynamic> operation,
+  ) async {
+    final scope = 'account:$userId';
+    final snapshot = _scope == scope ? _data : _accounts[scope];
+    if (snapshot == null) return;
+
+    final rawOutbox = (snapshot['__outbox'] as List?) ?? const [];
+    final outbox = rawOutbox
+        .whereType<Map>()
+        .map((entry) => Map<String, dynamic>.from(entry))
+        .toList();
+    final queuedAt = operation['queuedAt'];
+    final before = outbox.length;
+    outbox.removeWhere((entry) {
+      if (entry['key'] != operation['key']) return false;
+      if (queuedAt != null) return entry['queuedAt'] == queuedAt;
+      return entry['operation'] == operation['operation'] &&
+          entry['value'] == operation['value'];
+    });
+    if (outbox.length == before) return;
+
+    snapshot['__outbox'] = outbox;
+    if (_scope != scope) _accounts[scope] = snapshot;
+    await _flush();
+  }
+
   Future<void> _flush() {
     // Capture the exact account state at the call boundary. Auth transitions
     // can overlap an outstanding disk write, so queued flushes must never read
