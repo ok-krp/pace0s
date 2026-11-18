@@ -218,7 +218,7 @@ assert.match(nutritionRoute, /await deletePersistedNutritionItem\(id, expectedUs
 assert.match(nutritionLog, /DELETED_IDS_KEY = "pace\.__nutrition_deleted_ids_v1"/, "Explicit nutrition deletions must leave an account-local tombstone");
 assert.match(nutritionLog, /rememberDeletedNutritionId\(user\.id, id\)/, "A successful SQL deletion must tombstone the deleted UUID");
 assert.match(nutritionLog, /nutritionRows\(value\)\.filter\(\(\{ id \}\) => isFoodLogUuid\(id\) && !deletedIds\.has\(id\)\)/, "Only UUID-backed rows may be bridged, and explicitly deleted IDs stay excluded");
-assert.match(nutritionLog, /raw\?\.userId === userId/, "Nutrition tombstones must be isolated to the signed-in account");
+assert.match(nutritionLog, /localStorage\.getItem\(deletedIdsStorageKey\(userId\)\)[\s\S]*legacy\?\.userId === userId[\s\S]*localStorage\.removeItem\(DELETED_IDS_KEY\)/, "Nutrition tombstones must use the active account namespace and migrate the legacy slot only to its recorded owner");
 const explicitNutritionDeleteStart = nutritionLog.indexOf("export async function deletePersistedNutritionItem");
 const explicitNutritionDeleteEnd = nutritionLog.indexOf("\nfunction nutritionRows", explicitNutritionDeleteStart);
 assert.ok(explicitNutritionDeleteStart >= 0 && explicitNutritionDeleteEnd > explicitNutritionDeleteStart, "Explicit nutrition deletion must remain identifiable");
