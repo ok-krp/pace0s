@@ -708,68 +708,11 @@ String newFoodLogUuid() {
 
 bool _isFoodLogUuid(dynamic id) {
   if (id is! String) return false;
-  final parts = id.split('-');
-  return parts.length == 5 &&
-      parts[0].length == 8 &&
-      parts[1].length == 4 &&
-      parts[2].length == 4 &&
-      parts[3].length == 4 &&
-      parts[4].length == 12;
+  return RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    caseSensitive: false,
+  ).hasMatch(id);
 }
-
-bool shouldAcknowledgeSyncOperation({required bool accepted}) => accepted;
-
-/// Returns whether a Realtime user_state row is newer than the local
-/// checkpoint and safe to apply.
-///
-/// Pending local mutations always win over a Realtime event. The normal sync
-/// cycle will reconcile the cloud state after the local write has completed.
-bool shouldApplyRealtimeUserState({
-  required DateTime? remoteTime,
-  required DateTime? localTime,
-  required bool hasPendingMutation,
-}) {
-  if (hasPendingMutation || remoteTime == null) return false;
-  return localTime == null || remoteTime.isAfter(localTime);
-}
-
-/// Validated response contract returned by upsert_user_state_if_newer().
-class CloudSyncWriteResponse {
-  const CloudSyncWriteResponse({
-    required this.accepted,
-    required this.updatedAt,
-  });
-
-  final bool accepted;
-  final String updatedAt;
-
-  factory CloudSyncWriteResponse.fromRpc(dynamic response) {
-    if (response is! Map) {
-      throw const FormatException('invalid cloud sync write response');
-    }
-    final accepted = response['accepted'];
-    final updatedAt = response['updated_at'];
-    if (accepted is! bool || updatedAt is! String || updatedAt.isEmpty) {
-      throw const FormatException('invalid cloud sync write response');
-    }
-    return CloudSyncWriteResponse(
-      accepted: accepted,
-      updatedAt: updatedAt,
-    );
-  }
-}
-
-class _PushResult {
-  const _PushResult.accepted(this.serverUpdatedAt) : accepted = true;
-
-  const _PushResult.rejected()
-      : accepted = false,
-        serverUpdatedAt = null;
-
-  final bool accepted;
-  final String? serverUpdatedAt;
-}
-, caseSensitive: false).hasMatch(id);
 
 /// Native and web clients share the same explicit sync_cloud opt-in.
 bool shouldRunCloudSync({
