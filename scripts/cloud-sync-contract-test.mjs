@@ -386,7 +386,7 @@ assert.match(engine, /pruneEquivalentConflicts/);
 
 // Rapid mutations are represented by a value + timestamp and coalesced per key.
 assert.match(engine, /type QueueItem = \{ key: string; value: unknown; updatedAt: string/);
-assert.match(engine, /readQueue\(\)\.filter\(\(queued\) => queued\.key !== item\.key\)/);
+assert.match(engine, /readQueue\(userId\)\.filter\(\(queued\) => queued\.key !== item\.key\)/, "Rapid mutations must be coalesced per key inside the originating account queue");
 
 // Client timestamps are retained only for local queue identity; server time orders cloud writes.
 assert.match(engine, /p_updated_at: item\.updatedAt/);
