@@ -236,7 +236,7 @@ assert.match(nutritionLog, /const pendingRows = currentRows\.filter\(\(item\) =>
 assert.match(nutritionLog, /if \(pendingRows\.length\) await bridgeLocalNutritionToFoodLog\(nextSnapshot, expectedUserId\)/, "Web must retry pending native meal inserts through the idempotent account-bound UUID bridge");
 assert.match(nutritionLog, /if \(!isFoodLogUuid\(id\)\) return/, "Legacy timestamp meal deletion must not query the UUID food_log key");
 
-assert.match(nutritionLog, /await persistNutritionItem\(item, source\)/, "All nutrition additions must persist to food_log before updating local state");
+assert.match(nutritionLog, /await persistNutritionItem\(item, source, expectedUserId\)/, "All nutrition additions must persist to food_log under the account that initiated the action");
 assert.match(nutritionLog, /source === "photo_ai" \? "photo" : source/, "Photo AI writes must use a source value accepted by the food_log schema");
 
 assert.match(nutritionLog, /export function subscribeNutritionFoodLogChanges/, "Web Nutrition must subscribe to canonical food_log changes");
@@ -265,7 +265,7 @@ assert.doesNotMatch(nutritionLog, /recentAdds|addFingerprint/, "Identical intent
 assert.match(nutritionLog, /completedOperations\.set\(operationId, now\)/, "Only explicit operation IDs should trigger idempotency suppression");
 assert.match(nutritionRoute, /savingPending/, "Barcode and photo confirmation must prevent accidental duplicate clicks while the server write is pending");
 
-assert.match(nutritionLog, /refreshNutritionFromFoodLog\(todayKey\(\)\)/, "Nutrition projection must be rebuilt from canonical food_log after an addition");
+assert.match(nutritionLog, /await refreshNutritionFromFoodLog\(todayKey\(\), \{ expectedUserId \}\)/, "Nutrition projection must be rebuilt from canonical food_log under the original account");
 assert.match(nutritionLog, /async function bridgeNutritionSnapshot\(value: unknown, userId: string\)/, "Previously local-only manual entries must be recovered into food_log");
 assert.match(nutritionLog, /for \(const \{ id, day, item \} of nextRows\)/, "Legacy recovery must preserve each existing nutrition UUID");
 assert.match(nutritionLog, /id, user_id: user\.id, log_date: day/, "Legacy recovery must reuse each existing nutrition UUID in food_log");
@@ -273,7 +273,7 @@ assert.doesNotMatch(nutritionLog.slice(nutritionLog.indexOf("async function refr
 assert.match(nutritionLog, /order\("created_at", \{ ascending: true \}\)/, "Canonical nutrition refresh must retain stable meal ordering");
 assert.match(nutritionLog, /let nutritionBridgeChain: Promise<void>/, "Legacy nutrition snapshots must be serialized instead of being dropped during an in-flight bridge");
 assert.match(nutritionLog, /nutritionBridgeChain = nutritionBridgeChain\.then\(task, task\)/, "Queued nutrition bridge snapshots must run even after a previous failure");
-assert.match(nutritionLog, /await bridgeLocalNutritionToFoodLog\(readNutritionItems\(\)\)/, "Nutrition refresh must wait for legacy local entries to finish bridging");
+assert.match(nutritionLog, /await bridgeLocalNutritionToFoodLog\(readNutritionItems\(\), expectedUserId\)/, "Nutrition refresh must wait for legacy local entries to finish bridging under the initiating account");
 assert.doesNotMatch(nutritionLog, /nutritionBridgeRunning/, "The bridge must not silently discard writes while busy");
 
 assert.match(nutritionRoute, /await addNutritionItem\([\s\S]*"manual"\)/, "Manual form must use the canonical persisted add path");
