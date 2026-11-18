@@ -16,7 +16,7 @@ class SyncService {
   /// A durable local write should start its sync cycle immediately. Device-only
   /// keys stay local and must not trigger a network reconciliation.
   void _onLocalMutation(String key) {
-    if (!isSyncableKey(key)) return;
+    if (!SyncService.isSyncableKey(key)) return;
     unawaited(syncNow());
   }
 

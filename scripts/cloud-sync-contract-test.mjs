@@ -327,7 +327,7 @@ assert.match(engine, /if \(cancelled \|\| !allowed\(\) \|\| !isSyncableKey\(row\
 assert.match(engine, /stopRealtime\(\);\n      setStatus\("offline"\);/, "Realtime must stop when the app goes offline");
 assert.match(engine, /if \(allowed\(\)\) startRealtime\(\);/, "Realtime must start on initial opt-in");
 assert.match(engine, /if \(allowed\(\)\) \{ startRealtime\(\); void syncNow\(\); \}/, "Enabling sync consent must reconnect Realtime and reconcile");
-assert.match(engine, /queueItem\(\{ key, value, updatedAt, mutationId \}\);\n      if \(allowed\(\)\)/, "Local mutations must remain queued on-device while cloud sync consent is off");
+assert.match(engine, /const offLocal = onLocalWrite\([\s\S]*queueItem\(\{ key, value, updatedAt, mutationId \}, user\.id\);\s*if \(allowed\(\)\) void pushItem/, "Local mutations must remain queued under the authenticated account while cloud sync consent is off, and push only after opt-in");
 assert.match(engine, /localOnlyKeys/, "Legacy raw app-state bootstrap must exclude device-local security and appearance settings");
 assert.match(engine, /pace\.privacy\.pin\.hash/, "Finance PIN hashes must never be part of local raw-state cloud recovery");
 assert.match(engine, /pace\.ble\.devices/, "Paired Bluetooth device identifiers must remain device-local");
