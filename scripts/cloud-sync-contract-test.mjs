@@ -124,7 +124,7 @@ assert.match(flutterSync, /consent_type', 'sync_cloud'/, "Flutter sync consent m
 assert.match(flutterSync, /_cloudSyncConsent = null/, "A failed consent lookup must remain distinguishable from an explicit denial");
 assert.match(flutterNutrition, /impossible de vérifier le consentement cloud/, "Nutrition must explain when consent lookup is unavailable instead of falsely claiming consent was denied");
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*userId == null[\s\S]*localStore\.currentAccountId != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not push local outbox mutations without an authenticated matching account and sync_cloud consent");
-assert.match(flutterSync, /if \(!_hasCachedCloudSyncConsent\(userId\)\) return;/, "Flutter must not pull remote state without sync_cloud consent");
+assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*localStore\.currentAccountId != userId[\s\S]*client\?\.auth\.currentUser\?\.id != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not pull remote state for a mismatched account or without sync_cloud consent");
 assert.match(flutterSettings, /Synchronisation entre appareils[\s\S]*_setConsent\('sync_cloud', value\)/, "Flutter settings must expose the functional cross-device sync consent");
 assert.match(flutterSettings, /await widget\.sync\.setCloudSyncConsent\(value\)/, "Changing consent must immediately update native sync behavior");
 
