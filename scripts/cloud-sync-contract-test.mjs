@@ -76,7 +76,7 @@ assert.match(accountScope, /const restored = readAccountSnapshot\(nextScope\)[\s
 
 assert.match(authProvider, /scopeError/, "The app must not render account data if namespace restoration fails");
 
-assert.match(accountScopeRuntimeTest, /first authenticated account|legacy local/i, "Browser account-scope runtime test must cover legacy local data adoption");
+assert.match(accountScopeRuntimeTest, /legacyNutrition[\s\S]*switchLocalAccountScope\("user-a"\)[\s\S]*readJson\("pace\.nutrition\.items"\)/, "the first authenticated user must adopt existing legacy Nutrition data instead of losing it");
 assert.match(accountScopeRuntimeTest, /user-a[\s\S]*user-b[\s\S]*__guest__/, "Browser account-scope runtime test must exercise separate users and guest data");
 assert.match(accountScopeRuntimeTest, /corrupt target snapshot[\s\S]*assert\.throws/, "Browser account-scope runtime test must prove failed restores do not erase the active user's data");
 assert.match(packageScripts["test:sync"], /node --experimental-strip-types scripts\/account-scope-test\.mjs/, "The standard sync test command must execute the browser account-scope runtime suite");
