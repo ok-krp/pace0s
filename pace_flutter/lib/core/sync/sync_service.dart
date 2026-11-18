@@ -587,7 +587,7 @@ class SyncService {
         double sum(String key) => nextRows.fold<double>(
               0,
               (total, item) => total +
-                  ((item is Map && item[key] is num)
+                  ((item[key] is num)
                       ? (item[key] as num).toDouble()
                       : 0),
             );
