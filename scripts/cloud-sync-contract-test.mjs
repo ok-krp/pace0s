@@ -158,7 +158,7 @@ assert.match(flutterSync, /Future<void> onAccountChanged\(String\? userId\)[\s\S
 
 
 
-assert.match(flutterSync, /if \(hadNutritionMutation\) \{[\s\S]*_reconcileNutritionProjection\(user\.id\);[\s\S]*_pushPending\(\)/, "Flutter must reconcile canonical Nutrition rows after local mutations and push the merged snapshot");
+assert.match(flutterSync, /final shouldReconcileNutrition = hadNutritionMutation[\s\S]*await _pushPending\(\);[\s\S]*await _pullRemote\(\);[\s\S]*if \(shouldReconcileNutrition\) \{[\s\S]*_reconcileNutritionProjection\(user\.id\)[\s\S]*if \(hadNutritionMutation[\s\S]*await _pushPending\(\)/, "Flutter must push local mutations, reconcile canonical food_log rows and re-push the merged projection without requiring a mutation-only code path");
 assert.match(flutterSync, /_reconcileNutritionProjection[\s\S]*from\('food_log'\)[\s\S]*legacyRows[\s\S]*_isFoodLogUuid/, "Flutter reconciliation must combine canonical food_log rows with legacy local-only manual meals");
 assert.match(flutterSync, /Future<void> deleteNutritionFoodLogItem\(String id\)[\s\S]*from\('food_log'\)[\s\S]*\.delete\(\)/, "Deleting a canonical meal must delete its exact food_log row");
 assert.match(flutterNutrition, /deleteNutritionFoodLogItem\(item\['id'\]\?\.toString\(\) \?\? ''\)/, "Flutter Nutrition UI must request explicit canonical deletion before removing an item");
