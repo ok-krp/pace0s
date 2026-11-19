@@ -41,6 +41,13 @@ class _NutritionPageState extends State<NutritionPage> {
     return double.tryParse(text.replaceAll(',', '.'));
   }
 
+  bool _isValidOptionalNumber(TextEditingController controller) {
+    final text = controller.text.trim();
+    if (text.isEmpty) return true;
+    final value = double.tryParse(text.replaceAll(',', '.'));
+    return value != null && value.isFinite && value >= 0;
+  }
+
   Future<void> _addFood() async {
     final accountId = widget.sync.activeAccountId;
     if (!widget.sync.isCurrentLocalAccount(accountId)) return;
@@ -64,13 +71,21 @@ class _NutritionPageState extends State<NutritionPage> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
           FilledButton(onPressed: () {
             if (name.text.trim().isEmpty) return;
+            if ([kcal, protein, carbs, fat]
+                .any((controller) => !_isValidOptionalNumber(controller))) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Entre des nombres positifs valides pour les valeurs nutritionnelles.'),
+                ),
+              );
+              return;
+            }
             final values = <String, dynamic>{
               'kcal': _parseOptional(kcal),
               'p': _parseOptional(protein),
               'c': _parseOptional(carbs),
               'f': _parseOptional(fat),
             };
-            if (values.values.any((value) => value is double && value.isNaN)) return;
             Navigator.pop(context, values);
           }, child: const Text('Ajouter')),
         ],
