@@ -186,7 +186,12 @@ assert.match(flutterSync, /if \(localStore\.currentAccountId != userId\) \{[\s\S
 
 assert.match(flutterLocalStore, /Future<void> acknowledgeOperationForAccount\([\s\S]*final scope = 'account:\$userId'[\s\S]*_accounts\[scope\]/, "Late accepted cloud acknowledgements must update the originating account snapshot rather than the active one");
 assert.match(flutterSync, /acknowledgeOperationForAccount\([\s\S]*userId,[\s\S]*operation,[\s\S]*result\.serverUpdatedAt/, "Flutter must acknowledge accepted mutations inside their originating account after async requests finish");
-assert.match(flutterSync, /final shouldRerunForActiveAccount = _syncRequested[\s\S]*unawaited\(syncNow\(\)\)/, "A new account sync request must be resumed after an old in-flight account cycle drains");
+const rerunMarkerIndex = flutterSync.indexOf("final shouldRerunForActiveAccount = _syncRequested;");
+const rerunScheduleIndex = flutterSync.indexOf("_scheduleSync();", rerunMarkerIndex);
+assert.ok(
+  rerunMarkerIndex >= 0 && rerunScheduleIndex > rerunMarkerIndex,
+  "A new account sync request must be resumed through the safe scheduler after an old in-flight account cycle drains",
+);
 assert.match(flutterSync, /final userId = client\?\.auth\.currentUser\?\.id;[\s\S]*localStore\.currentAccountId != userId[\s\S]*_cloudSyncConsentUserId != userId/, "Late user_state Realtime events must not apply across account scopes");
 assert.match(flutterApp, /if \(widget\.auth\.currentUser\?\.id != userId\) return;[\s\S]*await widget\.sync\.onAccountChanged\(userId\)/, "Obsolete auth stream events must not activate an account after a newer session has arrived");
 assert.match(flutterNutrition, /final accountId = widget\.sync\.activeAccountId[\s\S]*isCurrentLocalAccount\(accountId\)/, "Nutrition dialogs must stay bound to the account that opened them");
@@ -298,7 +303,11 @@ assert.match(nutritionLog, /lastBridgedNutrition = nextSnapshot;[\s\S]*writeDoma
 assert.match(nutritionLog, /const changed = JSON\.stringify\(current\[day\] \?\? \[\]\) !== JSON\.stringify\(mergedRows\);[\s\S]*if \(changed\) \{[\s\S]*writeDomain/, "A Realtime refresh must not enqueue identical full Nutrition snapshots");
 assert.match(nutritionRoute, /subscribeNutritionFoodLogChanges\(refresh\)/, "The Nutrition route must bind its lifecycle to the Realtime subscription");
 assert.match(nutritionRoute, /setInterval\(refresh, 60_000\)/, "Nutrition must retain a bounded fallback when Realtime is unavailable");
-assert.match(flutterSync, /table: 'food_log'[\s\S]*callback: \(_\) => unawaited\(_handleFoodLogRealtime\(userId\)\)/, "Flutter must reconcile food_log INSERT and UPDATE events");
+assert.ok(
+  flutterSync.includes("table: 'food_log'") &&
+    flutterSync.includes("callback: (_) => _scheduleNutritionRealtime(userId)"),
+  "Flutter must reconcile food_log INSERT, UPDATE and DELETE events through a safe background callback",
+);
 assert.match(flutterSync, /_lastNutritionReconciledAt == null[\s\S]*_nutritionFallbackInterval/, "Flutter must refresh canonical Nutrition after login and on a bounded fallback interval");
 
 assert.match(flutterSync, /Future<void> upsertNutritionFoodLogItem\([\s\S]*from\('food_log'\)\.upsert[\s\S]*onConflict: 'id'/, "Flutter manual Nutrition inserts must be idempotent in canonical food_log");
