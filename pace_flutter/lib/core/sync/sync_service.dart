@@ -348,7 +348,7 @@ class SyncService {
       // draining, immediately start a fresh cycle once B's namespace is active.
       if (shouldRerunForActiveAccount &&
           isCurrentLocalAccount(client?.auth.currentUser?.id)) {
-        unawaited(syncNow());
+        _scheduleSync();
       }
     }
   }
@@ -424,7 +424,7 @@ class SyncService {
             column: 'user_id',
             value: userId,
           ),
-          callback: (_) => unawaited(_handleFoodLogRealtime(userId)),
+          callback: (_) => _scheduleNutritionRealtime(userId),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.delete,
@@ -435,7 +435,7 @@ class SyncService {
             column: 'user_id',
             value: userId,
           ),
-          callback: (_) => unawaited(_handleFoodLogRealtime(userId)),
+          callback: (_) => _scheduleNutritionRealtime(userId),
         );
 
     _realtimeChannel = channel;
@@ -448,7 +448,7 @@ class SyncService {
             // Reconcile immediately after the websocket is confirmed. This
             // closes the race where an event was emitted before subscription
             // became active.
-            unawaited(syncNow());
+            _scheduleSync();
             break;
           case RealtimeSubscribeStatus.channelError:
           case RealtimeSubscribeStatus.timedOut:
