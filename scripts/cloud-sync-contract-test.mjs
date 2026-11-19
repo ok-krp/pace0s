@@ -219,7 +219,7 @@ assert.match(flutterSync, /_reconcileNutritionProjection[\s\S]*from\('food_log'\
 assert.match(flutterSync, /Future<void> deleteNutritionFoodLogItem\(String id\)[\s\S]*from\('food_log'\)[\s\S]*\.delete\(\)/, "Deleting a canonical meal must delete its exact food_log row");
 assert.match(flutterNutrition, /deleteNutritionFoodLogItem\(item\['id'\]\?\.toString\(\) \?\? ''\)/, "Flutter Nutrition UI must request explicit canonical deletion before removing an item");
 const nativeDeleteUiStart = flutterNutrition.indexOf("Future<void> _deleteItem(");
-const nativeDeleteUiEnd = flutterNutrition.indexOf("\\n  @override", nativeDeleteUiStart);
+const nativeDeleteUiEnd = flutterNutrition.indexOf("  @override", nativeDeleteUiStart);
 assert.ok(
   nativeDeleteUiStart >= 0 && nativeDeleteUiEnd > nativeDeleteUiStart,
   "Native Nutrition delete handler must remain identifiable",
