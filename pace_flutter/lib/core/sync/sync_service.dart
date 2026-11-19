@@ -60,11 +60,14 @@ class SyncService {
     'pace.ai.debug',
     'pace.billing.device_id',
     'pace.watch.last_metrics',
+    'pace.legal.consent',
   };
 
   /// Exact aliases and sync bookkeeping excluded before PostgREST returns rows.
   static const Set<String> excludedRemotePullKeys = {
     ...excludedSyncKeys,
+    'pace.legal.consent',
+    'pace.__sync_food_log_deleted_ids',
     'pace.__sync_food_log_outbox',
     'pace.__sync_food_log_quarantine',
     'pace.__sync_ai_preferences_pending',
@@ -84,6 +87,7 @@ class SyncService {
       '("pace.sport.active","pace.ai.conversations",'
       '"pace.ai.deleted_conversations","pace.wallpaper","pace.finance.pin.hash",'
       '"pace.ai.debug","pace.billing.device_id","pace.watch.last_metrics",'
+      '"pace.legal.consent","pace.__sync_food_log_deleted_ids",'
       '"pace.__sync_food_log_outbox","pace.__sync_food_log_quarantine",'
       '"pace.__sync_ai_preferences_pending","pace.__sync_last_pull_at",'
       '"pace.__sync_last_full_pull_at","lt.sport.active","lt.ai.conversations",'
@@ -91,18 +95,22 @@ class SyncService {
       '"lt.ai.debug","lt.billing.device_id","lt.watch.last_metrics")';
 
   static const List<String> excludedRemotePullKeyPatterns = [
-    r'^(pace|lt)\.__sync_',
-    r'^(pace|lt)\.__nutrition_cache:',
+    r'^(pace|lt)\.__',
     r'^(pace|lt)\.(privacy|ble|import|local-ai)\.',
     r'^(pace|lt)\.ai\.pending:',
+    r'^(pace|lt)\.(finance|ai\.local)\.',
   ];
 
   static bool isDeviceLocalKey(String key) =>
+      key.startsWith('pace.__') ||
       key.startsWith('pace.privacy.') ||
+      key.startsWith('pace.finance.') ||
       key.startsWith('pace.ble.') ||
       key.startsWith('pace.import.') ||
       key.startsWith('pace.local-ai.') ||
+      key.startsWith('pace.ai.local.') ||
       key.startsWith('pace.ai.pending:') ||
+      key == 'pace.legal.consent' ||
       excludedSyncKeys.contains(key);
 
   static bool isSyncableKey(String key) =>
