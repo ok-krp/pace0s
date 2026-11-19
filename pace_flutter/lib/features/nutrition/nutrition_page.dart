@@ -168,15 +168,20 @@ class _NutritionPageState extends State<NutritionPage> {
   Future<void> _deleteItem(Map<String, dynamic> item) async {
     final accountId = widget.sync.activeAccountId;
     if (!widget.sync.isCurrentLocalAccount(accountId)) return;
-    try {
-      await widget.sync.deleteNutritionFoodLogItem(item['id']?.toString() ?? '');
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Suppression impossible ; le repas a été conservé.')),
-        );
+    // A guest/local-only namespace has no canonical food_log row. Delete
+    // directly from its isolated local snapshot; authenticated accounts must
+    // keep the tombstone + exact-ID SQL delete path before changing the UI.
+    if (accountId != null) {
+      try {
+        await widget.sync.deleteNutritionFoodLogItem(item['id']?.toString() ?? '');
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Suppression impossible ; le repas a été conservé.')),
+          );
+        }
+        return;
       }
-      return;
     }
     if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
     final raw = widget.localStore.read('pace.nutrition.items');
