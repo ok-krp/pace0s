@@ -51,7 +51,7 @@ class _PaceAppState extends State<PaceApp> {
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     });
-    unawaited(widget.sync.syncNow());
+    // LocalStore's durable mutation listener starts the sync cycle.
   }
 
   @override
@@ -235,7 +235,10 @@ class _PaceShellState extends State<PaceShell> {
   @override
   void initState() {
     super.initState();
-    _timer = Timer.periodic(const Duration(seconds: 60), (_) => unawaited(widget.sync.syncNow()));
+    _timer = Timer.periodic(
+      const Duration(seconds: 60),
+      (_) => unawaited(widget.sync.syncNow().catchError((Object _) {})),
+    );
   }
 
   @override
