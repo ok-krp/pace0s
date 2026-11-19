@@ -149,7 +149,19 @@ assert.match(flutterSettings, /await widget\.sync\.setCloudSyncConsent\(value\)/
 
 assert.match(flutterLocalStore, /__local_store_version': 2[\s\S]*__accounts/, "Flutter local storage must persist independent versioned account snapshots");
 assert.match(flutterLocalStore, /void addMutationListener\(LocalMutationListener listener\)[\s\S]*_notifyMutation\(key\)/, "Durable native local mutations must expose a sync notification without coupling storage to Supabase");
-assert.match(flutterSync, /localStore\.addMutationListener\(_onLocalMutation\)[\s\S]*void _onLocalMutation\(String key\)[\s\S]*!SyncService\.isSyncableKey\(key\)[\s\S]*discardOperationForAccount\(userId, operation\)[\s\S]*unawaited\(syncNow\(\)\)/, "Flutter must immediately sync eligible local writes and purge device-local outbox items without uploading them");
+const mutationListenerIndex = flutterSync.indexOf("localStore.addMutationListener(_onLocalMutation)");
+const localMutationHandlerIndex = flutterSync.indexOf("void _onLocalMutation(String key)");
+const deviceLocalCheckIndex = flutterSync.indexOf("!SyncService.isSyncableKey(key)", localMutationHandlerIndex);
+const discardDeviceLocalIndex = flutterSync.indexOf("discardOperationForAccount(userId, operation)", deviceLocalCheckIndex);
+const scheduleEligibleMutationIndex = flutterSync.indexOf("_scheduleSync();", discardDeviceLocalIndex);
+assert.ok(
+  mutationListenerIndex >= 0 &&
+    localMutationHandlerIndex > mutationListenerIndex &&
+    deviceLocalCheckIndex > localMutationHandlerIndex &&
+    discardDeviceLocalIndex > deviceLocalCheckIndex &&
+    scheduleEligibleMutationIndex > discardDeviceLocalIndex,
+  "Flutter must immediately sync eligible local writes and purge device-local outbox items without uploading them",
+);
 assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.wallpaper\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native user_state writes must explicitly exclude AI transcripts, wallpapers and finance PIN keys");
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeyPatterns/, "Native pulls must exclude canonical/legacy device-local keys in PostgREST before downloading rows");
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableKey\(key\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys must be removed from the owning outbox without reaching Supabase");
