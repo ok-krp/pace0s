@@ -177,29 +177,45 @@ class SyncService {
     return next;
   }
 
-  Set<String> _readDeletedNutritionIds(String userId) {
-    if (!isCurrentLocalAccount(userId)) return <String>{};
-    final raw = localStore.read(_deletedNutritionIdsKey);
-    if (raw is! Map || raw['userId'] != userId || raw['ids'] is! List) {
-      return <String>{};
+  Map<String, dynamic> _readNutritionDeletionState(String userId) {
+    if (!isCurrentLocalAccount(userId)) {
+      return {'ids': <String>{}, 'pending': <String>{}};
     }
-    return (raw['ids'] as List)
-        .whereType<String>()
-        .where((id) => id.isNotEmpty)
-        .toSet();
+    final raw = localStore.read(_deletedNutritionIdsKey);
+    if (raw is! Map || raw['userId'] != userId) {
+      return {'ids': <String>{}, 'pending': <String>{}};
+    }
+    Set<String> parse(dynamic value) => value is List
+        ? value.whereType<String>().where((id) => id.isNotEmpty).toSet()
+        : <String>{};
+    return {
+      'ids': parse(raw['ids']),
+      'pending': parse(raw['pending']),
+    };
   }
+
+  Set<String> _readDeletedNutritionIds(String userId) =>
+      _readNutritionDeletionState(userId)['ids'] as Set<String>;
+
+  Set<String> _readPendingNutritionDeleteIds(String userId) =>
+      _readNutritionDeletionState(userId)['pending'] as Set<String>;
 
   Future<void> _writeDeletedNutritionIds(
     String userId,
-    Set<String> ids,
-  ) async {
+    Set<String> ids, {
+    Set<String>? pendingIds,
+  }) async {
     if (!isCurrentLocalAccount(userId)) return;
+    List<String> bounded(Set<String> values) =>
+        values.toList().reversed.take(5000).toList().reversed.toList();
     await localStore.write(
       _deletedNutritionIdsKey,
       {
         'userId': userId,
-        // Bound the local tombstone history while preserving the newest deletes.
-        'ids': ids.toList().reversed.take(5000).toList().reversed.toList(),
+        // Keep completed tombstones to prevent stale full-state snapshots
+        // from resurrecting meals, but retry only deletes not yet acknowledged.
+        'ids': bounded(ids),
+        'pending': bounded(pendingIds ?? <String>{}),
       },
       enqueueSync: false,
     );
@@ -224,6 +240,12 @@ class SyncService {
   Future<void> setCloudSyncConsent(bool granted) async {
     final userId = client?.auth.currentUser?.id;
     if (userId == null || localStore.currentAccountId != userId) return;
+    if (_cloudSyncConsentUserId != userId ||
+        _cloudSyncConsent != granted) {
+      // Reconcile immediately after consent is enabled again so queued
+      // Nutrition deletions are not delayed by the ordinary 60s fallback.
+      _lastNutritionReconciledAt = null;
+    }
     _cloudSyncConsentUserId = userId;
     _cloudSyncConsent = granted;
     _cloudSyncConsentCheckedAt = DateTime.now();
@@ -682,7 +704,7 @@ class SyncService {
       // Retry exact-ID deletes that were retained while offline or while
       // cloud sync consent was disabled. A failed delete remains tombstoned
       // and is filtered from the local projection below.
-      final pendingDeleteIds = _readDeletedNutritionIds(userId)
+      final pendingDeleteIds = _readPendingNutritionDeleteIds(userId)
           .where(_isFoodLogUuid)
           .toList();
       if (pendingDeleteIds.isNotEmpty) {
@@ -692,8 +714,19 @@ class SyncService {
               .delete()
               .eq('user_id', userId)
               .inFilter('id', pendingDeleteIds);
+          if (isCurrentLocalAccount(userId)) {
+            final deletedIds = _readDeletedNutritionIds(userId);
+            final remainingPending =
+                _readPendingNutritionDeleteIds(userId)
+                  ..removeAll(pendingDeleteIds);
+            await _writeDeletedNutritionIds(
+              userId,
+              deletedIds,
+              pendingIds: remainingPending,
+            );
+          }
         } catch (_) {
-          // Preserve every tombstone and continue with a filtered projection.
+          // Preserve every pending delete and continue with a filtered projection.
         }
       }
 
@@ -828,7 +861,13 @@ class SyncService {
       // scoped local tombstone prevents stale user_state/food_log snapshots
       // from restoring this meal after an offline delete or account switch.
       final deletedIds = _readDeletedNutritionIds(user.id)..add(id);
-      await _writeDeletedNutritionIds(user.id, deletedIds);
+      final pendingIds = _readPendingNutritionDeleteIds(user.id);
+      if (_isFoodLogUuid(id)) pendingIds.add(id);
+      await _writeDeletedNutritionIds(
+        user.id,
+        deletedIds,
+        pendingIds: pendingIds,
+      );
 
       // Legacy timestamp IDs exist only in user_state. They are filtered from
       // future pulls locally; UUID-backed canonical rows are deleted by exact ID.
@@ -840,6 +879,14 @@ class SyncService {
             .delete()
             .eq('id', id)
             .eq('user_id', user.id);
+        if (isCurrentLocalAccount(user.id)) {
+          pendingIds.remove(id);
+          await _writeDeletedNutritionIds(
+            user.id,
+            deletedIds,
+            pendingIds: pendingIds,
+          );
+        }
       } catch (_) {
         // The local delete remains accepted. The durable tombstone is retried
         // during the next consented sync cycle.
