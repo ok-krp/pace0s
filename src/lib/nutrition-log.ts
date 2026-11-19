@@ -65,10 +65,12 @@ function readDeletedNutritionIds(userId: string): Set<string> {
 
 function writeDeletedNutritionIds(userId: string, ids: Set<string>) {
   if (typeof window === "undefined") return;
-  // IDs are opaque UUIDs; cap each account's tombstone list to bound storage.
+  // Retain every deleted ID: dropping an older tombstone could let a stale
+  // full-state snapshot resurrect a meal. The list is account-local and never
+  // enters the cloud outbox.
   localStorage.setItem(
     deletedIdsStorageKey(userId),
-    JSON.stringify({ userId, ids: [...ids].slice(-5000) } satisfies DeletedNutritionIds),
+    JSON.stringify({ userId, ids: [...ids] } satisfies DeletedNutritionIds),
   );
 }
 
