@@ -13,6 +13,17 @@ class SyncService {
     localStore.addMutationListener(_onLocalMutation);
   }
 
+  /// Fire-and-forget entry point for automatic sync triggers. UI callers
+  /// may still await syncNow() for feedback; background triggers must not leak
+  /// transient network/disk failures as uncaught async errors.
+  void _scheduleSync() {
+    unawaited(syncNow().catchError((Object _) {}));
+  }
+
+  void _scheduleNutritionRealtime(String userId) {
+    unawaited(_handleFoodLogRealtime(userId).catchError((Object _) {}));
+  }
+
   /// A durable local write should start its sync cycle immediately. Device-only
   /// keys stay local and must not trigger a network reconciliation.
   void _onLocalMutation(String key) {
@@ -23,11 +34,11 @@ class SyncService {
           .where((operation) => operation['key'] == key)
           .toList();
       for (final operation in obsolete) {
-        unawaited(localStore.discardOperationForAccount(userId, operation));
+        unawaited(localStore.discardOperationForAccount(userId, operation).catchError((Object _) {}));
       }
       return;
     }
-    unawaited(syncNow());
+    _scheduleSync();
   }
 
   final LocalStore localStore;
@@ -367,7 +378,7 @@ class SyncService {
       final value = record['value'];
       final updatedAt = record['updated_at'];
       if (key is! String || updatedAt is! String) return;
-      unawaited(_applyRealtimeRow(key, value, updatedAt));
+      unawaited(_applyRealtimeRow(key, value, updatedAt).catchError((Object _) {}));
     }
 
     channel
@@ -402,7 +413,7 @@ class SyncService {
             column: 'user_id',
             value: userId,
           ),
-          callback: (_) => unawaited(_handleFoodLogRealtime(userId)),
+          callback: (_) => _scheduleNutritionRealtime(userId),
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
