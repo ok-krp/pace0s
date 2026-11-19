@@ -38,10 +38,11 @@ class SyncService {
   String? _cloudSyncConsentUserId;
   DateTime? _cloudSyncConsentCheckedAt;
   DateTime? _lastNutritionReconciledAt;
-  // food_log Realtime callbacks and the periodic fallback may arrive while a
-  // previous projection query is still in flight. Serialize them so an older
-  // query cannot finish last and overwrite a newer canonical snapshot.
-  Future<bool> _nutritionReconcileQueue = Future<bool>.value(false);
+  // Serialize native Nutrition projections and explicit deletions. This keeps
+  // a query/upsert already in flight from resurrecting a meal after the user
+  // has deleted it.
+  Future<void> _nutritionMutationQueue = Future<void>.value();
+  static const _deletedNutritionIdsKey = 'pace.__sync_food_log_deleted_ids';
   static const _cloudSyncConsentCacheTtl = Duration(seconds: 30);
   static const _nutritionFallbackInterval = Duration(minutes: 1);
   RealtimeChannel? _realtimeChannel;
@@ -163,6 +164,45 @@ class SyncService {
     }
     _lastNutritionReconciledAt = null;
     _syncRequested = false;
+  }
+
+  Future<T> _serializeNutrition<T>(Future<T> Function() operation) {
+    final next = _nutritionMutationQueue.then((_) => operation());
+    // A failed operation is reported to its caller, but must not poison the
+    // queue and block later explicit deletes or retry projections.
+    _nutritionMutationQueue = next.then<void>(
+      (_) {},
+      onError: (Object _, StackTrace __) {},
+    );
+    return next;
+  }
+
+  Set<String> _readDeletedNutritionIds(String userId) {
+    if (!isCurrentLocalAccount(userId)) return <String>{};
+    final raw = localStore.read(_deletedNutritionIdsKey);
+    if (raw is! Map || raw['userId'] != userId || raw['ids'] is! List) {
+      return <String>{};
+    }
+    return (raw['ids'] as List)
+        .whereType<String>()
+        .where((id) => id.isNotEmpty)
+        .toSet();
+  }
+
+  Future<void> _writeDeletedNutritionIds(
+    String userId,
+    Set<String> ids,
+  ) async {
+    if (!isCurrentLocalAccount(userId)) return;
+    await localStore.write(
+      _deletedNutritionIdsKey,
+      {
+        'userId': userId,
+        // Bound the local tombstone history while preserving the newest deletes.
+        'ids': ids.toList().reversed.take(5000).toList().reversed.toList(),
+      },
+      enqueueSync: false,
+    );
   }
 
   bool get cloudSyncConsentGranted =>
@@ -420,7 +460,13 @@ class SyncService {
       return;
     }
 
-    await localStore.applyRemote(key, value, updatedAt);
+    final safeValue = key == 'pace.nutrition.items'
+        ? filterDeletedNutritionItems(
+            value,
+            _readDeletedNutritionIds(userId),
+          )
+        : value;
+    await localStore.applyRemote(key, safeValue, updatedAt);
   }
 
   Future<void> _pushPending() async {
@@ -581,14 +627,8 @@ class SyncService {
     }
   }
 
-  Future<bool> _reconcileNutritionProjection(String userId) {
-    final next = _nutritionReconcileQueue.then(
-      (_) => _reconcileNutritionProjectionNow(userId),
-      onError: (_) => _reconcileNutritionProjectionNow(userId),
-    );
-    _nutritionReconcileQueue = next;
-    return next;
-  }
+  Future<bool> _reconcileNutritionProjection(String userId) =>
+      _serializeNutrition(() => _reconcileNutritionProjectionNow(userId));
 
   Future<bool> _reconcileNutritionProjectionNow(String userId) async {
     if (localStore.currentAccountId != userId ||
@@ -608,11 +648,16 @@ class SyncService {
           ? List<dynamic>.from(initialItemsByDay[day] as List)
           : <dynamic>[];
 
+      final deletedIds = _readDeletedNutritionIds(userId);
+
       // Retry pending native inserts using the snapshot present at request
-      // start. A later local edit is re-read after the network query below.
+      // start. Deleted IDs are never reinserted, including after an offline
+      // deletion whose SQL request has not yet reached the server.
       for (final rawItem in initialCurrentDay.whereType<Map>()) {
         final item = Map<String, dynamic>.from(rawItem);
-        if (item['pendingFoodLog'] != true || !_isFoodLogUuid(item['id'])) {
+        if (item['pendingFoodLog'] != true ||
+            !_isFoodLogUuid(item['id']) ||
+            deletedIds.contains(item['id'])) {
           continue;
         }
         try {
@@ -631,6 +676,24 @@ class SyncService {
           );
         } catch (_) {
           // Keep the durable local meal and retry on the next cycle.
+        }
+      }
+
+      // Retry exact-ID deletes that were retained while offline or while
+      // cloud sync consent was disabled. A failed delete remains tombstoned
+      // and is filtered from the local projection below.
+      final pendingDeleteIds = _readDeletedNutritionIds(userId)
+          .where(_isFoodLogUuid)
+          .toList();
+      if (pendingDeleteIds.isNotEmpty) {
+        try {
+          await client!
+              .from('food_log')
+              .delete()
+              .eq('user_id', userId)
+              .inFilter('id', pendingDeleteIds);
+        } catch (_) {
+          // Preserve every tombstone and continue with a filtered projection.
         }
       }
 
@@ -676,6 +739,7 @@ class SyncService {
             .whereType<Map>()
             .map((item) => Map<String, dynamic>.from(item))
             .toList(),
+        deletedIds: _readDeletedNutritionIds(userId),
       );
 
       if (jsonEncode(latestCurrentDay) != jsonEncode(nextRows)) {
@@ -748,17 +812,39 @@ class SyncService {
   }
 
   Future<void> deleteNutritionFoodLogItem(String id) async {
-    if (!_isFoodLogUuid(id)) return;
+    if (id.isEmpty) return;
     final user = client?.auth.currentUser;
     if (client == null || user == null ||
         localStore.currentAccountId != user.id) {
       throw StateError('Session ou espace local utilisateur indisponible.');
     }
-    await client!
-        .from('food_log')
-        .delete()
-        .eq('id', id)
-        .eq('user_id', user.id);
+
+    await _serializeNutrition(() async {
+      if (!isCurrentLocalAccount(user.id)) {
+        throw StateError('La session a changé avant la suppression Nutrition.');
+      }
+
+      // Persist the deletion intent before touching the server. The account-
+      // scoped local tombstone prevents stale user_state/food_log snapshots
+      // from restoring this meal after an offline delete or account switch.
+      final deletedIds = _readDeletedNutritionIds(user.id)..add(id);
+      await _writeDeletedNutritionIds(user.id, deletedIds);
+
+      // Legacy timestamp IDs exist only in user_state. They are filtered from
+      // future pulls locally; UUID-backed canonical rows are deleted by exact ID.
+      if (!_isFoodLogUuid(id) || !_hasCachedCloudSyncConsent(user.id)) return;
+
+      try {
+        await client!
+            .from('food_log')
+            .delete()
+            .eq('id', id)
+            .eq('user_id', user.id);
+      } catch (_) {
+        // The local delete remains accepted. The durable tombstone is retried
+        // during the next consented sync cycle.
+      }
+    });
   }
 
   Future<void> _pullRemote() async {
@@ -805,7 +891,13 @@ class SyncService {
           continue;
         }
       }
-      await localStore.applyRemote(key, row['value'], remoteUpdatedAt);
+      final safeValue = key == 'pace.nutrition.items'
+          ? filterDeletedNutritionItems(
+              row['value'],
+              _readDeletedNutritionIds(userId),
+            )
+          : row['value'];
+      await localStore.applyRemote(key, safeValue, remoteUpdatedAt);
     }
   }
 }
@@ -833,23 +925,47 @@ bool _isFoodLogUuid(dynamic id) {
 /// Builds a canonical projection while retaining legacy and not-yet-uploaded
 /// local rows from the latest snapshot. A deleted canonical UUID is not kept
 /// unless it is still explicitly marked as a pending local insert.
+dynamic filterDeletedNutritionItems(
+  dynamic value,
+  Set<String> deletedIds,
+) {
+  if (deletedIds.isEmpty || value is! Map) return value;
+  return <String, dynamic>{
+    for (final entry in value.entries)
+      if (entry.key is String)
+        entry.key as String: entry.value is List
+            ? (entry.value as List)
+                .where((item) =>
+                    item is! Map ||
+                    !deletedIds.contains(item['id']?.toString()))
+                .toList()
+            : entry.value,
+  };
+}
+
 List<Map<String, dynamic>> mergeNutritionProjectionRows({
   required List<Map<String, dynamic>> canonicalRows,
   required List<Map<String, dynamic>> latestLocalRows,
+  Set<String> deletedIds = const <String>{},
 }) {
   final canonicalIds =
       canonicalRows.map((item) => item['id'] as String).toSet();
   final legacyRows = latestLocalRows
-      .where((item) => !_isFoodLogUuid(item['id']))
+      .where((item) =>
+          !_isFoodLogUuid(item['id']) &&
+          !deletedIds.contains(item['id']?.toString()))
       .toList();
   final pendingRows = latestLocalRows
       .where((item) =>
           item['pendingFoodLog'] == true &&
           _isFoodLogUuid(item['id']) &&
+          !deletedIds.contains(item['id']?.toString()) &&
           !canonicalIds.contains(item['id']))
       .toList();
   return [
-    ...canonicalRows,
+    ...canonicalRows.where(
+      (item) => !deletedIds.contains(item['id']?.toString()),
+    ),
     ...legacyRows.where((item) => !canonicalIds.contains(item['id'])),
     ...pendingRows.where((item) => !canonicalIds.contains(item['id'])),
   ];
