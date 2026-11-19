@@ -2,6 +2,63 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
+  group('Native Nutrition projection concurrency', () {
+    test('preserves local rows created while food_log was being queried', () {
+      final newPendingId = newFoodLogUuid();
+      final result = mergeNutritionProjectionRows(
+        canonicalRows: [
+          {
+            'id': newFoodLogUuid(),
+            'name': 'Repas cloud',
+            'meal': 'Déjeuner',
+            'kcal': 400,
+          },
+        ],
+        latestLocalRows: [
+          {
+            'id': '1731340800000000',
+            'name': 'Ancien repas Flutter',
+            'meal': 'Dîner',
+            'kcal': 600,
+          },
+          {
+            'id': newPendingId,
+            'name': 'Ajout pendant la requête',
+            'meal': 'Goûter',
+            'kcal': 250,
+            'pendingFoodLog': true,
+          },
+          {
+            'id': newFoodLogUuid(),
+            'name': 'Repas supprimé',
+            'meal': 'Petit-déjeuner',
+            'kcal': 200,
+          },
+        ],
+      );
+
+      expect(result.map((item) => item['name']), contains('Repas cloud'));
+      expect(result.map((item) => item['name']), contains('Ancien repas Flutter'));
+      expect(result.map((item) => item['name']), contains('Ajout pendant la requête'));
+      expect(result.map((item) => item['name']), isNot(contains('Repas supprimé')));
+    });
+
+    test('does not duplicate a pending row already returned by food_log', () {
+      final id = newFoodLogUuid();
+      final result = mergeNutritionProjectionRows(
+        canonicalRows: [
+          {'id': id, 'name': 'Repas synchronisé', 'kcal': 350},
+        ],
+        latestLocalRows: [
+          {'id': id, 'name': 'Repas local en attente', 'kcal': 350, 'pendingFoodLog': true},
+        ],
+      );
+
+      expect(result, hasLength(1));
+      expect(result.single['id'], id);
+    });
+  });
+
   group('Flutter Nutrition IDs', () {
     test('creates valid UUID v4 IDs for canonical food_log rows', () {
       final id = newFoodLogUuid();
