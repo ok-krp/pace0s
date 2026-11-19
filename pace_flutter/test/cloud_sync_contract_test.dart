@@ -132,6 +132,11 @@ void main() {
         'pace.ai.deleted_conversations',
         'pace.sport.active',
         'pace.__sync_food_log_outbox',
+        'pace.__sync_food_log_deleted_ids',
+        'pace.__internal_device_key',
+        'pace.finance.unlocked',
+        'pace.ai.local.enabled',
+        'pace.legal.consent',
       ]) {
         expect(SyncService.isSyncableKey(key), isFalse, reason: key);
       }
@@ -145,6 +150,14 @@ void main() {
       expect(SyncService.excludedRemotePullKeysFilter, contains('"pace.wallpaper"'));
       expect(SyncService.excludedRemotePullKeysFilter, contains('"lt.wallpaper"'));
       expect(SyncService.excludedRemotePullKeyPatterns, hasLength(4));
+      expect(
+        SyncService.excludedRemotePullKeyPatterns.join(' '),
+        contains(r'^(pace|lt)\\.(finance|ai\\.local)\\.'),
+      );
+      expect(
+        SyncService.excludedRemotePullKeyPatterns.join(' '),
+        contains(r'^(pace|lt)\\.__'),
+      );
     });
   });
 
