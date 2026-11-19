@@ -267,7 +267,13 @@ export function refreshNutritionFromFoodLog(
     // An in-flight read for account A must never be projected into account B's
     // shared browser storage after an auth transition.
     if (activeNutritionAccountId() !== expectedUserId) return;
-  const rows: NutritionItem[] = (data ?? []).map((row) => {
+  // The query may have started before an explicit delete and returned
+  // a stale canonical row after the DELETE completed. Filter the database
+  // response against the account's tombstones before rebuilding the view.
+  const deletedIds = readDeletedNutritionIds(user.id);
+  const rows: NutritionItem[] = (data ?? [])
+    .filter((row) => !deletedIds.has(row.id))
+    .map((row) => {
     const meta = row.meta && typeof row.meta === "object" ? row.meta as Record<string, unknown> : {};
     const nutrients = meta.client_nutrients && typeof meta.client_nutrients === "object" ? meta.client_nutrients as Record<string, unknown> : {};
     return {
@@ -282,7 +288,6 @@ export function refreshNutritionFromFoodLog(
     };
   });
   const current = readNutritionItems();
-  const deletedIds = readDeletedNutritionIds(user.id);
   // Older native Flutter releases stored manual meals only in user_state
   // with timestamp IDs. Preserve those rows while food_log is canonical for
   // UUID-backed meals; never mistake the legacy rows for SQL UUIDs.
