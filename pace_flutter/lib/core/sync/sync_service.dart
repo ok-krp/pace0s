@@ -38,6 +38,10 @@ class SyncService {
   String? _cloudSyncConsentUserId;
   DateTime? _cloudSyncConsentCheckedAt;
   DateTime? _lastNutritionReconciledAt;
+  // food_log Realtime callbacks and the periodic fallback may arrive while a
+  // previous projection query is still in flight. Serialize them so an older
+  // query cannot finish last and overwrite a newer canonical snapshot.
+  Future<bool> _nutritionReconcileQueue = Future<bool>.value(false);
   static const _cloudSyncConsentCacheTtl = Duration(seconds: 30);
   static const _nutritionFallbackInterval = Duration(minutes: 1);
   RealtimeChannel? _realtimeChannel;
@@ -577,7 +581,16 @@ class SyncService {
     }
   }
 
-  Future<bool> _reconcileNutritionProjection(String userId) async {
+  Future<bool> _reconcileNutritionProjection(String userId) {
+    final next = _nutritionReconcileQueue.then(
+      (_) => _reconcileNutritionProjectionNow(userId),
+      onError: (_) => _reconcileNutritionProjectionNow(userId),
+    );
+    _nutritionReconcileQueue = next;
+    return next;
+  }
+
+  Future<bool> _reconcileNutritionProjectionNow(String userId) async {
     if (localStore.currentAccountId != userId ||
         client?.auth.currentUser?.id != userId ||
         !_hasCachedCloudSyncConsent(userId)) {
@@ -587,17 +600,17 @@ class SyncService {
       final now = DateTime.now();
       final day =
           '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-      final raw = localStore.read('pace.nutrition.items');
-      final itemsByDay =
-          Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
-      final currentDay = itemsByDay[day] is List
-          ? List<dynamic>.from(itemsByDay[day] as List)
+      final initialRaw = localStore.read('pace.nutrition.items');
+      final initialItemsByDay = Map<String, dynamic>.from(
+        initialRaw is Map ? initialRaw : <String, dynamic>{},
+      );
+      final initialCurrentDay = initialItemsByDay[day] is List
+          ? List<dynamic>.from(initialItemsByDay[day] as List)
           : <dynamic>[];
 
-      // Retry pending native inserts with their stable UUID. Upsert makes a
-      // lost HTTP response safe: the same local operation cannot create a
-      // duplicate food_log row on the next reconnect.
-      for (final rawItem in currentDay.whereType<Map>()) {
+      // Retry pending native inserts using the snapshot present at request
+      // start. A later local edit is re-read after the network query below.
+      for (final rawItem in initialCurrentDay.whereType<Map>()) {
         final item = Map<String, dynamic>.from(rawItem);
         if (item['pendingFoodLog'] != true || !_isFoodLogUuid(item['id'])) {
           continue;
@@ -628,11 +641,21 @@ class SyncService {
           .eq('log_date', day)
           .order('created_at');
 
-      final legacyRows = currentDay
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .where((item) => !_isFoodLogUuid(item['id']))
-          .toList();
+      if (client?.auth.currentUser?.id != userId ||
+          localStore.currentAccountId != userId) {
+        return false;
+      }
+
+      // The network round-trip above may have overlapped with a manual add or
+      // delete. Re-read the latest local snapshot immediately before building
+      // the projection so an edit made during the query is never discarded.
+      final latestRaw = localStore.read('pace.nutrition.items');
+      final latestItemsByDay = Map<String, dynamic>.from(
+        latestRaw is Map ? latestRaw : <String, dynamic>{},
+      );
+      final latestCurrentDay = latestItemsByDay[day] is List
+          ? List<dynamic>.from(latestItemsByDay[day] as List)
+          : <dynamic>[];
 
       final canonicalRows = rows.map((row) => <String, dynamic>{
             'id': row['id'],
@@ -647,29 +670,17 @@ class SyncService {
             'sodium': (row['sodium_mg'] as num?)?.toDouble() ?? 0,
             'qty': 1,
           }).toList();
-      final canonicalIds =
-          canonicalRows.map((item) => item['id'] as String).toSet();
-      final pendingRows = currentDay
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .where((item) =>
-              item['pendingFoodLog'] == true &&
-              _isFoodLogUuid(item['id']) &&
-              !canonicalIds.contains(item['id']))
-          .toList();
-      final nextRows = [
-        ...canonicalRows,
-        ...legacyRows.where((item) => !canonicalIds.contains(item['id'])),
-        ...pendingRows.where((item) => !canonicalIds.contains(item['id'])),
-      ];
+      final nextRows = mergeNutritionProjectionRows(
+        canonicalRows: canonicalRows,
+        latestLocalRows: latestCurrentDay
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(),
+      );
 
-      if (client?.auth.currentUser?.id != userId ||
-          localStore.currentAccountId != userId) {
-        return false;
-      }
-      if (jsonEncode(currentDay) != jsonEncode(nextRows)) {
-        itemsByDay[day] = nextRows;
-        await localStore.write('pace.nutrition.items', itemsByDay);
+      if (jsonEncode(latestCurrentDay) != jsonEncode(nextRows)) {
+        latestItemsByDay[day] = nextRows;
+        await localStore.write('pace.nutrition.items', latestItemsByDay);
         if (!isCurrentLocalAccount(userId) ||
             !_hasCachedCloudSyncConsent(userId)) {
           return false;
@@ -814,9 +825,96 @@ String newFoodLogUuid() {
 bool _isFoodLogUuid(dynamic id) {
   if (id is! String) return false;
   return RegExp(
-    r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}
+/// Native and web clients share the same explicit sync_cloud opt-in.
+bool shouldRunCloudSync({
+  required String? userId,
+  required String? activeAccountId,
+  required bool consentGranted,
+}) =>
+    userId != null && activeAccountId == userId && consentGranted;
+
+/// A local outbox operation is acknowledged only after server acceptance.
+bool shouldAcknowledgeSyncOperation({required bool accepted}) => accepted;
+
+/// Returns whether a Realtime user_state row is newer than the local
+/// checkpoint and safe to apply.
+///
+/// Pending local mutations always win over a Realtime event. The normal sync
+/// cycle will reconcile the cloud state after the local write has completed.
+bool shouldApplyRealtimeUserState({
+  required DateTime? remoteTime,
+  required DateTime? localTime,
+  required bool hasPendingMutation,
+}) {
+  if (hasPendingMutation || remoteTime == null) return false;
+  return localTime == null || remoteTime.isAfter(localTime);
+}
+
+/// Validated response contract returned by upsert_user_state_if_newer().
+class CloudSyncWriteResponse {
+  const CloudSyncWriteResponse({
+    required this.accepted,
+    required this.updatedAt,
+  });
+
+  final bool accepted;
+  final String updatedAt;
+
+  factory CloudSyncWriteResponse.fromRpc(dynamic response) {
+    if (response is! Map) {
+      throw const FormatException('invalid cloud sync write response');
+    }
+    final accepted = response['accepted'];
+    final updatedAt = response['updated_at'];
+    if (accepted is! bool || updatedAt is! String || updatedAt.isEmpty) {
+      throw const FormatException('invalid cloud sync write response');
+    }
+    return CloudSyncWriteResponse(
+      accepted: accepted,
+      updatedAt: updatedAt,
+    );
+  }
+}
+
+class _PushResult {
+  const _PushResult.accepted(this.serverUpdatedAt) : accepted = true;
+
+  const _PushResult.rejected()
+      : accepted = false,
+        serverUpdatedAt = null;
+
+  final bool accepted;
+  final String? serverUpdatedAt;
+}
+,
     caseSensitive: false,
   ).hasMatch(id);
+}
+
+/// Builds a canonical projection while retaining legacy and not-yet-uploaded
+/// local rows from the latest snapshot. A deleted canonical UUID is not kept
+/// unless it is still explicitly marked as a pending local insert.
+List<Map<String, dynamic>> mergeNutritionProjectionRows({
+  required List<Map<String, dynamic>> canonicalRows,
+  required List<Map<String, dynamic>> latestLocalRows,
+}) {
+  final canonicalIds =
+      canonicalRows.map((item) => item['id'] as String).toSet();
+  final legacyRows = latestLocalRows
+      .where((item) => !_isFoodLogUuid(item['id']))
+      .toList();
+  final pendingRows = latestLocalRows
+      .where((item) =>
+          item['pendingFoodLog'] == true &&
+          _isFoodLogUuid(item['id']) &&
+          !canonicalIds.contains(item['id']))
+      .toList();
+  return [
+    ...canonicalRows,
+    ...legacyRows.where((item) => !canonicalIds.contains(item['id'])),
+    ...pendingRows.where((item) => !canonicalIds.contains(item['id'])),
+  ];
 }
 
 /// Native and web clients share the same explicit sync_cloud opt-in.
