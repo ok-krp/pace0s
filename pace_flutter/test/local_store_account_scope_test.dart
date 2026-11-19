@@ -142,6 +142,46 @@ void main() {
       expect(await file.readAsString(), corrupted);
     });
 
+    test('keeps Nutrition deletion tombstones isolated by account and out of sync outboxes', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-nutrition-tombstones-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final store = await LocalStore.openAt(
+        File('${directory.path}/pace_local.json'),
+      );
+
+      await store.activateAccount('user-a');
+      await store.write(
+        'pace.__sync_food_log_deleted_ids',
+        {
+          'userId': 'user-a',
+          'ids': ['meal-deleted-a'],
+          'pending': ['meal-deleted-a'],
+        },
+        enqueueSync: false,
+      );
+      expect(store.pendingOperations(), isEmpty);
+
+      await store.activateAccount('user-b');
+      expect(store.read('pace.__sync_food_log_deleted_ids'), isNull);
+      await store.write(
+        'pace.__sync_food_log_deleted_ids',
+        {'userId': 'user-b', 'ids': ['meal-deleted-b'], 'pending': []},
+        enqueueSync: false,
+      );
+
+      await store.activateAccount('user-a');
+      expect(store.read('pace.__sync_food_log_deleted_ids'), {
+        'userId': 'user-a',
+        'ids': ['meal-deleted-a'],
+        'pending': ['meal-deleted-a'],
+      });
+      expect(store.pendingOperations(), isEmpty);
+    });
+
     test('discards device-local outbox entries without marking them synced', () async {
       final directory = await Directory.systemTemp.createTemp('pace-local-discard-');
       addTearDown(() async {
