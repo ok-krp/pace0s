@@ -224,16 +224,15 @@ class SyncService {
     Set<String>? pendingIds,
   }) async {
     if (!isCurrentLocalAccount(userId)) return;
-    List<String> bounded(Set<String> values) =>
-        values.toList().reversed.take(5000).toList().reversed.toList();
+    // Keep every completed tombstone so a stale full-state snapshot can
+    // never resurrect an old meal. The metadata is local-only and excluded
+    // from user_state; pending SQL deletes are still sent in bounded batches.
     await localStore.write(
       _deletedNutritionIdsKey,
       {
         'userId': userId,
-        // Keep completed tombstones to prevent stale full-state snapshots
-        // from resurrecting meals, but retry only deletes not yet acknowledged.
-        'ids': bounded(ids),
-        'pending': bounded(pendingIds ?? <String>{}),
+        'ids': ids.toList(),
+        'pending': (pendingIds ?? <String>{}).toList(),
       },
       enqueueSync: false,
     );
