@@ -226,6 +226,15 @@ assert.match(nutritionLog, /DELETED_IDS_KEY = "pace\.__nutrition_deleted_ids_v1"
 assert.match(nutritionLog, /rememberDeletedNutritionId\(user\.id, id\)/, "A successful SQL deletion must tombstone the deleted UUID");
 assert.match(nutritionLog, /nutritionRows\(value\)\.filter\(\(\{ id \}\) => isFoodLogUuid\(id\) && !deletedIds\.has\(id\)\)/, "Only UUID-backed rows may be bridged, and explicitly deleted IDs stay excluded");
 assert.match(nutritionLog, /localStorage\.getItem\(deletedIdsStorageKey\(userId\)\)[\s\S]*legacy\?\.userId === userId[\s\S]*localStorage\.removeItem\(DELETED_IDS_KEY\)/, "Nutrition tombstones must use the active account namespace and migrate the legacy slot only to its recorded owner");
+const nutritionRefreshStart = nutritionLog.indexOf("export function refreshNutritionFromFoodLog(");
+const nutritionRefreshEnd = nutritionLog.indexOf("\\nexport function subscribeNutritionFoodLogChanges", nutritionRefreshStart);
+assert.ok(nutritionRefreshStart >= 0 && nutritionRefreshEnd > nutritionRefreshStart, "Nutrition refresh projection must remain identifiable");
+const nutritionRefreshBlock = nutritionLog.slice(nutritionRefreshStart, nutritionRefreshEnd);
+assert.match(
+  nutritionRefreshBlock,
+  /const deletedIds = readDeletedNutritionIds\\(user\\.id\\)[\\s\\S]*const rows: NutritionItem\\[\\] = \\(data \\?\\? \\[]\\)[\\s\\S]*filter\\(\\(row\\) => !deletedIds\\.has\\(row\\.id\\)\\)/,
+  "A stale in-flight food_log read must not reinsert a meal that was explicitly deleted while the query was running",
+);
 const explicitNutritionDeleteStart = nutritionLog.indexOf("export async function deletePersistedNutritionItem");
 const explicitNutritionDeleteEnd = nutritionLog.indexOf("\nfunction nutritionRows", explicitNutritionDeleteStart);
 assert.ok(explicitNutritionDeleteStart >= 0 && explicitNutritionDeleteEnd > explicitNutritionDeleteStart, "Explicit nutrition deletion must remain identifiable");
