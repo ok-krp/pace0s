@@ -227,13 +227,14 @@ assert.match(nutritionLog, /rememberDeletedNutritionId\(user\.id, id\)/, "A succ
 assert.match(nutritionLog, /nutritionRows\(value\)\.filter\(\(\{ id \}\) => isFoodLogUuid\(id\) && !deletedIds\.has\(id\)\)/, "Only UUID-backed rows may be bridged, and explicitly deleted IDs stay excluded");
 assert.match(nutritionLog, /localStorage\.getItem\(deletedIdsStorageKey\(userId\)\)[\s\S]*legacy\?\.userId === userId[\s\S]*localStorage\.removeItem\(DELETED_IDS_KEY\)/, "Nutrition tombstones must use the active account namespace and migrate the legacy slot only to its recorded owner");
 const nutritionRefreshStart = nutritionLog.indexOf("export function refreshNutritionFromFoodLog(");
-const nutritionRefreshEnd = nutritionLog.indexOf("\\nexport function subscribeNutritionFoodLogChanges", nutritionRefreshStart);
+const nutritionRefreshEnd = nutritionLog.indexOf("export function subscribeNutritionFoodLogChanges", nutritionRefreshStart);
 assert.ok(nutritionRefreshStart >= 0 && nutritionRefreshEnd > nutritionRefreshStart, "Nutrition refresh projection must remain identifiable");
 const nutritionRefreshBlock = nutritionLog.slice(nutritionRefreshStart, nutritionRefreshEnd);
-assert.match(
-  nutritionRefreshBlock,
-  /const deletedIds = readDeletedNutritionIds\\(user\\.id\\)[\\s\\S]*const rows: NutritionItem\\[\\] = \\(data \\?\\? \\[]\\)[\\s\\S]*filter\\(\\(row\\) => !deletedIds\\.has\\(row\\.id\\)\\)/,
-  "A stale in-flight food_log read must not reinsert a meal that was explicitly deleted while the query was running",
+const refreshDeletedIdsIndex = nutritionRefreshBlock.indexOf("const deletedIds = readDeletedNutritionIds(user.id);");
+const refreshDeletedFilterIndex = nutritionRefreshBlock.indexOf(".filter((row) => !deletedIds.has(row.id))");
+assert.ok(
+  refreshDeletedIdsIndex >= 0 && refreshDeletedFilterIndex > refreshDeletedIdsIndex,
+  "A stale in-flight food_log read must filter returned canonical rows against explicit delete tombstones before rebuilding the Nutrition view",
 );
 const explicitNutritionDeleteStart = nutritionLog.indexOf("export async function deletePersistedNutritionItem");
 const explicitNutritionDeleteEnd = nutritionLog.indexOf("\nfunction nutritionRows", explicitNutritionDeleteStart);
