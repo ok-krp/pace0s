@@ -167,6 +167,15 @@ assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*excludedRemotePull
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableKey\(key\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys must be removed from the owning outbox without reaching Supabase");
 assert.match(flutterLocalStore, /Future<void> discardOperationForAccount\([\s\S]*final scope = \x27account:\$userId\x27[\s\S]*snapshot\[\x27__outbox\x27\] = outbox/, "Device-local outbox cleanup must update the originating account only");
 assert.match(flutterApp, /Timer\.periodic\(const Duration\(seconds: 60\)/, "Flutter's periodic reconciliation must be a 60-second fallback, not the primary write-delivery mechanism");
+assert.ok(
+  flutterApp.includes("unawaited(widget.sync.syncNow().catchError((Object _) {}))"),
+  "Flutter periodic background reconciliation must contain transient sync errors",
+);
+assert.equal(
+  flutterApp.includes("unawaited(widget.sync.syncNow());"),
+  false,
+  "Flutter must not launch an uncaught redundant fire-and-forget sync after a durable local write",
+);
 assert.match(flutterLocalStore, /Future<void> activateAccount\(String\? userId\)/, "Flutter must switch local snapshot and outbox atomically at account boundaries");
 
 assert.match(flutterLocalStore, /Future<void> acknowledgeOperationForAccount\([\s\S]*_accounts\[scope\]/, "Late acknowledgements must update the saved originating account snapshot");
