@@ -77,7 +77,6 @@ class SyncService {
   /// Exact aliases and sync bookkeeping excluded before PostgREST returns rows.
   static const Set<String> excludedRemotePullKeys = {
     ...excludedSyncKeys,
-    'pace.legal.consent',
     'pace.__sync_food_log_deleted_ids',
     'pace.__sync_food_log_outbox',
     'pace.__sync_food_log_quarantine',
