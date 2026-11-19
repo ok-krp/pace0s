@@ -262,6 +262,21 @@ assert.match(nutritionLog, /DELETED_IDS_KEY = "pace\.__nutrition_deleted_ids_v1"
 assert.match(nutritionLog, /rememberDeletedNutritionId\(user\.id, id\)/, "A successful SQL deletion must tombstone the deleted UUID");
 assert.match(nutritionLog, /nutritionRows\(value\)\.filter\(\(\{ id \}\) => isFoodLogUuid\(id\) && !deletedIds\.has\(id\)\)/, "Only UUID-backed rows may be bridged, and explicitly deleted IDs stay excluded");
 assert.match(nutritionLog, /localStorage\.getItem\(deletedIdsStorageKey\(userId\)\)[\s\S]*legacy\?\.userId === userId[\s\S]*localStorage\.removeItem\(DELETED_IDS_KEY\)/, "Nutrition tombstones must use the active account namespace and migrate the legacy slot only to its recorded owner");
+assert.doesNotMatch(
+  nutritionLog,
+  /slice\(-5000\)/,
+  "Web Nutrition delete tombstones must not be truncated and allow stale snapshots to resurrect older meals",
+);
+assert.match(
+  flutterSync,
+  /_writeDeletedNutritionIds[\s\S]*enqueueSync: false/,
+  "Native Nutrition deletion tombstones must persist locally without entering the cloud outbox",
+);
+assert.doesNotMatch(
+  flutterSync,
+  /take\(5000\)/,
+  "Native Nutrition delete tombstones must not be truncated and allow stale snapshots to resurrect older meals",
+);
 const nutritionRefreshStart = nutritionLog.indexOf("export function refreshNutritionFromFoodLog(");
 const nutritionRefreshEnd = nutritionLog.indexOf("export function subscribeNutritionFoodLogChanges", nutritionRefreshStart);
 assert.ok(nutritionRefreshStart >= 0 && nutritionRefreshEnd > nutritionRefreshStart, "Nutrition refresh projection must remain identifiable");
