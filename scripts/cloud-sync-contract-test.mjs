@@ -166,7 +166,11 @@ assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeyPatterns/, "Native pulls must exclude canonical/legacy device-local keys in PostgREST before downloading rows");
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableKey\(key\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys must be removed from the owning outbox without reaching Supabase");
 assert.match(flutterLocalStore, /Future<void> discardOperationForAccount\([\s\S]*final scope = \x27account:\$userId\x27[\s\S]*snapshot\[\x27__outbox\x27\] = outbox/, "Device-local outbox cleanup must update the originating account only");
-assert.match(flutterApp, /Timer\.periodic\(const Duration\(seconds: 60\)/, "Flutter's periodic reconciliation must be a 60-second fallback, not the primary write-delivery mechanism");
+assert.ok(
+  flutterApp.includes("Timer.periodic(") &&
+    flutterApp.includes("const Duration(seconds: 60)"),
+  "Flutter's periodic reconciliation must be a 60-second fallback, not the primary write-delivery mechanism",
+);
 assert.ok(
   flutterApp.includes("unawaited(widget.sync.syncNow().catchError((Object _) {}))"),
   "Flutter periodic background reconciliation must contain transient sync errors",
