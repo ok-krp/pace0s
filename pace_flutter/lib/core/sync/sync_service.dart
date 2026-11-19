@@ -716,25 +716,28 @@ class SyncService {
           .where(_isFoodLogUuid)
           .toList();
       if (pendingDeleteIds.isNotEmpty) {
-        try {
-          await client!
-              .from('food_log')
-              .delete()
-              .eq('user_id', userId)
-              .inFilter('id', pendingDeleteIds);
-          if (isCurrentLocalAccount(userId)) {
-            final deletedIds = _readDeletedNutritionIds(userId);
-            final remainingPending =
-                _readPendingNutritionDeleteIds(userId)
-                  ..removeAll(pendingDeleteIds);
+        final deletedIds = _readDeletedNutritionIds(userId);
+        final remainingPending = _readPendingNutritionDeleteIds(userId);
+        // Keep URL/query payloads bounded even after many offline deletes.
+        for (var offset = 0; offset < pendingDeleteIds.length; offset += 100) {
+          final batch = pendingDeleteIds.skip(offset).take(100).toList();
+          try {
+            await client!
+                .from('food_log')
+                .delete()
+                .eq('user_id', userId)
+                .inFilter('id', batch);
+            if (!isCurrentLocalAccount(userId)) return false;
+            remainingPending.removeAll(batch);
             await _writeDeletedNutritionIds(
               userId,
               deletedIds,
               pendingIds: remainingPending,
             );
+          } catch (_) {
+            // Keep failed and not-yet-attempted batches for the next sync.
+            break;
           }
-        } catch (_) {
-          // Preserve every pending delete and continue with a filtered projection.
         }
       }
 
