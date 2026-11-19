@@ -108,6 +108,18 @@ const flutterApp = read("pace_flutter/lib/app/pace_app.dart");
 const flutterSettings = read("pace_flutter/lib/features/more/more_page.dart");
 const flutterLocalStore = read("pace_flutter/lib/core/storage/local_store.dart");
 const flutterLocalStoreTest = read("pace_flutter/test/local_store_account_scope_test.dart");
+assert.match(
+  flutterSync,
+  /void _scheduleSync\\(\\)[\\s\\S]*unawaited\\(syncNow\\(\\)\\.catchError/,
+  "Background local mutation and reconnect triggers must contain transient sync errors",
+);
+assert.match(
+  flutterSync,
+  /void _scheduleNutritionRealtime\\(String userId\\)[\\s\\S]*_handleFoodLogRealtime\\(userId\\)\\.catchError/,
+  "Background food_log Realtime callbacks must contain transient reconciliation errors",
+);
+assert.doesNotMatch(flutterSync, /unawaited\\(syncNow\\(\\)\\);/, "No native background sync trigger may leak an uncaught sync failure");
+assert.doesNotMatch(flutterSync, /unawaited\\(_handleFoodLogRealtime\\(userId\\)\\)/, "No native food_log Realtime trigger may leak an uncaught reconciliation failure");
 const flutterPushStart = flutterSync.indexOf("Future<void> _pushPending()");
 const flutterPushEnd = flutterSync.indexOf("Future<_PushResult> _push(", flutterPushStart);
 assert.ok(flutterPushStart >= 0 && flutterPushEnd > flutterPushStart, "Flutter outbox push path must remain identifiable");
