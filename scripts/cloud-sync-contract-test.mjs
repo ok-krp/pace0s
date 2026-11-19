@@ -218,6 +218,19 @@ assert.match(flutterSync, /final shouldReconcileNutrition = hadNutritionMutation
 assert.match(flutterSync, /_reconcileNutritionProjection[\s\S]*from\('food_log'\)[\s\S]*legacyRows[\s\S]*_isFoodLogUuid/, "Flutter reconciliation must combine canonical food_log rows with legacy local-only manual meals");
 assert.match(flutterSync, /Future<void> deleteNutritionFoodLogItem\(String id\)[\s\S]*from\('food_log'\)[\s\S]*\.delete\(\)/, "Deleting a canonical meal must delete its exact food_log row");
 assert.match(flutterNutrition, /deleteNutritionFoodLogItem\(item\['id'\]\?\.toString\(\) \?\? ''\)/, "Flutter Nutrition UI must request explicit canonical deletion before removing an item");
+const nativeDeleteUiStart = flutterNutrition.indexOf("Future<void> _deleteItem(");
+const nativeDeleteUiEnd = flutterNutrition.indexOf("\\n  @override", nativeDeleteUiStart);
+assert.ok(
+  nativeDeleteUiStart >= 0 && nativeDeleteUiEnd > nativeDeleteUiStart,
+  "Native Nutrition delete handler must remain identifiable",
+);
+const nativeDeleteUi = flutterNutrition.slice(nativeDeleteUiStart, nativeDeleteUiEnd);
+assert.ok(
+  nativeDeleteUi.indexOf("if (accountId != null)") >= 0 &&
+    nativeDeleteUi.indexOf("if (accountId != null)") < nativeDeleteUi.indexOf("deleteNutritionFoodLogItem("),
+  "Guest/local-only Nutrition entries must be deletable without a Supabase food_log request",
+);
+
 assert.match(flutterNutrition, /Suppression impossible ; le repas a été conservé\./, "A failed canonical deletion must leave the meal visible");
 
 assert.match(flutterNutrition, /cloudSyncConsentGranted/, "Flutter Nutrition must not silently imply cross-device sync when explicit consent is disabled");
