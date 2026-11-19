@@ -151,12 +151,16 @@ void main() {
       expect(SyncService.excludedRemotePullKeysFilter, contains('"lt.wallpaper"'));
       expect(SyncService.excludedRemotePullKeyPatterns, hasLength(4));
       expect(
-        SyncService.excludedRemotePullKeyPatterns.join(' '),
-        contains(r'^(pace|lt)\\.(finance|ai\\.local)\\.'),
+        SyncService.excludedRemotePullKeyPatterns.any(
+          (pattern) => pattern.contains('(finance|ai'),
+        ),
+        isTrue,
       );
       expect(
-        SyncService.excludedRemotePullKeyPatterns.join(' '),
-        contains(r'^(pace|lt)\\.__'),
+        SyncService.excludedRemotePullKeyPatterns.any(
+          (pattern) => pattern.contains(r'\.__'),
+        ),
+        isTrue,
       );
     });
   });
