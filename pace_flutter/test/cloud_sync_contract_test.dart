@@ -57,6 +57,52 @@ void main() {
       expect(result, hasLength(1));
       expect(result.single['id'], id);
     });
+
+    test('filters deleted canonical, legacy and pending meal IDs from projection', () {
+      const deletedCanonical = 'b3d2d75a-5e4c-4f08-9d7b-5f3aa34a3be1';
+      const deletedPending = '2f6b44af-0d6c-45e1-a760-c9b559c8e992';
+      final result = mergeNutritionProjectionRows(
+        canonicalRows: [
+          {'id': deletedCanonical, 'name': 'Ancien repas cloud'},
+          {'id': '2c99003e-d73f-4e52-91b0-bd44de2f8680', 'name': 'Repas conservé'},
+        ],
+        latestLocalRows: [
+          {'id': 'legacy-meal-deleted', 'name': 'Ancien repas local'},
+          {'id': 'legacy-meal-kept', 'name': 'Ancien repas conservé'},
+          {'id': deletedPending, 'name': 'Ajout local supprimé', 'pendingFoodLog': true},
+        ],
+        deletedIds: {deletedCanonical, deletedPending, 'legacy-meal-deleted'},
+      );
+
+      expect(result.map((item) => item['name']), contains('Repas conservé'));
+      expect(result.map((item) => item['name']), contains('Ancien repas conservé'));
+      expect(result.map((item) => item['name']), isNot(contains('Ancien repas cloud')));
+      expect(result.map((item) => item['name']), isNot(contains('Ancien repas local')));
+      expect(result.map((item) => item['name']), isNot(contains('Ajout local supprimé')));
+    });
+
+    test('filters deleted IDs across all days of a remote Nutrition snapshot', () {
+      final value = {
+        '2026-11-18': [
+          {'id': 'deleted-one', 'name': 'Repas supprimé'},
+          {'id': 'kept-one', 'name': 'Repas conservé'},
+        ],
+        '2026-11-19': [
+          {'id': 'deleted-two', 'name': 'Ancien repas supprimé'},
+          {'id': 'kept-two', 'name': 'Nouveau repas conservé'},
+        ],
+      };
+
+      final result = filterDeletedNutritionItems(
+        value,
+        {'deleted-one', 'deleted-two'},
+      ) as Map<String, dynamic>;
+
+      expect((result['2026-11-18'] as List).map((item) => item['name']),
+          ['Repas conservé']);
+      expect((result['2026-11-19'] as List).map((item) => item['name']),
+          ['Nouveau repas conservé']);
+    });
   });
 
   group('Flutter Nutrition IDs', () {
