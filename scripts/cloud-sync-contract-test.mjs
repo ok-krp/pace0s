@@ -423,7 +423,8 @@ assert.doesNotMatch(nutritionLog, /nutritionBridgeRunning/, "The bridge must not
 assert.match(nutritionRoute, /await addNutritionItem\([\s\S]*"manual"\)/, "Manual form must use the canonical persisted add path");
 assert.match(nutritionRoute, /await addNutritionItem\([\s\S]*"barcode"\)/, "Barcode additions must use the canonical persisted add path");
 assert.match(nutritionRoute, /await addNutritionItem\([\s\S]*"photo_ai"\)/, "Photo AI additions must use the canonical persisted add path");
-assert.match(read("src/components/RecipesView.tsx"), /await addNutritionItem\(/, "Recipe quick-add must wait for canonical persistence");
+assert.match(read("src/components/RecipesView.tsx"), /void addNutritionItem\\([\\s\\S]*\\.then\\(\\(saved\\) =>[\\s\\S]*\\.catch\\(/, "Recipe quick-add must handle canonical persistence asynchronously and surface failures");
+assert.match(read("src/components/RecipesView.tsx"), /Repas enregistré sur cet appareil\\./, "Recipe quick-add must identify local-only saves when cloud sync consent is disabled");
 
 assert.match(engine, /setInterval\s*\(.*60(?:000|_000)/s, "sync engine must reconcile periodically");
 assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
