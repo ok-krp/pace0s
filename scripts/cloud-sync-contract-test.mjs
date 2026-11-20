@@ -378,6 +378,8 @@ assert.match(nutritionRefreshBlock, /!isLegalCategoryAllowed\("sync_cloud"\)/, "
 assert.match(nutritionRefreshBlock, /activeNutritionAccountId\(\) !== expectedUserId \|\|[\s\S]*!isLegalCategoryAllowed\("sync_cloud"\)/, "Nutrition refresh must discard in-flight cloud results when sync consent is revoked");
 assert.match(nutritionRoute, /enregistré sur cet appareil/i, "The Web UI must clearly describe local-only Nutrition saves when sync consent is off");
 assert.match(nutritionLog, /source === "photo_ai" \? "photo" : source/, "Photo AI writes must use a source value accepted by the food_log schema");
+assert.match(nutritionLog, /pendingFoodLogSource\?: "manual" \| "barcode" \| "photo_ai"/, "Locally queued Nutrition entries must preserve their original input source");
+assert.match(bridge, /pendingFoodLogSource === "photo_ai"[\s\S]*pendingFoodLogSource \?\? "manual"[\s\S]*source: existingIds\.has\(id\) \? undefined : pendingSource/, "A concurrent local bridge must preserve barcode/photo provenance and normalize photo_ai to the database's photo source");
 
 assert.match(nutritionLog, /export function subscribeNutritionFoodLogChanges/, "Web Nutrition must subscribe to canonical food_log changes");
 assert.match(nutritionLog, /event: "INSERT"[\s\S]*table: "food_log"[\s\S]*filter: `user_id=eq\.\$\{user\.id\}`/, "Web Nutrition Realtime must be scoped to the authenticated account");
