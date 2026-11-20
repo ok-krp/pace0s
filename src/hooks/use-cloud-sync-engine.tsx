@@ -365,7 +365,21 @@ export function useCloudSyncEngineInternal() {
     const pull = async () => {
       if (cancelled || !allowed() || !navigator.onLine || running.current[user.id]) return;
       try {
-        const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id);
+        // A full user_state snapshot can contain large Nutrition/Health JSON.
+        // Bootstrap once per account, then fetch only recent changes. Keep a
+        // two-minute overlap to tolerate small clock skew and writes racing a
+        // previous pull; Realtime remains the primary low-latency path.
+        const pullCursorKey = `pace.__cloud_sync_last_pull:${user.id}`;
+        const previousPullAt = localStorage.getItem(pullCursorKey);
+        const pullStartedAt = Date.now();
+        let request = supabase.from("user_state")
+          .select("key,value,updated_at,updated_by")
+          .eq("user_id", user.id);
+        const previousPullTime = previousPullAt ? Date.parse(previousPullAt) : Number.NaN;
+        if (Number.isFinite(previousPullTime)) {
+          request = request.gt("updated_at", new Date(previousPullTime - 120_000).toISOString());
+        }
+        const { data, error } = await request;
         if (error || !data || cancelled) return;
         const queue = new Set(readQueue(user.id).map((item) => item.key));
         const meta = readMeta(user.id);
@@ -508,6 +522,7 @@ export function useCloudSyncEngineInternal() {
           }
         } catch {}
         writeMeta(meta, user.id);
+        localStorage.setItem(pullCursorKey, new Date(pullStartedAt).toISOString());
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (newest) setStatus("ok");
       } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
