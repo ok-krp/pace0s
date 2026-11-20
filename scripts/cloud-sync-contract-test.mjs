@@ -331,6 +331,8 @@ assert.match(nutritionLog, /if \(pendingRows\.length\) await bridgeLocalNutritio
 assert.match(nutritionLog, /if \(!isFoodLogUuid\(id\) \|\| !cloudAllowed\) return/, "Legacy timestamp meal deletion must not query the UUID food_log key, and a cloud opt-out must remain local");
 
 assert.match(nutritionLog, /await persistNutritionItem\(item, source, expectedUserId, id, logDate\)/, "Consented Nutrition writes must reuse the preallocated local UUID and captured log date so ambiguous retries are idempotent");
+assert.match(nutritionLog, /log_date: logDate/, "Canonical food_log writes must use the same log date captured before authentication/network awaits");
+assert.match(addNutritionBlock, /const logDate = todayKey\(\);[\s\S]*const day = logDate[\s\S]*persistNutritionItem\(item, source, expectedUserId, id, logDate\)[\s\S]*refreshNutritionFromFoodLog\(logDate/, "Local pending rows, canonical persistence, and retry reconciliation must share one captured date across midnight");
 const addNutritionStart = nutritionLog.indexOf("export async function addNutritionItem");
 assert.ok(addNutritionStart >= 0, "Web Nutrition add path must remain identifiable");
 const addNutritionBlock = nutritionLog.slice(addNutritionStart);
