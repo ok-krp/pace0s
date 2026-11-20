@@ -420,7 +420,7 @@ assert.doesNotMatch(nutritionLog, /recentAdds|addFingerprint/, "Identical intent
 assert.match(nutritionLog, /const operationKey = operationId \? `\$\{expectedUserId\}:\$\{operationId\}` : null[\s\S]*if \(operationKey\)[\s\S]*completedOperations\.set\(operationKey, now\)/, "Only explicit operation IDs should trigger account-scoped idempotency suppression");
 assert.match(nutritionRoute, /savingPending/, "Barcode and photo confirmation must prevent accidental duplicate clicks while the server write is pending");
 
-assert.match(nutritionLog, /await refreshNutritionFromFoodLog\(todayKey\(\), \{ expectedUserId \}\)/, "Nutrition projection must be rebuilt from canonical food_log under the original account");
+assert.match(nutritionLog, /await refreshNutritionFromFoodLog\(logDate, \{ expectedUserId \}\)/, "Nutrition projection must be rebuilt from canonical food_log under the original account and captured day");
 assert.match(nutritionLog, /async function bridgeNutritionSnapshot\(value: unknown, userId: string\)/, "Previously local-only manual entries must be recovered into food_log");
 assert.match(nutritionLog, /for \(const \{ id, day, item \} of nextRows\)/, "Legacy recovery must preserve each existing nutrition UUID");
 assert.match(nutritionLog, /id, user_id: user\.id, log_date: day/, "Legacy recovery must reuse each existing nutrition UUID in food_log");
