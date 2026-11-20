@@ -164,6 +164,7 @@ export async function persistNutritionItem(
   source: PersistedNutritionSource = "manual",
   expectedUserId = activeNutritionAccountId(),
   id = newNutritionUuid(),
+  logDate = todayKey(),
 ): Promise<NutritionItem> {
   if (!expectedUserId) throw new Error("Espace utilisateur indisponible.");
   if (!isLegalCategoryAllowed("sync_cloud")) {
@@ -177,7 +178,7 @@ export async function persistNutritionItem(
   }
   const meta = { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } };
   const foodLogSource = source === "photo_ai" ? "photo" : source;
-  const { data, error } = await supabase.from("food_log").upsert({ id, user_id: expectedUserId, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source: foodLogSource, meta }, { onConflict: "id" }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
+  const { data, error } = await supabase.from("food_log").upsert({ id, user_id: expectedUserId, log_date: logDate, meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source: foodLogSource, meta }, { onConflict: "id" }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
   if (error || !data) throw new Error(error?.message ?? "Enregistrement nutritionnel impossible.");
   return { id: data.id ?? id, name: data.name, meal: data.meal, kcal: Number(data.kcal ?? 0), p: Number(data.protein_g ?? 0), c: Number(data.carbs_g ?? 0), f: Number(data.fat_g ?? 0), fiber: Number(data.fiber_g ?? 0), sugar: Number(data.sugar_g ?? 0), sodium: Number(data.sodium_mg ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1 };
 }
@@ -519,6 +520,7 @@ export async function addNutritionItem(
   }
 
   const id = newNutritionUuid();
+  const logDate = todayKey();
   const savePendingLocally = () => {
     const saved: NutritionItem = {
       ...item,
@@ -527,7 +529,7 @@ export async function addNutritionItem(
       pendingFoodLog: true,
       pendingFoodLogSource: source,
     };
-    const day = todayKey();
+    const day = logDate;
     const current = readNutritionItems();
     const list = current[day] ?? [];
     if (!list.some((row) => row.id === id)) {
@@ -553,13 +555,13 @@ export async function addNutritionItem(
     // UUID and upsert contract, so either ordering remains idempotent.
     let saved: NutritionItem;
     try {
-      saved = await persistNutritionItem(item, source, expectedUserId, id);
+      saved = await persistNutritionItem(item, source, expectedUserId, id, logDate);
     } catch (error) {
       if (activeNutritionAccountId() !== expectedUserId) return true;
       console.warn("[nutrition] canonical insert deferred to local outbox", error instanceof Error ? error.message : error);
       if (isLegalCategoryAllowed("sync_cloud")) {
         try {
-          await refreshNutritionFromFoodLog(todayKey(), { expectedUserId });
+          await refreshNutritionFromFoodLog(logDate, { expectedUserId });
         } catch {
           // The stable local UUID stays pending and is retried on reconnect.
         }
@@ -572,13 +574,13 @@ export async function addNutritionItem(
     }
     if (activeNutritionAccountId() !== expectedUserId) return true;
     try {
-      await refreshNutritionFromFoodLog(todayKey(), { expectedUserId });
+      await refreshNutritionFromFoodLog(logDate, { expectedUserId });
     } catch (refreshError) {
       if (activeNutritionAccountId() !== expectedUserId) return true;
       // The SQL insert already succeeded. Keep the returned row visible rather
       // than telling the user to retry and accidentally inserting it again.
       console.error("[nutrition] canonical refresh failed after successful insert", refreshError instanceof Error ? refreshError.message : refreshError);
-      const day = todayKey();
+      const day = logDate;
       if (activeNutritionAccountId() !== expectedUserId) return true;
       const current = readNutritionItems();
       const list = current[day] ?? [];
