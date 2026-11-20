@@ -283,9 +283,9 @@ assert.ok(bridgeStart >= 0 && bridgeEnd > bridgeStart, "Nutrition bridge must re
 const bridge = nutritionLog.slice(bridgeStart, bridgeEnd);
 assert.doesNotMatch(bridge, /\.delete\s*\(/, "A missing local snapshot row must never delete canonical food_log data");
 assert.match(bridge, /A missing ID is not a delete instruction/);
-assert.match(nutritionRoute, /await deletePersistedNutritionItem\(id, expectedUserId \?\? undefined\)/, "User-requested deletion must explicitly delete its exact SQL row under the account that initiated the action");
+assert.match(nutritionRoute, /await deletePersistedNutritionItem\\(id, expectedUserId\\)/, "User-requested deletion must delegate the exact account-scoped ID to the local-first SQL delete helper");
 assert.match(nutritionLog, /DELETED_IDS_KEY = "pace\.__nutrition_deleted_ids_v1"/, "Explicit nutrition deletions must leave an account-local tombstone");
-assert.match(nutritionLog, /rememberDeletedNutritionId\(user\.id, id\)/, "A successful SQL deletion must tombstone the deleted UUID");
+assert.match(nutritionLog, /rememberDeletedNutritionId\\(expectedUserId, id, isFoodLogUuid\\(id\\)\\)/, "A requested deletion must persist an account-scoped tombstone and queue UUID deletes for later sync");
 assert.match(nutritionLog, /nutritionRows\(value\)\.filter\(\(\{ id \}\) => isFoodLogUuid\(id\) && !deletedIds\.has\(id\)\)/, "Only UUID-backed rows may be bridged, and explicitly deleted IDs stay excluded");
 assert.match(nutritionLog, /localStorage\.getItem\(deletedIdsStorageKey\(userId\)\)[\s\S]*legacy\?\.userId === userId[\s\S]*localStorage\.removeItem\(DELETED_IDS_KEY\)/, "Nutrition tombstones must use the active account namespace and migrate the legacy slot only to its recorded owner");
 assert.doesNotMatch(
