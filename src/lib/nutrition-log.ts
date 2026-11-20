@@ -193,7 +193,7 @@ export async function deletePersistedNutritionItem(
   // Local opt-out/offline deletes stay local and become an account-scoped
   // pending SQL delete. They are flushed only after explicit opt-in returns.
   const cloudAllowed = isLegalCategoryAllowed("sync_cloud");
-  rememberDeletedNutritionId(expectedUserId, id, cloudAllowed && isFoodLogUuid(id));
+  rememberDeletedNutritionId(expectedUserId, id, isFoodLogUuid(id));
   await nutritionBridgeChain.catch(() => undefined);
   if (!isFoodLogUuid(id) || !cloudAllowed) return;
 
@@ -216,15 +216,16 @@ export async function deletePersistedNutritionItem(
     throw new Error("La session a changé ; la suppression Nutrition a été interrompue.");
   }
 
-  const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", expectedUserId);
-  if (error) {
+  try {
+    const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", expectedUserId);
+    if (error) throw error;
+    clearPendingNutritionDeletes(expectedUserId, [id]);
+  } catch {
     // Preserve the local tombstone and retry this exact UUID later.
     const state = readDeletedNutritionState(expectedUserId);
     state.pending.add(id);
     writeDeletedNutritionState(expectedUserId, state);
-    return;
   }
-  clearPendingNutritionDeletes(expectedUserId, [id]);
 }
 
 function nutritionRows(value: unknown) {
@@ -330,9 +331,7 @@ if (typeof window !== "undefined") {
   window.addEventListener("online", retryPendingNutritionBridge);
   window.addEventListener("pace.legal.changed", retryPendingNutritionBridge);
   window.addEventListener("pace.account.scope.changed", retryPendingNutritionBridge);
-  void bridgeLocalNutritionToFoodLog(lastBridgedNutrition).catch((error) => {
-    console.error("[nutrition] initial food_log bridge failed", error instanceof Error ? error.message : error);
-  });
+  retryPendingNutritionBridge();
 }
 
 let nutritionRefreshChain: Promise<void> = Promise.resolve();
