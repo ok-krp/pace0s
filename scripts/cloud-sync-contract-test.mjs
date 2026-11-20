@@ -250,6 +250,7 @@ assert.match(aiAddPath, /insert_coach_ai_food_idempotent_v2/);
 assert.doesNotMatch(aiAddPath, /\.delete\s*\(/, "AI add_food must never delete a previous food_log row");
 assert.doesNotMatch(aiAddPath, /\.update\s*\(/, "AI add_food must never overwrite a previous food_log row");
 assert.match(nutritionAi, /AJOUT APPEND-ONLY/, "Coach IA must be instructed to preserve every existing meal during additions");
+assert.match(nutritionAi, /const canonicalIds = new Set\(\(data \?\? \[\]\)\.map\(\(row\) => row\.id\)\)[\s\S]*item\.pendingFoodLog === true && !canonicalIds\.has\(item\.id\)/, "Coach context must not count a pending local meal twice when its canonical food_log row already exists");
 assert.doesNotMatch(nutritionAi, /Si le même plat est ajouté au même repas, conserve un seul objet logique/);
 assert.match(nutritionAi, /Déplacement refusé : demande explicite de déplacement absente/);
 assert.match(nutritionAi, /Remplacement refusé : demande explicite de modification absente/);
