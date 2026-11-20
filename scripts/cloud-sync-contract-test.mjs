@@ -328,7 +328,7 @@ assert.match(nutritionLog, /const currentRows = current\[day\] \?\? \[\][\s\S]*c
 assert.match(nutritionLog, /const pendingRows = currentRows\.filter\(\(item\) =>[\s\S]*pendingFoodLog === true[\s\S]*!canonicalIds\.has\(item\.id\)/, "Web refresh must retain pending native UUID rows absent from food_log");
 assert.match(nutritionLog, /const pendingRows = currentRows\.filter\(\(item\) =>[\s\S]*pendingFoodLog === true[\s\S]*!canonicalIds\.has\(item\.id\)/, "Web refresh must preserve native UUID rows while their canonical food_log insert is pending");
 assert.match(nutritionLog, /if \(pendingRows\.length\) await bridgeLocalNutritionToFoodLog\(nextSnapshot, expectedUserId\)/, "Web must retry pending native meal inserts through the idempotent account-bound UUID bridge");
-assert.match(nutritionLog, /if \(!isFoodLogUuid\(id\)\) return/, "Legacy timestamp meal deletion must not query the UUID food_log key");
+assert.match(nutritionLog, /if \(!isFoodLogUuid\(id\) \|\| !cloudAllowed\) return/, "Legacy timestamp meal deletion must not query the UUID food_log key, and a cloud opt-out must remain local");
 
 assert.match(nutritionLog, /await persistNutritionItem\(item, source, expectedUserId, id\)/, "Consented Nutrition writes must reuse the preallocated local UUID so ambiguous retries are idempotent");
 const addNutritionStart = nutritionLog.indexOf("export async function addNutritionItem");
