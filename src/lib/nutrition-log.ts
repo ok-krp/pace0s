@@ -124,6 +124,7 @@ export async function persistNutritionItem(
   item: Omit<NutritionItem, "id" | "qty"> & { qty?: number },
   source: PersistedNutritionSource = "manual",
   expectedUserId = activeNutritionAccountId(),
+  id = newNutritionUuid(),
 ): Promise<NutritionItem> {
   if (!expectedUserId) throw new Error("Espace utilisateur indisponible.");
   if (!isLegalCategoryAllowed("sync_cloud")) {
@@ -137,9 +138,9 @@ export async function persistNutritionItem(
   }
   const meta = { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } };
   const foodLogSource = source === "photo_ai" ? "photo" : source;
-  const { data, error } = await supabase.from("food_log").insert({ user_id: expectedUserId, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source: foodLogSource, meta }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
+  const { data, error } = await supabase.from("food_log").upsert({ id, user_id: expectedUserId, log_date: todayKey(), meal: item.meal, name: item.name, kcal: item.kcal, protein_g: item.p, carbs_g: item.c, fat_g: item.f, fiber_g: item.fiber ?? 0, sugar_g: item.sugar ?? 0, sodium_mg: item.sodium ?? 0, source: foodLogSource, meta }, { onConflict: "id" }).select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg").single();
   if (error || !data) throw new Error(error?.message ?? "Enregistrement nutritionnel impossible.");
-  return { id: data.id, name: data.name, meal: data.meal, kcal: Number(data.kcal ?? 0), p: Number(data.protein_g ?? 0), c: Number(data.carbs_g ?? 0), f: Number(data.fat_g ?? 0), fiber: Number(data.fiber_g ?? 0), sugar: Number(data.sugar_g ?? 0), sodium: Number(data.sodium_mg ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1 };
+  return { id: data.id ?? id, name: data.name, meal: data.meal, kcal: Number(data.kcal ?? 0), p: Number(data.protein_g ?? 0), c: Number(data.carbs_g ?? 0), f: Number(data.fat_g ?? 0), fiber: Number(data.fiber_g ?? 0), sugar: Number(data.sugar_g ?? 0), sodium: Number(data.sodium_mg ?? 0), sat: item.sat, salt: item.salt, iron: item.iron, calcium: item.calcium, vitC: item.vitC, qty: item.qty ?? 1 };
 }
 
 export async function deletePersistedNutritionItem(
@@ -250,12 +251,23 @@ function bridgeLocalNutritionToFoodLog(
 }
 
 if (typeof window !== "undefined") {
+  const retryPendingNutritionBridge = () => {
+    const userId = activeNutritionAccountId();
+    if (!userId || !isLegalCategoryAllowed("sync_cloud")) return;
+    void bridgeLocalNutritionToFoodLog(readNutritionItems(), userId).catch((error) => {
+      console.error("[nutrition] pending food_log retry failed", error instanceof Error ? error.message : error);
+    });
+  };
+
   onLocalWrite((key, value) => {
     if (key !== "pace.nutrition.items") return;
     void bridgeLocalNutritionToFoodLog(value).catch((error) => {
       console.error("[nutrition] food_log bridge failed", error instanceof Error ? error.message : error);
     });
   });
+  window.addEventListener("online", retryPendingNutritionBridge);
+  window.addEventListener("pace.legal.changed", retryPendingNutritionBridge);
+  window.addEventListener("pace.account.scope.changed", retryPendingNutritionBridge);
   void bridgeLocalNutritionToFoodLog(lastBridgedNutrition).catch((error) => {
     console.error("[nutrition] initial food_log bridge failed", error instanceof Error ? error.message : error);
   });
@@ -437,28 +449,50 @@ export async function addNutritionItem(
     for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
   }
 
+  const id = newNutritionUuid();
+  const savePendingLocally = () => {
+    const saved: NutritionItem = {
+      ...item,
+      id,
+      qty: item.qty ?? 1,
+      pendingFoodLog: true,
+    };
+    const day = todayKey();
+    const current = readNutritionItems();
+    const list = current[day] ?? [];
+    if (!list.some((row) => row.id === id)) {
+      writeDomain(DOMAIN_ITEMS, { ...current, [day]: [...list, saved] });
+    }
+    return saved;
+  };
+
   try {
     if (!isLegalCategoryAllowed("sync_cloud")) {
       // Match Flutter's consent behavior: keep the exact meal locally and
       // queue a stable UUID for the first consented cloud reconciliation.
-      const saved: NutritionItem = {
-        ...item,
-        id: newNutritionUuid(),
-        qty: item.qty ?? 1,
-        pendingFoodLog: true,
-      };
-      const day = todayKey();
-      const current = readNutritionItems();
-      writeDomain(DOMAIN_ITEMS, {
-        ...current,
-        [day]: [...(current[day] ?? []), saved],
-      });
+      savePendingLocally();
       return true;
     }
 
-    // food_log is canonical when cloud sync is explicitly enabled: persist
-    // before projecting the entry into local UI state.
-    const saved = await persistNutritionItem(item, source, expectedUserId);
+    // Keep one client UUID across an ambiguous network failure. The retry
+    // bridge can safely discover an already-committed row instead of adding
+    // a duplicate meal.
+    let saved: NutritionItem;
+    try {
+      saved = await persistNutritionItem(item, source, expectedUserId, id);
+    } catch (error) {
+      if (activeNutritionAccountId() !== expectedUserId) throw error;
+      savePendingLocally();
+      console.warn("[nutrition] canonical insert deferred to local outbox", error instanceof Error ? error.message : error);
+      if (isLegalCategoryAllowed("sync_cloud")) {
+        try {
+          await refreshNutritionFromFoodLog(todayKey(), { expectedUserId });
+        } catch {
+          // The stable local UUID stays pending and is retried on reconnect.
+        }
+      }
+      return true;
+    }
     if (operationKey) {
       completedOperations.set(operationKey, now);
       for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
