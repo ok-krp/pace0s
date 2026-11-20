@@ -353,6 +353,14 @@ assert.ok(deletePendingStart >= 0 && deletePendingEnd > deletePendingStart, "Exp
 const deletePendingBlock = nutritionLog.slice(deletePendingStart, deletePendingEnd);
 assert.match(deletePendingBlock, /rememberDeletedNutritionId\(expectedUserId, id, isFoodLogUuid\(id\)\)[\s\S]*if \(!isFoodLogUuid\(id\) \|\| !cloudAllowed\) return/, "A local-first Nutrition delete must be tombstoned and deferred when cloud consent is disabled");
 assert.match(deletePendingBlock, /state\.pending\.add\(id\)[\s\S]*writeDeletedNutritionState\(expectedUserId, state\)/, "An unsuccessful cloud delete must remain queued without resurrecting the local meal");
+const routeDeleteStart = nutritionRoute.indexOf("const remove = (id: string) =>");
+const routeDeleteEnd = nutritionRoute.indexOf("const t = totals[today]", routeDeleteStart);
+assert.ok(routeDeleteStart >= 0 && routeDeleteEnd > routeDeleteStart, "Web Nutrition remove handler must remain identifiable");
+const routeDeleteBlock = nutritionRoute.slice(routeDeleteStart, routeDeleteEnd);
+assert.match(routeDeleteBlock, /await deletePersistedNutritionItem\(id, expectedUserId\)/, "Web Nutrition delete must delegate to the local-first account-scoped delete helper");
+assert.doesNotMatch(routeDeleteBlock, /supabase\.auth\.getUser/, "The UI must not require a network auth preflight before a local Nutrition delete");
+assert.match(retryHooks, /refreshNutritionFromFoodLog\(todayKey\(\), \{[\s\S]*bridgeLocalFirst: false[\s\S]*expectedUserId: userId/, "After queued changes are flushed, Web Nutrition must reconcile the canonical journal and clear acknowledged pending inserts");
+
 const persistNutritionStart = nutritionLog.indexOf("export async function persistNutritionItem");
 const persistNutritionEnd = nutritionLog.indexOf("export async function deletePersistedNutritionItem", persistNutritionStart);
 assert.ok(persistNutritionStart >= 0 && persistNutritionEnd > persistNutritionStart, "Canonical Nutrition persistence must remain identifiable");
