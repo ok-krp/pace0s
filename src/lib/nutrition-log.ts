@@ -281,7 +281,7 @@ async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<
       const { error } = await supabase.from("food_log").update(update).eq("id", id).eq("user_id", user.id);
       if (error) throw error;
     } else {
-      const { error } = await supabase.from("food_log").insert(payload);
+      const { error } = await supabase.from("food_log").upsert(payload, { onConflict: "id" });
       if (error) throw error;
       existingIds.add(id);
     }
@@ -528,26 +528,29 @@ export async function addNutritionItem(
     if (!list.some((row) => row.id === id)) {
       writeDomain(DOMAIN_ITEMS, { ...current, [day]: [...list, saved] });
     }
+    if (!readNutritionItems()[day]?.some((row) => row.id === id)) {
+      throw new Error("Impossible de conserver le repas dans le stockage local de cet appareil.");
+    }
     return saved;
   };
 
   try {
+    // Always commit the meal to this account's local snapshot before network
+    // work. If the session changes or the request is ambiguous, the originating
+    // account retains the exact UUID and can retry it when it becomes active.
+    savePendingLocally();
+
     if (!isLegalCategoryAllowed("sync_cloud")) {
-      // Match Flutter's consent behavior: keep the exact meal locally and
-      // queue a stable UUID for the first consented cloud reconciliation.
-      savePendingLocally();
       return true;
     }
 
-    // Keep one client UUID across an ambiguous network failure. The retry
-    // bridge can safely discover an already-committed row instead of adding
-    // a duplicate meal.
+    // The local bridge and this direct request may overlap. Both use the same
+    // UUID and upsert contract, so either ordering remains idempotent.
     let saved: NutritionItem;
     try {
       saved = await persistNutritionItem(item, source, expectedUserId, id);
     } catch (error) {
-      if (activeNutritionAccountId() !== expectedUserId) throw error;
-      savePendingLocally();
+      if (activeNutritionAccountId() !== expectedUserId) return true;
       console.warn("[nutrition] canonical insert deferred to local outbox", error instanceof Error ? error.message : error);
       if (isLegalCategoryAllowed("sync_cloud")) {
         try {
@@ -574,9 +577,10 @@ export async function addNutritionItem(
       if (activeNutritionAccountId() !== expectedUserId) return true;
       const current = readNutritionItems();
       const list = current[day] ?? [];
-      if (!list.some((row) => row.id === saved.id)) {
-        writeDomain(DOMAIN_ITEMS, { ...current, [day]: [...list, saved] });
-      }
+      const nextList = list.some((row) => row.id === saved.id)
+        ? list.map((row) => row.id === saved.id ? saved : row)
+        : [...list, saved];
+      writeDomain(DOMAIN_ITEMS, { ...current, [day]: nextList });
     }
     return true;
   } catch (error) {
