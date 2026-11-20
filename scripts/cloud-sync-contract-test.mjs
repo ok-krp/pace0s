@@ -339,20 +339,20 @@ assert.match(nutritionLog, /function newNutritionUuid\(\): string[\s\S]*crypto\.
 assert.match(nutritionLog, /from\("food_log"\)\.upsert\(\{ id, user_id: expectedUserId[\s\S]*\{ onConflict: "id" \}\)/, "A retried manual Nutrition write must upsert by the exact preallocated UUID instead of duplicating a row");
 assert.match(addNutritionBlock, /const id = newNutritionUuid\(\);[\s\S]*const savePendingLocally = \(\) => \{[\s\S]*id,[\s\S]*pendingFoodLog: true[\s\S]*await persistNutritionItem\(item, source, expectedUserId, id\)/, "A failed canonical insert must fall back to a local pending row with the same UUID used by the cloud retry");
 const retryHooksStart = nutritionLog.indexOf("const retryPendingNutritionBridge =");
-const retryHooksEnd = nutritionLog.indexOf("\\n}", retryHooksStart);
+const retryHooksEnd = nutritionLog.indexOf("\n}", retryHooksStart);
 assert.ok(retryHooksStart >= 0 && retryHooksEnd > retryHooksStart, "Nutrition retry hook lifecycle must remain identifiable");
 const retryHooks = nutritionLog.slice(retryHooksStart, retryHooksEnd);
-assert.match(retryHooks, /flushPendingNutritionDeletes\(userId\)[\\s\\S]*bridgeLocalNutritionToFoodLog\(readNutritionItems\(\), userId\)/, "Reconnect/consent retry must flush queued explicit deletes before bridging local adds");
-for (const event of ["online", "pace.legal.changed", "pace.account.scope.changed"]) {
-  assert.match(nutritionLog, new RegExp('addEventListener\\("' + event.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\assert.match(nutritionLog, /function newNutritionUuid\(\): string[\s\S]*crypto\.getRandomValues/, "Local pending Nutrition entries must receive collision-resistant UUIDs before upload");") + '", retryPendingNutritionBridge\\)'), "Nutrition pending operations must retry after " + event);
-}
-assert.match(nutritionLog, /async function flushPendingNutritionDeletes\(userId: string\)[\\s\\S]*readDeletedNutritionState\(userId\)\.pending[\\s\\S]*offset \+= 100[\\s\\S]*clearPendingNutritionDeletes\(userId, batch\)/, "Queued Nutrition SQL deletes must retry in bounded account-scoped batches and clear only after acknowledgement");
+assert.match(retryHooks, /flushPendingNutritionDeletes\(userId\)[\s\S]*bridgeLocalNutritionToFoodLog\(readNutritionItems\(\), userId\)/, "Reconnect/consent retry must flush queued explicit deletes before bridging local adds");
+assert.match(nutritionLog, /window\.addEventListener\("online", retryPendingNutritionBridge\)/, "Pending nutrition writes and deletes must retry after network reconnection");
+assert.match(nutritionLog, /window\.addEventListener\("pace\.legal\.changed", retryPendingNutritionBridge\)/, "Pending nutrition writes and deletes must retry after sync consent is enabled");
+assert.match(nutritionLog, /window\.addEventListener\("pace\.account\.scope\.changed", retryPendingNutritionBridge\)/, "Pending nutrition writes and deletes must retry after an account scope transition");
+assert.match(nutritionLog, /async function flushPendingNutritionDeletes\(userId: string\)[\s\S]*readDeletedNutritionState\(userId\)\.pending[\s\S]*offset \+= 100[\s\S]*clearPendingNutritionDeletes\(userId, batch\)/, "Queued Nutrition SQL deletes must retry in bounded account-scoped batches and clear only after acknowledgement");
 const deletePendingStart = nutritionLog.indexOf("export async function deletePersistedNutritionItem");
-const deletePendingEnd = nutritionLog.indexOf("\\nfunction nutritionRows", deletePendingStart);
+const deletePendingEnd = nutritionLog.indexOf("\nfunction nutritionRows", deletePendingStart);
 assert.ok(deletePendingStart >= 0 && deletePendingEnd > deletePendingStart, "Explicit Nutrition delete path must remain identifiable");
 const deletePendingBlock = nutritionLog.slice(deletePendingStart, deletePendingEnd);
-assert.match(deletePendingBlock, /rememberDeletedNutritionId\(expectedUserId, id, isFoodLogUuid\(id\)\)[\\s\\S]*if \(!isFoodLogUuid\(id\) \|\| !cloudAllowed\) return/, "A local-first Nutrition delete must be tombstoned and deferred when cloud consent is disabled");
-assert.match(deletePendingBlock, /state\.pending\.add\(id\)[\\s\\S]*writeDeletedNutritionState\(expectedUserId, state\)/, "An unsuccessful cloud delete must remain queued without resurrecting the local meal");
+assert.match(deletePendingBlock, /rememberDeletedNutritionId\(expectedUserId, id, isFoodLogUuid\(id\)\)[\s\S]*if \(!isFoodLogUuid\(id\) \|\| !cloudAllowed\) return/, "A local-first Nutrition delete must be tombstoned and deferred when cloud consent is disabled");
+assert.match(deletePendingBlock, /state\.pending\.add\(id\)[\s\S]*writeDeletedNutritionState\(expectedUserId, state\)/, "An unsuccessful cloud delete must remain queued without resurrecting the local meal");
 const persistNutritionStart = nutritionLog.indexOf("export async function persistNutritionItem");
 const persistNutritionEnd = nutritionLog.indexOf("export async function deletePersistedNutritionItem", persistNutritionStart);
 assert.ok(persistNutritionStart >= 0 && persistNutritionEnd > persistNutritionStart, "Canonical Nutrition persistence must remain identifiable");
