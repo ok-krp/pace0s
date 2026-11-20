@@ -87,6 +87,7 @@ assert.match(packageScripts["test:sync"], /node --experimental-strip-types scrip
 
 
 const nutritionAi = read("src/lib/ai-chat.server.ts");
+const nutritionAiChat = read("src/components/NutritionDailyAiChat.tsx");
 const nutritionLog = read("src/lib/nutrition-log.ts");
 const nutritionRoute = read("src/routes/nutrition.tsx");
 assert.match(nutritionLog, /function activeNutritionAccountId\(\)[\s\S]*pace\.__account_scope[\s\S]*scope !== "__guest__"/, "Nutrition local bridge must identify the account whose local snapshot is active");
@@ -419,6 +420,8 @@ assert.doesNotMatch(domainStore, /MAX_IDENTICAL_NUTRITION_ITEMS_PER_DAY|MAX_NUTR
 assert.doesNotMatch(nutritionLog, /recentAdds|addFingerprint/, "Identical intentional food entries must not be dropped by a client-side fingerprint cooldown");
 assert.match(nutritionLog, /const operationKey = operationId \? `\$\{expectedUserId\}:\$\{operationId\}` : null[\s\S]*if \(operationKey\)[\s\S]*completedOperations\.set\(operationKey, now\)/, "Only explicit operation IDs should trigger account-scoped idempotency suppression");
 assert.match(nutritionRoute, /savingPending/, "Barcode and photo confirmation must prevent accidental duplicate clicks while the server write is pending");
+assert.match(nutritionAiChat, /isNutritionDeviceSyncEnabled\(\)[\s\S]*refreshNutritionFromFoodLog\(todayKey\(\), \{ bridgeLocalFirst: false \}\)/, "Coach IA refresh must respect cloud-sync consent and use the merge-safe canonical Nutrition projection");
+assert.doesNotMatch(nutritionAiChat, /from\("food_log"\)\.select/, "Coach IA completion must not replace local Nutrition with a raw partial food_log snapshot");
 
 assert.match(nutritionLog, /await refreshNutritionFromFoodLog\(logDate, \{ expectedUserId \}\)/, "Nutrition projection must be rebuilt from canonical food_log under the original account and captured day");
 assert.match(nutritionLog, /async function bridgeNutritionSnapshot\(value: unknown, userId: string\)/, "Previously local-only manual entries must be recovered into food_log");
