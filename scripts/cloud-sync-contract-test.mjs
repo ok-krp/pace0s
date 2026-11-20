@@ -353,6 +353,9 @@ assert.ok(deletePendingStart >= 0 && deletePendingEnd > deletePendingStart, "Exp
 const deletePendingBlock = nutritionLog.slice(deletePendingStart, deletePendingEnd);
 assert.match(deletePendingBlock, /rememberDeletedNutritionId\(expectedUserId, id, isFoodLogUuid\(id\)\)[\s\S]*if \(!isFoodLogUuid\(id\) \|\| !cloudAllowed\) return/, "A local-first Nutrition delete must be tombstoned and deferred when cloud consent is disabled");
 assert.match(deletePendingBlock, /state\.pending\.add\(id\)[\s\S]*writeDeletedNutritionState\(expectedUserId, state\)/, "An unsuccessful cloud delete must remain queued without resurrecting the local meal");
+assert.doesNotMatch(deletePendingBlock, /forgetDeletedNutritionId/, "An account switch or transient auth failure must never discard the previous account's pending deletion tombstone");
+assert.match(deletePendingBlock, /await nutritionBridgeChain\.catch\(\(\) => undefined\);[\s\S]*activeNutritionAccountId\(\) !== expectedUserId \|\|[\s\S]*!isLegalCategoryAllowed\("sync_cloud"\)/, "Explicit SQL deletion must recheck account and consent after draining the queued Nutrition bridge");
+
 const routeDeleteStart = nutritionRoute.indexOf("const remove = (id: string) =>");
 const routeDeleteEnd = nutritionRoute.indexOf("const t = totals[today]", routeDeleteStart);
 assert.ok(routeDeleteStart >= 0 && routeDeleteEnd > routeDeleteStart, "Web Nutrition remove handler must remain identifiable");
