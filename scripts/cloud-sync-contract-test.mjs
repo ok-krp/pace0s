@@ -334,7 +334,8 @@ assert.match(nutritionLog, /await persistNutritionItem\(item, source, expectedUs
 const addNutritionStart = nutritionLog.indexOf("export async function addNutritionItem");
 assert.ok(addNutritionStart >= 0, "Web Nutrition add path must remain identifiable");
 const addNutritionBlock = nutritionLog.slice(addNutritionStart);
-assert.match(addNutritionBlock, /if \(!isLegalCategoryAllowed\("sync_cloud"\)\) \{[\s\S]*pendingFoodLog: true[\s\S]*writeDomain\(DOMAIN_ITEMS/, "When cloud-sync consent is off, Web Nutrition must retain the meal locally with a stable pending UUID instead of writing to Supabase");
+assert.match(addNutritionBlock, /const savePendingLocally = \(\) => \{[\s\S]*pendingFoodLog: true[\s\S]*writeDomain\(DOMAIN_ITEMS/, "Local-first Nutrition persistence must save pending entries under a stable UUID before cloud upload");
+assert.match(addNutritionBlock, /if \(!isLegalCategoryAllowed\("sync_cloud"\)\) \{[\s\S]*savePendingLocally\(\);[\s\S]*return true;/, "When cloud-sync consent is off, Web Nutrition must keep the meal locally instead of writing to Supabase");
 assert.match(nutritionLog, /function newNutritionUuid\(\): string[\s\S]*crypto\.getRandomValues/, "Local pending Nutrition entries must receive collision-resistant UUIDs before upload");
 assert.match(nutritionLog, /from\("food_log"\)\.upsert\(\{ id, user_id: expectedUserId[\s\S]*\{ onConflict: "id" \}\)/, "A retried manual Nutrition write must upsert by the exact preallocated UUID instead of duplicating a row");
 assert.match(addNutritionBlock, /const id = newNutritionUuid\(\);[\s\S]*const savePendingLocally = \(\) => \{[\s\S]*id,[\s\S]*pendingFoodLog: true[\s\S]*await persistNutritionItem\(item, source, expectedUserId, id\)/, "A failed canonical insert must fall back to a local pending row with the same UUID used by the cloud retry");
