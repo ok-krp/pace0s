@@ -275,7 +275,9 @@ async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<
   for (const { id, day, item } of nextRows) {
     if (!isLegalCategoryAllowed("sync_cloud") || activeNutritionAccountId() !== userId) return;
     const previous = previousById.get(id);
-    const changed = previous !== undefined && JSON.stringify(previous) !== JSON.stringify(item);
+    const changed = previous !== undefined
+      ? JSON.stringify(previous) !== JSON.stringify(item)
+      : item.pendingFoodLog === true;
     if (existingIds.has(id) && !changed) continue;
     const pendingSource = item.pendingFoodLogSource === "photo_ai"
       ? "photo"
