@@ -315,9 +315,13 @@ if (typeof window !== "undefined") {
   const retryPendingNutritionBridge = () => {
     const userId = activeNutritionAccountId();
     if (!userId || !isLegalCategoryAllowed("sync_cloud")) return;
-    void flushPendingNutritionDeletes(userId).then(() =>
-      bridgeLocalNutritionToFoodLog(readNutritionItems(), userId)
-    ).catch((error) => {
+    void flushPendingNutritionDeletes(userId)
+      .then(() => bridgeLocalNutritionToFoodLog(readNutritionItems(), userId))
+      .then(() => refreshNutritionFromFoodLog(todayKey(), {
+        bridgeLocalFirst: false,
+        expectedUserId: userId,
+      }))
+      .catch((error) => {
       console.error("[nutrition] pending food_log retry failed", error instanceof Error ? error.message : error);
     });
   };
