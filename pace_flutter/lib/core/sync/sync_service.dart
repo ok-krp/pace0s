@@ -921,10 +921,29 @@ class SyncService {
         !_hasCachedCloudSyncConsent(userId)) {
       return;
     }
-    final rows = await client!
+    // user_state.value can contain large Nutrition/Health snapshots. Read
+    // the full account once, then only changes since the previous successful
+    // pull. A two-minute overlap protects against small clock skew and writes
+    // racing a previous request; Realtime remains the primary fast path.
+    final previousPullAt =
+        localStore.read('__cloud_sync_last_pull_at') as String?;
+    final previousPullTime = previousPullAt == null
+        ? null
+        : DateTime.tryParse(previousPullAt)?.toUtc();
+    final requestStartedAt = DateTime.now().toUtc();
+    var query = client!
         .from('user_state')
         .select('key,value,updated_at')
-        .eq('user_id', userId)
+        .eq('user_id', userId);
+    if (previousPullTime != null) {
+      query = query.gt(
+        'updated_at',
+        previousPullTime
+            .subtract(const Duration(minutes: 2))
+            .toIso8601String(),
+      );
+    }
+    final rows = await query
         .not('key', 'in', SyncService.excludedRemotePullKeysFilter)
         .not('key', 'match', SyncService.excludedRemotePullKeyPatterns[0])
         .not('key', 'match', SyncService.excludedRemotePullKeyPatterns[1])
@@ -965,6 +984,14 @@ class SyncService {
             )
           : row['value'];
       await localStore.applyRemote(key, safeValue, remoteUpdatedAt);
+    }
+    if (client?.auth.currentUser?.id == userId &&
+        localStore.currentAccountId == userId) {
+      await localStore.write(
+        '__cloud_sync_last_pull_at',
+        requestStartedAt.toIso8601String(),
+        enqueueSync: false,
+      );
     }
   }
 }
