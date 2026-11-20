@@ -330,7 +330,17 @@ assert.match(nutritionLog, /const pendingRows = currentRows\.filter\(\(item\) =>
 assert.match(nutritionLog, /if \(pendingRows\.length\) await bridgeLocalNutritionToFoodLog\(nextSnapshot, expectedUserId\)/, "Web must retry pending native meal inserts through the idempotent account-bound UUID bridge");
 assert.match(nutritionLog, /if \(!isFoodLogUuid\(id\)\) return/, "Legacy timestamp meal deletion must not query the UUID food_log key");
 
-assert.match(nutritionLog, /await persistNutritionItem\(item, source, expectedUserId\)/, "All nutrition additions must persist to food_log under the account that initiated the action");
+assert.match(nutritionLog, /await persistNutritionItem\(item, source, expectedUserId\)/, "Consented nutrition additions must persist to food_log under the account that initiated the action");
+assert.match(nutritionLog, /if \(!isLegalCategoryAllowed\("sync_cloud"\)\) \{[\s\S]*pendingFoodLog: true[\s\S]*writeDomain\(DOMAIN_ITEMS/, "When cloud-sync consent is off, Web Nutrition must retain the meal locally with a stable pending UUID instead of writing to Supabase");
+assert.match(nutritionLog, /function newNutritionUuid\(\): string[\s\S]*crypto\.getRandomValues/, "Local pending Nutrition entries must receive collision-resistant UUIDs before upload");
+const persistNutritionStart = nutritionLog.indexOf("export async function persistNutritionItem");
+const persistNutritionEnd = nutritionLog.indexOf("export async function deletePersistedNutritionItem", persistNutritionStart);
+assert.ok(persistNutritionStart >= 0 && persistNutritionEnd > persistNutritionStart, "Canonical Nutrition persistence must remain identifiable");
+assert.match(nutritionLog.slice(persistNutritionStart, persistNutritionEnd), /if \(!isLegalCategoryAllowed\("sync_cloud"\)\)/, "The direct canonical insert helper must fail closed without explicit sync consent");
+assert.match(bridge, /if \(!isLegalCategoryAllowed\("sync_cloud"\)\) return;/, "The legacy bridge must not read or write food_log without explicit sync consent");
+assert.match(nutritionLog, /!isLegalCategoryAllowed\("sync_cloud"\)\) return Promise\.resolve\(\);[\s\S]*const task = async \(\) => \{\s*if \(!isLegalCategoryAllowed\("sync_cloud"\)\) return;/, "Queued legacy bridge work must recheck consent before reaching Supabase");
+assert.match(nutritionRefreshBlock, /!isLegalCategoryAllowed\("sync_cloud"\)/, "Canonical Nutrition refresh must not pull cloud data while sync consent is disabled");
+assert.match(nutritionRoute, /enregistré sur cet appareil/i, "The Web UI must clearly describe local-only Nutrition saves when sync consent is off");
 assert.match(nutritionLog, /source === "photo_ai" \? "photo" : source/, "Photo AI writes must use a source value accepted by the food_log schema");
 
 assert.match(nutritionLog, /export function subscribeNutritionFoodLogChanges/, "Web Nutrition must subscribe to canonical food_log changes");
