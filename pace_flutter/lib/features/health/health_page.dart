@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../core/compliance/compliance_service.dart';
 import '../../core/platform/health_adapter.dart';

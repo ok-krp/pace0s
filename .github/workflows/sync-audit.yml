@@ -17,7 +17,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
       - run: node scripts/test-sync-policy.mjs
       - run: npm run test:health-e2ee-realtime
       # TanStack Router generates src/routeTree.gen.ts during the Vite build.

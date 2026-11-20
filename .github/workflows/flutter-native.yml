@@ -185,6 +185,12 @@ jobs:
 
       - name: Build Linux
         working-directory: pace_flutter
+        env:
+          # flutter_secure_storage_linux currently bundles an nlohmann/json
+          # header whose deprecated literal-operator warning is promoted to
+          # an error by the hosted Clang toolchain. Keep the exception scoped
+          # to this native Linux build; Dart analysis remains strict.
+          CXXFLAGS: -Wno-deprecated-literal-operator
         run: flutter build linux --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
 
       - name: Publish Linux build

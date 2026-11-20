@@ -1,12 +1,14 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../core/storage/local_store.dart';
+import '../../core/sync/sync_service.dart';
 import '../../ui/pace_theme.dart';
 
 class NutritionPage extends StatefulWidget {
-  const NutritionPage({super.key, required this.localStore});
+  const NutritionPage({super.key, required this.localStore, required this.sync});
 
   final LocalStore localStore;
+  final SyncService sync;
 
   @override
   State<NutritionPage> createState() => _NutritionPageState();
@@ -39,7 +41,16 @@ class _NutritionPageState extends State<NutritionPage> {
     return double.tryParse(text.replaceAll(',', '.'));
   }
 
+  bool _isValidOptionalNumber(TextEditingController controller) {
+    final text = controller.text.trim();
+    if (text.isEmpty) return true;
+    final value = double.tryParse(text.replaceAll(',', '.'));
+    return value != null && value.isFinite && value >= 0;
+  }
+
   Future<void> _addFood() async {
+    final accountId = widget.sync.activeAccountId;
+    if (!widget.sync.isCurrentLocalAccount(accountId)) return;
     final name = TextEditingController();
     final kcal = TextEditingController();
     final protein = TextEditingController();
@@ -60,13 +71,21 @@ class _NutritionPageState extends State<NutritionPage> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Annuler')),
           FilledButton(onPressed: () {
             if (name.text.trim().isEmpty) return;
+            if ([kcal, protein, carbs, fat]
+                .any((controller) => !_isValidOptionalNumber(controller))) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Entre des nombres positifs valides pour les valeurs nutritionnelles.'),
+                ),
+              );
+              return;
+            }
             final values = <String, dynamic>{
               'kcal': _parseOptional(kcal),
               'p': _parseOptional(protein),
               'c': _parseOptional(carbs),
               'f': _parseOptional(fat),
             };
-            if (values.values.any((value) => value is double && value.isNaN)) return;
             Navigator.pop(context, values);
           }, child: const Text('Ajouter')),
         ],
@@ -79,13 +98,15 @@ class _NutritionPageState extends State<NutritionPage> {
     carbs.dispose();
     fat.dispose();
     if (result == null || itemName.isEmpty) return;
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
 
     final raw = widget.localStore.read('pace.nutrition.items');
     final data = Map<String, dynamic>.from(raw is Map ? raw : <String, dynamic>{});
     final day = _todayKey();
     final list = data[day] is List ? List<dynamic>.from(data[day] as List) : <dynamic>[];
     list.add({
-      'id': DateTime.now().microsecondsSinceEpoch.toString(),
+      'id': newFoodLogUuid(),
+      'pendingFoodLog': true,
       'name': itemName,
       'meal': 'Repas',
       'qty': 1,
@@ -93,7 +114,27 @@ class _NutritionPageState extends State<NutritionPage> {
     });
     data[day] = list;
     await widget.localStore.write('pace.nutrition.items', data);
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
     await _recalculateTotals(data);
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
+    try {
+      await widget.sync.syncNow();
+      if (mounted && widget.sync.cloudSyncConsentDenied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Repas enregistré sur cet appareil. Active « Synchronisation entre appareils » dans Plus → Paramètres pour le retrouver sur tes autres appareils.')),
+        );
+      } else if (mounted && !widget.sync.cloudSyncConsentGranted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Repas conservé localement : impossible de vérifier le consentement cloud. La synchronisation reprendra après reconnexion.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Repas enregistré sur cet appareil ; synchronisation en attente de connexion.')),
+        );
+      }
+    }
     if (mounted) setState(() {});
   }
 
@@ -125,6 +166,24 @@ class _NutritionPageState extends State<NutritionPage> {
   }
 
   Future<void> _deleteItem(Map<String, dynamic> item) async {
+    final accountId = widget.sync.activeAccountId;
+    if (!widget.sync.isCurrentLocalAccount(accountId)) return;
+    // A guest/local-only namespace has no canonical food_log row. Delete
+    // directly from its isolated local snapshot; authenticated accounts must
+    // keep the tombstone + exact-ID SQL delete path before changing the UI.
+    if (accountId != null) {
+      try {
+        await widget.sync.deleteNutritionFoodLogItem(item['id']?.toString() ?? '');
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Suppression impossible ; le repas a été conservé.')),
+          );
+        }
+        return;
+      }
+    }
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
     final raw = widget.localStore.read('pace.nutrition.items');
     if (raw is! Map) return;
     final data = Map<String, dynamic>.from(raw);
@@ -135,7 +194,27 @@ class _NutritionPageState extends State<NutritionPage> {
     if (list.length == before) return;
     data[day] = list;
     await widget.localStore.write('pace.nutrition.items', data);
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
     await _recalculateTotals(data);
+    if (!mounted || !widget.sync.isCurrentLocalAccount(accountId)) return;
+    try {
+      await widget.sync.syncNow();
+      if (mounted && widget.sync.cloudSyncConsentDenied) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Modification enregistrée sur cet appareil. Active « Synchronisation entre appareils » dans Plus → Paramètres pour la transmettre aux autres appareils.')),
+        );
+      } else if (mounted && !widget.sync.cloudSyncConsentGranted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Modification conservée localement : impossible de vérifier le consentement cloud. La synchronisation reprendra après reconnexion.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Modification enregistrée sur cet appareil ; synchronisation en attente de connexion.')),
+        );
+      }
+    }
     if (mounted) setState(() {});
   }
 
@@ -148,7 +227,12 @@ class _NutritionPageState extends State<NutritionPage> {
       return value is num ? value.toStringAsFixed(1) : '—';
     }
     return RefreshIndicator(
-      onRefresh: () async => setState(() {}),
+      onRefresh: () async {
+        try {
+          await widget.sync.syncNow();
+        } catch (_) {}
+        if (mounted) setState(() {});
+      },
       child: ListView(padding: const EdgeInsets.all(20), children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('Nutrition', style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w700)),

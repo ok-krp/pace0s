@@ -2075,7 +2075,7 @@ export type Database = {
           p_user_id: string
           p_value: Json
         }
-        Returns: boolean
+        Returns: Json
       }
     }
     Enums: {

@@ -17,14 +17,18 @@ assert.equal(engine.includes("location.reload"), false, "sync engine must not re
 assert.match(engine, /onLocalWrite\(/, "local writes must be observed through an explicit mutation event");
 assert.match(engine, /postgres_changes/, "remote changes must use Supabase Realtime");
 assert.match(engine, /row\.updated_by === DEVICE_ID/, "self-originated realtime events must be ignored");
-assert.match(engine, /keyWrites\.current\[item\.key\]/, "remote events must not overwrite an in-flight local mutation");
+assert.match(engine, /const writeKey = `\$\{user\.id\}:\$\{item\.key\}`[\s\S]*keyWrites\.current\[writeKey\]/, "in-flight writes must be serialized per account and key so Realtime cannot overwrite local mutations");
 assert.match(engine, /latest\.updatedAt !== item\.updatedAt/, "rapid local mutations must be protected from late remote results");
 assert.match(engine, /queueItem\(/, "failed/offline writes must remain queued");
 assert.match(engine, /unqueueIfMutation\(/, "successful writes must leave the queue only after confirmation");
 
 assert.match(storage, /REMOTE_WRITE_EVENT/, "storage must expose a remote-write channel");
 assert.match(storage, /LOCAL_WRITE_EVENT/, "storage must expose a local-write channel");
-assert.match(storage, /suppressPersistRef/, "remote React state hydration must suppress the persistence effect");
+assert.match(storage, /pendingRemoteValueRef/, "remote React state hydration must remember the exact remote snapshot");
+assert.match(storage, /hasPendingRemoteValueRef/, "remote hydration echo suppression must be scoped to the exact pending value");
+assert.match(storage, /hasPendingRemoteValueRef\.current = false;\s*pendingRemoteValueRef\.current = undefined;\s*valueRef\.current = resolved/s, "a user mutation racing with Realtime hydration must clear the pending remote echo");
+assert.match(storage, /if \(!hydratedRef\.current\) \{\s*hydratedRef\.current = true;/s, "initial hydration must complete before suppressing a remote echo");
+assert.doesNotMatch(storage, /suppressPersistRef/, "a global suppression boolean must not discard the next manual state change");
 assert.match(storage, /remoteWrite|REMOTE_WRITE/, "remote hydration must have an explicit remote-write path");
 assert.match(storage, /previous === serialized/, "unchanged local values must not emit writes");
 assert.doesNotMatch(domainStore, /enqueueDomainWrite|peekDomainOutbox|markDomainOutboxSent/, "there must not be a second domain outbox architecture");
