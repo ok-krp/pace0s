@@ -41,59 +41,97 @@ function activeNutritionAccountId(): string | null {
     return scope && scope !== "__guest__" ? scope : null;
   } catch { return null; }
 }
-type DeletedNutritionIds = { userId: string; ids: string[] };
+type DeletedNutritionIds = { userId: string; ids: string[]; pending?: string[] };
+type DeletedNutritionState = { ids: Set<string>; pending: Set<string> };
 
 function deletedIdsStorageKey(userId: string) {
   return `${DELETED_IDS_KEY}:${encodeURIComponent(userId)}`;
 }
 
-function readDeletedNutritionIds(userId: string): Set<string> {
-  if (typeof window === "undefined") return new Set();
+function readDeletedNutritionState(userId: string): DeletedNutritionState {
+  if (typeof window === "undefined") return { ids: new Set(), pending: new Set() };
   try {
     const scopedRaw = localStorage.getItem(deletedIdsStorageKey(userId));
     if (scopedRaw !== null) {
       const scoped = JSON.parse(scopedRaw) as DeletedNutritionIds;
-      return Array.isArray(scoped.ids)
-        ? new Set(scoped.ids.filter((id) => typeof id === "string"))
-        : new Set();
+      return {
+        ids: new Set(Array.isArray(scoped.ids) ? scoped.ids.filter((id) => typeof id === "string") : []),
+        pending: new Set(Array.isArray(scoped.pending) ? scoped.pending.filter((id) => typeof id === "string") : []),
+      };
     }
 
     // Migrate the former single-user tombstone slot without allowing another
     // account to claim or overwrite the previous account's deletion history.
     const legacy = JSON.parse(localStorage.getItem(DELETED_IDS_KEY) ?? "null") as DeletedNutritionIds | null;
     if (legacy?.userId === userId && Array.isArray(legacy.ids)) {
-      const ids = new Set(legacy.ids.filter((id) => typeof id === "string"));
-      writeDeletedNutritionIds(userId, ids);
+      const state = {
+        ids: new Set(legacy.ids.filter((id) => typeof id === "string")),
+        pending: new Set<string>(),
+      };
+      writeDeletedNutritionState(userId, state);
       localStorage.removeItem(DELETED_IDS_KEY);
-      return ids;
+      return state;
     }
-  } catch { return new Set(); }
-  return new Set();
+  } catch { return { ids: new Set(), pending: new Set() }; }
+  return { ids: new Set(), pending: new Set() };
 }
 
-function writeDeletedNutritionIds(userId: string, ids: Set<string>) {
+function writeDeletedNutritionState(userId: string, state: DeletedNutritionState) {
   if (typeof window === "undefined") return;
-  // Retain every deleted ID: dropping an older tombstone could let a stale
-  // full-state snapshot resurrect a meal. The list is account-local and never
-  // enters the cloud outbox.
+  // Keep all completed tombstones to block stale snapshots. Pending deletes
+  // are kept separately until the server acknowledges the exact account IDs.
   localStorage.setItem(
     deletedIdsStorageKey(userId),
-    JSON.stringify({ userId, ids: [...ids] } satisfies DeletedNutritionIds),
+    JSON.stringify({ userId, ids: [...state.ids], pending: [...state.pending] } satisfies DeletedNutritionIds),
   );
 }
 
-function rememberDeletedNutritionId(userId: string, id: string) {
+function readDeletedNutritionIds(userId: string): Set<string> {
+  return readDeletedNutritionState(userId).ids;
+}
+
+function rememberDeletedNutritionId(userId: string, id: string, pendingCloudDelete = false) {
   if (!id) return;
-  const ids = readDeletedNutritionIds(userId);
-  ids.add(id);
-  writeDeletedNutritionIds(userId, ids);
+  const state = readDeletedNutritionState(userId);
+  state.ids.add(id);
+  if (pendingCloudDelete && isFoodLogUuid(id)) state.pending.add(id);
+  writeDeletedNutritionState(userId, state);
+}
+
+function clearPendingNutritionDeletes(userId: string, ids: string[]) {
+  const state = readDeletedNutritionState(userId);
+  for (const id of ids) state.pending.delete(id);
+  writeDeletedNutritionState(userId, state);
 }
 
 function forgetDeletedNutritionId(userId: string, id: string) {
-  const ids = readDeletedNutritionIds(userId);
-  ids.delete(id);
-  writeDeletedNutritionIds(userId, ids);
+  const state = readDeletedNutritionState(userId);
+  state.ids.delete(id);
+  state.pending.delete(id);
+  writeDeletedNutritionState(userId, state);
 }
+
+async function flushPendingNutritionDeletes(userId: string): Promise<void> {
+  if (!isLegalCategoryAllowed("sync_cloud") || activeNutritionAccountId() !== userId) return;
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error) throw error;
+  if (!user || user.id !== userId || activeNutritionAccountId() !== userId ||
+      !isLegalCategoryAllowed("sync_cloud")) return;
+
+  const pending = [...readDeletedNutritionState(userId).pending].filter(isFoodLogUuid);
+  for (let offset = 0; offset < pending.length; offset += 100) {
+    const batch = pending.slice(offset, offset + 100);
+    if (activeNutritionAccountId() !== userId || !isLegalCategoryAllowed("sync_cloud")) return;
+    const { error: deleteError } = await supabase.from("food_log")
+      .delete()
+      .eq("user_id", userId)
+      .in("id", batch);
+    if (deleteError) throw deleteError;
+    if (activeNutritionAccountId() !== userId || !isLegalCategoryAllowed("sync_cloud")) return;
+    clearPendingNutritionDeletes(userId, batch);
+  }
+}
+
 type NutritionTotals = Record<string, { kcal: number; p: number; c: number; f: number }>;
 type NutritionMap = Record<string, NutritionItem[]>;
 const completedOperations = new Map<string, number>();
@@ -148,23 +186,45 @@ export async function deletePersistedNutritionItem(
   expectedUserId = activeNutritionAccountId(),
 ): Promise<void> {
   if (!expectedUserId) throw new Error("Espace utilisateur indisponible.");
-  const { data: { user }, error: userError } = await supabase.auth.getUser();
-  if (userError || !user || user.id !== expectedUserId ||
+  if (activeNutritionAccountId() !== expectedUserId) {
+    throw new Error("L'espace local a changé ; la suppression Nutrition a été interrompue.");
+  }
+
+  // Local opt-out/offline deletes stay local and become an account-scoped
+  // pending SQL delete. They are flushed only after explicit opt-in returns.
+  const cloudAllowed = isLegalCategoryAllowed("sync_cloud");
+  rememberDeletedNutritionId(expectedUserId, id, cloudAllowed && isFoodLogUuid(id));
+  await nutritionBridgeChain.catch(() => undefined);
+  if (!isFoodLogUuid(id) || !cloudAllowed) return;
+
+  let user: { id: string } | null = null;
+  try {
+    const auth = await supabase.auth.getUser();
+    if (auth.error) throw auth.error;
+    user = auth.data.user;
+  } catch (error) {
+    // Do not discard a valid local deletion when the network/auth endpoint is
+    // unavailable. The pending delete remains account-scoped until reconnect.
+    if (activeNutritionAccountId() === expectedUserId) return;
+    forgetDeletedNutritionId(expectedUserId, id);
+    throw error;
+  }
+  if (!user || user.id !== expectedUserId ||
       activeNutritionAccountId() !== expectedUserId) {
+    if (activeNutritionAccountId() === expectedUserId) return;
+    forgetDeletedNutritionId(expectedUserId, id);
     throw new Error("La session a changé ; la suppression Nutrition a été interrompue.");
   }
-  // Tombstone first, then drain any bridge snapshot already in flight. This
-  // makes the explicit SQL DELETE the final operation for this UUID.
-  rememberDeletedNutritionId(user.id, id);
-  await nutritionBridgeChain.catch(() => undefined);
-  // Historical Flutter entries used timestamp IDs and exist only in the
-  // user_state snapshot. They have no food_log row to delete.
-  if (!isFoodLogUuid(id)) return;
+
   const { error } = await supabase.from("food_log").delete().eq("id", id).eq("user_id", expectedUserId);
   if (error) {
-    forgetDeletedNutritionId(user.id, id);
-    throw new Error(error.message);
+    // Preserve the local tombstone and retry this exact UUID later.
+    const state = readDeletedNutritionState(expectedUserId);
+    state.pending.add(id);
+    writeDeletedNutritionState(expectedUserId, state);
+    return;
   }
+  clearPendingNutritionDeletes(expectedUserId, [id]);
 }
 
 function nutritionRows(value: unknown) {
@@ -254,7 +314,9 @@ if (typeof window !== "undefined") {
   const retryPendingNutritionBridge = () => {
     const userId = activeNutritionAccountId();
     if (!userId || !isLegalCategoryAllowed("sync_cloud")) return;
-    void bridgeLocalNutritionToFoodLog(readNutritionItems(), userId).catch((error) => {
+    void flushPendingNutritionDeletes(userId).then(() =>
+      bridgeLocalNutritionToFoodLog(readNutritionItems(), userId)
+    ).catch((error) => {
       console.error("[nutrition] pending food_log retry failed", error instanceof Error ? error.message : error);
     });
   };
