@@ -196,24 +196,24 @@ export async function deletePersistedNutritionItem(
   rememberDeletedNutritionId(expectedUserId, id, isFoodLogUuid(id));
   await nutritionBridgeChain.catch(() => undefined);
   if (!isFoodLogUuid(id) || !cloudAllowed) return;
+  if (activeNutritionAccountId() !== expectedUserId ||
+      !isLegalCategoryAllowed("sync_cloud")) return;
 
   let user: { id: string } | null = null;
   try {
     const auth = await supabase.auth.getUser();
     if (auth.error) throw auth.error;
     user = auth.data.user;
-  } catch (error) {
-    // Do not discard a valid local deletion when the network/auth endpoint is
-    // unavailable. The pending delete remains account-scoped until reconnect.
-    if (activeNutritionAccountId() === expectedUserId) return;
-    forgetDeletedNutritionId(expectedUserId, id);
-    throw error;
+  } catch {
+    // The exact account-scoped tombstone remains pending. A reconnect or
+    // account-scope event will retry it without restoring the deleted meal.
+    return;
   }
   if (!user || user.id !== expectedUserId ||
-      activeNutritionAccountId() !== expectedUserId) {
-    if (activeNutritionAccountId() === expectedUserId) return;
-    forgetDeletedNutritionId(expectedUserId, id);
-    throw new Error("La session a changé ; la suppression Nutrition a été interrompue.");
+      activeNutritionAccountId() !== expectedUserId ||
+      !isLegalCategoryAllowed("sync_cloud")) {
+    // Never remove the previous account's tombstone on an auth transition.
+    return;
   }
 
   try {
