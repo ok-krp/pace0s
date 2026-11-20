@@ -131,8 +131,9 @@ export async function persistNutritionItem(
   }
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user || user.id !== expectedUserId ||
-      activeNutritionAccountId() !== expectedUserId) {
-    throw new Error("La session a changé ; l'ajout Nutrition a été interrompu.");
+      activeNutritionAccountId() !== expectedUserId ||
+      !isLegalCategoryAllowed("sync_cloud")) {
+    throw new Error("La session ou le consentement a changé ; l'ajout Nutrition a été interrompu.");
   }
   const meta = { client_nutrients: { sat: item.sat ?? null, salt: item.salt ?? null, iron: item.iron ?? null, calcium: item.calcium ?? null, vitC: item.vitC ?? null } };
   const foodLogSource = source === "photo_ai" ? "photo" : source;
@@ -187,7 +188,8 @@ async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<
   if (userError) throw userError;
   // A queued snapshot from a previous session must never be written under a
   // different account after an account switch.
-  if (!user || user.id !== userId || activeNutritionAccountId() !== userId) return;
+  if (!user || user.id !== userId || activeNutritionAccountId() !== userId ||
+      !isLegalCategoryAllowed("sync_cloud")) return;
   if (lastBridgedUserId !== userId) {
     lastBridgedUserId = userId;
     lastBridgedNutrition = readNutritionItems();
@@ -204,7 +206,7 @@ async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<
     ? await supabase.from("food_log").select("id").eq("user_id", userId).in("id", requestedIds)
     : { data: [], error: null };
   if (selectError) throw selectError;
-  if (activeNutritionAccountId() !== userId) return;
+  if (!isLegalCategoryAllowed("sync_cloud") || activeNutritionAccountId() !== userId) return;
   const existingIds = new Set((existing ?? []).map((row) => row.id));
   for (const { id, day, item } of nextRows) {
     if (!isLegalCategoryAllowed("sync_cloud") || activeNutritionAccountId() !== userId) return;
@@ -237,7 +239,8 @@ function bridgeLocalNutritionToFoodLog(
     // Bind queued work to the account that owned the local mutation when it
     // was scheduled. Never infer ownership from a later, possibly new session.
     if (error || !user || user.id !== expectedUserId ||
-        activeNutritionAccountId() !== expectedUserId) return;
+        activeNutritionAccountId() !== expectedUserId ||
+        !isLegalCategoryAllowed("sync_cloud")) return;
     await bridgeNutritionSnapshot(value, expectedUserId);
   };
   // Serialize snapshots instead of dropping writes while a previous bridge
@@ -276,14 +279,16 @@ export function refreshNutritionFromFoodLog(
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError) throw userError;
     if (!user || user.id !== expectedUserId ||
-        activeNutritionAccountId() !== expectedUserId) return;
+        activeNutritionAccountId() !== expectedUserId ||
+        !isLegalCategoryAllowed("sync_cloud")) return;
     const { data, error } = await supabase.from("food_log")
       .select("id,name,meal,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg,meta")
       .eq("user_id", expectedUserId).eq("log_date", day).order("created_at", { ascending: true });
     if (error) throw new Error(error.message);
     // An in-flight read for account A must never be projected into account B's
     // shared browser storage after an auth transition.
-    if (activeNutritionAccountId() !== expectedUserId) return;
+    if (activeNutritionAccountId() !== expectedUserId ||
+        !isLegalCategoryAllowed("sync_cloud")) return;
   // The query may have started before an explicit delete and returned
   // a stale canonical row after the DELETE completed. Filter the database
   // response against the account's tombstones before rebuilding the view.
@@ -324,6 +329,8 @@ export function refreshNutritionFromFoodLog(
   // Mark the fetched canonical snapshot before writeDomain emits LOCAL_WRITE;
   // the compatibility bridge must not upload its own remote refresh again.
   lastBridgedNutrition = nextSnapshot;
+  if (!isLegalCategoryAllowed("sync_cloud") ||
+      activeNutritionAccountId() !== expectedUserId) return;
   const changed = JSON.stringify(current[day] ?? []) !== JSON.stringify(mergedRows);
   if (changed) {
     writeDomain(DOMAIN_ITEMS, nextSnapshot);
