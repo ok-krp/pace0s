@@ -335,10 +335,12 @@ const addNutritionStart = nutritionLog.indexOf("export async function addNutriti
 assert.ok(addNutritionStart >= 0, "Web Nutrition add path must remain identifiable");
 const addNutritionBlock = nutritionLog.slice(addNutritionStart);
 assert.match(addNutritionBlock, /const savePendingLocally = \(\) => \{[\s\S]*pendingFoodLog: true[\s\S]*writeDomain\(DOMAIN_ITEMS/, "Local-first Nutrition persistence must save pending entries under a stable UUID before cloud upload");
-assert.match(addNutritionBlock, /if \(!isLegalCategoryAllowed\("sync_cloud"\)\) \{[\s\S]*savePendingLocally\(\);[\s\S]*return true;/, "When cloud-sync consent is off, Web Nutrition must keep the meal locally instead of writing to Supabase");
+assert.match(addNutritionBlock, /savePendingLocally\(\);[\s\S]*if \(!isLegalCategoryAllowed\("sync_cloud"\)\) \{[\s\S]*return true;/, "Web Nutrition must persist the meal locally before deciding whether cloud consent allows upload");
 assert.match(nutritionLog, /function newNutritionUuid\(\): string[\s\S]*crypto\.getRandomValues/, "Local pending Nutrition entries must receive collision-resistant UUIDs before upload");
 assert.match(nutritionLog, /from\("food_log"\)\.upsert\(\{ id, user_id: expectedUserId[\s\S]*\{ onConflict: "id" \}\)/, "A retried manual Nutrition write must upsert by the exact preallocated UUID instead of duplicating a row");
-assert.match(addNutritionBlock, /const id = newNutritionUuid\(\);[\s\S]*const savePendingLocally = \(\) => \{[\s\S]*id,[\s\S]*pendingFoodLog: true[\s\S]*await persistNutritionItem\(item, source, expectedUserId, id\)/, "A failed canonical insert must fall back to a local pending row with the same UUID used by the cloud retry");
+assert.match(bridge, /from\("food_log"\)\.upsert\(payload, \{ onConflict: "id" \}\)/, "The compatibility bridge must also upsert by UUID so it can race a direct local-first add without duplicating or losing the meal");
+assert.match(addNutritionBlock, /if \(activeNutritionAccountId\(\) !== expectedUserId\) return true;/, "A network failure after account switch must leave the already-persisted meal in its originating account instead of dropping it");
+assert.match(addNutritionBlock, /const id = newNutritionUuid\(\);[\s\S]*const savePendingLocally = \(\) => \{[\s\S]*id,[\s\S]*pendingFoodLog: true[\s\S]*savePendingLocally\(\);[\s\S]*await persistNutritionItem\(item, source, expectedUserId, id\)/, "Every Web Nutrition addition must be locally durable with one UUID before the idempotent cloud upsert");
 const retryHooksStart = nutritionLog.indexOf("const retryPendingNutritionBridge =");
 const retryHooksEnd = nutritionLog.indexOf("\n}", retryHooksStart);
 assert.ok(retryHooksStart >= 0 && retryHooksEnd > retryHooksStart, "Nutrition retry hook lifecycle must remain identifiable");
