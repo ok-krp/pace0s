@@ -330,7 +330,7 @@ assert.match(nutritionLog, /const pendingRows = currentRows\.filter\(\(item\) =>
 assert.match(nutritionLog, /if \(pendingRows\.length\) await bridgeLocalNutritionToFoodLog\(nextSnapshot, expectedUserId\)/, "Web must retry pending native meal inserts through the idempotent account-bound UUID bridge");
 assert.match(nutritionLog, /if \(!isFoodLogUuid\(id\) \|\| !cloudAllowed\) return/, "Legacy timestamp meal deletion must not query the UUID food_log key, and a cloud opt-out must remain local");
 
-assert.match(nutritionLog, /await persistNutritionItem\(item, source, expectedUserId, id\)/, "Consented Nutrition writes must reuse the preallocated local UUID so ambiguous retries are idempotent");
+assert.match(nutritionLog, /await persistNutritionItem\(item, source, expectedUserId, id, logDate\)/, "Consented Nutrition writes must reuse the preallocated local UUID and captured log date so ambiguous retries are idempotent");
 const addNutritionStart = nutritionLog.indexOf("export async function addNutritionItem");
 assert.ok(addNutritionStart >= 0, "Web Nutrition add path must remain identifiable");
 const addNutritionBlock = nutritionLog.slice(addNutritionStart);
@@ -340,7 +340,7 @@ assert.match(nutritionLog, /function newNutritionUuid\(\): string[\s\S]*crypto\.
 assert.match(nutritionLog, /from\("food_log"\)\.upsert\(\{ id, user_id: expectedUserId[\s\S]*\{ onConflict: "id" \}\)/, "A retried manual Nutrition write must upsert by the exact preallocated UUID instead of duplicating a row");
 assert.match(bridge, /from\("food_log"\)\.upsert\(payload, \{ onConflict: "id" \}\)/, "The compatibility bridge must also upsert by UUID so it can race a direct local-first add without duplicating or losing the meal");
 assert.match(addNutritionBlock, /if \(activeNutritionAccountId\(\) !== expectedUserId\) return true;/, "A network failure after account switch must leave the already-persisted meal in its originating account instead of dropping it");
-assert.match(addNutritionBlock, /const id = newNutritionUuid\(\);[\s\S]*const savePendingLocally = \(\) => \{[\s\S]*id,[\s\S]*pendingFoodLog: true[\s\S]*savePendingLocally\(\);[\s\S]*await persistNutritionItem\(item, source, expectedUserId, id\)/, "Every Web Nutrition addition must be locally durable with one UUID before the idempotent cloud upsert");
+assert.match(addNutritionBlock, /const id = newNutritionUuid\(\);[\s\S]*const logDate = todayKey\(\);[\s\S]*const savePendingLocally = \(\) => \{[\s\S]*id,[\s\S]*pendingFoodLog: true[\s\S]*savePendingLocally\(\);[\s\S]*await persistNutritionItem\(item, source, expectedUserId, id, logDate\)/, "Every Web Nutrition addition must be locally durable with one UUID and one captured date before the idempotent cloud upsert");
 const retryHooksStart = nutritionLog.indexOf("const retryPendingNutritionBridge =");
 const retryHooksEnd = nutritionLog.indexOf("\n}", retryHooksStart);
 assert.ok(retryHooksStart >= 0 && retryHooksEnd > retryHooksStart, "Nutrition retry hook lifecycle must remain identifiable");
