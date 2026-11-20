@@ -165,6 +165,7 @@ assert.ok(
 );
 assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.wallpaper\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native user_state writes must explicitly exclude AI transcripts, wallpapers and finance PIN keys");
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeyPatterns/, "Native pulls must exclude canonical/legacy device-local keys in PostgREST before downloading rows");
+assert.match(flutterSync, /localStore\.read\('__cloud_sync_last_pull_at'\)[\s\S]*query\.gt\([\s\S]*'updated_at'[\s\S]*localStore\.write\([\s\S]*'__cloud_sync_last_pull_at'[\s\S]*enqueueSync: false/, "Native cloud pulls must persist an account-scoped cursor and fetch only recently changed user_state rows after the initial bootstrap");
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableKey\(key\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys must be removed from the owning outbox without reaching Supabase");
 assert.match(flutterLocalStore, /Future<void> discardOperationForAccount\([\s\S]*final scope = \x27account:\$userId\x27[\s\S]*snapshot\[\x27__outbox\x27\] = outbox/, "Device-local outbox cleanup must update the originating account only");
 assert.ok(
@@ -552,6 +553,7 @@ assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 // performs a single reconciliation read against the canonical row.
 assert.match(engine, /if \(!payload\.accepted\)/);
 assert.match(engine, /supabase\.from\("user_state"\)\.select\("key,value,updated_at,updated_by"\)/);
+assert.match(engine, /const pullCursorKey = `pace\.__cloud_sync_last_pull:\$\{user\.id\}`[\s\S]*request\.gt\("updated_at"[\s\S]*localStorage\.setItem\(pullCursorKey/, "Web cloud pulls must persist an account-scoped cursor and fetch only recently changed user_state rows after the initial bootstrap");
 assert.match(engine, /serialize\(queued\.value\) === serialize\(remoteValue\)/);
 
 // The server RPC is monotonic: an older canonical timestamp must never be
