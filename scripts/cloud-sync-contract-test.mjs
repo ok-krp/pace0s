@@ -332,10 +332,10 @@ assert.match(nutritionLog, /if \(!isFoodLogUuid\(id\) \|\| !cloudAllowed\) retur
 
 assert.match(nutritionLog, /await persistNutritionItem\(item, source, expectedUserId, id, logDate\)/, "Consented Nutrition writes must reuse the preallocated local UUID and captured log date so ambiguous retries are idempotent");
 assert.match(nutritionLog, /log_date: logDate/, "Canonical food_log writes must use the same log date captured before authentication/network awaits");
-assert.match(addNutritionBlock, /const logDate = todayKey\(\);[\s\S]*const day = logDate[\s\S]*persistNutritionItem\(item, source, expectedUserId, id, logDate\)[\s\S]*refreshNutritionFromFoodLog\(logDate/, "Local pending rows, canonical persistence, and retry reconciliation must share one captured date across midnight");
 const addNutritionStart = nutritionLog.indexOf("export async function addNutritionItem");
 assert.ok(addNutritionStart >= 0, "Web Nutrition add path must remain identifiable");
 const addNutritionBlock = nutritionLog.slice(addNutritionStart);
+assert.match(addNutritionBlock, /const logDate = todayKey\(\);[\s\S]*const day = logDate[\s\S]*persistNutritionItem\(item, source, expectedUserId, id, logDate\)[\s\S]*refreshNutritionFromFoodLog\(logDate/, "Local pending rows, canonical persistence, and retry reconciliation must share one captured date across midnight");
 assert.match(addNutritionBlock, /const savePendingLocally = \(\) => \{[\s\S]*pendingFoodLog: true[\s\S]*writeDomain\(DOMAIN_ITEMS/, "Local-first Nutrition persistence must save pending entries under a stable UUID before cloud upload");
 assert.match(addNutritionBlock, /savePendingLocally\(\);[\s\S]*if \(!isLegalCategoryAllowed\("sync_cloud"\)\) \{[\s\S]*return true;/, "Web Nutrition must persist the meal locally before deciding whether cloud consent allows upload");
 assert.match(nutritionLog, /function newNutritionUuid\(\): string[\s\S]*crypto\.getRandomValues/, "Local pending Nutrition entries must receive collision-resistant UUIDs before upload");
