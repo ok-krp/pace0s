@@ -20,12 +20,20 @@ export type NutritionItem = {
   calcium?: number;
   vitC?: number;
   qty: number;
+  pendingFoodLog?: boolean;
 };
 
 const DOMAIN_ITEMS = "nutrition.items";
 const DELETED_IDS_KEY = "pace.__nutrition_deleted_ids_v1";
 const FOOD_LOG_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function isFoodLogUuid(id: string) { return FOOD_LOG_UUID.test(id); }
+function newNutritionUuid(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
 function activeNutritionAccountId(): string | null {
   if (typeof window === "undefined") return null;
   try {
@@ -118,6 +126,9 @@ export async function persistNutritionItem(
   expectedUserId = activeNutritionAccountId(),
 ): Promise<NutritionItem> {
   if (!expectedUserId) throw new Error("Espace utilisateur indisponible.");
+  if (!isLegalCategoryAllowed("sync_cloud")) {
+    throw new Error("Active « Fonctionnel — Synchronisation » pour enregistrer ce repas dans le cloud.");
+  }
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError || !user || user.id !== expectedUserId ||
       activeNutritionAccountId() !== expectedUserId) {
@@ -171,6 +182,7 @@ function nutritionRows(value: unknown) {
 let lastBridgedNutrition = readNutritionItems();
 let lastBridgedUserId: string | null = null;
 async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<void> {
+  if (!isLegalCategoryAllowed("sync_cloud")) return;
   const { data: { user }, error: userError } = await supabase.auth.getUser();
   if (userError) throw userError;
   // A queued snapshot from a previous session must never be written under a
@@ -195,7 +207,7 @@ async function bridgeNutritionSnapshot(value: unknown, userId: string): Promise<
   if (activeNutritionAccountId() !== userId) return;
   const existingIds = new Set((existing ?? []).map((row) => row.id));
   for (const { id, day, item } of nextRows) {
-    if (activeNutritionAccountId() !== userId) return;
+    if (!isLegalCategoryAllowed("sync_cloud") || activeNutritionAccountId() !== userId) return;
     const previous = previousById.get(id);
     const changed = previous !== undefined && JSON.stringify(previous) !== JSON.stringify(item);
     if (existingIds.has(id) && !changed) continue;
@@ -217,8 +229,10 @@ function bridgeLocalNutritionToFoodLog(
   value: unknown,
   expectedUserId = activeNutritionAccountId(),
 ): Promise<void> {
-  if (typeof window === "undefined" || !expectedUserId) return Promise.resolve();
+  if (typeof window === "undefined" || !expectedUserId ||
+      !isLegalCategoryAllowed("sync_cloud")) return Promise.resolve();
   const task = async () => {
+    if (!isLegalCategoryAllowed("sync_cloud")) return;
     const { data: { user }, error } = await supabase.auth.getUser();
     // Bind queued work to the account that owned the local mutation when it
     // was scheduled. Never infer ownership from a later, possibly new session.
@@ -251,9 +265,10 @@ export function refreshNutritionFromFoodLog(
   options: { bridgeLocalFirst?: boolean; expectedUserId?: string } = {},
 ): Promise<void> {
   const expectedUserId = options.expectedUserId ?? activeNutritionAccountId();
-  if (!expectedUserId) return Promise.resolve();
+  if (!expectedUserId || !isLegalCategoryAllowed("sync_cloud")) return Promise.resolve();
   const task = async () => {
-    if (activeNutritionAccountId() !== expectedUserId) return;
+    if (!isLegalCategoryAllowed("sync_cloud") ||
+        activeNutritionAccountId() !== expectedUserId) return;
     if (options.bridgeLocalFirst !== false) {
       await bridgeLocalNutritionToFoodLog(readNutritionItems(), expectedUserId);
     }
@@ -415,9 +430,27 @@ export async function addNutritionItem(
     for (const [id, timestamp] of completedOperations) if (now - timestamp >= 60_000) completedOperations.delete(id);
   }
 
-  // food_log is canonical: persist before projecting the entry into local UI
-  // state, then rebuild the day's complete view from the database.
   try {
+    if (!isLegalCategoryAllowed("sync_cloud")) {
+      // Match Flutter's consent behavior: keep the exact meal locally and
+      // queue a stable UUID for the first consented cloud reconciliation.
+      const saved: NutritionItem = {
+        ...item,
+        id: newNutritionUuid(),
+        qty: item.qty ?? 1,
+        pendingFoodLog: true,
+      };
+      const day = todayKey();
+      const current = readNutritionItems();
+      writeDomain(DOMAIN_ITEMS, {
+        ...current,
+        [day]: [...(current[day] ?? []), saved],
+      });
+      return true;
+    }
+
+    // food_log is canonical when cloud sync is explicitly enabled: persist
+    // before projecting the entry into local UI state.
     const saved = await persistNutritionItem(item, source, expectedUserId);
     if (operationKey) {
       completedOperations.set(operationKey, now);
