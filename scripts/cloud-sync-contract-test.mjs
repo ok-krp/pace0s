@@ -9,12 +9,15 @@ const storage = read("src/lib/storage.ts");
 const supabaseTypes = read("src/integrations/supabase/types.ts");
 const supabaseClient = read("src/integrations/supabase/client.ts");
 
-assert.ok(
-  supabaseClient.includes("import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;") &&
-    supabaseClient.includes(
-      "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||\n    process.env.SUPABASE_PUBLISHABLE_KEY;",
-    ),
-  "Web and SSR Supabase clients must use deployment-specific environment variables only",
+assert.match(
+  supabaseClient,
+  /import\\.meta\\.env\\.VITE_SUPABASE_URL\\s*\\|\\|\\s*process\\.env\\.SUPABASE_URL;/,
+  "Web and SSR Supabase clients must use the deployment-specific URL",
+);
+assert.match(
+  supabaseClient,
+  /import\\.meta\\.env\\.VITE_SUPABASE_PUBLISHABLE_KEY\\s*\\|\\|\\s*process\\.env\\.SUPABASE_PUBLISHABLE_KEY;/,
+  "Web and SSR Supabase clients must use the deployment-specific publishable key",
 );
 assert.match(
   supabaseClient,
