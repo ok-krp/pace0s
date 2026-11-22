@@ -8,6 +8,18 @@ const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
 const supabaseTypes = read("src/integrations/supabase/types.ts");
 const supabaseClient = read("src/integrations/supabase/client.ts");
+const supabaseConfig = read("supabase/config.toml");
+
+assert.match(
+  supabaseConfig,
+  /^project_id = "cduyjejftorfuxuwhbqt"$/m,
+  "Supabase CLI must target the same project as the configured Vercel runtime",
+);
+assert.doesNotMatch(
+  supabaseConfig,
+  /jayzswkabxfhzmftagku/,
+  "Supabase CLI must not retain the retired project reference",
+);
 
 assert.match(
   supabaseClient,
