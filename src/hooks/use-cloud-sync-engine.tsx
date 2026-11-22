@@ -10,7 +10,14 @@ const PACE_PREFIX = "pace.";
 const INTERNAL_PREFIX = "pace.__";
 const DOMAIN_PREFIX = "pace.domain.";
 const DOMAIN_OUTBOX_KEY = "pace.domain.outbox";
-const EXCLUDED = new Set<string>(["pace.sport.active"]);
+const WALLPAPER_SYNC_KEYS = [
+  "pace.wallpaper",
+  "pace.domain.wallpaper",
+  "lt.wallpaper",
+  "lt.domain.wallpaper",
+] as const;
+const DEVICE_LOCAL_PULL_FILTER = `(${WALLPAPER_SYNC_KEYS.map((key) => `"${key}"`).join(",")})`;
+const EXCLUDED = new Set<string>(["pace.sport.active", ...WALLPAPER_SYNC_KEYS]);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
@@ -374,7 +381,10 @@ export function useCloudSyncEngineInternal() {
         const pullStartedAt = Date.now();
         let request = supabase.from("user_state")
           .select("key,value,updated_at,updated_by")
-          .eq("user_id", user.id);
+          .eq("user_id", user.id)
+          // Filter device-local wallpapers in PostgREST before their large
+          // JSONB values cross the network. Client-side filtering is too late.
+          .not("key", "in", DEVICE_LOCAL_PULL_FILTER);
         const previousPullTime = previousPullAt ? Date.parse(previousPullAt) : Number.NaN;
         if (Number.isFinite(previousPullTime)) {
           request = request.gt("updated_at", new Date(previousPullTime - 120_000).toISOString());
