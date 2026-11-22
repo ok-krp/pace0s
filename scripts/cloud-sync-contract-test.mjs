@@ -11,12 +11,12 @@ const supabaseClient = read("src/integrations/supabase/client.ts");
 
 assert.match(
   supabaseClient,
-  /import\\.meta\\.env\\.VITE_SUPABASE_URL\\s*\\|\\|\\s*process\\.env\\.SUPABASE_URL;/,
+  /import\.meta\.env\.VITE_SUPABASE_URL\s*\|\|\s*process\.env\.SUPABASE_URL;/,
   "Web and SSR Supabase clients must use the deployment-specific URL",
 );
 assert.match(
   supabaseClient,
-  /import\\.meta\\.env\\.VITE_SUPABASE_PUBLISHABLE_KEY\\s*\\|\\|\\s*process\\.env\\.SUPABASE_PUBLISHABLE_KEY;/,
+  /import\.meta\.env\.VITE_SUPABASE_PUBLISHABLE_KEY\s*\|\|\s*process\.env\.SUPABASE_PUBLISHABLE_KEY;/,
   "Web and SSR Supabase clients must use the deployment-specific publishable key",
 );
 assert.match(
