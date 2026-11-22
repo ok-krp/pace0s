@@ -102,6 +102,17 @@ assert.match(nutritionLog, /function deletedIdsStorageKey\(userId: string\)[\s\S
 assert.match(nutritionLog, /localStorage\.getItem\(deletedIdsStorageKey\(userId\)\)[\s\S]*legacy\?\.userId === userId[\s\S]*localStorage\.removeItem\(DELETED_IDS_KEY\)/, "Legacy single-account tombstones must migrate only to their owning account");
 const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const domainStore = read("src/lib/domain-store.ts");
+const wallpaperKeys = [
+  "pace.wallpaper",
+  "pace.domain.wallpaper",
+  "lt.wallpaper",
+  "lt.domain.wallpaper",
+];
+assert.match(engine, /const WALLPAPER_SYNC_KEYS = \\[([\\s\\S]*)"pace\\.wallpaper"([\\s\\S]*)"pace\\.domain\\.wallpaper"([\\s\\S]*)"lt\\.wallpaper"([\\s\\S]*)"lt\\.domain\\.wallpaper"/, "Web must explicitly identify every canonical and legacy wallpaper key");
+assert.match(engine, /const DEVICE_LOCAL_PULL_FILTER = `\\(\\$\\{WALLPAPER_SYNC_KEYS\\.map/, "Web must construct a PostgREST exclusion filter for large wallpaper values");
+assert.match(engine, /\\.not\\("key",\\s*"in",\\s*DEVICE_LOCAL_PULL_FILTER\\)/, "Web must filter wallpapers in PostgREST before downloading JSONB values");
+assert.match(engine, /const EXCLUDED = new Set<string>\\(\\["pace\\.sport\\.active", \.\.\.WALLPAPER_SYNC_KEYS\\]\\)/, "Web uploads, queues and Realtime handlers must reject wallpaper keys");
+
 
 const flutterSync = read("pace_flutter/lib/core/sync/sync_service.dart");
 const flutterNutrition = read("pace_flutter/lib/features/nutrition/nutrition_page.dart");
@@ -145,6 +156,8 @@ assert.match(flutterSync, /_cloudSyncConsent = null/, "A failed consent lookup m
 assert.match(flutterNutrition, /impossible de vérifier le consentement cloud/, "Nutrition must explain when consent lookup is unavailable instead of falsely claiming consent was denied");
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*userId == null[\s\S]*localStore\.currentAccountId != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not push local outbox mutations without an authenticated matching account and sync_cloud consent");
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*localStore\.currentAccountId != userId[\s\S]*client\?\.auth\.currentUser\?\.id != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not pull remote state for a mismatched account or without sync_cloud consent");
+assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.wallpaper\x27[\s\S]*\x27pace\.domain\.wallpaper\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native sync must keep both canonical wallpaper keys device-local");
+assert.match(flutterSync, /excludedRemotePullKeysFilter =[\s\S]*"pace\.domain\.wallpaper"[\s\S]*"lt\.domain\.wallpaper"/, "Native PostgREST pulls must filter canonical and legacy domain wallpaper aliases before download");
 assert.match(flutterSettings, /Synchronisation entre appareils[\s\S]*_setConsent\('sync_cloud', value\)/, "Flutter settings must expose the functional cross-device sync consent");
 assert.match(flutterSettings, /await widget\.sync\.setCloudSyncConsent\(value\)/, "Changing consent must immediately update native sync behavior");
 
