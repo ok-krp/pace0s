@@ -11,7 +11,9 @@ const supabaseClient = read("src/integrations/supabase/client.ts");
 
 assert.ok(
   supabaseClient.includes("import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;") &&
-    supabaseClient.includes("import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||\n    process.env.SUPABASE_PUBLISHABLE_KEY;"),
+    supabaseClient.includes(
+      "import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||\n    process.env.SUPABASE_PUBLISHABLE_KEY;",
+    ),
   "Web and SSR Supabase clients must use deployment-specific environment variables only",
 );
 assert.match(
