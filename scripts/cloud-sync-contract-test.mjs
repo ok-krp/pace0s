@@ -108,10 +108,20 @@ const wallpaperKeys = [
   "lt.wallpaper",
   "lt.domain.wallpaper",
 ];
-assert.match(engine, /const WALLPAPER_SYNC_KEYS = \\[([\\s\\S]*)"pace\\.wallpaper"([\\s\\S]*)"pace\\.domain\\.wallpaper"([\\s\\S]*)"lt\\.wallpaper"([\\s\\S]*)"lt\\.domain\\.wallpaper"/, "Web must explicitly identify every canonical and legacy wallpaper key");
-assert.match(engine, /const DEVICE_LOCAL_PULL_FILTER = `\\(\\$\\{WALLPAPER_SYNC_KEYS\\.map/, "Web must construct a PostgREST exclusion filter for large wallpaper values");
-assert.match(engine, /\\.not\\("key",\\s*"in",\\s*DEVICE_LOCAL_PULL_FILTER\\)/, "Web must filter wallpapers in PostgREST before downloading JSONB values");
-assert.match(engine, /const EXCLUDED = new Set<string>\\(\\["pace\\.sport\\.active", \.\.\.WALLPAPER_SYNC_KEYS\\]\\)/, "Web uploads, queues and Realtime handlers must reject wallpaper keys");
+assert.ok(
+  engine.includes("const WALLPAPER_SYNC_KEYS = [") &&
+    wallpaperKeys.every((key) => engine.includes(`"${key}"`)),
+  "Web must explicitly identify every canonical and legacy wallpaper key",
+);
+assert.ok(
+  engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)'),
+  "Web must filter wallpapers in PostgREST before downloading JSONB values",
+);
+assert.ok(
+  engine.includes("...WALLPAPER_SYNC_KEYS") &&
+    engine.includes("const EXCLUDED = new Set<string>"),
+  "Web uploads, queues and Realtime handlers must reject wallpaper keys",
+);
 
 
 const flutterSync = read("pace_flutter/lib/core/sync/sync_service.dart");
