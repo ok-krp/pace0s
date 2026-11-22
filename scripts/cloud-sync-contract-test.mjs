@@ -7,6 +7,23 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const engine = read("src/hooks/use-cloud-sync-engine.tsx");
 const storage = read("src/lib/storage.ts");
 const supabaseTypes = read("src/integrations/supabase/types.ts");
+const supabaseClient = read("src/integrations/supabase/client.ts");
+
+assert.ok(
+  supabaseClient.includes("import.meta.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;") &&
+    supabaseClient.includes("import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||\n    process.env.SUPABASE_PUBLISHABLE_KEY;"),
+  "Web and SSR Supabase clients must use deployment-specific environment variables only",
+);
+assert.match(
+  supabaseClient,
+  /if \(!SUPABASE_URL \|\| !SUPABASE_PUBLISHABLE_KEY\)/,
+  "Supabase client initialization must fail closed when deployment configuration is missing",
+);
+assert.doesNotMatch(
+  supabaseClient,
+  /jayzswkabxfhzmftagku|sb_publishable_2C2_WSyuDwMzT8uRB2uO_A_f-J2zTfQ/,
+  "Supabase client must not silently fall back to the retired project URL or its public key",
+);
 
 const writeItemStart = engine.indexOf("const writeItem =");
 const pushItemStart = engine.indexOf("const pushItem =", writeItemStart);
