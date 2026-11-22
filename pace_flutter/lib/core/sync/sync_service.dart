@@ -67,6 +67,7 @@ class SyncService {
     'pace.ai.conversations',
     'pace.ai.deleted_conversations',
     'pace.wallpaper',
+    'pace.domain.wallpaper',
     'pace.finance.pin.hash',
     'pace.ai.debug',
     'pace.billing.device_id',
@@ -87,6 +88,7 @@ class SyncService {
     'lt.ai.conversations',
     'lt.ai.deleted_conversations',
     'lt.wallpaper',
+    'lt.domain.wallpaper',
     'lt.finance.pin.hash',
     'lt.ai.debug',
     'lt.billing.device_id',
@@ -95,13 +97,13 @@ class SyncService {
 
   static const String excludedRemotePullKeysFilter =
       '("pace.sport.active","pace.ai.conversations",'
-      '"pace.ai.deleted_conversations","pace.wallpaper","pace.finance.pin.hash",'
+      '"pace.ai.deleted_conversations","pace.wallpaper","pace.domain.wallpaper","pace.finance.pin.hash",'
       '"pace.ai.debug","pace.billing.device_id","pace.watch.last_metrics",'
       '"pace.legal.consent","pace.__sync_food_log_deleted_ids",'
       '"pace.__sync_food_log_outbox","pace.__sync_food_log_quarantine",'
       '"pace.__sync_ai_preferences_pending","pace.__sync_last_pull_at",'
       '"pace.__sync_last_full_pull_at","lt.sport.active","lt.ai.conversations",'
-      '"lt.ai.deleted_conversations","lt.wallpaper","lt.finance.pin.hash",'
+      '"lt.ai.deleted_conversations","lt.wallpaper","lt.domain.wallpaper","lt.finance.pin.hash",'
       '"lt.ai.debug","lt.billing.device_id","lt.watch.last_metrics")';
 
   static const List<String> excludedRemotePullKeyPatterns = [
