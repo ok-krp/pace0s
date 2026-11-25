@@ -10,13 +10,23 @@ const goals = await readFile("src/hooks/use-user-goals.tsx", "utf8");
 const profileMigration = await readFile("supabase/migrations/20260821090000_profile_sync_hardening.sql", "utf8");
 const migrations = await readFile("supabase/migrations/20260902092340_fix_event_driven_sync_timestamp_reconciliation.sql", "utf8");
 
-assert.match(engine, /setInterval\s*\(.*60(?:000|_000)/s, "sync engine must reconcile periodically");
-assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
-assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
+assert.match(
+  engine,
+  /const reconcileTimer = window\.setInterval\([\s\S]*document\.visibilityState === "visible" && allowed\(\)[\s\S]*void syncNow\(\)[\s\S]*60_000/,
+  "user_state remote changes must reconcile through a foreground-only 60-second filtered pull",
+);
 assert.equal(engine.includes("location.reload"), false, "sync engine must not reload the app");
 assert.match(engine, /onLocalWrite\(/, "local writes must be observed through an explicit mutation event");
-assert.match(engine, /postgres_changes/, "remote changes must use Supabase Realtime");
-assert.match(engine, /row\.updated_by === DEVICE_ID/, "self-originated realtime events must be ignored");
+assert.doesNotMatch(
+  engine,
+  /postgres_changes|channel\.subscribe\(|realtimeHealthy|startRealtime|stopRealtime/,
+  "generic user_state Realtime must stay disabled while its documented filters cannot exclude local prefixes",
+);
+assert.match(
+  engine,
+  /request = request\.not\("key", "match", keyPrefixRegex\(prefix\)\)/,
+  "device-local prefixes must be filtered by PostgREST before user_state values cross the network",
+);
 assert.match(engine, /const writeKey = `\$\{user\.id\}:\$\{item\.key\}`[\s\S]*keyWrites\.current\[writeKey\]/, "in-flight writes must be serialized per account and key so Realtime cannot overwrite local mutations");
 assert.match(engine, /latest\.updatedAt !== item\.updatedAt/, "rapid local mutations must be protected from late remote results");
 assert.match(engine, /queueItem\(/, "failed/offline writes must remain queued");
