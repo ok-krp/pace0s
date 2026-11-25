@@ -152,6 +152,11 @@ assert.ok(
   "Web must filter wallpapers in PostgREST before downloading JSONB values",
 );
 assert.ok(
+  engine.includes("const DEVICE_LOCAL_REALTIME_FILTER = `key=not.in.") &&
+    engine.includes("filter: `user_id=eq.${user.id},${DEVICE_LOCAL_REALTIME_FILTER}`"),
+  "Web Realtime must exclude wallpaper keys on the server while retaining the user_id filter",
+);
+assert.ok(
   engine.includes("...WALLPAPER_SYNC_KEYS") &&
     engine.includes("const EXCLUDED = new Set<string>"),
   "Web uploads, queues and Realtime handlers must reject wallpaper keys",
@@ -202,6 +207,14 @@ assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*userId == null[\s
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*localStore\.currentAccountId != userId[\s\S]*client\?\.auth\.currentUser\?\.id != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not pull remote state for a mismatched account or without sync_cloud consent");
 assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.wallpaper\x27[\s\S]*\x27pace\.domain\.wallpaper\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native sync must keep both canonical wallpaper keys device-local");
 assert.match(flutterSync, /excludedRemotePullKeysFilter =[\s\S]*"pace\.domain\.wallpaper"[\s\S]*"lt\.domain\.wallpaper"/, "Native PostgREST pulls must filter canonical and legacy domain wallpaper aliases before download");
+assert.ok(
+  flutterSync.includes("final userStateRealtimeFilters = <PostgresChangeFilter>[" ) &&
+    flutterSync.includes("PostgresChangeFilterType.inFilter") &&
+    flutterSync.includes("negate: true") &&
+    wallpaperKeys.every((key) => flutterSync.includes(`'${key}'`)) &&
+    (flutterSync.match(/filters: userStateRealtimeFilters/g) ?? []).length === 2,
+  "Flutter Realtime must server-filter all wallpaper aliases and retain both user_state event subscriptions",
+);
 assert.match(flutterSettings, /Synchronisation entre appareils[\s\S]*_setConsent\('sync_cloud', value\)/, "Flutter settings must expose the functional cross-device sync consent");
 assert.match(flutterSettings, /await widget\.sync\.setCloudSyncConsent\(value\)/, "Changing consent must immediately update native sync behavior");
 
