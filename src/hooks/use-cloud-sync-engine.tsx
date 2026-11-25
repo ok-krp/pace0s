@@ -67,16 +67,6 @@ const DEVICE_LOCAL_PULL_KEYS = [
   ...LEGACY_DEVICE_LOCAL_DOMAIN_SYNC_KEYS,
 ] as const;
 const DEVICE_LOCAL_PULL_FILTER = `(${DEVICE_LOCAL_PULL_KEYS.map((key) => `"${key}"`).join(",")})`;
-const DEVICE_LOCAL_REALTIME_FILTER = [
-  `key=not.in.(${DEVICE_LOCAL_PULL_KEYS.map((key) => `"${key}"`).join(",")})`,
-  ...ALL_DEVICE_LOCAL_SYNC_PREFIXES.flatMap((prefix) => {
-    const legacyPrefix = `lt.${prefix.slice(PACE_PREFIX.length)}`;
-    return [
-      `key=not.match.${keyPrefixRegex(prefix)}`,
-      `key=not.match.${keyPrefixRegex(legacyPrefix)}`,
-    ];
-  }),
-].join(",");
 const EXCLUDED = new Set<string>([...WALLPAPER_SYNC_KEYS, ...DEVICE_LOCAL_SYNC_KEYS]);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
@@ -426,30 +416,13 @@ export function useCloudSyncEngineInternal() {
       try { await Promise.all(queue.map((item) => pushItem(item))); } finally { running.current[user.id] = false; }
     };
 
-    const applyRemoteRow = (row: SyncRow) => {
-      if (cancelled || !allowed() || !isSyncableKey(row.key) || row.updated_by === DEVICE_ID) return;
-      const remoteTime = Date.parse(row.updated_at);
-      if (!Number.isFinite(remoteTime)) return;
-      const meta = readMeta(user.id);
-      const knownTime = Date.parse(meta[row.key] ?? "1970-01-01T00:00:00.000Z");
-      if (remoteTime <= knownTime) return;
-      const queued = getQueued(row.key, user.id);
-      if (queued) { recordConflict(row.key, queued.value, row.value, row.updated_at); return; }
-      const domain = readDomainRecord(row.key);
-      if (domain && Date.parse(domain.updatedAt) >= remoteTime && !isEmptyRecoveredValue(domain.value)) return;
-      applyRemoteAndRemember(row.key, row.value, row.updated_at);
-      markVersion(row.key, row.updated_at, user.id);
-      localStorage.setItem("pace.__last_sync_at", row.updated_at);
-      setStatus("ok");
-    };
-
     const pull = async () => {
       if (cancelled || !allowed() || !navigator.onLine || running.current[user.id]) return;
       try {
         // A full user_state snapshot can contain large Nutrition/Health JSON.
         // Bootstrap once per account, then fetch only recent changes. Keep a
         // two-minute overlap to tolerate small clock skew and writes racing a
-        // previous pull; Realtime remains the primary low-latency path.
+        // previous pull; The 60-second filtered pull is the remote-state reconciliation path.
         const pullCursorKey = `pace.__cloud_sync_last_pull:${user.id}`;
         const previousPullAt = localStorage.getItem(pullCursorKey);
         const pullStartedAt = Date.now();
@@ -604,36 +577,6 @@ export function useCloudSyncEngineInternal() {
       pruneEquivalentConflicts();
     };
 
-    let realtimeHealthy = false;
-    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
-
-    const stopRealtime = () => {
-      const channel = realtimeChannel;
-      realtimeChannel = null;
-      realtimeHealthy = false;
-      if (channel) void supabase.removeChannel(channel);
-    };
-
-    const startRealtime = () => {
-      if (cancelled || !allowed() || !navigator.onLine || realtimeChannel) return;
-      const channel = supabase.channel(`pace-user-state-${user.id}`)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id},${DEVICE_LOCAL_REALTIME_FILTER}` }, (payload) => applyRemoteRow(payload.new as SyncRow))
-        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id},${DEVICE_LOCAL_REALTIME_FILTER}` }, (payload) => applyRemoteRow(payload.new as SyncRow));
-      realtimeChannel = channel;
-      void channel.subscribe((subscriptionStatus) => {
-        if (cancelled || realtimeChannel !== channel || !allowed()) return;
-        if (subscriptionStatus === "SUBSCRIBED") {
-          realtimeHealthy = true;
-          void pull();
-        } else if (subscriptionStatus === "CHANNEL_ERROR" || subscriptionStatus === "TIMED_OUT" || subscriptionStatus === "CLOSED") {
-          realtimeChannel = null;
-          realtimeHealthy = false;
-          void supabase.removeChannel(channel);
-          setStatus(navigator.onLine ? "error" : "offline");
-        }
-      });
-    };
-
     const offLocal = onLocalWrite((key, value, updatedAt, mutationId) => {
       if (!isSyncableKey(key) || !updatedAt) return;
       const encoded = serialize(value);
@@ -645,32 +588,29 @@ export function useCloudSyncEngineInternal() {
     });
 
     const onOnline = () => {
-      stopRealtime();
-      startRealtime();
       void syncNow();
     };
     const onOffline = () => {
-      stopRealtime();
       setStatus("offline");
     };
 
-    // Realtime is the fast path. Periodic polling is only a recovery path
-    // for a channel that is not healthy; visible/online/page-show events still
-    // trigger an immediate reconciliation. This avoids full-table egress every
-    // few seconds while preserving recovery when Realtime is unavailable.
+    // Generic user_state Realtime is intentionally disabled: its documented
+    // filter operators cannot exclude arbitrary device-local key prefixes
+    // before payload delivery. The incremental PostgREST pull applies exact
+    // and regex exclusions server-side. Local writes push immediately; remote
+    // writes reconcile every 60s or when the tab returns online/visible.
     const reconcileTimer = window.setInterval(() => {
-      if (document.visibilityState === "visible" && allowed() && !realtimeHealthy) { startRealtime(); void syncNow(); }
+      if (document.visibilityState === "visible" && allowed()) void syncNow();
     }, 60_000);
     const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") { startRealtime(); void syncNow(); }
+      if (document.visibilityState === "visible") void syncNow();
     };
     const onPageShow = () => {
-      startRealtime();
       void syncNow();
     };
     const onLegalChanged = () => {
-      if (allowed()) { startRealtime(); void syncNow(); }
-      else { stopRealtime(); setStatus("idle"); }
+      if (allowed()) void syncNow();
+      else setStatus("idle");
     };
     const onConflictResolved = () => { void syncNow(); };
     window.addEventListener("online", onOnline);
@@ -679,7 +619,6 @@ export function useCloudSyncEngineInternal() {
     window.addEventListener("pageshow", onPageShow);
     window.addEventListener("pace.legal.changed", onLegalChanged);
     window.addEventListener("pace.sync.conflict.resolved", onConflictResolved);
-    if (allowed()) startRealtime();
     pruneEquivalentConflicts();
     void syncNow();
     return () => {
@@ -691,7 +630,6 @@ export function useCloudSyncEngineInternal() {
       window.removeEventListener("pageshow", onPageShow);
       window.removeEventListener("pace.legal.changed", onLegalChanged);
       window.removeEventListener("pace.sync.conflict.resolved", onConflictResolved);
-      stopRealtime();
     };
   }, [user]);
 
