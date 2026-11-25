@@ -240,7 +240,7 @@ assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*
 assert.match(flutterSync, /static String get excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeys\.map\(\(key\) =>/,
   "Native PostgREST exact-key filter must be generated from the same exclusion set used by Realtime");
 assert.ok(
-  flutterSync.includes("final userStateRealtimeFilters = <PostgresChangeFilter[") &&
+  flutterSync.includes("final userStateRealtimeFilters = <PostgresChangeFilter>[") &&
     flutterSync.includes("SyncService.excludedRemotePullKeys.toList(growable: false)") &&
     flutterSync.includes("...SyncService.excludedRemotePullKeyPatterns.map(") &&
     flutterSync.includes("PostgresChangeFilterType.inFilter") &&
