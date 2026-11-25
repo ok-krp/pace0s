@@ -21,6 +21,8 @@ const DEVICE_LOCAL_SYNC_KEYS = [
   "pace.legal.consent",
   "pace.billing.device_id",
   "pace.watch.last_metrics",
+  "pace.ai.conversations",
+  "pace.ai.deleted_conversations",
   "pace.dark",
   "pace.visual-theme",
 ] as const;
