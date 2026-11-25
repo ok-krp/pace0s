@@ -151,16 +151,15 @@ assert.ok(
   engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)'),
   "Web must filter device-local state in PostgREST before downloading JSONB values",
 );
-assert.ok(
-  engine.includes("const DEVICE_LOCAL_REALTIME_FILTER = [") &&
-    engine.includes("const DEVICE_LOCAL_DOMAIN_SYNC_KEYS =") &&
-    engine.includes("const DEVICE_LOCAL_DOMAIN_SYNC_PREFIXES =") &&
-    engine.includes("const ALL_DEVICE_LOCAL_SYNC_PREFIXES = [") &&
-    engine.includes("key=not.in.(${DEVICE_LOCAL_PULL_KEYS.map") &&
-    engine.includes("key=not.match.${keyPrefixRegex(prefix)}") &&
-    engine.includes("key=not.match.${keyPrefixRegex(legacyPrefix)}") &&
-    engine.includes("filter: `user_id=eq.${user.id},${DEVICE_LOCAL_REALTIME_FILTER}`"),
-  "Web Realtime must exclude device-local keys and prefixes on the server while retaining the user_id filter",
+assert.doesNotMatch(
+  engine,
+  /postgres_changes|DEVICE_LOCAL_REALTIME_FILTER|startRealtime|realtimeHealthy/,
+  "Web must not subscribe to generic user_state Realtime events with unsupported prefix filters",
+);
+assert.match(
+  engine,
+  /const reconcileTimer = window\.setInterval\(\(\) => \{\s*if \(document\.visibilityState === "visible" && allowed\(\)\) void syncNow\(\);\s*\}, 60_000\)/,
+  "Web must reconcile remote user_state changes through a 60-second filtered pull",
 );
 assert.ok(
   engine.includes("const DEVICE_LOCAL_SYNC_KEYS = [") &&
@@ -177,7 +176,7 @@ assert.match(engine, /function isDeviceLocalSyncKey\(key: string\)[\s\S]*domainC
 assert.equal(`^${"pace.__".replaceAll(".", "[.]")}`, "^pace[.]__",
   "The internal-key regex must treat underscores literally instead of as SQL LIKE wildcards");
 assert.match(engine, /function isSyncableKey\(key: string\)[\s\S]*!isDeviceLocalSyncKey\(key\)/,
-  "Web pushes and Realtime apply paths must reject device-local keys");
+  "Web pushes, queues and bootstrap must reject device-local keys");
 assert.ok(
   engine.includes("for (const prefix of ALL_DEVICE_LOCAL_SYNC_PREFIXES)") &&
     engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)') &&
@@ -588,15 +587,12 @@ assert.match(engine, /isLegalCategoryAllowed\("sync_cloud"\)/, "cross-device syn
 const syncSettings = read("src/components/CloudSyncSettings.tsx");
 assert.match(syncSettings, /isLegalCategoryAllowed\("sync_cloud"\)/, "Settings must show the actual cross-device sync consent");
 assert.match(syncSettings, /Désactivée — active/, "Settings must not claim synchronization is active when consent is off");
-const realtimeStart = engine.indexOf("const startRealtime =");
-const realtimeEnd = engine.indexOf("const offLocal =", realtimeStart);
-assert.ok(realtimeStart >= 0 && realtimeEnd > realtimeStart, "Realtime lifecycle must be identifiable");
-const realtimeLifecycle = engine.slice(realtimeStart, realtimeEnd);
-assert.match(realtimeLifecycle, /!allowed\(\)/, "Realtime must not start without cloud-sync consent");
-assert.match(engine, /if \(cancelled \|\| !allowed\(\) \|\| !isSyncableKey\(row\.key\)/, "Remote writes must be rejected when cloud-sync consent is off");
-assert.match(engine, /stopRealtime\(\);\n      setStatus\("offline"\);/, "Realtime must stop when the app goes offline");
-assert.match(engine, /if \(allowed\(\)\) startRealtime\(\);/, "Realtime must start on initial opt-in");
-assert.match(engine, /if \(allowed\(\)\) \{ startRealtime\(\); void syncNow\(\); \}/, "Enabling sync consent must reconnect Realtime and reconcile");
+assert.doesNotMatch(engine, /startRealtime|stopRealtime|realtimeHealthy|postgres_changes/,
+  "Web user_state sync must not create a generic Realtime subscription");
+assert.match(engine, /const onOnline = \(\) => \{\s*void syncNow\(\);\s*\}/,
+  "Web must reconcile immediately after network recovery");
+assert.match(engine, /const onLegalChanged = \(\) => \{\s*if \(allowed\(\)\) void syncNow\(\);\s*else setStatus\("idle"\);\s*\}/,
+  "Web must reconcile immediately when cloud-sync consent is enabled");
 assert.match(engine, /const offLocal = onLocalWrite\([\s\S]*queueItem\(\{ key, value, updatedAt, mutationId \}, user\.id\);\s*if \(allowed\(\)\) void pushItem/, "Local mutations must remain queued under the authenticated account while cloud sync consent is off, and push only after opt-in");
 assert.match(engine, /if \(!isSyncableKey\(key\) \|\| grouped\.has\(key\)\) continue;/,
   "Legacy raw app-state bootstrap must use the shared device-local sync predicate");
@@ -619,8 +615,7 @@ assert.doesNotMatch(engine.slice(engine.indexOf("for (const [key, bucket] of gro
 
 assert.match(read("src/lib/legal.ts"), /sync_cloud: false/, "cloud sync must remain opt-in by default");
 assert.match(nutritionLog, /isNutritionDeviceSyncEnabled\(\).*isLegalCategoryAllowed\("sync_cloud"\)/s, "Nutrition UI must be able to explain when cross-device sync is disabled");
-assert.match(engine, /postgres_changes/);
-assert.equal((engine.match(/channel\.subscribe\(/g) ?? []).length, 1, "Realtime channel must only be subscribed during initial channel setup");
+assert.doesNotMatch(engine, /postgres_changes|channel\.subscribe\(/, "Web state sync must not subscribe to user_state Realtime");
 assert.equal(/location\.reload\s*\(/.test(engine), false, "sync must never reload the page");
 
 // Internal persistence keys never become cloud records.
