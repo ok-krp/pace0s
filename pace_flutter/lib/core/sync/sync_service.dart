@@ -376,13 +376,16 @@ class SyncService {
       PostgresChangeFilter(
         type: PostgresChangeFilterType.inFilter,
         column: 'key',
-        value: const <String>[
-          'pace.wallpaper',
-          'pace.domain.wallpaper',
-          'lt.wallpaper',
-          'lt.domain.wallpaper',
-        ],
+        value: SyncService.excludedRemotePullKeys.toList(growable: false),
         negate: true,
+      ),
+      ...SyncService.excludedRemotePullKeyPatterns.map(
+        (pattern) => PostgresChangeFilter(
+          type: PostgresChangeFilterType.match,
+          column: 'key',
+          value: pattern,
+          negate: true,
+        ),
       ),
     ];
 
