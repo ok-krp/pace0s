@@ -171,7 +171,8 @@ assert.ok(
       .every((prefix) => engine.includes(`"${prefix}"`)),
   "Web must centralize the static and prefix-based device-local sync exclusions",
 );
-assert.match(engine, /function keyPrefixRegex\(prefix: string\)[\s\S]*prefix\.replaceAll\("\\.", "\\[\\.\\]"\)/);
+assert.ok(engine.includes('function keyPrefixRegex(prefix: string)') && engine.includes('prefix.replaceAll(".", "[.]")'),
+  "Web prefix regex must convert literal dots to regex character classes");
 assert.match(engine, /function isDeviceLocalSyncKey\(key: string\)[\s\S]*domainCanonicalKey[\s\S]*EXCLUDED\.has\(domainCanonicalKey\)[\s\S]*ALL_DEVICE_LOCAL_SYNC_PREFIXES\.some/);
 assert.equal(`^${"pace.__".replaceAll(".", "[.]")}`, "^pace[.]__",
   "The internal-key regex must treat underscores literally instead of as SQL LIKE wildcards");
