@@ -237,25 +237,15 @@ assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*userId == null[\s
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*localStore\.currentAccountId != userId[\s\S]*client\?\.auth\.currentUser\?\.id != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not pull remote state for a mismatched account or without sync_cloud consent");
 assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.wallpaper\x27[\s\S]*\x27pace\.domain\.wallpaper\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native sync must keep both canonical wallpaper keys device-local");
 assert.match(flutterSync, /static String get excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeys\.map\(\(key\) =>/,
-  "Native PostgREST exact-key filter must be generated from the same exclusion set used by Realtime");
-assert.ok(
-  flutterSync.includes("final userStateRealtimeFilters = <PostgresChangeFilter>[") &&
-    flutterSync.includes("SyncService.excludedRemotePullKeys.toList(growable: false)") &&
-    flutterSync.includes("...SyncService.excludedRemotePullKeyPatterns.map(") &&
-    flutterSync.includes("PostgresChangeFilterType.inFilter") &&
-    flutterSync.includes("PostgresChangeFilterType.match") &&
-    flutterSync.includes("excludedSyncKeys.map((key) => 'lt.${key.substring(5)}')") &&
-    flutterSync.includes("where((key) => !key.startsWith('pace.domain.'))") &&
-    flutterSync.includes("pace.domain.outbox") &&
-    flutterSync.includes("domainCanonicalKey.startsWith('pace.ai.debug')") &&
-    flutterSync.includes(String.raw`r'^(pace|lt)\.ai\.debug'`) &&
-    flutterSync.includes(String.raw`r'^(pace|lt)\.domain\.ai\.debug'`) &&
-    flutterSync.includes("r'^(pace|lt)\\.domain\\.__'") &&
-    flutterSync.includes("r'^(pace|lt)\\.domain\\.(privacy|ble|import|local-ai)\\.'") &&
-    flutterSync.includes("negate: true") &&
-    (flutterSync.match(/filters: userStateRealtimeFilters/g) ?? []).length === 2,
-  "Flutter Realtime must reuse all PostgREST device-local key and prefix exclusions for both user_state event subscriptions",
-);
+  "Native PostgREST exact-key filter must be generated from the canonical device-local exclusion set");
+assert.doesNotMatch(flutterSync, /onPostgresChanges\([\s\S]{0,300}table: 'user_state'/,
+  "Flutter must not subscribe to generic user_state Realtime events with unsupported prefix filters");
+assert.doesNotMatch(flutterSync, /PostgresChangeFilterType\.match|userStateRealtimeFilters/,
+  "Flutter Realtime must not use undocumented regex or negated prefix filters");
+assert.match(flutterSync, /channel\('pace-flutter-food-log-\$userId'\)/,
+  "Flutter may keep the separate food_log channel");
+assert.match(flutterSync, /onPostgresChanges\([\s\S]*table: 'food_log'[\s\S]*PostgresChangeFilterType\.eq/,
+  "Flutter food_log Realtime must remain scoped with a documented user_id equality filter");
 assert.match(flutterSettings, /Synchronisation entre appareils[\s\S]*_setConsent\('sync_cloud', value\)/, "Flutter settings must expose the functional cross-device sync consent");
 assert.match(flutterSettings, /await widget\.sync\.setCloudSyncConsent\(value\)/, "Changing consent must immediately update native sync behavior");
 
@@ -318,7 +308,7 @@ assert.ok(
   rerunMarkerIndex >= 0 && rerunScheduleIndex > rerunMarkerIndex,
   "A new account sync request must be resumed through the safe scheduler after an old in-flight account cycle drains",
 );
-assert.match(flutterSync, /final userId = client\?\.auth\.currentUser\?\.id;[\s\S]*localStore\.currentAccountId != userId[\s\S]*_cloudSyncConsentUserId != userId/, "Late user_state Realtime events must not apply across account scopes");
+assert.doesNotMatch(flutterSync, /Future<void> _applyRealtimeRow\(/, "Native user_state snapshots must reconcile through the account-scoped pull, not a generic Realtime payload handler");
 assert.match(flutterApp, /if \(widget\.auth\.currentUser\?\.id != userId\) return;[\s\S]*await widget\.sync\.onAccountChanged\(userId\)/, "Obsolete auth stream events must not activate an account after a newer session has arrived");
 assert.match(flutterNutrition, /final accountId = widget\.sync\.activeAccountId[\s\S]*isCurrentLocalAccount\(accountId\)/, "Nutrition dialogs must stay bound to the account that opened them");
 assert.match(flutterSettings, /final userId = widget\.auth\.currentUser\?\.id[\s\S]*localStore\.currentAccountId != userId/, "Settings mutations must be attributed to the account that initiated them");
@@ -554,7 +544,7 @@ assert.match(read("src/components/RecipesView.tsx"), /void addNutritionItem\([\s
 assert.match(read("src/components/RecipesView.tsx"), /Repas enregistré sur cet appareil\./, "Recipe quick-add must identify local-only saves when cloud sync consent is disabled");
 
 assert.match(engine, /setInterval\s*\(.*60(?:000|_000)/s, "sync engine must reconcile periodically");
-assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling on Realtime health");
+assert.match(engine, /const reconcileTimer = window\.setInterval\([\s\S]*document\.visibilityState === "visible" && allowed\(\)[\s\S]*void syncNow\(\)[\s\S]*60_000/, "Web must reconcile filtered user_state snapshots every 60 seconds while visible");
 assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
 assert.equal(/setInterval\s*\(/.test(storage), false, "storage must not poll for local changes");
 assert.match(storage, /pace\.local\.write/);
@@ -629,7 +619,7 @@ const localRemoteHandlerEnd = storage.indexOf("window.addEventListener(REMOTE_WR
 const localRemoteHandler = storage.slice(localRemoteHandlerStart, localRemoteHandlerEnd);
 assert.ok(localRemoteHandler.indexOf("hasCompatibleTopLevelShape") < localRemoteHandler.indexOf("hasPendingRemoteValueRef.current = true"), "Invalid remote shapes must not suppress the next manual local write");
 assert.match(localRemoteHandler, /Object\.is\(valueRef\.current, next\)/, "Identical remote values must not create a pending echo");
-assert.match(localRemoteHandler, /pendingRemoteValueRef\.current = next/, "Realtime application must remember the exact remote value instead of a global suppression flag");
+assert.match(localRemoteHandler, /pendingRemoteValueRef\.current = next/, "Remote snapshot application must remember the exact value instead of a global suppression flag");
 const localSetStart = storage.indexOf("const set = useCallback", localRemoteHandlerEnd);
 const localSetEnd = storage.indexOf("return [value, set]", localSetStart);
 const localSetHandler = storage.slice(localSetStart, localSetEnd);
