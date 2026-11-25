@@ -157,8 +157,8 @@ assert.ok(
     engine.includes("const DEVICE_LOCAL_DOMAIN_SYNC_PREFIXES =") &&
     engine.includes("const ALL_DEVICE_LOCAL_SYNC_PREFIXES = [") &&
     engine.includes("key=not.in.(${DEVICE_LOCAL_PULL_KEYS.map") &&
-    engine.includes("key=not.like.${prefix}%") &&
-    engine.includes("key=not.like.${legacyPrefix}%") &&
+    engine.includes("key=not.match.${keyPrefixRegex(prefix)}") &&
+    engine.includes("key=not.match.${keyPrefixRegex(legacyPrefix)}") &&
     engine.includes("filter: `user_id=eq.${user.id},${DEVICE_LOCAL_REALTIME_FILTER}`"),
   "Web Realtime must exclude device-local keys and prefixes on the server while retaining the user_id filter",
 );
@@ -171,14 +171,18 @@ assert.ok(
       .every((prefix) => engine.includes(`"${prefix}"`)),
   "Web must centralize the static and prefix-based device-local sync exclusions",
 );
+assert.match(engine, /function keyPrefixRegex\(prefix: string\)[\s\S]*prefix\.replaceAll\("\\.", "\\[\\.\\]"\)/);
 assert.match(engine, /function isDeviceLocalSyncKey\(key: string\)[\s\S]*domainCanonicalKey[\s\S]*EXCLUDED\.has\(domainCanonicalKey\)[\s\S]*ALL_DEVICE_LOCAL_SYNC_PREFIXES\.some/);
+assert.equal(`^${"pace.__".replaceAll(".", "[.]")}`, "^pace[.]__",
+  "The internal-key regex must treat underscores literally instead of as SQL LIKE wildcards");
 assert.match(engine, /function isSyncableKey\(key: string\)[\s\S]*!isDeviceLocalSyncKey\(key\)/,
   "Web pushes and Realtime apply paths must reject device-local keys");
 assert.ok(
   engine.includes("for (const prefix of ALL_DEVICE_LOCAL_SYNC_PREFIXES)") &&
     engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)') &&
-    engine.includes('request = request.not("key", "like", `${prefix}%`);') &&
-    engine.includes('request = request.not("key", "like", `lt.${prefix.slice(PACE_PREFIX.length)}%`);'),
+    engine.includes('request = request.not("key", "match", keyPrefixRegex(prefix));') &&
+    engine.includes('request = request.not("key", "match", keyPrefixRegex(legacyPrefix));') &&
+    !engine.includes('request = request.not("key", "like"'),
   "Web PostgREST pulls must exclude device-local keys and legacy prefixes before downloading JSONB values",
 );
 assert.ok(
