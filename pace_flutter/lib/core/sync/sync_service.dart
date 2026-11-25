@@ -75,29 +75,26 @@ class SyncService {
     'pace.legal.consent',
     'pace.dark',
     'pace.visual-theme',
+    'pace.domain.outbox',
   };
 
-  /// Exact aliases and sync bookkeeping excluded before PostgREST returns rows.
+  /// Exact canonical, legacy, and domain aliases excluded before PostgREST
+  /// returns rows. Derive aliases from one set so pull and Realtime cannot drift.
   static final Set<String> excludedRemotePullKeys = {
     ...excludedSyncKeys,
+    ...excludedSyncKeys.map((key) => 'lt.${key.substring(5)}'),
+    ...excludedSyncKeys
+        .where((key) => !key.startsWith('pace.domain.'))
+        .map((key) => 'pace.domain.${key.substring(5)}'),
+    ...excludedSyncKeys
+        .where((key) => !key.startsWith('pace.domain.'))
+        .map((key) => 'lt.domain.${key.substring(5)}'),
     'pace.__sync_food_log_deleted_ids',
     'pace.__sync_food_log_outbox',
     'pace.__sync_food_log_quarantine',
     'pace.__sync_ai_preferences_pending',
     'pace.__sync_last_pull_at',
     'pace.__sync_last_full_pull_at',
-    'lt.sport.active',
-    'lt.ai.conversations',
-    'lt.ai.deleted_conversations',
-    'lt.wallpaper',
-    'lt.domain.wallpaper',
-    'lt.finance.pin.hash',
-    'lt.ai.debug',
-    'lt.billing.device_id',
-    'lt.watch.last_metrics',
-    'lt.legal.consent',
-    'lt.dark',
-    'lt.visual-theme',
   };
 
   static String get excludedRemotePullKeysFilter {
@@ -107,22 +104,34 @@ class SyncService {
 
   static const List<String> excludedRemotePullKeyPatterns = [
     r'^(pace|lt)\.__',
+    r'^(pace|lt)\.domain\.__',
     r'^(pace|lt)\.(privacy|ble|import|local-ai)\.',
+    r'^(pace|lt)\.domain\.(privacy|ble|import|local-ai)\.',
     r'^(pace|lt)\.ai\.pending:',
+    r'^(pace|lt)\.domain\.ai\.pending:',
     r'^(pace|lt)\.(finance|ai\.local)\.',
+    r'^(pace|lt)\.domain\.(finance|ai\.local)\.',
   ];
 
-  static bool isDeviceLocalKey(String key) =>
-      key.startsWith('pace.__') ||
-      key.startsWith('pace.privacy.') ||
-      key.startsWith('pace.finance.') ||
-      key.startsWith('pace.ble.') ||
-      key.startsWith('pace.import.') ||
-      key.startsWith('pace.local-ai.') ||
-      key.startsWith('pace.ai.local.') ||
-      key.startsWith('pace.ai.pending:') ||
-      key == 'pace.legal.consent' ||
-      excludedSyncKeys.contains(key);
+  static bool isDeviceLocalKey(String key) {
+    final legacyCanonicalKey =
+        key.startsWith('lt.') ? 'pace.${key.substring(3)}' : key;
+    final domainCanonicalKey = legacyCanonicalKey.startsWith('pace.domain.')
+        ? 'pace.${legacyCanonicalKey.substring(12)}'
+        : legacyCanonicalKey;
+    return legacyCanonicalKey.startsWith('pace.__') ||
+        domainCanonicalKey.startsWith('pace.__') ||
+        domainCanonicalKey.startsWith('pace.privacy.') ||
+        domainCanonicalKey.startsWith('pace.finance.') ||
+        domainCanonicalKey.startsWith('pace.ble.') ||
+        domainCanonicalKey.startsWith('pace.import.') ||
+        domainCanonicalKey.startsWith('pace.local-ai.') ||
+        domainCanonicalKey.startsWith('pace.ai.local.') ||
+        domainCanonicalKey.startsWith('pace.ai.pending:') ||
+        domainCanonicalKey == 'pace.legal.consent' ||
+        excludedSyncKeys.contains(legacyCanonicalKey) ||
+        excludedSyncKeys.contains(domainCanonicalKey);
+  }
 
   static bool isSyncableKey(String key) =>
       key.startsWith('pace.') &&
