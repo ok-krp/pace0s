@@ -73,6 +73,8 @@ class SyncService {
     'pace.billing.device_id',
     'pace.watch.last_metrics',
     'pace.legal.consent',
+    'pace.dark',
+    'pace.visual-theme',
   };
 
   /// Exact aliases and sync bookkeeping excluded before PostgREST returns rows.
@@ -93,6 +95,9 @@ class SyncService {
     'lt.ai.debug',
     'lt.billing.device_id',
     'lt.watch.last_metrics',
+    'lt.legal.consent',
+    'lt.dark',
+    'lt.visual-theme',
   };
 
   static const String excludedRemotePullKeysFilter =
