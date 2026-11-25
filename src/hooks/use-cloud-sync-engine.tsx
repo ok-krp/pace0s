@@ -17,6 +17,7 @@ const WALLPAPER_SYNC_KEYS = [
   "lt.domain.wallpaper",
 ] as const;
 const DEVICE_LOCAL_PULL_FILTER = `(${WALLPAPER_SYNC_KEYS.map((key) => `"${key}"`).join(",")})`;
+const DEVICE_LOCAL_REALTIME_FILTER = `key=not.in.(${WALLPAPER_SYNC_KEYS.map((key) => `"${key}"`).join(",")})`;
 const EXCLUDED = new Set<string>(["pace.sport.active", ...WALLPAPER_SYNC_KEYS]);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
@@ -559,8 +560,8 @@ export function useCloudSyncEngineInternal() {
     const startRealtime = () => {
       if (cancelled || !allowed() || !navigator.onLine || realtimeChannel) return;
       const channel = supabase.channel(`pace-user-state-${user.id}`)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow))
-        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id}` }, (payload) => applyRemoteRow(payload.new as SyncRow));
+        .on("postgres_changes", { event: "INSERT", schema: "public", table: "user_state", filter: `user_id=eq.${user.id},${DEVICE_LOCAL_REALTIME_FILTER}` }, (payload) => applyRemoteRow(payload.new as SyncRow))
+        .on("postgres_changes", { event: "UPDATE", schema: "public", table: "user_state", filter: `user_id=eq.${user.id},${DEVICE_LOCAL_REALTIME_FILTER}` }, (payload) => applyRemoteRow(payload.new as SyncRow));
       realtimeChannel = channel;
       void channel.subscribe((subscriptionStatus) => {
         if (cancelled || realtimeChannel !== channel || !allowed()) return;
