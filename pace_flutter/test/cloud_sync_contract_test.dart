@@ -147,9 +147,24 @@ void main() {
     test('filters canonical and legacy device-local aliases before a remote pull', () {
       expect(SyncService.excludedRemotePullKeys, contains('pace.wallpaper'));
       expect(SyncService.excludedRemotePullKeys, contains('lt.wallpaper'));
+      expect(SyncService.excludedRemotePullKeys, contains('pace.domain.outbox'));
+      expect(SyncService.excludedRemotePullKeys, contains('lt.domain.outbox'));
+      expect(SyncService.excludedRemotePullKeys, contains('pace.domain.legal.consent'));
+      expect(SyncService.excludedRemotePullKeys, contains('lt.domain.legal.consent'));
       expect(SyncService.excludedRemotePullKeysFilter, contains('"pace.wallpaper"'));
       expect(SyncService.excludedRemotePullKeysFilter, contains('"lt.wallpaper"'));
-      expect(SyncService.excludedRemotePullKeyPatterns, hasLength(4));
+      expect(SyncService.excludedRemotePullKeysFilter, contains('"pace.domain.outbox"'));
+      expect(SyncService.excludedRemotePullKeyPatterns, hasLength(10));
+      for (final pattern in [
+        r'^(pace|lt)\\.__',
+        r'^(pace|lt)\\.domain\\.__',
+        r'^(pace|lt)\\.ai\\.debug',
+        r'^(pace|lt)\\.domain\\.ai\\.debug',
+        r'^(pace|lt)\\.ai\\.pending:',
+        r'^(pace|lt)\\.domain\\.ai\\.pending:',
+      ]) {
+        expect(SyncService.excludedRemotePullKeyPatterns, contains(pattern));
+      }
       expect(
         SyncService.excludedRemotePullKeyPatterns.any(
           (pattern) => pattern.contains('(finance|ai'),
@@ -158,10 +173,25 @@ void main() {
       );
       expect(
         SyncService.excludedRemotePullKeyPatterns.any(
-          (pattern) => pattern.contains(r'\.__'),
+          (pattern) => pattern.contains(r'\\.__'),
         ),
         isTrue,
       );
+      for (final key in [
+        'pace.domain.outbox',
+        'lt.domain.outbox',
+        'pace.domain.ble.mapping',
+        'pace.domain.import.log',
+        'pace.domain.legal.consent',
+        'lt.domain.legal.consent',
+        'pace.domain.dark',
+        'pace.domain.__sync_meta',
+        'pace.domain.ai.debug.trace',
+        'lt.domain.ai.debug.trace',
+        'pace.ai.debug.trace',
+      ]) {
+        expect(SyncService.isDeviceLocalKey(key), isTrue, reason: key);
+      }
     });
   });
 
