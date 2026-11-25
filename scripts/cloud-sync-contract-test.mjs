@@ -274,6 +274,12 @@ assert.ok(
     flutterApp.includes("const Duration(seconds: 60)"),
   "Flutter's periodic reconciliation must be a 60-second fallback, not the primary write-delivery mechanism",
 );
+assert.match(flutterApp, /WidgetsBinding\.instance\.addObserver\(this\)/,
+  "Flutter app shell must observe lifecycle resumes for immediate sync reconciliation");
+assert.match(flutterApp, /didChangeAppLifecycleState\(AppLifecycleState state\)[\s\S]*AppLifecycleState\.resumed[\s\S]*widget\.sync\.syncNow\(\)/,
+  "Flutter must reconcile immediately after returning to the foreground");
+assert.match(flutterApp, /WidgetsBinding\.instance\.removeObserver\(this\)/,
+  "Flutter app shell must remove its lifecycle observer on dispose");
 assert.ok(
   flutterApp.includes("unawaited(widget.sync.syncNow().catchError((Object _) {}))"),
   "Flutter periodic background reconciliation must contain transient sync errors",
