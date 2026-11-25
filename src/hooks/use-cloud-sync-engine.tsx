@@ -25,8 +25,10 @@ const DEVICE_LOCAL_SYNC_KEYS = [
   "pace.ai.deleted_conversations",
   "pace.dark",
   "pace.visual-theme",
+  DOMAIN_OUTBOX_KEY,
 ] as const;
 const DEVICE_LOCAL_SYNC_PREFIXES = [
+  "pace.__",
   "pace.ai.pending:",
   "pace.ai.debug",
   "pace.local-ai.",
@@ -36,18 +38,33 @@ const DEVICE_LOCAL_SYNC_PREFIXES = [
   "pace.ble.",
   "pace.import.",
 ] as const;
+const DEVICE_LOCAL_DOMAIN_SYNC_KEYS = DEVICE_LOCAL_SYNC_KEYS
+  .filter((key) => !key.startsWith(DOMAIN_PREFIX))
+  .map((key) => `${DOMAIN_PREFIX}${key.slice(PACE_PREFIX.length)}`);
 const LEGACY_DEVICE_LOCAL_SYNC_KEYS = DEVICE_LOCAL_SYNC_KEYS.map(
   (key) => `lt.${key.slice(PACE_PREFIX.length)}`,
 );
+const LEGACY_DEVICE_LOCAL_DOMAIN_SYNC_KEYS = DEVICE_LOCAL_DOMAIN_SYNC_KEYS.map(
+  (key) => `lt.${key.slice(PACE_PREFIX.length)}`,
+);
+const DEVICE_LOCAL_DOMAIN_SYNC_PREFIXES = DEVICE_LOCAL_SYNC_PREFIXES.map(
+  (prefix) => `${DOMAIN_PREFIX}${prefix.slice(PACE_PREFIX.length)}`,
+);
+const ALL_DEVICE_LOCAL_SYNC_PREFIXES = [
+  ...DEVICE_LOCAL_SYNC_PREFIXES,
+  ...DEVICE_LOCAL_DOMAIN_SYNC_PREFIXES,
+] as const;
 const DEVICE_LOCAL_PULL_KEYS = [
   ...WALLPAPER_SYNC_KEYS,
   ...DEVICE_LOCAL_SYNC_KEYS,
   ...LEGACY_DEVICE_LOCAL_SYNC_KEYS,
+  ...DEVICE_LOCAL_DOMAIN_SYNC_KEYS,
+  ...LEGACY_DEVICE_LOCAL_DOMAIN_SYNC_KEYS,
 ] as const;
 const DEVICE_LOCAL_PULL_FILTER = `(${DEVICE_LOCAL_PULL_KEYS.map((key) => `"${key}"`).join(",")})`;
 const DEVICE_LOCAL_REALTIME_FILTER = [
   `key=not.in.(${DEVICE_LOCAL_PULL_KEYS.map((key) => `"${key}"`).join(",")})`,
-  ...DEVICE_LOCAL_SYNC_PREFIXES.flatMap((prefix) => {
+  ...ALL_DEVICE_LOCAL_SYNC_PREFIXES.flatMap((prefix) => {
     const legacyPrefix = `lt.${prefix.slice(PACE_PREFIX.length)}`;
     return [`key=not.like.${prefix}%`, `key=not.like.${legacyPrefix}%`];
   }),
@@ -80,8 +97,12 @@ function getDeviceId() {
 }
 function isDeviceLocalSyncKey(key: string) {
   const canonicalKey = key.startsWith("lt.") ? `${PACE_PREFIX}${key.slice("lt.".length)}` : key;
+  const domainCanonicalKey = canonicalKey.startsWith(DOMAIN_PREFIX)
+    ? `${PACE_PREFIX}${canonicalKey.slice(DOMAIN_PREFIX.length)}`
+    : canonicalKey;
   return EXCLUDED.has(canonicalKey) ||
-    DEVICE_LOCAL_SYNC_PREFIXES.some((prefix) => canonicalKey.startsWith(prefix));
+    EXCLUDED.has(domainCanonicalKey) ||
+    ALL_DEVICE_LOCAL_SYNC_PREFIXES.some((prefix) => canonicalKey.startsWith(prefix));
 }
 function isSyncableKey(key: string) {
   return key.startsWith(PACE_PREFIX) &&
@@ -430,7 +451,7 @@ export function useCloudSyncEngineInternal() {
           // Filter device-local state in PostgREST before JSONB values cross
           // the network; checking only after download still incurs egress.
           .not("key", "in", DEVICE_LOCAL_PULL_FILTER);
-        for (const prefix of DEVICE_LOCAL_SYNC_PREFIXES) {
+        for (const prefix of ALL_DEVICE_LOCAL_SYNC_PREFIXES) {
           request = request.not("key", "like", `${prefix}%`);
           request = request.not("key", "like", `lt.${prefix.slice(PACE_PREFIX.length)}%`);
         }
