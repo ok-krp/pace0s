@@ -378,57 +378,14 @@ class SyncService {
       _realtimeUserId = null;
     }
 
-    final userStateRealtimeFilters = <PostgresChangeFilter>[
-      PostgresChangeFilter(
-        type: PostgresChangeFilterType.eq,
-        column: 'user_id',
-        value: userId,
-      ),
-      PostgresChangeFilter(
-        type: PostgresChangeFilterType.inFilter,
-        column: 'key',
-        value: SyncService.excludedRemotePullKeys.toList(growable: false),
-        negate: true,
-      ),
-      ...SyncService.excludedRemotePullKeyPatterns.map(
-        (pattern) => PostgresChangeFilter(
-          type: PostgresChangeFilterType.match,
-          column: 'key',
-          value: pattern,
-          negate: true,
-        ),
-      ),
-    ];
-
-    final channel = client!.channel('pace-flutter-user-state-$userId');
-
-    void handlePayload(PostgresChangePayload payload) {
-      // P1.1 deliberately handles INSERT/UPDATE only. DELETE/tombstone
-      // semantics are implemented in P1.3 so a DELETE can never be mistaken
-      // for an empty user_state value here.
-      final record = Map<String, dynamic>.from(payload.newRecord);
-      final key = record['key'];
-      final value = record['value'];
-      final updatedAt = record['updated_at'];
-      if (key is! String || updatedAt is! String) return;
-      unawaited(_applyRealtimeRow(key, value, updatedAt).catchError((Object _) {}));
-    }
+    // Generic user_state Realtime is intentionally disabled. Postgres Changes
+    // documents only eq/neq/range/in filters, not arbitrary prefix regexes;
+    // a generic channel could deliver device-local values before client checks.
+    // Filtered incremental PostgREST pulls reconcile user_state every 60s.
+    // Keep the user-scoped food_log channel only.
+    final channel = client!.channel('pace-flutter-food-log-$userId');
 
     channel
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'user_state',
-          filters: userStateRealtimeFilters,
-          callback: handlePayload,
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.update,
-          schema: 'public',
-          table: 'user_state',
-          filters: userStateRealtimeFilters,
-          callback: handlePayload,
-        )
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
@@ -492,47 +449,6 @@ class SyncService {
       _realtimeUserId = null;
       // Polling remains the fallback when Realtime is unavailable.
     }
-  }
-
-  Future<void> _applyRealtimeRow(
-    String key,
-    dynamic value,
-    String updatedAt,
-  ) async {
-    final userId = client?.auth.currentUser?.id;
-    if (userId == null ||
-        localStore.currentAccountId != userId ||
-        _cloudSyncConsentUserId != userId ||
-        _cloudSyncConsent != true) {
-      return;
-    }
-    if (_running) {
-      // The regular sync cycle will reconcile this row after its current
-      // mutation batch completes, preventing a transient overwrite.
-      return;
-    }
-
-    final localUpdatedAt = localStore.lastSyncedAt(key);
-    final remoteTime = DateTime.tryParse(updatedAt);
-    final localTime =
-        localUpdatedAt == null ? null : DateTime.tryParse(localUpdatedAt);
-    if (!shouldApplyRealtimeUserState(
-      remoteTime: remoteTime,
-      localTime: localTime,
-      hasPendingMutation: localStore
-          .pendingOperations()
-          .any((operation) => operation['key'] == key),
-    )) {
-      return;
-    }
-
-    final safeValue = key == 'pace.nutrition.items'
-        ? filterDeletedNutritionItems(
-            value,
-            _readDeletedNutritionIds(userId),
-          )
-        : value;
-    await localStore.applyRemote(key, safeValue, updatedAt);
   }
 
   Future<void> _pushPending() async {
@@ -1102,20 +1018,6 @@ bool shouldRunCloudSync({
 
 /// A local outbox operation is acknowledged only after server acceptance.
 bool shouldAcknowledgeSyncOperation({required bool accepted}) => accepted;
-
-/// Returns whether a Realtime user_state row is newer than the local
-/// checkpoint and safe to apply.
-///
-/// Pending local mutations always win over a Realtime event. The normal sync
-/// cycle will reconcile the cloud state after the local write has completed.
-bool shouldApplyRealtimeUserState({
-  required DateTime? remoteTime,
-  required DateTime? localTime,
-  required bool hasPendingMutation,
-}) {
-  if (hasPendingMutation || remoteTime == null) return false;
-  return localTime == null || remoteTime.isAfter(localTime);
-}
 
 /// Validated response contract returned by upsert_user_state_if_newer().
 class CloudSyncWriteResponse {
