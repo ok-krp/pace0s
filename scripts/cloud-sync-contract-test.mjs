@@ -161,7 +161,7 @@ assert.ok(
 );
 assert.ok(
   engine.includes("const DEVICE_LOCAL_SYNC_KEYS = [") &&
-    ["pace.sport.active","pace.legal.consent","pace.billing.device_id","pace.watch.last_metrics","pace.dark","pace.visual-theme"]
+    ["pace.sport.active","pace.legal.consent","pace.billing.device_id","pace.watch.last_metrics","pace.ai.conversations","pace.ai.deleted_conversations","pace.dark","pace.visual-theme"]
       .every((key) => engine.includes(`"${key}"`)) &&
     engine.includes("const DEVICE_LOCAL_SYNC_PREFIXES = [") &&
     ["pace.ai.pending:","pace.ai.debug","pace.local-ai.","pace.ai.local.","pace.privacy.","pace.finance.","pace.ble.","pace.import."]
@@ -235,6 +235,8 @@ assert.ok(
     flutterSync.includes("...SyncService.excludedRemotePullKeyPatterns.map(") &&
     flutterSync.includes("PostgresChangeFilterType.inFilter") &&
     flutterSync.includes("PostgresChangeFilterType.match") &&
+    ["pace.ai.conversations","pace.ai.deleted_conversations","pace.dark","pace.visual-theme",
+      "lt.legal.consent","lt.dark","lt.visual-theme"].every((key) => flutterSync.includes(`'${key}'`)) &&
     flutterSync.includes("negate: true") &&
     (flutterSync.match(/filters: userStateRealtimeFilters/g) ?? []).length === 2,
   "Flutter Realtime must reuse all PostgREST device-local key and prefix exclusions for both user_state event subscriptions",
