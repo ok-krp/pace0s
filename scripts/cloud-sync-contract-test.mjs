@@ -248,6 +248,9 @@ assert.ok(
     flutterSync.includes("excludedSyncKeys.map((key) => 'lt.${key.substring(5)}')") &&
     flutterSync.includes("where((key) => !key.startsWith('pace.domain.'))") &&
     flutterSync.includes("pace.domain.outbox") &&
+    flutterSync.includes("domainCanonicalKey.startsWith('pace.ai.debug')") &&
+    flutterSync.includes(String.raw`r'^(pace|lt)\\.ai\\.debug'`) &&
+    flutterSync.includes(String.raw`r'^(pace|lt)\\.domain\\.ai\\.debug'`) &&
     flutterSync.includes("r'^(pace|lt)\\.domain\\.__'") &&
     flutterSync.includes("r'^(pace|lt)\\.domain\\.(privacy|ble|import|local-ai)\\.'") &&
     flutterSync.includes("negate: true") &&
