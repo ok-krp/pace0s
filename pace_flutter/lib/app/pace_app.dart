@@ -228,13 +228,14 @@ class PaceShell extends StatefulWidget {
   State<PaceShell> createState() => _PaceShellState();
 }
 
-class _PaceShellState extends State<PaceShell> {
+class _PaceShellState extends State<PaceShell> with WidgetsBindingObserver {
   int _index = 0;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _timer = Timer.periodic(
       const Duration(seconds: 60),
       (_) => unawaited(widget.sync.syncNow().catchError((Object _) {})),
@@ -242,7 +243,15 @@ class _PaceShellState extends State<PaceShell> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(widget.sync.syncNow().catchError((Object _) {}));
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     super.dispose();
   }
