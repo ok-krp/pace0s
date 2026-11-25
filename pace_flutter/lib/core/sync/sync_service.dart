@@ -100,8 +100,10 @@ class SyncService {
     'lt.visual-theme',
   };
 
-  static String get excludedRemotePullKeysFilter =>
-      '(${excludedRemotePullKeys.map((key) => '"$key"').join(',')})';
+  static String get excludedRemotePullKeysFilter {
+    final values = excludedRemotePullKeys.map((key) => '"$key"').join(',');
+    return '($values)';
+  }
 
   static const List<String> excludedRemotePullKeyPatterns = [
     r'^(pace|lt)\.__',
