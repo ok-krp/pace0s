@@ -230,12 +230,14 @@ assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*localStore\.curren
 assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.wallpaper\x27[\s\S]*\x27pace\.domain\.wallpaper\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native sync must keep both canonical wallpaper keys device-local");
 assert.match(flutterSync, /excludedRemotePullKeysFilter =[\s\S]*"pace\.domain\.wallpaper"[\s\S]*"lt\.domain\.wallpaper"/, "Native PostgREST pulls must filter canonical and legacy domain wallpaper aliases before download");
 assert.ok(
-  flutterSync.includes("final userStateRealtimeFilters = <PostgresChangeFilter>[" ) &&
+  flutterSync.includes("final userStateRealtimeFilters = <PostgresChangeFilter[") &&
+    flutterSync.includes("SyncService.excludedRemotePullKeys.toList(growable: false)") &&
+    flutterSync.includes("...SyncService.excludedRemotePullKeyPatterns.map(") &&
     flutterSync.includes("PostgresChangeFilterType.inFilter") &&
+    flutterSync.includes("PostgresChangeFilterType.match") &&
     flutterSync.includes("negate: true") &&
-    wallpaperKeys.every((key) => flutterSync.includes(`'${key}'`)) &&
     (flutterSync.match(/filters: userStateRealtimeFilters/g) ?? []).length === 2,
-  "Flutter Realtime must server-filter all wallpaper aliases and retain both user_state event subscriptions",
+  "Flutter Realtime must reuse all PostgREST device-local key and prefix exclusions for both user_state event subscriptions",
 );
 assert.match(flutterSettings, /Synchronisation entre appareils[\s\S]*_setConsent\('sync_cloud', value\)/, "Flutter settings must expose the functional cross-device sync consent");
 assert.match(flutterSettings, /await widget\.sync\.setCloudSyncConsent\(value\)/, "Changing consent must immediately update native sync behavior");
