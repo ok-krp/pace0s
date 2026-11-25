@@ -156,12 +156,12 @@ void main() {
       expect(SyncService.excludedRemotePullKeysFilter, contains('"pace.domain.outbox"'));
       expect(SyncService.excludedRemotePullKeyPatterns, hasLength(10));
       for (final pattern in [
-        r'^(pace|lt)\\.__',
-        r'^(pace|lt)\\.domain\\.__',
-        r'^(pace|lt)\\.ai\\.debug',
-        r'^(pace|lt)\\.domain\\.ai\\.debug',
-        r'^(pace|lt)\\.ai\\.pending:',
-        r'^(pace|lt)\\.domain\\.ai\\.pending:',
+        r'^(pace|lt)\.__',
+        r'^(pace|lt)\.domain\.__',
+        r'^(pace|lt)\.ai\.debug',
+        r'^(pace|lt)\.domain\.ai\.debug',
+        r'^(pace|lt)\.ai\.pending:',
+        r'^(pace|lt)\.domain\.ai\.pending:',
       ]) {
         expect(SyncService.excludedRemotePullKeyPatterns, contains(pattern));
       }
