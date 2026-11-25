@@ -173,7 +173,7 @@ void main() {
       );
       expect(
         SyncService.excludedRemotePullKeyPatterns.any(
-          (pattern) => pattern.contains(r'\\.__'),
+          (pattern) => pattern.contains(r'\.__'),
         ),
         isTrue,
       );
