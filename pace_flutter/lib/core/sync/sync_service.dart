@@ -107,6 +107,8 @@ class SyncService {
     r'^(pace|lt)\.domain\.__',
     r'^(pace|lt)\.(privacy|ble|import|local-ai)\.',
     r'^(pace|lt)\.domain\.(privacy|ble|import|local-ai)\.',
+    r'^(pace|lt)\.ai\.debug',
+    r'^(pace|lt)\.domain\.ai\.debug',
     r'^(pace|lt)\.ai\.pending:',
     r'^(pace|lt)\.domain\.ai\.pending:',
     r'^(pace|lt)\.(finance|ai\.local)\.',
@@ -127,6 +129,7 @@ class SyncService {
         domainCanonicalKey.startsWith('pace.import.') ||
         domainCanonicalKey.startsWith('pace.local-ai.') ||
         domainCanonicalKey.startsWith('pace.ai.local.') ||
+        domainCanonicalKey.startsWith('pace.ai.debug') ||
         domainCanonicalKey.startsWith('pace.ai.pending:') ||
         domainCanonicalKey == 'pace.legal.consent' ||
         excludedSyncKeys.contains(legacyCanonicalKey) ||
