@@ -153,6 +153,9 @@ assert.ok(
 );
 assert.ok(
   engine.includes("const DEVICE_LOCAL_REALTIME_FILTER = [") &&
+    engine.includes("const DEVICE_LOCAL_DOMAIN_SYNC_KEYS =") &&
+    engine.includes("const DEVICE_LOCAL_DOMAIN_SYNC_PREFIXES =") &&
+    engine.includes("const ALL_DEVICE_LOCAL_SYNC_PREFIXES = [") &&
     engine.includes("key=not.in.(${DEVICE_LOCAL_PULL_KEYS.map") &&
     engine.includes("key=not.like.${prefix}%") &&
     engine.includes("key=not.like.${legacyPrefix}%") &&
@@ -161,18 +164,19 @@ assert.ok(
 );
 assert.ok(
   engine.includes("const DEVICE_LOCAL_SYNC_KEYS = [") &&
-    ["pace.sport.active","pace.legal.consent","pace.billing.device_id","pace.watch.last_metrics","pace.ai.conversations","pace.ai.deleted_conversations","pace.dark","pace.visual-theme"]
+    ["pace.sport.active","pace.legal.consent","pace.billing.device_id","pace.watch.last_metrics","pace.ai.conversations","pace.ai.deleted_conversations","pace.dark","pace.visual-theme","pace.domain.outbox"]
       .every((key) => engine.includes(`"${key}"`)) &&
     engine.includes("const DEVICE_LOCAL_SYNC_PREFIXES = [") &&
-    ["pace.ai.pending:","pace.ai.debug","pace.local-ai.","pace.ai.local.","pace.privacy.","pace.finance.","pace.ble.","pace.import."]
+    ["pace.__","pace.ai.pending:","pace.ai.debug","pace.local-ai.","pace.ai.local.","pace.privacy.","pace.finance.","pace.ble.","pace.import."]
       .every((prefix) => engine.includes(`"${prefix}"`)),
   "Web must centralize the static and prefix-based device-local sync exclusions",
 );
-assert.match(engine, /function isDeviceLocalSyncKey\(key: string\)[\s\S]*EXCLUDED\.has\(canonicalKey\)[\s\S]*DEVICE_LOCAL_SYNC_PREFIXES\.some/);
+assert.match(engine, /function isDeviceLocalSyncKey\(key: string\)[\s\S]*domainCanonicalKey[\s\S]*EXCLUDED\.has\(domainCanonicalKey\)[\s\S]*ALL_DEVICE_LOCAL_SYNC_PREFIXES\.some/);
 assert.match(engine, /function isSyncableKey\(key: string\)[\s\S]*!isDeviceLocalSyncKey\(key\)/,
   "Web pushes and Realtime apply paths must reject device-local keys");
 assert.ok(
-  engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)') &&
+  engine.includes("for (const prefix of ALL_DEVICE_LOCAL_SYNC_PREFIXES)") &&
+    engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)') &&
     engine.includes('request = request.not("key", "like", `${prefix}%`);') &&
     engine.includes('request = request.not("key", "like", `lt.${prefix.slice(PACE_PREFIX.length)}%`);'),
   "Web PostgREST pulls must exclude device-local keys and legacy prefixes before downloading JSONB values",
@@ -236,8 +240,11 @@ assert.ok(
     flutterSync.includes("...SyncService.excludedRemotePullKeyPatterns.map(") &&
     flutterSync.includes("PostgresChangeFilterType.inFilter") &&
     flutterSync.includes("PostgresChangeFilterType.match") &&
-    ["pace.ai.conversations","pace.ai.deleted_conversations","pace.dark","pace.visual-theme",
-      "lt.legal.consent","lt.dark","lt.visual-theme"].every((key) => flutterSync.includes(`'${key}'`)) &&
+    flutterSync.includes("excludedSyncKeys.map((key) => 'lt.${key.substring(5)}')") &&
+    flutterSync.includes("where((key) => !key.startsWith('pace.domain.'))") &&
+    flutterSync.includes("pace.domain.outbox") &&
+    flutterSync.includes("r'^(pace|lt)\\.domain\\.__'") &&
+    flutterSync.includes("r'^(pace|lt)\\.domain\\.(privacy|ble|import|local-ai)\\.'") &&
     flutterSync.includes("negate: true") &&
     (flutterSync.match(/filters: userStateRealtimeFilters/g) ?? []).length === 2,
   "Flutter Realtime must reuse all PostgREST device-local key and prefix exclusions for both user_state event subscriptions",
