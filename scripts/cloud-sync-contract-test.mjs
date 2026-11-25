@@ -228,7 +228,8 @@ assert.match(flutterNutrition, /impossible de vérifier le consentement cloud/, 
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*userId == null[\s\S]*localStore\.currentAccountId != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not push local outbox mutations without an authenticated matching account and sync_cloud consent");
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*localStore\.currentAccountId != userId[\s\S]*client\?\.auth\.currentUser\?\.id != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not pull remote state for a mismatched account or without sync_cloud consent");
 assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.wallpaper\x27[\s\S]*\x27pace\.domain\.wallpaper\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native sync must keep both canonical wallpaper keys device-local");
-assert.match(flutterSync, /excludedRemotePullKeysFilter =[\s\S]*"pace\.domain\.wallpaper"[\s\S]*"lt\.domain\.wallpaper"/, "Native PostgREST pulls must filter canonical and legacy domain wallpaper aliases before download");
+assert.match(flutterSync, /static String get excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeys\.map\(\(key\) =>/,
+  "Native PostgREST exact-key filter must be generated from the same exclusion set used by Realtime");
 assert.ok(
   flutterSync.includes("final userStateRealtimeFilters = <PostgresChangeFilter[") &&
     flutterSync.includes("SyncService.excludedRemotePullKeys.toList(growable: false)") &&
