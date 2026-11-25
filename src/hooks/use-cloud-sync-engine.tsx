@@ -16,6 +16,11 @@ const WALLPAPER_SYNC_KEYS = [
   "lt.wallpaper",
   "lt.domain.wallpaper",
 ] as const;
+function keyPrefixRegex(prefix: string) {
+  // Prefixes contain literal dots and underscores; a regex keeps underscores
+  // literal (unlike SQL LIKE, where _ is a one-character wildcard).
+  return `^${prefix.replaceAll(".", "[.]")}`;
+}
 const DEVICE_LOCAL_SYNC_KEYS = [
   "pace.sport.active",
   "pace.legal.consent",
@@ -66,7 +71,10 @@ const DEVICE_LOCAL_REALTIME_FILTER = [
   `key=not.in.(${DEVICE_LOCAL_PULL_KEYS.map((key) => `"${key}"`).join(",")})`,
   ...ALL_DEVICE_LOCAL_SYNC_PREFIXES.flatMap((prefix) => {
     const legacyPrefix = `lt.${prefix.slice(PACE_PREFIX.length)}`;
-    return [`key=not.like.${prefix}%`, `key=not.like.${legacyPrefix}%`];
+    return [
+      `key=not.match.${keyPrefixRegex(prefix)}`,
+      `key=not.match.${keyPrefixRegex(legacyPrefix)}`,
+    ];
   }),
 ].join(",");
 const EXCLUDED = new Set<string>([...WALLPAPER_SYNC_KEYS, ...DEVICE_LOCAL_SYNC_KEYS]);
@@ -452,8 +460,9 @@ export function useCloudSyncEngineInternal() {
           // the network; checking only after download still incurs egress.
           .not("key", "in", DEVICE_LOCAL_PULL_FILTER);
         for (const prefix of ALL_DEVICE_LOCAL_SYNC_PREFIXES) {
-          request = request.not("key", "like", `${prefix}%`);
-          request = request.not("key", "like", `lt.${prefix.slice(PACE_PREFIX.length)}%`);
+          const legacyPrefix = `lt.${prefix.slice(PACE_PREFIX.length)}`;
+          request = request.not("key", "match", keyPrefixRegex(prefix));
+          request = request.not("key", "match", keyPrefixRegex(legacyPrefix));
         }
         const previousPullTime = previousPullAt ? Date.parse(previousPullAt) : Number.NaN;
         if (Number.isFinite(previousPullTime)) {
