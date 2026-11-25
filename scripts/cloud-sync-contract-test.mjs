@@ -598,10 +598,18 @@ assert.match(engine, /stopRealtime\(\);\n      setStatus\("offline"\);/, "Realti
 assert.match(engine, /if \(allowed\(\)\) startRealtime\(\);/, "Realtime must start on initial opt-in");
 assert.match(engine, /if \(allowed\(\)\) \{ startRealtime\(\); void syncNow\(\); \}/, "Enabling sync consent must reconnect Realtime and reconcile");
 assert.match(engine, /const offLocal = onLocalWrite\([\s\S]*queueItem\(\{ key, value, updatedAt, mutationId \}, user\.id\);\s*if \(allowed\(\)\) void pushItem/, "Local mutations must remain queued under the authenticated account while cloud sync consent is off, and push only after opt-in");
-assert.match(engine, /localOnlyKeys/, "Legacy raw app-state bootstrap must exclude device-local security and appearance settings");
-assert.match(engine, /pace\.privacy\.pin\.hash/, "Finance PIN hashes must never be part of local raw-state cloud recovery");
-assert.match(engine, /pace\.ble\.devices/, "Paired Bluetooth device identifiers must remain device-local");
-assert.match(engine, /pace\.ai\.pending:/, "Local AI prompt drafts must remain device-local");
+assert.match(engine, /if \(!isSyncableKey\(key\) \|\| grouped\.has\(key\)\) continue;/,
+  "Legacy raw app-state bootstrap must use the shared device-local sync predicate");
+assert.ok(
+  ["pace.legal.consent","pace.billing.device_id","pace.watch.last_metrics","pace.dark","pace.visual-theme"]
+    .every((key) => engine.includes(`"${key}"`)),
+  "Device-bound consent, billing, watch and appearance settings must remain device-local",
+);
+assert.ok(
+  ["pace.privacy.","pace.finance.","pace.ble.","pace.import.","pace.local-ai.","pace.ai.local.","pace.ai.pending:"]
+    .every((prefix) => engine.includes(`"${prefix}"`)),
+  "Privacy, Finance, BLE, import and local AI records must remain device-local by prefix",
+);
 
 assert.match(engine, /await flushQueue\(\); await pull\(\); await flushQueue\(\);/, "Bootstrapped and recovered local values must be pushed in the same sync pass");
 assert.match(engine, /const sourceRow = !canonical \? legacy : !legacy \? canonical/, "Legacy recovery must select the newest full snapshot instead of union-merging rows");
