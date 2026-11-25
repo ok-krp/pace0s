@@ -149,17 +149,39 @@ assert.ok(
 );
 assert.ok(
   engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)'),
-  "Web must filter wallpapers in PostgREST before downloading JSONB values",
+  "Web must filter device-local state in PostgREST before downloading JSONB values",
 );
 assert.ok(
-  engine.includes("const DEVICE_LOCAL_REALTIME_FILTER = `key=not.in.") &&
+  engine.includes("const DEVICE_LOCAL_REALTIME_FILTER = [") &&
+    engine.includes("key=not.in.(${DEVICE_LOCAL_PULL_KEYS.map") &&
+    engine.includes("key=not.like.${prefix}%") &&
+    engine.includes("key=not.like.${legacyPrefix}%") &&
     engine.includes("filter: `user_id=eq.${user.id},${DEVICE_LOCAL_REALTIME_FILTER}`"),
-  "Web Realtime must exclude wallpaper keys on the server while retaining the user_id filter",
+  "Web Realtime must exclude device-local keys and prefixes on the server while retaining the user_id filter",
+);
+assert.ok(
+  engine.includes("const DEVICE_LOCAL_SYNC_KEYS = [") &&
+    ["pace.sport.active","pace.legal.consent","pace.billing.device_id","pace.watch.last_metrics","pace.dark","pace.visual-theme"]
+      .every((key) => engine.includes(`"${key}"`)) &&
+    engine.includes("const DEVICE_LOCAL_SYNC_PREFIXES = [") &&
+    ["pace.ai.pending:","pace.ai.debug","pace.local-ai.","pace.ai.local.","pace.privacy.","pace.finance.","pace.ble.","pace.import."]
+      .every((prefix) => engine.includes(`"${prefix}"`)),
+  "Web must centralize the static and prefix-based device-local sync exclusions",
+);
+assert.match(engine, /function isDeviceLocalSyncKey\(key: string\)[\s\S]*EXCLUDED\.has\(canonicalKey\)[\s\S]*DEVICE_LOCAL_SYNC_PREFIXES\.some/);
+assert.match(engine, /function isSyncableKey\(key: string\)[\s\S]*!isDeviceLocalSyncKey\(key\)/,
+  "Web pushes and Realtime apply paths must reject device-local keys");
+assert.ok(
+  engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)') &&
+    engine.includes('request = request.not("key", "like", `${prefix}%`);') &&
+    engine.includes('request = request.not("key", "like", `lt.${prefix.slice(PACE_PREFIX.length)}%`);'),
+  "Web PostgREST pulls must exclude device-local keys and legacy prefixes before downloading JSONB values",
 );
 assert.ok(
   engine.includes("...WALLPAPER_SYNC_KEYS") &&
+    engine.includes("...DEVICE_LOCAL_SYNC_KEYS") &&
     engine.includes("const EXCLUDED = new Set<string>"),
-  "Web uploads, queues and Realtime handlers must reject wallpaper keys",
+  "Web sync must retain wallpaper and explicit device-local exclusions",
 );
 
 
