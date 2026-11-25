@@ -367,6 +367,25 @@ class SyncService {
       _realtimeUserId = null;
     }
 
+    final userStateRealtimeFilters = <PostgresChangeFilter>[
+      PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'user_id',
+        value: userId,
+      ),
+      PostgresChangeFilter(
+        type: PostgresChangeFilterType.inFilter,
+        column: 'key',
+        value: const <String>[
+          'pace.wallpaper',
+          'pace.domain.wallpaper',
+          'lt.wallpaper',
+          'lt.domain.wallpaper',
+        ],
+        negate: true,
+      ),
+    ];
+
     final channel = client!.channel('pace-flutter-user-state-$userId');
 
     void handlePayload(PostgresChangePayload payload) {
@@ -386,22 +405,14 @@ class SyncService {
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'user_state',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'user_id',
-            value: userId,
-          ),
+          filters: userStateRealtimeFilters,
           callback: handlePayload,
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'user_state',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'user_id',
-            value: userId,
-          ),
+          filters: userStateRealtimeFilters,
           callback: handlePayload,
         )
         .onPostgresChanges(
