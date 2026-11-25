@@ -16,9 +16,41 @@ const WALLPAPER_SYNC_KEYS = [
   "lt.wallpaper",
   "lt.domain.wallpaper",
 ] as const;
-const DEVICE_LOCAL_PULL_FILTER = `(${WALLPAPER_SYNC_KEYS.map((key) => `"${key}"`).join(",")})`;
-const DEVICE_LOCAL_REALTIME_FILTER = `key=not.in.(${WALLPAPER_SYNC_KEYS.map((key) => `"${key}"`).join(",")})`;
-const EXCLUDED = new Set<string>(["pace.sport.active", ...WALLPAPER_SYNC_KEYS]);
+const DEVICE_LOCAL_SYNC_KEYS = [
+  "pace.sport.active",
+  "pace.legal.consent",
+  "pace.billing.device_id",
+  "pace.watch.last_metrics",
+  "pace.dark",
+  "pace.visual-theme",
+] as const;
+const DEVICE_LOCAL_SYNC_PREFIXES = [
+  "pace.ai.pending:",
+  "pace.ai.debug",
+  "pace.local-ai.",
+  "pace.ai.local.",
+  "pace.privacy.",
+  "pace.finance.",
+  "pace.ble.",
+  "pace.import.",
+] as const;
+const LEGACY_DEVICE_LOCAL_SYNC_KEYS = DEVICE_LOCAL_SYNC_KEYS.map(
+  (key) => `lt.${key.slice(PACE_PREFIX.length)}`,
+);
+const DEVICE_LOCAL_PULL_KEYS = [
+  ...WALLPAPER_SYNC_KEYS,
+  ...DEVICE_LOCAL_SYNC_KEYS,
+  ...LEGACY_DEVICE_LOCAL_SYNC_KEYS,
+] as const;
+const DEVICE_LOCAL_PULL_FILTER = `(${DEVICE_LOCAL_PULL_KEYS.map((key) => `"${key}"`).join(",")})`;
+const DEVICE_LOCAL_REALTIME_FILTER = [
+  `key=not.in.(${DEVICE_LOCAL_PULL_KEYS.map((key) => `"${key}"`).join(",")})`,
+  ...DEVICE_LOCAL_SYNC_PREFIXES.flatMap((prefix) => {
+    const legacyPrefix = `lt.${prefix.slice(PACE_PREFIX.length)}`;
+    return [`key=not.like.${prefix}%`, `key=not.like.${legacyPrefix}%`];
+  }),
+].join(",");
+const EXCLUDED = new Set<string>([...WALLPAPER_SYNC_KEYS, ...DEVICE_LOCAL_SYNC_KEYS]);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
@@ -44,7 +76,17 @@ function getDeviceId() {
     return id;
   } catch { return `${Date.now()}-${Math.random()}`; }
 }
-function isSyncableKey(key: string) { return key.startsWith(PACE_PREFIX) && !key.startsWith(INTERNAL_PREFIX) && key !== DOMAIN_OUTBOX_KEY && !EXCLUDED.has(key); }
+function isDeviceLocalSyncKey(key: string) {
+  const canonicalKey = key.startsWith("lt.") ? `${PACE_PREFIX}${key.slice("lt.".length)}` : key;
+  return EXCLUDED.has(canonicalKey) ||
+    DEVICE_LOCAL_SYNC_PREFIXES.some((prefix) => canonicalKey.startsWith(prefix));
+}
+function isSyncableKey(key: string) {
+  return key.startsWith(PACE_PREFIX) &&
+    !key.startsWith(INTERNAL_PREFIX) &&
+    key !== DOMAIN_OUTBOX_KEY &&
+    !isDeviceLocalSyncKey(key);
+}
 function scopedSyncStorageKey(base: string, userId: string) {
   return `${base}:account:${encodeURIComponent(userId)}`;
 }
@@ -383,9 +425,13 @@ export function useCloudSyncEngineInternal() {
         let request = supabase.from("user_state")
           .select("key,value,updated_at,updated_by")
           .eq("user_id", user.id)
-          // Filter device-local wallpapers in PostgREST before their large
-          // JSONB values cross the network. Client-side filtering is too late.
+          // Filter device-local state in PostgREST before JSONB values cross
+          // the network; checking only after download still incurs egress.
           .not("key", "in", DEVICE_LOCAL_PULL_FILTER);
+        for (const prefix of DEVICE_LOCAL_SYNC_PREFIXES) {
+          request = request.not("key", "like", `${prefix}%`);
+          request = request.not("key", "like", `lt.${prefix.slice(PACE_PREFIX.length)}%`);
+        }
         const previousPullTime = previousPullAt ? Date.parse(previousPullAt) : Number.NaN;
         if (Number.isFinite(previousPullTime)) {
           request = request.gt("updated_at", new Date(previousPullTime - 120_000).toISOString());
@@ -497,31 +543,10 @@ export function useCloudSyncEngineInternal() {
         // Recover pre-existing local app state written by useLocalState (raw
         // pace.* keys). A key is bootstrapped only when no cloud/legacy row
         // exists, so this cannot overwrite an existing server snapshot.
-        const localOnlyKeys = new Set([
-          "pace.legal.consent",
-          "pace.billing.device_id",
-          "pace.watch.last_metrics",
-          "pace.dark",
-          "pace.visual-theme",
-          "pace.privacy.pin.hash",
-          "pace.privacy.unlocked",
-          "pace.privacy.lockOnEnter",
-          "pace.privacy.bioCredentialId",
-          "pace.finance.pin.hash",
-          "pace.finance.unlocked",
-          "pace.ai.debug",
-          "pace.local-ai.ready.v2",
-          "pace.ai.local.enabled",
-          "pace.ble.seen",
-          "pace.import.log",
-          "pace.ble.devices",
-          "pace.ble.mapping",
-        ]);
-        const localOnlyPrefixes = ["pace.ai.pending:", "pace.ai.debug", "pace.local-ai.", "pace.ai.local.", "pace.privacy.", "pace.finance.", "pace.ble."];
         try {
           for (const key of Object.keys(localStorage)) {
             if (!key.startsWith(PACE_PREFIX) || key.startsWith(INTERNAL_PREFIX) || key.startsWith(DOMAIN_PREFIX)) continue;
-            if (!isSyncableKey(key) || localOnlyKeys.has(key) || localOnlyPrefixes.some((prefix) => key.startsWith(prefix)) || grouped.has(key) || getQueued(key, user.id) || readDomainRecord(key)) continue;
+            if (!isSyncableKey(key) || grouped.has(key) || getQueued(key, user.id) || readDomainRecord(key)) continue;
             let value: unknown;
             try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { continue; }
             if (isEmptyRecoveredValue(value)) continue;
