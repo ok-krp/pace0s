@@ -217,7 +217,7 @@ export function useHealthToday() {
       }
       if (cancelled) return;
 
-      channel = supabase.channel(channelName);
+      channel = supabase.channel(channelName, { config: { private: true } });
       channel.on(
         "postgres_changes",
         {
