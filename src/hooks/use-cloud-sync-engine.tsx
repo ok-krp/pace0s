@@ -286,7 +286,7 @@ function mergeNutritionRemoteValue(incomingValue: unknown) {
 
 
 export function useCloudSyncEngineInternal() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
   const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
   const running = useRef<Record<string, boolean>>({});
@@ -581,13 +581,60 @@ export function useCloudSyncEngineInternal() {
       } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
     };
 
+    let syncInFlight: Promise<void> | null = null;
+    let syncRequested = false;
     const syncNow = async () => {
       if (!allowed()) return;
-      pruneEquivalentConflicts();
-      if (!navigator.onLine) { setStatus("offline"); return; }
-      await flushQueue(); await pull(); await flushQueue();
-      pruneEquivalentConflicts();
+      if (syncInFlight) {
+        // Coalesce Realtime bursts but never lose the last remote-change signal.
+        syncRequested = true;
+        await syncInFlight;
+        return;
+      }
+      const run = async () => {
+        do {
+          syncRequested = false;
+          pruneEquivalentConflicts();
+          if (!navigator.onLine) { setStatus("offline"); return; }
+          await flushQueue();
+          await pull();
+          await flushQueue();
+          pruneEquivalentConflicts();
+        } while (syncRequested && !cancelled && allowed() && navigator.onLine);
+      };
+      syncInFlight = run();
+      try {
+        await syncInFlight;
+      } finally {
+        syncInFlight = null;
+      }
     };
+
+    // Low-payload private Broadcast is the primary remote-change signal.
+    // The database trigger publishes only the changed key and server timestamp;
+    // clients then pull the authoritative JSONB value through the existing
+    // account-scoped, device-local-filtered PostgREST query.
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+    if (session?.access_token) {
+      // Private Broadcast authorization uses the current Supabase user JWT.
+      void supabase.realtime.setAuth(session.access_token).then(() => {
+        if (cancelled) return;
+        realtimeChannel = supabase
+          .channel(`pace-user-state:${user.id}`, { config: { private: true } })
+          .on("broadcast", { event: "user_state_changed" }, (message) => {
+            if (cancelled || !allowed() || !navigator.onLine) return;
+            const payload = message.payload as { key?: unknown } | undefined;
+            if (typeof payload?.key !== "string" || !isSyncableKey(payload.key)) return;
+            void syncNow();
+          })
+          .subscribe((state) => {
+            if (state === "SUBSCRIBED" && !cancelled) void syncNow();
+          });
+      }).catch(() => {
+        // The filtered 60-second pull remains the recovery path if private
+        // Realtime authorization cannot be established.
+      });
+    }
 
     const offLocal = onLocalWrite((key, value, updatedAt, mutationId) => {
       if (!isSyncableKey(key) || !updatedAt) return;
@@ -635,6 +682,7 @@ export function useCloudSyncEngineInternal() {
     void syncNow();
     return () => {
       cancelled = true; offLocal();
+      if (realtimeChannel) void supabase.removeChannel(realtimeChannel);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       window.clearInterval(reconcileTimer);
@@ -643,7 +691,7 @@ export function useCloudSyncEngineInternal() {
       window.removeEventListener("pace.legal.changed", onLegalChanged);
       window.removeEventListener("pace.sync.conflict.resolved", onConflictResolved);
     };
-  }, [user]);
+  }, [user, session?.access_token]);
 
   const resolveConflict = useCallback(async (conflictId: string, choice: "local" | "remote" | "merge") => {
     const userId = user?.id; if (!userId) return; const conflict = readConflicts(userId).find((item) => item.id === conflictId); if (!conflict) return;

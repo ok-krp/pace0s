@@ -143,6 +143,15 @@ assert.match(nutritionLog, /expectedUserId = activeNutritionAccountId\(\)[\s\S]*
 assert.match(nutritionLog, /for \(const \{ id, day, item \} of nextRows\)[\s\S]*activeNutritionAccountId\(\) !== userId/, "Nutrition bridge must abort row-by-row after an account switch");
 assert.match(nutritionLog, /function deletedIdsStorageKey\(userId: string\)[\s\S]*encodeURIComponent\(userId\)/, "Nutrition deletion tombstones must use a distinct storage namespace per account");
 assert.match(nutritionLog, /localStorage\.getItem\(deletedIdsStorageKey\(userId\)\)[\s\S]*legacy\?\.userId === userId[\s\S]*localStorage\.removeItem\(DELETED_IDS_KEY\)/, "Legacy single-account tombstones must migrate only to their owning account");
+const userStateBroadcastMigration = read("supabase/migrations/20261126180000_realtime_user_state_broadcast_sync.sql");
+assert.match(userStateBroadcastMigration, /CREATE OR REPLACE FUNCTION pace_private\.broadcast_user_state_sync_event\(\)[\s\S]*realtime\.send\([\s\S]*'key'[\s\S]*'updated_at'[\s\S]*'user_state_changed'[\s\S]*'pace-user-state:'[\s\S]*true/);
+assert.match(userStateBroadcastMigration, /CREATE TRIGGER user_state_broadcast_sync_event[\s\S]*AFTER INSERT OR UPDATE ON public\.user_state/);
+assert.match(userStateBroadcastMigration, /ON realtime\.messages[\s\S]*FOR SELECT[\s\S]*TO authenticated[\s\S]*realtime\.topic\(\)[\s\S]*auth\.uid\(\)/);
+assert.match(userStateBroadcastMigration, /CREATE SCHEMA IF NOT EXISTS pace_private[\s\S]*REVOKE ALL ON SCHEMA pace_private FROM PUBLIC, anon, authenticated[\s\S]*CREATE OR REPLACE FUNCTION pace_private\./);
+assert.doesNotMatch(userStateBroadcastMigration, /CREATE OR REPLACE FUNCTION public\./,
+  "The SECURITY DEFINER broadcast trigger must not live in the exposed public schema");
+assert.match(userStateBroadcastMigration, /pace\.finance|pace\.ai\.conversations|pace\.__/,
+  "The database trigger must not announce device-local or private keys");
 const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const domainStore = read("src/lib/domain-store.ts");
 const wallpaperKeys = [
@@ -160,10 +169,20 @@ assert.ok(
   engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)'),
   "Web must filter device-local state in PostgREST before downloading JSONB values",
 );
-assert.doesNotMatch(
+assert.match(
   engine,
-  /postgres_changes|DEVICE_LOCAL_REALTIME_FILTER|startRealtime|realtimeHealthy/,
-  "Web must not subscribe to generic user_state Realtime events with unsupported prefix filters",
+  /\.channel\(\`pace-user-state:\$\{user\.id\}\`, \{ config: \{ private: true \} \}\)[\s\S]*\.on\("broadcast", \{ event: "user_state_changed" \}/,
+  "Web must receive private low-payload Broadcast notifications for the authenticated account",
+);
+assert.match(
+  engine,
+  /message\.payload as \{ key\?: unknown \}[\s\S]*isSyncableKey\(payload\.key\)[\s\S]*void syncNow\(\)/,
+  "Web Broadcast callbacks must validate the key and pull authoritative state rather than trusting notification payloads",
+);
+assert.match(
+  engine,
+  /let syncInFlight: Promise<void> \| null = null;[\s\S]*let syncRequested = false;[\s\S]*if \(syncInFlight\)[\s\S]*syncRequested = true;[\s\S]*while \(syncRequested/,
+  "Web Realtime bursts must coalesce into serialized sync cycles without dropping the final notification",
 );
 assert.match(
   engine,
@@ -253,11 +272,14 @@ assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*
 assert.match(flutterSync, /static String get excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeys\.map\(\(key\) =>/,
   "Native PostgREST exact-key filter must be generated from the canonical device-local exclusion set");
 assert.doesNotMatch(flutterSync, /onPostgresChanges\([\s\S]{0,300}table: 'user_state'/,
-  "Flutter must not subscribe to generic user_state Realtime events with unsupported prefix filters");
+  "Flutter must not subscribe to generic user_state Postgres Changes events");
 assert.doesNotMatch(flutterSync, /PostgresChangeFilterType\.match|userStateRealtimeFilters/,
   "Flutter Realtime must not use undocumented regex or negated prefix filters");
-assert.match(flutterSync, /channel\('pace-flutter-food-log-\$userId'\)/,
-  "Flutter may keep the separate food_log channel");
+assert.match(flutterSync, /channel\([\s\S]{0,160}'pace-user-state:\$userId'[\s\S]{0,160}RealtimeChannelConfig\(private: true\)/,
+  "Flutter must join the same authenticated private sync Broadcast topic as Web");
+assert.match(flutterSync, /\.onBroadcast\([\s\S]*event: 'user_state_changed'[\s\S]*SyncService\.isSyncableKey\(key\)[\s\S]*_scheduleSync\(\)/,
+  "Flutter Broadcast callbacks must validate keys and schedule a cloud pull");
+
 assert.match(flutterSync, /onPostgresChanges\([\s\S]*table: 'food_log'[\s\S]*PostgresChangeFilterType\.eq/,
   "Flutter food_log Realtime must remain scoped with a documented user_id equality filter");
 assert.match(flutterSettings, /Synchronisation entre appareils[\s\S]*_setConsent\('sync_cloud', value\)/, "Flutter settings must expose the functional cross-device sync consent");
@@ -615,7 +637,7 @@ assert.ok(
   "Privacy, Finance, BLE, import and local AI records must remain device-local by prefix",
 );
 
-assert.match(engine, /await flushQueue\(\); await pull\(\); await flushQueue\(\);/, "Bootstrapped and recovered local values must be pushed in the same sync pass");
+assert.match(engine, /await flushQueue\(\);\s*await pull\(\);\s*await flushQueue\(\);/, "Bootstrapped and recovered local values must be pushed in the same sync pass");
 assert.match(engine, /const sourceRow = !canonical \? legacy : !legacy \? canonical/, "Legacy recovery must select the newest full snapshot instead of union-merging rows");
 assert.match(engine, /const localDomainTime = localDomain \? Date\.parse\(localDomain\.updatedAt\)/, "Local reconciliation must compare the persisted mutation timestamp, not only last acknowledged cloud metadata");
 assert.match(engine, /Number\.isFinite\(localDomainTime\) && localDomainTime > sourceTime/, "A newer local snapshot must be queued instead of overwritten by an older cloud snapshot");
@@ -770,5 +792,5 @@ assert.deepEqual(conflictsB, []);
 
 console.log("cloud-sync-contract-test: PASS");
 
-assert.match(engine, /pruneEquivalentConflicts\(\);\n      if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
+assert.match(engine, /pruneEquivalentConflicts\(\);\s*if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
 assert.match(engine, /remainingConflicts = currentConflicts\.filter\(\(item\) => item\.key !== key\)/, "queued equivalent values must clear stale conflicts");
