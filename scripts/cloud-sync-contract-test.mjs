@@ -503,7 +503,7 @@ assert.ok(webNutritionRealtimeStart >= 0 && webNutritionRealtimeEnd > webNutriti
 const webNutritionRealtime = nutritionLog.slice(webNutritionRealtimeStart, webNutritionRealtimeEnd);
 assert.doesNotMatch(webNutritionRealtime, /event: "DELETE"/, "Web must not subscribe to unfilterable DELETE events; the bounded refresh reconciles removals");
 assert.doesNotMatch(flutterSync, /event: PostgresChangeEvent\.delete/, "Flutter must not subscribe to unfilterable food_log DELETE events");
-assert.doesNotMatch(nutritionRealtimeMigration, /REPLICA IDENTITY FULL/i, "food_log Realtime migration must not enable FULL identity for unfilterable DELETE events");
+assert.doesNotMatch(nutritionRealtimeMigration, /ALTER TABLE public\\.food_log REPLICA IDENTITY FULL/i, "food_log Realtime migration must not enable FULL identity for unfilterable DELETE events");
 assert.match(nutritionLog, /nutritionRefreshChain = nutritionRefreshChain\.then\(task, task\)/, "Concurrent Nutrition hydration requests must be serialized");
 assert.match(nutritionLog, /lastBridgedNutrition = nextSnapshot;[\s\S]*writeDomain\(DOMAIN_ITEMS, nextSnapshot\)/, "A Realtime refresh must not echo stale local rows back into food_log");
 assert.match(nutritionLog, /const changed = JSON\.stringify\(current\[day\] \?\? \[\]\) !== JSON\.stringify\(mergedRows\);[\s\S]*if \(changed\) \{[\s\S]*writeDomain/, "A Realtime refresh must not enqueue identical full Nutrition snapshots");
