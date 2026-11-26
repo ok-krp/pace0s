@@ -1,0 +1,67 @@
+name: Refresh TanStack security lockfiles
+
+on:
+  push:
+    branches: [application]
+    paths:
+      - "package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  lockfiles:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout application branch
+        uses: actions/checkout@v4
+        with:
+          ref: application
+          persist-credentials: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Regenerate npm lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Regenerate Bun lockfile
+        run: bun install --lockfile-only
+
+      - name: Verify patched TanStack packages in both lockfiles
+        run: |
+          node <<'NODE'
+          const lock = require("./package-lock.json");
+          const reactStart = lock.packages["node_modules/@tanstack/react-start"]?.version;
+          const serverCore = lock.packages["node_modules/@tanstack/start-server-core"]?.version;
+          const version = (value) => value.split(".").map(Number);
+          const gte = (a, b) => {
+            const x = version(a), y = version(b);
+            for (let i = 0; i < 3; i++) {
+              if (x[i] !== y[i]) return x[i] > y[i];
+            }
+            return true;
+          };
+          if (!reactStart || !gte(reactStart, "1.168.60")) throw new Error("Unpatched @tanstack/react-start: " + reactStart);
+          if (!serverCore || !gte(serverCore, "1.169.39")) throw new Error("Unpatched @tanstack/start-server-core: " + serverCore);
+          console.log({ reactStart, serverCore });
+          NODE
+          grep -Fq '"@tanstack/start-server-core": ["@tanstack/start-server-core@1.169.45"' bun.lock
+
+      - name: Commit refreshed lockfiles
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json bun.lock
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(deps): refresh patched TanStack lockfiles"
+            git push origin HEAD:application
+          else
+            echo "Lockfiles already match the patched dependency graph."
+          fi
