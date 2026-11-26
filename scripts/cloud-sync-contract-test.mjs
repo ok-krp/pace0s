@@ -23,7 +23,7 @@ assert.doesNotMatch(
 );
 assert.match(
   flutterSupabase,
-  /String\\.fromEnvironment\\(\\s*'SUPABASE_PUBLISHABLE_KEY',\\s*defaultValue:\\s*'sb_publishable_LNvF5dXGd49ZUKi1rC8y_Q_5xxGkrmF'/,
+  /String\.fromEnvironment\(\s*'SUPABASE_PUBLISHABLE_KEY',\s*defaultValue:\s*'sb_publishable_LNvF5dXGd49ZUKi1rC8y_Q_5xxGkrmF'/,
   "Flutter must default to the new project's publishable key",
 );
 assert.doesNotMatch(
@@ -820,23 +820,40 @@ assert.deepEqual(conflictsB, []);
 
 assert.match(
   read("src/hooks/use-health.tsx"),
-  /supabase\\.channel\\(channelName, \\{ config: \\{ private: true \\} \\}\\)/,
+  /supabase\.channel\(channelName, \{ config: \{ private: true \} \}\)/,
   "Health E2EE Postgres Changes must join a private-only Realtime topic",
 );
 assert.match(
   read("src/hooks/use-profile-realtime.ts"),
-  /\\.channel\\(\x60pace-profile-\\$\\{user\\.id\\}\\x60, \\{ config: \\{ private: true \\} \\}\\)/,
+  /\.channel\(\x60pace-profile-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
   "Profile Postgres Changes must join a private-only Realtime topic",
 );
 assert.match(
   read("src/lib/nutrition-log.ts"),
-  /\\.channel\\(\x60pace-food-log-\\$\\{user\\.id\\}\\x60, \\{ config: \\{ private: true \\} \\}\\)/,
+  /\.channel\(\x60pace-food-log-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
   "Nutrition Postgres Changes must join a private-only Realtime topic",
 );
 assert.match(
   read("src/routes/development.tsx"),
-  /supabase\\.channel\\(\x60development-tasks-\\$\\{user\\.id\\}\\x60, \\{ config: \\{ private: true \\} \\}\\)/,
+  /supabase\.channel\(\x60development-tasks-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
   "Development-task Postgres Changes must join a private-only Realtime topic",
+);
+
+const nutritionAiServer = read("src/lib/nutrition-ai.functions.ts");
+assert.doesNotMatch(
+  nutritionAiServer,
+  /supabaseAdmin/,
+  "Nutrition photo analysis must not require a privileged server Supabase key for user-owned Storage objects",
+);
+assert.match(
+  nutritionAiServer,
+  /context\.supabase\.storage\.from\(PHOTO_BUCKET\)\.download\(path!\)/,
+  "Nutrition photo analysis must download through the authenticated user's Storage client",
+);
+assert.match(
+  nutritionAiServer,
+  /finally \{ if \(path\) await context\.supabase\.storage\.from\(PHOTO_BUCKET\)\.remove\(\[path\]\)/,
+  "Nutrition photo cleanup must remain scoped to the authenticated user's Storage policy",
 );
 
 console.log("cloud-sync-contract-test: PASS");
