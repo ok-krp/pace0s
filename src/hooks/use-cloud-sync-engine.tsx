@@ -286,7 +286,7 @@ function mergeNutritionRemoteValue(incomingValue: unknown) {
 
 
 export function useCloudSyncEngineInternal() {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [status, setStatus] = useState<SyncStatus>("idle");
   const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
   const running = useRef<Record<string, boolean>>({});
@@ -593,17 +593,27 @@ export function useCloudSyncEngineInternal() {
     // The database trigger publishes only the changed key and server timestamp;
     // clients then pull the authoritative JSONB value through the existing
     // account-scoped, device-local-filtered PostgREST query.
-    const realtimeChannel = supabase
-      .channel(`pace-user-state:${user.id}`, { config: { private: true } })
-      .on("broadcast", { event: "user_state_changed" }, (message) => {
-        if (cancelled || !allowed() || !navigator.onLine) return;
-        const payload = message.payload as { key?: unknown } | undefined;
-        if (typeof payload?.key !== "string" || !isSyncableKey(payload.key)) return;
-        void syncNow();
-      })
-      .subscribe((state) => {
-        if (state === "SUBSCRIBED" && !cancelled) void syncNow();
+    let realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+    if (session?.access_token) {
+      // Private Broadcast authorization uses the current Supabase user JWT.
+      void supabase.realtime.setAuth(session.access_token).then(() => {
+        if (cancelled) return;
+        realtimeChannel = supabase
+          .channel(`pace-user-state:${user.id}`, { config: { private: true } })
+          .on("broadcast", { event: "user_state_changed" }, (message) => {
+            if (cancelled || !allowed() || !navigator.onLine) return;
+            const payload = message.payload as { key?: unknown } | undefined;
+            if (typeof payload?.key !== "string" || !isSyncableKey(payload.key)) return;
+            void syncNow();
+          })
+          .subscribe((state) => {
+            if (state === "SUBSCRIBED" && !cancelled) void syncNow();
+          });
+      }).catch(() => {
+        // The filtered 60-second pull remains the recovery path if private
+        // Realtime authorization cannot be established.
       });
+    }
 
     const offLocal = onLocalWrite((key, value, updatedAt, mutationId) => {
       if (!isSyncableKey(key) || !updatedAt) return;
@@ -651,7 +661,7 @@ export function useCloudSyncEngineInternal() {
     void syncNow();
     return () => {
       cancelled = true; offLocal();
-      void supabase.removeChannel(realtimeChannel);
+      if (realtimeChannel) void supabase.removeChannel(realtimeChannel);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       window.clearInterval(reconcileTimer);
