@@ -461,10 +461,11 @@ export function subscribeNutritionFoodLogChanges(onChange: () => void): () => vo
         schema: "public",
         table: "food_log",
         filter: `user_id=eq.${user.id}`,
-      }, () => onChange())
-      // Do not subscribe to DELETE: Postgres Changes cannot filter it by
-      // user_id, and RLS does not protect DELETE payloads. The bounded refresh
-      // below reconciles removals without broadcasting unscoped primary keys.
+      }, () => onChange());
+
+    // Do not subscribe to DELETE: Postgres Changes cannot filter it by
+    // user_id, and RLS does not protect DELETE payloads. The bounded refresh
+    // below reconciles removals without broadcasting unscoped primary keys.
 
     channel = nextChannel;
     nextChannel.subscribe((status) => {
