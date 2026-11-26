@@ -64,13 +64,8 @@ assert.match(
 );
 assert.match(
   writeItemBlock,
-  /typeof responseData === "boolean"[\\s\\S]*updated_at: item\\.updatedAt/,
+  /typeof responseData === "boolean"[\s\S]*updated_at: item\.updatedAt/,
   "Web sync must normalize the legacy boolean RPC response using the timestamp supplied in the write request",
-);
-assert.match(
-  flutterSync,
-  /factory CloudSyncWriteResponse\\.fromRpc\\([\\s\\S]*if \\(response is bool\\)[\\s\\S]*fallbackUpdatedAt/,
-  "Flutter sync must normalize the legacy boolean RPC response using the timestamp supplied in the write request",
 );
 assert.match(writeItemBlock, /supabase\.rpc\("upsert_user_state_if_newer"/, "Web cloud sync must use the generated typed RPC contract");
 assert.doesNotMatch(writeItemBlock, /const rpc = supabase\.rpc as unknown as/, "Web cloud sync must not hide the generated RPC response contract behind an unsafe cast");
@@ -208,6 +203,11 @@ assert.ok(
 
 
 const flutterSync = read("pace_flutter/lib/core/sync/sync_service.dart");
+assert.match(
+  flutterSync,
+  /factory CloudSyncWriteResponse\.fromRpc\([\s\S]*if \(response is bool\)[\s\S]*fallbackUpdatedAt/,
+  "Flutter sync must normalize the legacy boolean RPC response using the timestamp supplied in the write request",
+);
 const flutterNutrition = read("pace_flutter/lib/features/nutrition/nutrition_page.dart");
 const flutterApp = read("pace_flutter/lib/app/pace_app.dart");
 const flutterSettings = read("pace_flutter/lib/features/more/more_page.dart");
