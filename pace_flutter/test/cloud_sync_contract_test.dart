@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pace/core/compliance/compliance_service.dart';
 import 'package:pace/core/sync/sync_service.dart';
 
 void main() {
@@ -192,6 +193,74 @@ void main() {
       ]) {
         expect(SyncService.isDeviceLocalKey(key), isTrue, reason: key);
       }
+    });
+  });
+
+  group('Functional cross-device consent storage', () {
+    test('reads sync_cloud from the accepted legal consent options', () {
+      expect(
+        PaceComplianceService.legalConsentOptionGranted(
+          {'sync_cloud': true, 'health_cloud_sync': false},
+          'sync_cloud',
+        ),
+        isTrue,
+      );
+      expect(
+        PaceComplianceService.legalConsentOptionGranted(
+          {'sync_cloud': false},
+          'sync_cloud',
+        ),
+        isFalse,
+      );
+      expect(
+        PaceComplianceService.legalConsentOptionGranted(
+          {'health_cloud_sync': true},
+          'sync_cloud',
+        ),
+        isFalse,
+      );
+      expect(
+        PaceComplianceService.legalConsentOptionGranted(null, 'sync_cloud'),
+        isFalse,
+      );
+    });
+
+    test('updates only sync_cloud and preserves every other consent option', () {
+      final existing = <String, dynamic>{
+        'sync_cloud': false,
+        'health_data': true,
+        'health_cloud_sync': true,
+        'financial_data': false,
+        'ai_processing': true,
+        'custom_future_option': 'preserved',
+      };
+
+      final granted = PaceComplianceService.withLegalConsentOption(
+        existing,
+        option: 'sync_cloud',
+        granted: true,
+      );
+
+      expect(granted['sync_cloud'], isTrue);
+      expect(granted['health_data'], isTrue);
+      expect(granted['health_cloud_sync'], isTrue);
+      expect(granted['financial_data'], isFalse);
+      expect(granted['ai_processing'], isTrue);
+      expect(granted['custom_future_option'], 'preserved');
+      expect(existing['sync_cloud'], isFalse);
+    });
+
+    test('does not manufacture an acceptance when no legal options exist', () {
+      final granted = PaceComplianceService.withLegalConsentOption(
+        null,
+        option: 'sync_cloud',
+        granted: false,
+      );
+      expect(granted, {'sync_cloud': false});
+      expect(
+        PaceComplianceService.legalConsentOptionGranted(granted, 'sync_cloud'),
+        isFalse,
+      );
     });
   });
 
