@@ -35,6 +35,7 @@ BEGIN
      OR v_key ~ '^pace\.domain\.__'
      OR v_key ~ '^pace\.(privacy|finance|ble|import|local-ai)\.'
      OR v_key ~ '^pace\.domain\.(privacy|finance|ble|import|local-ai)\.'
+     OR v_key ~ '^pace\.domain\.ai\.(local\.|debug|pending:)'
      OR v_key ~ '^pace\.ai\.(local\.|debug|pending:)'
      OR v_key = ANY (ARRAY[
        'pace.sport.active',
