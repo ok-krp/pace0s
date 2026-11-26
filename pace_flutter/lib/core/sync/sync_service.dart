@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../compliance/compliance_service.dart';
 import '../storage/local_store.dart';
 
 /// Replays local mutations through Pace's existing user_state RPC and pulls
@@ -156,17 +157,18 @@ class SyncService {
     }
 
     try {
-      final rows = await client!
-          .from('consent_records')
-          .select('granted')
-          .eq('user_id', userId)
-          .eq('consent_type', 'sync_cloud')
-          .order('created_at', ascending: false)
-          .limit(1);
+      // The functional sync opt-in lives in legal_consent.opts.sync_cloud.
+      // consent_records is intentionally limited to granular health/AI/finance
+      // categories and rejects a synthetic "sync_cloud" consent_type.
+      final granted = await PaceComplianceService(client).hasConsent('sync_cloud');
+      if (localStore.currentAccountId != userId ||
+          client?.auth.currentUser?.id != userId) {
+        return false;
+      }
       _cloudSyncConsentUserId = userId;
-      _cloudSyncConsent = rows.isNotEmpty && rows.first['granted'] == true;
-      _cloudSyncConsentCheckedAt = now;
-      return _cloudSyncConsent!;
+      _cloudSyncConsent = granted;
+      _cloudSyncConsentCheckedAt = DateTime.now();
+      return granted;
     } catch (_) {
       // Fail closed if consent cannot be confirmed. Local outbox entries remain.
       _cloudSyncConsentUserId = userId;
