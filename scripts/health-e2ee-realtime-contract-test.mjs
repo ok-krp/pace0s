@@ -5,11 +5,11 @@ import path from "node:path";
 const root = process.cwd();
 const source = fs.readFileSync(path.join(root, "src/hooks/use-health.tsx"), "utf8");
 
-const channelSetup = source.indexOf("channel = supabase.channel(channelName);");
+const channelSetup = source.indexOf("channel = supabase.channel(channelName, { config: { private: true } });");
 const callbackRegistration = source.indexOf('channel.on(\n        "postgres_changes"');
 const subscribe = source.indexOf("void channel.subscribe();");
 
-assert.ok(channelSetup >= 0, "health E2EE realtime channel must be created");
+assert.ok(channelSetup >= 0, "health E2EE realtime channel must be created as private when public channels are disabled");
 assert.ok(callbackRegistration > channelSetup, "health E2EE postgres_changes callback must be registered after channel creation");
 assert.ok(subscribe > callbackRegistration, "health E2EE channel must subscribe only after postgres_changes callbacks are registered");
 

@@ -43,7 +43,7 @@ function DevelopmentPage() {
       setTasks((data ?? []) as Task[]);
     };
     void load();
-    const channel = supabase.channel(`development-tasks-${user.id}`)
+    const channel = supabase.channel(`development-tasks-${user.id}`, { config: { private: true } })
       .on("postgres_changes", { event: "*", schema: "public", table: "development_tasks", filter: `user_id=eq.${user.id}` }, () => { void load(); })
       .subscribe((status) => {
         if (!active) return;
