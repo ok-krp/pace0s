@@ -9,6 +9,7 @@ const storage = read("src/lib/storage.ts");
 const supabaseTypes = read("src/integrations/supabase/types.ts");
 const supabaseClient = read("src/integrations/supabase/client.ts");
 const supabaseConfig = read("supabase/config.toml");
+const flutterSupabase = read("pace_flutter/lib/core/supabase/pace_supabase.dart");
 
 assert.match(
   supabaseConfig,
@@ -19,6 +20,16 @@ assert.doesNotMatch(
   supabaseConfig,
   /jayzswkabxfhzmftagku/,
   "Supabase CLI must not retain the retired project reference",
+);
+assert.match(
+  flutterSupabase,
+  /String\\.fromEnvironment\\(\\s*'SUPABASE_PUBLISHABLE_KEY',\\s*defaultValue:\\s*'sb_publishable_LNvF5dXGd49ZUKi1rC8y_Q_5xxGkrmF'/,
+  "Flutter must default to the new project's publishable key",
+);
+assert.doesNotMatch(
+  flutterSupabase,
+  /SUPABASE_ANON_KEY/,
+  "Flutter must not fall back to a legacy key that could point at the retired Supabase project",
 );
 
 assert.match(
