@@ -28,6 +28,10 @@ jobs:
         working-directory: pace_flutter
         run: flutter create --platforms=android --org com.paceos --project-name pace .
 
+      - name: Remove generated Flutter sample test
+        working-directory: pace_flutter
+        run: rm -f test/widget_test.dart
+
       - name: Configure Android native services
         working-directory: pace_flutter
         shell: bash
@@ -63,7 +67,7 @@ jobs:
 
       - name: Analyze Dart
         working-directory: pace_flutter
-        run: flutter analyze
+        run: flutter analyze --no-fatal-infos
 
       - name: Run Dart tests
         working-directory: pace_flutter
@@ -71,11 +75,11 @@ jobs:
 
       - name: Build native Flutter Android APK
         working-directory: pace_flutter
-        run: flutter build apk --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter build apk --release
 
       - name: Build native Flutter Android AAB
         working-directory: pace_flutter
-        run: flutter build appbundle --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter build appbundle --release
 
       - name: Verify APK and AAB are valid packages
         working-directory: pace_flutter

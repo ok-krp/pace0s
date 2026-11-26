@@ -6,8 +6,17 @@ class PaceSupabase {
   static SupabaseClient? _client;
 
   static Future<SupabaseClient?> initialize() async {
-    final url = const String.fromEnvironment('SUPABASE_URL');
-    final key = const String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY', defaultValue: String.fromEnvironment('SUPABASE_ANON_KEY'));
+    final url = const String.fromEnvironment(
+      'SUPABASE_URL',
+      defaultValue: 'https://tqvuosujpkwmypkbyikq.supabase.co',
+    );
+    final key = const String.fromEnvironment(
+      'SUPABASE_PUBLISHABLE_KEY',
+      defaultValue: String.fromEnvironment(
+        'SUPABASE_ANON_KEY',
+        defaultValue: 'sb_publishable_LNvF5dXGd49ZUKi1rC8y_Q_5xxGkrmF',
+      ),
+    );
     if (url.isEmpty || key.isEmpty) return null;
     await Supabase.initialize(
       url: url,
