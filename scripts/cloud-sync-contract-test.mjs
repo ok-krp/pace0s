@@ -826,22 +826,22 @@ assert.deepEqual(conflictsB, []);
 
 assert.match(
   read("src/hooks/use-health.tsx"),
-  /supabase\\.channel\\(channelName, \\{ config: \\{ private: true \\} \\}\\)/,
+  /supabase\.channel\(channelName, \{ config: \{ private: true \} \}\)/,
   "Health E2EE Postgres Changes must join a private-only Realtime topic",
 );
 assert.match(
   read("src/hooks/use-profile-realtime.ts"),
-  /\\.channel\\(\x60pace-profile-\\$\\{user\\.id\\}\\x60, \\{ config: \\{ private: true \\} \\}\\)/,
+  /\.channel\(\x60pace-profile-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
   "Profile Postgres Changes must join a private-only Realtime topic",
 );
 assert.match(
   read("src/lib/nutrition-log.ts"),
-  /\\.channel\\(\x60pace-food-log-\\$\\{user\\.id\\}\\x60, \\{ config: \\{ private: true \\} \\}\\)/,
+  /\.channel\(\x60pace-food-log-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
   "Nutrition Postgres Changes must join a private-only Realtime topic",
 );
 assert.match(
   read("src/routes/development.tsx"),
-  /supabase\\.channel\\(\x60development-tasks-\\$\\{user\\.id\\}\\x60, \\{ config: \\{ private: true \\} \\}\\)/,
+  /supabase\.channel\(\x60development-tasks-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
   "Development-task Postgres Changes must join a private-only Realtime topic",
 );
 
