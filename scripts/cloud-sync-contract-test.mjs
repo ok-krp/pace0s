@@ -12,7 +12,7 @@ const supabaseConfig = read("supabase/config.toml");
 
 assert.match(
   supabaseConfig,
-  /^project_id = "ohkmiqkhzqekavypiugf"$/m,
+  /^project_id = "tqvuosujpkwmypkbyikq"$/m,
   "Supabase CLI must target the selected PaceOS database project",
 );
 assert.doesNotMatch(
