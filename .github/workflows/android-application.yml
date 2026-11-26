@@ -71,11 +71,11 @@ jobs:
 
       - name: Build native Flutter Android APK
         working-directory: pace_flutter
-        run: flutter build apk --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter build apk --release
 
       - name: Build native Flutter Android AAB
         working-directory: pace_flutter
-        run: flutter build appbundle --release --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} --dart-define=SUPABASE_PUBLISHABLE_KEY=${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+        run: flutter build appbundle --release
 
       - name: Verify APK and AAB are valid packages
         working-directory: pace_flutter
