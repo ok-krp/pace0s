@@ -512,7 +512,7 @@ class SyncService {
       'p_updated_by': 'flutter-native',
     });
 
-    final write = CloudSyncWriteResponse.fromRpc(response);
+    final write = CloudSyncWriteResponse.fromRpc(response, fallbackUpdatedAt: updatedAt);
     if (write.accepted) {
       return _PushResult.accepted(write.updatedAt);
     }
@@ -1021,7 +1021,19 @@ class CloudSyncWriteResponse {
   final bool accepted;
   final String updatedAt;
 
-  factory CloudSyncWriteResponse.fromRpc(dynamic response) {
+  factory CloudSyncWriteResponse.fromRpc(
+    dynamic response, {
+    String? fallbackUpdatedAt,
+  }) {
+    if (response is bool) {
+      if (fallbackUpdatedAt == null || fallbackUpdatedAt.isEmpty) {
+        throw const FormatException('invalid cloud sync write response');
+      }
+      return CloudSyncWriteResponse(
+        accepted: response,
+        updatedAt: fallbackUpdatedAt,
+      );
+    }
     if (response is! Map) {
       throw const FormatException('invalid cloud sync write response');
     }
