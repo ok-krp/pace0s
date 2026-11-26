@@ -378,14 +378,30 @@ class SyncService {
       _realtimeUserId = null;
     }
 
-    // Generic user_state Realtime is intentionally disabled. Postgres Changes
-    // documents only eq/neq/range/in filters, not arbitrary prefix regexes;
-    // a generic channel could deliver device-local values before client checks.
-    // Filtered incremental PostgREST pulls reconcile user_state every 60s.
-    // Keep the user-scoped food_log channel only.
-    final channel = client!.channel('pace-flutter-food-log-$userId');
+    // A private, low-payload Broadcast announces only the changed key.
+    // The client then pulls the authoritative value through the existing
+    // account-scoped query, which excludes device-local keys before transfer.
+    final channel = client!.channel(
+      'pace-user-state:$userId',
+      opts: const RealtimeChannelConfig(private: true),
+    );
 
     channel
+        .onBroadcast(
+          event: 'user_state_changed',
+          callback: (payload) {
+            if (!isCurrentLocalAccount(userId) ||
+                !_hasCachedCloudSyncConsent(userId)) {
+              return;
+            }
+            final nested = payload['payload'];
+            final eventPayload = nested is Map ? nested : payload;
+            final key = eventPayload['key'];
+            if (key is String && SyncService.isSyncableKey(key)) {
+              _scheduleSync();
+            }
+          },
+        )
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
