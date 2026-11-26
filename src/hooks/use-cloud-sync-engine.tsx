@@ -358,8 +358,20 @@ export function useCloudSyncEngineInternal() {
         p_updated_by: DEVICE_ID,
       });
       if (result?.error) throw result.error;
-      const payload = result?.data as ServerWriteResult | null;
-      if (!payload || typeof payload.accepted !== "boolean" || typeof payload.updated_at !== "string") {        throw new Error("invalid cloud sync write response");
+      const responseData: unknown = result?.data;
+      const payload: ServerWriteResult | null =
+        typeof responseData === "boolean"
+          ? { accepted: responseData, updated_at: item.updatedAt }
+          : responseData && typeof responseData === "object"
+            ? (responseData as ServerWriteResult)
+            : null;
+      if (
+        !payload ||
+        typeof payload.accepted !== "boolean" ||
+        typeof payload.updated_at !== "string" ||
+        payload.updated_at.length === 0
+      ) {
+        throw new Error("invalid cloud sync write response");
       }
       if (!payload.accepted) {
         const { data, error } = await supabase.from("user_state").select("key,value,updated_at,updated_by").eq("user_id", user.id).eq("key", item.key).limit(1);
