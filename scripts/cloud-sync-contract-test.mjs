@@ -497,15 +497,13 @@ assert.match(bridge, /pendingFoodLogSource === "photo_ai"[\s\S]*pendingFoodLogSo
 assert.match(nutritionLog, /export function subscribeNutritionFoodLogChanges/, "Web Nutrition must subscribe to canonical food_log changes");
 assert.match(nutritionLog, /event: "INSERT"[\s\S]*table: "food_log"[\s\S]*filter: `user_id=eq\.\$\{user\.id\}`/, "Web Nutrition Realtime must be scoped to the authenticated account");
 assert.match(nutritionLog, /event: "UPDATE"[\s\S]*table: "food_log"/, "Web Nutrition must refresh when canonical meals are edited by AI or another device");
-assert.match(nutritionLog, /event: "DELETE"[\s\S]*table: "food_log"[\s\S]*filter: `user_id=eq\.\$\{user\.id\}`/, "Web Nutrition must receive account-filtered canonical meal deletions in Realtime");
-assert.ok(
-  flutterSync.includes("event: PostgresChangeEvent.delete") &&
-    flutterSync.includes("table: 'food_log'") &&
-    flutterSync.includes("column: 'user_id'") &&
-    flutterSync.includes("callback: (_) => _scheduleNutritionRealtime(userId)"),
-  "Flutter must reconcile account-filtered food_log DELETE events through its safe background scheduler",
-);
-assert.match(nutritionRealtimeMigration, /ALTER TABLE public\.food_log REPLICA IDENTITY FULL/, "food_log must expose old user_id values so DELETE Realtime can be filtered per account");
+const webNutritionRealtimeStart = nutritionLog.indexOf("export function subscribeNutritionFoodLogChanges");
+const webNutritionRealtimeEnd = nutritionLog.indexOf("export function currentNutritionAccountId", webNutritionRealtimeStart);
+assert.ok(webNutritionRealtimeStart >= 0 && webNutritionRealtimeEnd > webNutritionRealtimeStart, "Web Nutrition Realtime subscription must remain identifiable");
+const webNutritionRealtime = nutritionLog.slice(webNutritionRealtimeStart, webNutritionRealtimeEnd);
+assert.doesNotMatch(webNutritionRealtime, /event: "DELETE"/, "Web must not subscribe to unfilterable DELETE events; the bounded refresh reconciles removals");
+assert.doesNotMatch(flutterSync, /event: PostgresChangeEvent\.delete/, "Flutter must not subscribe to unfilterable food_log DELETE events");
+assert.doesNotMatch(nutritionRealtimeMigration, /REPLICA IDENTITY FULL/i, "food_log Realtime migration must not enable FULL identity for unfilterable DELETE events");
 assert.match(nutritionLog, /nutritionRefreshChain = nutritionRefreshChain\.then\(task, task\)/, "Concurrent Nutrition hydration requests must be serialized");
 assert.match(nutritionLog, /lastBridgedNutrition = nextSnapshot;[\s\S]*writeDomain\(DOMAIN_ITEMS, nextSnapshot\)/, "A Realtime refresh must not echo stale local rows back into food_log");
 assert.match(nutritionLog, /const changed = JSON\.stringify\(current\[day\] \?\? \[\]\) !== JSON\.stringify\(mergedRows\);[\s\S]*if \(changed\) \{[\s\S]*writeDomain/, "A Realtime refresh must not enqueue identical full Nutrition snapshots");
@@ -514,7 +512,7 @@ assert.match(nutritionRoute, /setInterval\(refresh, 60_000\)/, "Nutrition must r
 assert.ok(
   flutterSync.includes("table: 'food_log'") &&
     flutterSync.includes("callback: (_) => _scheduleNutritionRealtime(userId)"),
-  "Flutter must reconcile food_log INSERT, UPDATE and DELETE events through a safe background callback",
+  "Flutter must reconcile food_log INSERT and UPDATE events through a safe background callback",
 );
 assert.match(flutterSync, /_lastNutritionReconciledAt == null[\s\S]*_nutritionFallbackInterval/, "Flutter must refresh canonical Nutrition after login and on a bounded fallback interval");
 
