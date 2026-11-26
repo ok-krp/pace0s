@@ -28,6 +28,10 @@ jobs:
         working-directory: pace_flutter
         run: flutter create --platforms=android --org com.paceos --project-name pace .
 
+      - name: Remove generated Flutter sample test
+        working-directory: pace_flutter
+        run: rm -f test/widget_test.dart
+
       - name: Configure Android native services
         working-directory: pace_flutter
         shell: bash
