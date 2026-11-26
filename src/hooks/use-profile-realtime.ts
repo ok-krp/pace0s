@@ -31,7 +31,7 @@ export function useProfileRealtime() {
     if (!user) return;
     const deviceId = getDeviceId();
     const channel = supabase
-      .channel(`pace-profile-${user.id}`)
+      .channel(`pace-profile-${user.id}`, { config: { private: true } })
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "profiles", filter: `user_id=eq.${user.id}` },
