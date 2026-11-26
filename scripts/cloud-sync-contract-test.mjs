@@ -250,6 +250,7 @@ assert.ok(
 
 
 const flutterSync = read("pace_flutter/lib/core/sync/sync_service.dart");
+const flutterCompliance = read("pace_flutter/lib/core/compliance/compliance_service.dart");
 assert.match(
   flutterSync,
   /factory CloudSyncWriteResponse\.fromRpc\([\s\S]*if \(response is bool\)[\s\S]*fallbackUpdatedAt/,
@@ -291,7 +292,12 @@ assert.match(flutterNutrition, /await widget\.localStore\.write\('pace\.nutritio
 assert.match(flutterApp, /NutritionPage\(localStore: widget\.localStore, sync: widget\.sync\)/, "Flutter app must inject the shared sync service into Nutrition");
 
 assert.match(flutterSync, /Future<bool> _hasCloudSyncConsent\(String userId\)/, "Flutter must load the latest explicit sync_cloud consent");
-assert.match(flutterSync, /consent_type', 'sync_cloud'/, "Flutter sync consent must match the web consent category");
+assert.match(flutterSync, /PaceComplianceService\(client\)\.hasConsent\('sync_cloud'\)/, "Flutter sync engine must delegate functional consent lookup to the canonical compliance service");
+assert.doesNotMatch(flutterSync, /consent_type', 'sync_cloud'/, "Flutter must not query the granular consent_records table for the functional sync option");
+assert.match(flutterCompliance, /if \(consentType == 'sync_cloud'\)[\s\S]*_recordLegalConsentOption/, "The functional sync option must be handled separately from granular consent records");
+assert.match(flutterCompliance, /from\('legal_consent'\)[\s\S]*select\('opts'\)[\s\S]*legalConsentOptionGranted\(rows\.first\['opts'\], 'sync_cloud'\)/, "Flutter must read sync_cloud from the user's persisted legal_consent options");
+assert.match(flutterCompliance, /withLegalConsentOption\([\s\S]*option: 'sync_cloud'[\s\S]*granted: granted/, "Flutter must update only the functional sync option while preserving other legal options");
+assert.match(flutterSettings, /PaceComplianceService\(client\)\.hasConsent\('sync_cloud'\)/, "Flutter settings must display the canonical saved sync option");
 assert.match(flutterSync, /_cloudSyncConsent = null/, "A failed consent lookup must remain distinguishable from an explicit denial");
 assert.match(flutterNutrition, /impossible de vérifier le consentement cloud/, "Nutrition must explain when consent lookup is unavailable instead of falsely claiming consent was denied");
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*userId == null[\s\S]*localStore\.currentAccountId != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not push local outbox mutations without an authenticated matching account and sync_cloud consent");

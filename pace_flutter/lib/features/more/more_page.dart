@@ -148,6 +148,16 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
           widget.localStore.currentAccountId != userId) {
         return;
       }
+      // Functional cross-device sync is stored alongside the accepted
+      // privacy/EULA options in legal_consent.opts, not in consent_records.
+      final syncCloudConsent =
+          await PaceComplianceService(client).hasConsent('sync_cloud');
+      if (!mounted ||
+          widget.auth.currentUser?.id != userId ||
+          widget.localStore.currentAccountId != userId) {
+        return;
+      }
+
       final latest = <String, bool>{};
       for (final row in rows) {
         final type = row['consent_type'] as String?;
@@ -157,7 +167,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       }
       if (!mounted) return;
       setState(() {
-        _syncCloudConsent = latest['sync_cloud'] ?? false;
+        _syncCloudConsent = syncCloudConsent;
         _healthConsent = latest['health_data'] ?? false;
         _healthCloudConsent = latest['health_cloud_sync'] ?? false;
         _financialConsent = latest['financial_data'] ?? false;
