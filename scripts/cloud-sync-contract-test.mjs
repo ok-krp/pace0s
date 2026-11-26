@@ -847,12 +847,12 @@ assert.doesNotMatch(
 );
 assert.match(
   nutritionAiServer,
-  /context\\.supabase\\.storage\\.from\\(PHOTO_BUCKET\\)\\.download\\(path!\\)/,
+  /context\.supabase\.storage\.from\(PHOTO_BUCKET\)\.download\(path!\)/,
   "Nutrition photo analysis must download through the authenticated user's Storage client",
 );
 assert.match(
   nutritionAiServer,
-  /finally \\{ if \\(path\\) await context\\.supabase\\.storage\\.from\\(PHOTO_BUCKET\\)\\.remove\\(\\[path\\]\\)/,
+  /finally \{ if \(path\) await context\.supabase\.storage\.from\(PHOTO_BUCKET\)\.remove\(\[path\]\)/,
   "Nutrition photo cleanup must remain scoped to the authenticated user's Storage policy",
 );
 
