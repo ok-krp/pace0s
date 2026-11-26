@@ -12,8 +12,8 @@ const supabaseConfig = read("supabase/config.toml");
 
 assert.match(
   supabaseConfig,
-  /^project_id = "cduyjejftorfuxuwhbqt"$/m,
-  "Supabase CLI must target the same project as the configured Vercel runtime",
+  /^project_id = "ohkmiqkhzqekavypiugf"$/m,
+  "Supabase CLI must target the selected PaceOS database project",
 );
 assert.doesNotMatch(
   supabaseConfig,
@@ -57,7 +57,21 @@ assert.doesNotMatch(pushItemBlock, /\}\s*unqueueIfMutation\(latest\.key, latest\
 const syncRpcTypeStart = supabaseTypes.indexOf("upsert_user_state_if_newer:");
 const syncRpcTypeBlock = supabaseTypes.slice(syncRpcTypeStart, syncRpcTypeStart + 350);
 assert.ok(syncRpcTypeStart >= 0, "Generated cloud sync RPC type must remain identifiable");
-assert.match(syncRpcTypeBlock, /Returns: Json/, "Generated Supabase types must reflect the jsonb accepted/updated_at response");
+assert.match(
+  syncRpcTypeBlock,
+  /Returns: (?:Json|boolean)/,
+  "Generated Supabase types must reflect one of the supported boolean or jsonb sync RPC contracts",
+);
+assert.match(
+  writeItemBlock,
+  /typeof responseData === "boolean"[\\s\\S]*updated_at: item\\.updatedAt/,
+  "Web sync must normalize the legacy boolean RPC response using the timestamp supplied in the write request",
+);
+assert.match(
+  flutterSync,
+  /factory CloudSyncWriteResponse\\.fromRpc\\([\\s\\S]*if \\(response is bool\\)[\\s\\S]*fallbackUpdatedAt/,
+  "Flutter sync must normalize the legacy boolean RPC response using the timestamp supplied in the write request",
+);
 assert.match(writeItemBlock, /supabase\.rpc\("upsert_user_state_if_newer"/, "Web cloud sync must use the generated typed RPC contract");
 assert.doesNotMatch(writeItemBlock, /const rpc = supabase\.rpc as unknown as/, "Web cloud sync must not hide the generated RPC response contract behind an unsafe cast");
 
