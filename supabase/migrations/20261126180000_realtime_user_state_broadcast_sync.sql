@@ -2,7 +2,10 @@
 -- Broadcast only the key and server timestamp; clients fetch the JSONB value
 -- through the existing user-scoped PostgREST query and its device-local filters.
 
-CREATE OR REPLACE FUNCTION public.broadcast_user_state_sync_event()
+CREATE SCHEMA IF NOT EXISTS pace_private;
+REVOKE ALL ON SCHEMA pace_private FROM PUBLIC, anon, authenticated;
+
+CREATE OR REPLACE FUNCTION pace_private.broadcast_user_state_sync_event()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -64,7 +67,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.broadcast_user_state_sync_event()
+REVOKE ALL ON FUNCTION pace_private.broadcast_user_state_sync_event()
   FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS user_state_broadcast_sync_event
@@ -73,7 +76,7 @@ DROP TRIGGER IF EXISTS user_state_broadcast_sync_event
 CREATE TRIGGER user_state_broadcast_sync_event
   AFTER INSERT OR UPDATE ON public.user_state
   FOR EACH ROW
-  EXECUTE FUNCTION public.broadcast_user_state_sync_event();
+  EXECUTE FUNCTION pace_private.broadcast_user_state_sync_event();
 
 DROP POLICY IF EXISTS pace_users_receive_own_sync_broadcasts
   ON realtime.messages;
