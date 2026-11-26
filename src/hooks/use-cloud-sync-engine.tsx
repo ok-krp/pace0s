@@ -357,7 +357,14 @@ export function useCloudSyncEngineInternal() {
         p_updated_at: item.updatedAt,
         p_updated_by: DEVICE_ID,
       });
-      if (result?.error) throw result.error;
+      if (result?.error) {
+        console.error("[Pace sync] user_state RPC rejected a write", {
+          key: item.key,
+          code: result.error.code,
+          message: result.error.message,
+        });
+        throw result.error;
+      }
       const responseData: unknown = result?.data;
       const payload: ServerWriteResult | null =
         typeof responseData === "boolean"
@@ -402,7 +409,11 @@ export function useCloudSyncEngineInternal() {
         let accepted = false;
         try {
           accepted = await writeItem(latest);
-        } catch {
+        } catch (error) {
+          console.error("[Pace sync] queued write failed", {
+            key: latest.key,
+            message: error instanceof Error ? error.message : "unknown error",
+          });
           throw new Error("cloud write failed");
         }
         if (cancelled) return;
@@ -454,7 +465,20 @@ export function useCloudSyncEngineInternal() {
           request = request.gt("updated_at", new Date(previousPullTime - 120_000).toISOString());
         }
         const { data, error } = await request;
-        if (error || !data || cancelled) return;
+        if (cancelled) return;
+        if (error) {
+          console.error("[Pace sync] user_state pull failed", {
+            code: error.code,
+            message: error.message,
+          });
+          setStatus("error");
+          return;
+        }
+        if (!data) {
+          console.error("[Pace sync] user_state pull returned no data");
+          setStatus("error");
+          return;
+        }
         const queue = new Set(readQueue(user.id).map((item) => item.key));
         const meta = readMeta(user.id);
         const grouped = new Map<string, { canonical?: SyncRow; legacy?: SyncRow }>();
@@ -578,7 +602,12 @@ export function useCloudSyncEngineInternal() {
         localStorage.setItem(pullCursorKey, new Date(pullStartedAt).toISOString());
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (newest) setStatus("ok");
-      } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
+      } catch (error) {
+        console.error("[Pace sync] user_state pull threw", {
+          message: error instanceof Error ? error.message : "unknown error",
+        });
+        if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
+      }
     };
 
     let syncInFlight: Promise<void> | null = null;
@@ -628,9 +657,21 @@ export function useCloudSyncEngineInternal() {
             void syncNow();
           })
           .subscribe((state) => {
-            if (state === "SUBSCRIBED" && !cancelled) void syncNow();
+            if (state === "SUBSCRIBED" && !cancelled) {
+              console.info("[Pace sync] private user_state Broadcast subscribed");
+              void syncNow();
+              return;
+            }
+            if (state === "CHANNEL_ERROR" || state === "TIMED_OUT" || state === "CLOSED") {
+              console.error("[Pace sync] private Broadcast channel unavailable", { state });
+              if (!cancelled) setStatus("error");
+            }
           });
-      }).catch(() => {
+      }).catch((error) => {
+        console.error("[Pace sync] failed to authorize private Realtime channel", {
+          message: error instanceof Error ? error.message : "unknown error",
+        });
+        if (!cancelled) setStatus("error");
         // The filtered 60-second pull remains the recovery path if private
         // Realtime authorization cannot be established.
       });
