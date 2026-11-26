@@ -47,7 +47,15 @@ BEGIN
        'pace.visual-theme',
        'pace.wallpaper',
        'pace.domain.wallpaper',
-       'pace.domain.outbox'
+       'pace.domain.outbox',
+       'pace.domain.sport.active',
+       'pace.domain.legal.consent',
+       'pace.domain.billing.device_id',
+       'pace.domain.watch.last_metrics',
+       'pace.domain.ai.conversations',
+       'pace.domain.ai.deleted_conversations',
+       'pace.domain.dark',
+       'pace.domain.visual-theme'
      ]) THEN
     RETURN NULL;
   END IF;
