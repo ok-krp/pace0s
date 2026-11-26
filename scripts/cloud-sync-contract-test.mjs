@@ -839,6 +839,23 @@ assert.match(
   "Development-task Postgres Changes must join a private-only Realtime topic",
 );
 
+const nutritionAiServer = read("src/lib/nutrition-ai.functions.ts");
+assert.doesNotMatch(
+  nutritionAiServer,
+  /supabaseAdmin/,
+  "Nutrition photo analysis must not require a privileged server Supabase key for user-owned Storage objects",
+);
+assert.match(
+  nutritionAiServer,
+  /context\\.supabase\\.storage\\.from\\(PHOTO_BUCKET\\)\\.download\\(path!\\)/,
+  "Nutrition photo analysis must download through the authenticated user's Storage client",
+);
+assert.match(
+  nutritionAiServer,
+  /finally \\{ if \\(path\\) await context\\.supabase\\.storage\\.from\\(PHOTO_BUCKET\\)\\.remove\\(\\[path\\]\\)/,
+  "Nutrition photo cleanup must remain scoped to the authenticated user's Storage policy",
+);
+
 console.log("cloud-sync-contract-test: PASS");
 
 assert.match(engine, /pruneEquivalentConflicts\(\);\s*if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
