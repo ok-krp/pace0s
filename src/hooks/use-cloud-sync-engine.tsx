@@ -581,12 +581,33 @@ export function useCloudSyncEngineInternal() {
       } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
     };
 
+    let syncInFlight: Promise<void> | null = null;
+    let syncRequested = false;
     const syncNow = async () => {
       if (!allowed()) return;
-      pruneEquivalentConflicts();
-      if (!navigator.onLine) { setStatus("offline"); return; }
-      await flushQueue(); await pull(); await flushQueue();
-      pruneEquivalentConflicts();
+      if (syncInFlight) {
+        // Coalesce Realtime bursts but never lose the last remote-change signal.
+        syncRequested = true;
+        await syncInFlight;
+        return;
+      }
+      const run = async () => {
+        do {
+          syncRequested = false;
+          pruneEquivalentConflicts();
+          if (!navigator.onLine) { setStatus("offline"); return; }
+          await flushQueue();
+          await pull();
+          await flushQueue();
+          pruneEquivalentConflicts();
+        } while (syncRequested && !cancelled && allowed() && navigator.onLine);
+      };
+      syncInFlight = run();
+      try {
+        await syncInFlight;
+      } finally {
+        syncInFlight = null;
+      }
     };
 
     // Low-payload private Broadcast is the primary remote-change signal.
