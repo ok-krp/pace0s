@@ -637,7 +637,7 @@ assert.ok(
   "Privacy, Finance, BLE, import and local AI records must remain device-local by prefix",
 );
 
-assert.match(engine, /await flushQueue\(\); await pull\(\); await flushQueue\(\);/, "Bootstrapped and recovered local values must be pushed in the same sync pass");
+assert.match(engine, /await flushQueue\(\);\s*await pull\(\);\s*await flushQueue\(\);/, "Bootstrapped and recovered local values must be pushed in the same sync pass");
 assert.match(engine, /const sourceRow = !canonical \? legacy : !legacy \? canonical/, "Legacy recovery must select the newest full snapshot instead of union-merging rows");
 assert.match(engine, /const localDomainTime = localDomain \? Date\.parse\(localDomain\.updatedAt\)/, "Local reconciliation must compare the persisted mutation timestamp, not only last acknowledged cloud metadata");
 assert.match(engine, /Number\.isFinite\(localDomainTime\) && localDomainTime > sourceTime/, "A newer local snapshot must be queued instead of overwritten by an older cloud snapshot");
