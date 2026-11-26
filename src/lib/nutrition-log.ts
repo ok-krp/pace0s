@@ -462,11 +462,9 @@ export function subscribeNutritionFoodLogChanges(onChange: () => void): () => vo
         table: "food_log",
         filter: `user_id=eq.${user.id}`,
       }, () => onChange())
-      // DELETE needs REPLICA IDENTITY FULL for its user_id filter. The
-      // additive migration enables it so deletions stay account-scoped.
-      // DELETE events cannot be filtered by user_id in Supabase Realtime.
-      // RLS is not applied to DELETE payloads; the 60-second refresh below
-      // reconciles removals without broadcasting unscoped primary keys.
+      // Do not subscribe to DELETE: Postgres Changes cannot filter it by
+      // user_id, and RLS does not protect DELETE payloads. The bounded refresh
+      // below reconciles removals without broadcasting unscoped primary keys.
 
     channel = nextChannel;
     nextChannel.subscribe((status) => {
