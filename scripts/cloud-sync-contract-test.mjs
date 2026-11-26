@@ -862,6 +862,28 @@ assert.match(
   "Nutrition photo cleanup must remain scoped to the authenticated user's Storage policy",
 );
 
+const nutritionEngine = read("src/lib/nutrition-engine.ts");
+assert.doesNotMatch(
+  nutritionEngine,
+  /supabaseAdmin/,
+  "Nutrition reference lookups must not require a privileged Supabase server key",
+);
+assert.match(
+  nutritionEngine,
+  /type NutritionClient = SupabaseClient<Database>/,
+  "Nutrition reference engine must accept an explicitly supplied authenticated client",
+);
+assert.match(
+  nutritionAiServer,
+  /findDishReference\(parsed\.dish_name, context\.supabase\)/,
+  "AI photo dish references must use the authenticated request client",
+);
+assert.match(
+  nutritionAiServer,
+  /calculateReferenceBasedNutrition\([\s\S]*context\.supabase\)/,
+  "AI photo food references must use the authenticated request client",
+);
+
 console.log("cloud-sync-contract-test: PASS");
 
 assert.match(engine, /pruneEquivalentConflicts\(\);\s*if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
