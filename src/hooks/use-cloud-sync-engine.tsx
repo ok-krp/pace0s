@@ -602,7 +602,12 @@ export function useCloudSyncEngineInternal() {
         localStorage.setItem(pullCursorKey, new Date(pullStartedAt).toISOString());
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
         if (newest) setStatus("ok");
-      } catch { if (!cancelled) setStatus(navigator.onLine ? "error" : "offline"); }
+      } catch (error) {
+        console.error("[Pace sync] user_state pull threw", {
+          message: error instanceof Error ? error.message : "unknown error",
+        });
+        if (!cancelled) setStatus(navigator.onLine ? "error" : "offline");
+      }
     };
 
     let syncInFlight: Promise<void> | null = null;
