@@ -147,6 +147,9 @@ const userStateBroadcastMigration = read("supabase/migrations/20261126180000_rea
 assert.match(userStateBroadcastMigration, /CREATE OR REPLACE FUNCTION pace_private\.broadcast_user_state_sync_event\(\)[\s\S]*realtime\.send\([\s\S]*'key'[\s\S]*'updated_at'[\s\S]*'user_state_changed'[\s\S]*'pace-user-state:'[\s\S]*true/);
 assert.match(userStateBroadcastMigration, /CREATE TRIGGER user_state_broadcast_sync_event[\s\S]*AFTER INSERT OR UPDATE ON public\.user_state/);
 assert.match(userStateBroadcastMigration, /ON realtime\.messages[\s\S]*FOR SELECT[\s\S]*TO authenticated[\s\S]*realtime\.topic\(\)[\s\S]*auth\.uid\(\)/);
+assert.match(userStateBroadcastMigration, /CREATE SCHEMA IF NOT EXISTS pace_private[\s\S]*REVOKE ALL ON SCHEMA pace_private FROM PUBLIC, anon, authenticated[\s\S]*CREATE OR REPLACE FUNCTION pace_private\./);
+assert.doesNotMatch(userStateBroadcastMigration, /CREATE OR REPLACE FUNCTION public\./,
+  "The SECURITY DEFINER broadcast trigger must not live in the exposed public schema");
 assert.match(userStateBroadcastMigration, /pace\.finance|pace\.ai\.conversations|pace\.__/,
   "The database trigger must not announce device-local or private keys");
 const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
@@ -175,6 +178,11 @@ assert.match(
   engine,
   /message\.payload as \{ key\?: unknown \}[\s\S]*isSyncableKey\(payload\.key\)[\s\S]*void syncNow\(\)/,
   "Web Broadcast callbacks must validate the key and pull authoritative state rather than trusting notification payloads",
+);
+assert.match(
+  engine,
+  /let syncInFlight: Promise<void> \| null = null;[\s\S]*let syncRequested = false;[\s\S]*if \(syncInFlight\)[\s\S]*syncRequested = true;[\s\S]*while \(syncRequested/,
+  "Web Realtime bursts must coalesce into serialized sync cycles without dropping the final notification",
 );
 assert.match(
   engine,
