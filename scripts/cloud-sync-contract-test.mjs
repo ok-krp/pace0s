@@ -23,7 +23,7 @@ assert.doesNotMatch(
 );
 assert.match(
   flutterSupabase,
-  /String\\.fromEnvironment\\(\\s*'SUPABASE_PUBLISHABLE_KEY',\\s*defaultValue:\\s*'sb_publishable_LNvF5dXGd49ZUKi1rC8y_Q_5xxGkrmF'/,
+  /String\.fromEnvironment\(\s*'SUPABASE_PUBLISHABLE_KEY',\s*defaultValue:\s*'sb_publishable_LNvF5dXGd49ZUKi1rC8y_Q_5xxGkrmF'/,
   "Flutter must default to the new project's publishable key",
 );
 assert.doesNotMatch(
