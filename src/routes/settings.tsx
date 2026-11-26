@@ -17,6 +17,7 @@ import { FinanceLockSettings } from "@/components/FinanceLockSettings";
 import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
+import { CloudSyncSettings } from "@/components/CloudSyncSettings";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
 import { AiSettings } from "@/components/AiSettings";
 import { AiLocalModeSettings } from "@/components/AiLocalModeSettings";
@@ -138,6 +139,10 @@ function SettingsPage() {
               <AccordionItem value="ai">
                 <AccordionTrigger><span className="flex items-center gap-2"><Brain className="size-4 text-primary" /> Intelligence artificielle</span></AccordionTrigger>
                 <AccordionContent><div className="space-y-5"><AiSettings /><AiLocalModeSettings /></div></AccordionContent>
+              </AccordionItem>
+              <AccordionItem value="cloud-sync">
+                <AccordionTrigger>Synchronisation entre appareils</AccordionTrigger>
+                <AccordionContent><CloudSyncSettings /></AccordionContent>
               </AccordionItem>
               <AccordionItem value="privacy">
                 <AccordionTrigger>Données & confidentialité</AccordionTrigger>

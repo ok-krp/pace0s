@@ -12,6 +12,17 @@ assert.match(engine, /realtimeHealthy/, "sync engine must gate recovery polling 
 assert.match(engine, /document\.visibilityState === "visible"/, "periodic reconciliation must be foreground-only");
 assert.equal(/setInterval\s*\(/.test(storage), false, "storage must not poll for local changes");
 assert.match(storage, /pace\.local\.write/);
+assert.match(engine, /const DEVICE_ID = getTabDeviceId\(\)/,
+  "Realtime echo suppression must use a per-tab ID so sibling tabs receive updates");
+assert.match(engine, /sessionStorage\.getItem\(TAB_DEVICE_KEY\)/,
+  "each browser tab must have a distinct sync origin");
+assert.match(engine, /setStatus\(readQueue\(\)\.length > 0 \? "syncing" : "ok"\)/,
+  "sync settings must not report success until all queued mutations have completed");
+assert.match(engine, /setStatus\(navigator\.onLine \? "syncing" : "offline"\);[\s\S]*?void pushItem\(item\)/,
+  "a user mutation must start synchronization immediately and expose its in-flight state");
+const syncSettings = read("src/components/CloudSyncSettings.tsx");
+assert.match(syncSettings, /Synchronisation en temps réel active/);
+assert.match(syncSettings, /Chaque modification déclenche immédiatement la synchronisation/);
 assert.match(engine, /onLocalWrite\(/);
 assert.match(engine, /postgres_changes/);
 assert.equal((engine.match(/realtimeChannel\.subscribe\(/g) ?? []).length, 1, "Realtime channel must only be subscribed during initial channel setup");
@@ -22,6 +33,10 @@ assert.match(engine, /!key\.startsWith\(INTERNAL_PREFIX\)/);
 assert.match(engine, /DOMAIN_OUTBOX_KEY/);
 
 // Remote application is separated from user mutation events.
+assert.match(storage, /window\.addEventListener\("storage"/,
+  "sibling tabs must react to localStorage mutations without a page refresh");
+assert.match(storage, /CustomEvent\(REMOTE_WRITE_EVENT, \{ detail: \{ key, value, updatedAt \} \}\)/,
+  "cross-tab storage events must update subscribed UI state without re-enqueueing a cloud write");
 assert.match(storage, /REMOTE_WRITE_EVENT/);
 assert.match(storage, /CustomEvent<LocalWriteDetail>\(LOCAL_WRITE_EVENT/);
 assert.match(engine, /lastRemoteValues/);
@@ -40,12 +55,55 @@ assert.match(engine, /server-authoritative/);
 assert.match(engine, /const updatedAt = new Date\(\)\.toISOString\(\);/);
 assert.match(engine, /resolveConflict/);
 assert.match(storage, /const updatedAt = new Date\(\)\.toISOString\(\);/);
+assert.match(storage, /Persist and emit the sync event synchronously from the user mutation/, "local user mutations must emit sync events synchronously instead of waiting for a React effect");
+assert.match(storage, /if \(!loaded \|\| typeof window === "undefined"\) return;/, "local state persistence must only run after hydration");
+assert.match(storage, /pace\.sport\.exercises.*LOCAL_WRITE_EVENT/s, "derived sport exercise changes must enter the cloud queue");
+assert.match(storage, /pace\.sport\.programs.*LOCAL_WRITE_EVENT/s, "derived sport program changes must enter the cloud queue");
+const profileRpc = read("supabase/migrations/20260830150000_fix_profile_id_and_legacy_profile_upsert.sql");
+assert.match(profileRpc, /effective_updated_at timestamptz := clock_timestamp\(\)/, "profile ordering must use database time, not a browser clock");
+assert.match(profileRpc, /updated_at = EXCLUDED\.updated_at/, "profile writes must persist the server-authoritative ordering timestamp");
 
 // A lost RPC response is resolved by the monotonic RPC itself; a rejected write
 // performs a single reconciliation read against the canonical row.
 assert.match(engine, /if \(!payload\.accepted\)/);
 assert.match(engine, /supabase\.from\("user_state"\)\.select\("key,value,updated_at,updated_by"\)/);
 assert.match(engine, /serialize\(queued\.value\) === serialize\(mergedValue\)/);
+assert.match(engine, /const domainTime = localDomain \? Date\.parse\(localDomain\.updatedAt\)/,
+  "pull reconciliation must compare cloud timestamps against the local domain envelope, not only sync metadata");
+const localDomainUpdatedAt = Date.parse("2026-10-08T12:00:00.000Z");
+const missingMetaTimestamp = Date.parse("1970-01-01T00:00:00.000Z");
+const cloudUpdatedAt = Date.parse("2026-10-08T11:00:00.000Z");
+assert.ok(
+  Math.max(missingMetaTimestamp, localDomainUpdatedAt) > cloudUpdatedAt,
+  "a newer local domain edit must be queued when legacy sync metadata is missing",
+);
+
+assert.match(
+  engine,
+  /if \(domain && Date\.parse\(domain\.updatedAt\) >= remoteTime && !isEmptyRecoveredValue\(domain\.value\)\) \{[\s\S]*?if \(domainTime > remoteTime\) \{[\s\S]*?queueItem\(localItem\);[\s\S]*?void pushItem\(localItem\);[\s\S]*?recordConflict\(row\.key, domain\.value, row\.value, row\.updated_at\);/,
+  "a realtime row arriving after bootstrap must enqueue newer local data or expose an equal-timestamp conflict",
+);
+const realtimeReconcile = (local, remote) => {
+  if (local.updatedAt > remote.updatedAt) return "push-local";
+  if (local.updatedAt === remote.updatedAt && JSON.stringify(local.value) !== JSON.stringify(remote.value)) return "conflict";
+  return "apply-remote";
+};
+assert.equal(
+  realtimeReconcile(
+    { updatedAt: "2026-10-08T12:00:00.000Z", value: { count: 2 } },
+    { updatedAt: "2026-10-08T11:00:00.000Z", value: { count: 1 } },
+  ),
+  "push-local",
+  "a local-only edit newer than a Realtime insert must be pushed immediately",
+);
+assert.equal(
+  realtimeReconcile(
+    { updatedAt: "2026-10-08T12:00:00.000Z", value: { count: 2 } },
+    { updatedAt: "2026-10-08T12:00:00.000Z", value: { count: 1 } },
+  ),
+  "conflict",
+  "equal-timestamp divergent edits must not silently overwrite either value",
+);
 
 // The server RPC is monotonic: an older canonical timestamp must never be
 // replaced by a newer request carrying an older-than-canonical server timestamp.
@@ -135,6 +193,24 @@ const applyResolvedRemote = (device, conflicts, candidate) => {
 assert.deepEqual(deviceA, deviceB, "resolved water must converge across devices");
 assert.deepEqual(conflictsA, []);
 assert.deepEqual(conflictsB, []);
+
+// Sleep must only persist after an actual input mutation, and it must not debounce
+// the last edit into a timer that can be cancelled by route navigation.
+const sleepRoute = read("src/routes/sleep.tsx");
+assert.match(sleepRoute, /const persistSleep = \(nextStart: string, nextEnd: string, nextQuality: number\)/,
+  "sleep edits must go through a single persistence path");
+assert.match(sleepRoute, /onChange=\{\(e\) => \{ const value = e\.target\.value; setStart\(value\); persistSleep\(value, end, quality\); \}\}/,
+  "editing the sleep start must persist immediately");
+assert.match(sleepRoute, /onChange=\{\(e\) => \{ const value = e\.target\.value; setEnd\(value\); persistSleep\(start, value, quality\); \}\}/,
+  "editing the sleep end must persist immediately");
+assert.match(sleepRoute, /onChange=\{\(v\) => \{ if \(v != null\) \{ setQuality\(v\); persistSleep\(start, end, v\); \} \}\}/,
+  "editing sleep quality must persist immediately");
+assert.equal(/window\.setTimeout\(/.test(sleepRoute), false,
+  "sleep persistence must not depend on a cancellable debounce timer");
+assert.match(sleepRoute, /select\("key,value,updated_at"\)/,
+  "sleep cloud recovery must use authoritative row timestamps");
+assert.match(sleepRoute, /Date\.parse\(a\.updated_at\) - Date\.parse\(b\.updated_at\)/,
+  "sleep cloud history must merge rows in timestamp order");
 
 console.log("cloud-sync-contract-test: PASS");
 

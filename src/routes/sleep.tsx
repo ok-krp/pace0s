@@ -75,16 +75,20 @@ function SleepPage() {
 
       const { data, error } = await supabase
         .from("user_state")
-        .select("key,value")
+        .select("key,value,updated_at")
         .eq("user_id", userData.user.id)
         .in("key", ["lt.sleep", "pace.sleep", "pace.domain.sleep"]);
 
       if (cancelled) return;
       if (!error && data) {
-        const cloud = (data as Array<{ key: string; value: unknown }>)
+        // Merge oldest rows first so the newest cloud snapshot wins per day.
+        // Key priority is only a deterministic tie-breaker, never a substitute
+        // for the database's authoritative updated_at timestamp.
+        const rank = (key: string) => key === "lt.sleep" ? 0 : key === "pace.sleep" ? 1 : 2;
+        const cloud = (data as Array<{ key: string; value: unknown; updated_at: string }>)
           .sort((a, b) => {
-            const rank = (key: string) => key === "lt.sleep" ? 0 : key === "pace.sleep" ? 1 : 2;
-            return rank(a.key) - rank(b.key);
+            const timeDelta = Date.parse(a.updated_at) - Date.parse(b.updated_at);
+            return Number.isFinite(timeDelta) && timeDelta !== 0 ? timeDelta : rank(a.key) - rank(b.key);
           })
           .reduce<Record<string, SleepEntry>>((acc, row) => mergeSleep(acc, unwrapSleepValue(row.value)), {});
         if (Object.keys(cloud).length) setEntries((current) => mergeSleep(cloud, current));
@@ -129,29 +133,28 @@ function SleepPage() {
   const worst = valid.length ? valid.reduce((w, x) => (x.h < w ? x.h : w), 24) : 0;
   const debt = Math.max(0, valid.length * 8 - valid.reduce((s, x) => s + x.h, 0));
 
-  useEffect(() => {
-    if (!cloudLoaded) return;
-    const h = diffHours(start, end);
-    if (h <= 0 || quality < 1 || quality > 10) return;
-    const timer = window.setTimeout(() => {
-      setEntries((previous) => {
-        const current = previous[today];
-        const next: SleepEntry = { start, end, hours: h, quality };
-        if (current && current.start === next.start && current.end === next.end && current.hours === next.hours && current.quality === next.quality) return previous;
-        return { ...previous, [today]: next };
-      });
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [start, end, quality, today, cloudLoaded, setEntries]);
+  const persistSleep = (nextStart: string, nextEnd: string, nextQuality: number) => {
+    const hours = diffHours(nextStart, nextEnd);
+    if (hours <= 0 || nextQuality < 1 || nextQuality > 10) return;
+    const next: SleepEntry = { start: nextStart, end: nextEnd, hours, quality: nextQuality };
+    // Persist on the actual user action; do not create a fabricated default
+    // night merely because the page mounted, and do not lose the last edit to
+    // a debounce timer when navigating away.
+    setEntries((previous) => {
+      const current = previous[today];
+      if (current && current.start === next.start && current.end === next.end && current.hours === next.hours && current.quality === next.quality) return previous;
+      return { ...previous, [today]: next };
+    });
+  };
 
   return (
     <div>
       <PageHeader title="Sommeil" subtitle="Détectez les patterns, comblez la dette." />
       <div className="rounded-2xl glass-card p-5 mb-4">
         <div className="flex flex-wrap items-end gap-3">
-          <div><label className="text-xs text-muted-foreground">Endormi à</label><Input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="w-32" /></div>
-          <div><label className="text-xs text-muted-foreground">Réveil</label><Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="w-32" /></div>
-          <div><label className="text-xs text-muted-foreground">Qualité (1-10)</label><NumberField allowDecimal={true} min={1} max={10} value={quality} onChange={(v) => { if (v != null) setQuality(v); }} className="w-24" /></div>
+          <div><label className="text-xs text-muted-foreground">Endormi à</label><Input type="time" value={start} onChange={(e) => { const value = e.target.value; setStart(value); persistSleep(value, end, quality); }} className="w-32" /></div>
+          <div><label className="text-xs text-muted-foreground">Réveil</label><Input type="time" value={end} onChange={(e) => { const value = e.target.value; setEnd(value); persistSleep(start, value, quality); }} className="w-32" /></div>
+          <div><label className="text-xs text-muted-foreground">Qualité (1-10)</label><NumberField allowDecimal={true} min={1} max={10} value={quality} onChange={(v) => { if (v != null) { setQuality(v); persistSleep(start, end, v); } }} className="w-24" /></div>
           <div className="text-sm text-muted-foreground ml-auto" aria-live="polite"><Moon className="inline size-4 mr-1" /> {formatSleepDuration(diffHours(start, end))} · sauvegardé automatiquement</div>
         </div>
       </div>

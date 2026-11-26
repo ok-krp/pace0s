@@ -1,11 +1,12 @@
-import { Cloud, Wifi, WifiOff } from "lucide-react";
+import { Cloud, Wifi, WifiOff, Settings2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCloudSyncStatus } from "@/hooks/use-cloud-sync-engine";
 import { useAuth } from "@/hooks/use-auth";
+import { openConsentSheet } from "@/components/LegalConsentGate";
 
 export function CloudSyncSettings() {
   const { user } = useAuth();
-  const { status } = useCloudSyncStatus();
+  const { status, queuedCount } = useCloudSyncStatus();
   const [online, setOnline] = useState(() => typeof navigator === "undefined" ? true : navigator.onLine);
 
   useEffect(() => {
@@ -19,6 +20,8 @@ export function CloudSyncSettings() {
     };
   }, []);
 
+  const consentRequired = status === "consent_required";
+  const waiting = status === "idle";
   const label = !user
     ? "Connecte-toi pour activer la synchronisation."
     : !online || status === "offline"
@@ -27,7 +30,15 @@ export function CloudSyncSettings() {
         ? "Synchronisation…"
         : status === "error"
           ? "Synchronisation impossible — nouvelle tentative automatique"
-          : "Synchronisation automatique active";
+          : consentRequired
+            ? "Synchronisation désactivée — autorisation requise"
+            : waiting
+              ? "Synchronisation en attente de son premier résultat"
+              : "Synchronisation en temps réel active";
+
+  const indicatorClass = !online || status === "offline" || status === "error" || consentRequired || waiting
+    ? "bg-amber-500"
+    : "bg-emerald-500";
 
   return (
     <div className="rounded-2xl glass-card p-4 space-y-3">
@@ -39,9 +50,17 @@ export function CloudSyncSettings() {
           <div className="font-medium flex items-center gap-2"><Cloud className="size-4" /> Synchronisation cloud</div>
           <div className="text-xs text-muted-foreground">{label}</div>
         </div>
-        {user && <span className={`size-2 rounded-full ${online && status !== "error" ? "bg-emerald-500" : "bg-amber-500"}`} aria-label={online ? "En ligne" : "Hors ligne"} />}
+        {user && <span className={`size-2 rounded-full ${indicatorClass}`} aria-label={consentRequired ? "Autorisation requise" : waiting ? "Synchronisation en attente" : online ? "En ligne" : "Hors ligne"} />}
       </div>
-      {user && <div className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">Les modifications sont enregistrées localement immédiatement et synchronisées automatiquement. En cas de coupure, elles restent en file d'attente puis sont envoyées dès le retour de la connexion.</div>}
+      {consentRequired && user && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">La synchronisation entre appareils reste désactivée tant que tu ne l’autorises pas. Tes données locales ne sont pas envoyées avant ton accord.</p>
+          <button type="button" onClick={openConsentSheet} className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium hover:bg-muted/60">
+            <Settings2 className="size-4" /> Gérer mes consentements
+          </button>
+        </div>
+      )}
+      {user && <div className="rounded-xl bg-muted/40 px-3 py-2 text-xs text-muted-foreground">{consentRequired ? "Les modifications restent enregistrées localement. Elles ne seront envoyées qu’après ton autorisation explicite de la synchronisation cloud." : `Chaque modification déclenche immédiatement la synchronisation. Les autres appareils et onglets sont actualisés en temps réel. En cas de coupure, les changements restent en attente${queuedCount ? ` (${queuedCount})` : ""} puis sont envoyés au retour de la connexion.`}</div>}
     </div>
   );
 }
