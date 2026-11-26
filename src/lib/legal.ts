@@ -13,6 +13,39 @@ export type LegalConsentOptions = {
   do_not_sell?: boolean;
 };
 
+export const GRANULAR_CONSENT_TYPES = [
+  "health_data",
+  "health_cloud_sync",
+  "financial_data",
+  "ai_processing",
+  "marketing",
+] as const;
+
+export type GranularConsentRecord = {
+  consent_type: string;
+  granted: boolean;
+  created_at: string;
+  decision_sequence?: number;
+};
+
+/** Resolve only the newest record per category; explicit revocations win. */
+export function resolveGranularConsentOptions(records: readonly GranularConsentRecord[]): LegalConsentOptions {
+  const opts = { ...DEFAULT_LEGAL_OPTS };
+  const resolved = new Set<string>();
+  const ordered = [...records].sort((a, b) => {
+    const timestampOrder = Date.parse(b.created_at) - Date.parse(a.created_at);
+    if (timestampOrder !== 0) return timestampOrder;
+    return (b.decision_sequence ?? 0) - (a.decision_sequence ?? 0);
+  });
+  for (const record of ordered) {
+    if (!GRANULAR_CONSENT_TYPES.includes(record.consent_type as (typeof GRANULAR_CONSENT_TYPES)[number])) continue;
+    if (resolved.has(record.consent_type)) continue;
+    resolved.add(record.consent_type);
+    opts[record.consent_type as keyof LegalConsentOptions] = record.granted;
+  }
+  return opts;
+}
+
 export const LEGAL_VERSIONS = {
   eula: "2026-07-10",
   privacy: "2026-07-10",

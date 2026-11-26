@@ -25,3 +25,21 @@ export function planFromPriceId(priceId: string | null | undefined): PlanId | nu
   return null;
 }
 export function isPaidPlan(plan: EntitlementPlan): plan is PlanId { return plan === "plus" || plan === "pro" || plan === "coach"; }
+
+/**
+ * A paid plan is an entitlement only while Stripe reports a usable status and
+ * its current period has not ended. Cancellation at period end remains valid
+ * until that timestamp; canceled, unpaid, past-due, and incomplete states do not.
+ */
+export function hasActivePaidEntitlement(
+  plan: unknown,
+  status: string | null | undefined,
+  currentPeriodEnd: string | null | undefined,
+  now: number = Date.now(),
+): plan is PlanId {
+  if (plan !== "plus" && plan !== "pro" && plan !== "coach") return false;
+  if (status !== "active" && status !== "trialing") return false;
+  if (!currentPeriodEnd) return false;
+  const periodEnd = Date.parse(currentPeriodEnd);
+  return Number.isFinite(periodEnd) && periodEnd > now;
+}

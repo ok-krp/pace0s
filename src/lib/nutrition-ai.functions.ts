@@ -4,9 +4,10 @@ import { generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { LEGAL_VERSIONS } from "./legal";
+import { hasAiProcessingConsent } from "./ai-consent.server";
 import { AI_MODEL, PHOTO_INSTRUCTIONS, extractJson, foodAnalysisSchema } from "./nutrition-ai.shared";
 import { calculateReferenceBasedNutrition, findDishReference, scaleDishReference } from "./nutrition-engine";
+import { consumeCloudAiAction } from "./ai-quota.server";
 
 const PHOTO_BUCKET = "nutrition-ai";
 const MAX_PHOTO_BYTES = 50 * 1024 * 1024;
@@ -47,9 +48,13 @@ async function generateFoodVision(prompt: string, imageDataUrl: string, contentT
 function storagePathForUser(userId: string, path: string) { const normalized = path.replace(/^\/+/, ""); if (!normalized || normalized.includes("..") || !normalized.startsWith(`${userId}/`)) throw new Error("Référence image invalide."); return normalized; }
 
 export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((d: { storagePath?: string; vision?: unknown; goal?: string; hint?: string }) => z.object({ storagePath: z.string().min(3).max(500).optional(), vision: visionSchema.optional(), goal: z.string().max(300).optional(), hint: z.string().max(300).optional() }).refine((value) => Boolean(value.storagePath || value.vision), "Analyse photo manquante.").parse(d)).handler(async ({ data, context }) => {
-  const { data: consent, error: consentError } = await context.supabase.from("legal_consent").select("opts").eq("user_id", context.userId).eq("eula_version", LEGAL_VERSIONS.eula).eq("privacy_version", LEGAL_VERSIONS.privacy).maybeSingle();
-  if (consentError) throw new Error(consentError.message);
-  if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) return { error: "Consentement Analyse IA requis", result: null };
+  let aiConsentAllowed = false;
+  try {
+    aiConsentAllowed = await hasAiProcessingConsent(context.supabase, context.userId);
+  } catch {
+    return { error: "Impossible de vérifier le consentement IA. Réessayez plus tard.", result: null };
+  }
+  if (!aiConsentAllowed) return { error: "Consentement Analyse IA requis", result: null };
   const path = data.storagePath ? storagePathForUser(context.userId, data.storagePath) : null;
   try {
     let parsed: z.infer<typeof visionSchema>;
@@ -64,6 +69,12 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
       if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) throw new Error("Format image non autorisé.");
       const imageDataUrl = `data:${contentType};base64,${bytes.toString("base64")}`;
       const prompt = [PHOTO_INSTRUCTIONS, "IMPORTANT : fais d'abord un inventaire exhaustif des composants visibles. N'en omets aucun, même si la portion est petite ou l'identification imparfaite.", "Si le plat correspond à un plat connu, donne son nom canonique clairement.", data.goal ? `Objectif : ${data.goal}.` : "", data.hint ? `Indice : ${data.hint}.` : "", "Réponds en JSON pur avec dish_name, items [{name,brand,grams,kcal,protein_g,carbs_g,fat_g,fiber_g,sugar_g,sodium_mg}], health_score, quality, confidence, confidence_note, notes."].filter(Boolean).join("\n\n");
+      const quota = await consumeCloudAiAction(context.supabase);
+      if (!quota.allowed) {
+        throw new Error(quota.monthly_limit > 0
+          ? `Quota IA cloud mensuel atteint (${quota.used}/${quota.monthly_limit}).`
+          : "Un abonnement actif est nécessaire pour utiliser l’IA cloud Pace.");
+      }
       const { text } = await generateFoodVision(prompt, imageDataUrl, contentType);
       const result = visionSchema.safeParse(extractJson(text));
       if (!result.success) return { error: "Réponse IA invalide", result: null };
@@ -96,8 +107,12 @@ export const analyzeFoodPhoto = createServerFn({ method: "POST" }).middleware([r
 });
 
 export const nutritionAdvice = createServerFn({ method: "POST" }).middleware([requireSupabaseAuth]).validator((d: { summary: string }) => z.object({ summary: z.string().min(1).max(4000) }).parse(d)).handler(async ({ data, context }) => {
-  const { data: consent, error: consentError } = await context.supabase.from("legal_consent").select("opts").eq("user_id", context.userId).eq("eula_version", LEGAL_VERSIONS.eula).eq("privacy_version", LEGAL_VERSIONS.privacy).maybeSingle();
-  if (consentError) throw new Error(consentError.message);
-  if ((consent?.opts as { ai?: boolean } | null)?.ai !== true) return { advice: null, error: "Consentement Analyse IA requis" };
-  try { const { text } = await generateText({ model: getGeminiModel(), messages: [{ role: "user", content: `Tu es un coach nutrition. À partir du résumé ci-dessous, donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français, au format "• conseil". Pas de salutation, pas d’introduction. Ne recalcule jamais les macros dans ce texte : si des macros sont nécessaires, elles doivent provenir du Pace Nutrition Engine.\n\nRésumé :\n${data.summary}` }] }); return { advice: text, error: null }; } catch (e) { return { advice: null, error: e instanceof Error ? e.message : "Erreur IA" }; }
+  let aiConsentAllowed = false;
+  try {
+    aiConsentAllowed = await hasAiProcessingConsent(context.supabase, context.userId);
+  } catch {
+    return { advice: null, error: "Impossible de vérifier le consentement IA. Réessayez plus tard." };
+  }
+  if (!aiConsentAllowed) return { advice: null, error: "Consentement Analyse IA requis" };
+  try { const quota = await consumeCloudAiAction(context.supabase); if (!quota.allowed) throw new Error(quota.monthly_limit > 0 ? `Quota IA cloud mensuel atteint (${quota.used}/${quota.monthly_limit}).` : "Un abonnement actif est nécessaire pour utiliser l’IA cloud Pace."); const { text } = await generateText({ model: getGeminiModel(), messages: [{ role: "user", content: `Tu es un coach nutrition. À partir du résumé ci-dessous, donne 3 conseils ULTRA courts (1 ligne chacun), actionnables, en français, au format "• conseil". Pas de salutation, pas d’introduction. Ne recalcule jamais les macros dans ce texte : si des macros sont nécessaires, elles doivent provenir du Pace Nutrition Engine.\n\nRésumé :\n${data.summary}` }] }); return { advice: text, error: null }; } catch (e) { return { advice: null, error: e instanceof Error ? e.message : "Erreur IA" }; }
 });
