@@ -6,6 +6,7 @@ import { getPreferencesServer } from "./ai-history.server";
 import type { AgentType, AiPermissions } from "./ai-history.types";
 import { getAiRuntimeConfig, type AiGateway, PROVIDER_LABELS } from "./ai-provider.server";
 import { canonicalSportTools } from "./sport-ai-tools";
+import { hasAiProcessingConsent } from "./ai-consent.server";
 
 type Client = SupabaseClient<Database>;
 type ChatBody = { messages?: unknown; conversationId?: unknown; agentType?: unknown; ephemeral?: unknown };
@@ -116,42 +117,14 @@ export async function handleAiChat(request: Request) {
     if (!Array.isArray(body.messages) || body.messages.length === 0) fail(400, "no_messages", "Aucun message à envoyer."); if (typeof body.conversationId !== "string") fail(400, "no_conversation", "Conversation introuvable : ouvrez ou créez une conversation."); if (body.agentType !== "coach" && body.agentType !== "build") fail(400, "bad_agent", "Assistant inconnu.");
     const messages = body.messages as UIMessage[]; const agentType = body.agentType; const ephemeral = body.ephemeral === true; const conversationId = body.conversationId; const newest = messages[messages.length - 1]; if (newest && textOf(newest).length > MAX_TEXT_CHARS) fail(413, "message_too_long", `Message trop long : réduisez-le sous ${Math.round(MAX_TEXT_CHARS / 1000)} 000 caractères.`);
     const { client, userId } = await authenticatedClient(request);
-    const { data: aiConsent, error: aiConsentError } = await client
-      .from("consent_records")
-      .select("granted")
-      .eq("user_id", userId)
-      .eq("consent_type", "ai_processing")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (aiConsentError) console.warn("[ai-chat] granular AI consent lookup failed", aiConsentError.message);
-
-    // Backward compatibility: users who accepted AI before granular consent_records
-    // existed only have the decision in legal_consent. Do not lock them out of Coach/Nutrition.
-    if (aiConsent?.granted !== true) {
-      const { data: legacyConsent, error: legacyConsentError } = await client
-        .from("legal_consent")
-        .select("opts")
-        .eq("user_id", userId)
-        .order("consented_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (legacyConsentError) fail(503, "consent_lookup_failed", "Impossible de vérifier le consentement IA.");
-
-      const legacyOpts = legacyConsent?.opts as { ai_processing?: unknown; ai?: unknown } | null;
-      const legacyGranted = legacyOpts?.ai_processing === true || legacyOpts?.ai === true;
-      if (legacyGranted) {
-        const { error: backfillError } = await client.from("consent_records").insert({
-          user_id: userId,
-          consent_type: "ai_processing",
-          granted: true,
-          legal_version: "2026-07-10",
-          policy_version: "2026-07-10",
-        });
-        if (backfillError) console.warn("[ai-chat] legacy AI consent backfill skipped", backfillError.message);
-      } else {
-        fail(403, "ai_consent_required", "Activez le consentement « Traitement IA » dans Paramètres → Confidentialité.");
-      }
+    let aiConsentAllowed: boolean;
+    try {
+      aiConsentAllowed = await hasAiProcessingConsent(client, userId);
+    } catch {
+      fail(503, "consent_lookup_failed", "Impossible de vérifier le consentement IA. La requête a été bloquée.");
+    }
+    if (!aiConsentAllowed) {
+      fail(403, "ai_consent_required", "Activez le consentement « Traitement IA » dans Paramètres → Confidentialité.");
     }
     if (agentType === "build") { const { data: authUser } = await client.auth.getUser(); if (authUser.user?.email?.toLowerCase() !== "mathieu.lequint@gmail.com") fail(403, "build_forbidden", "Build IA est réservé au compte administrateur autorisé."); }
     if (!ephemeral) { const { data, error } = await client.from("ai_conversations").select("id").eq("id", conversationId).eq("user_id", userId).eq("agent_type", agentType).maybeSingle(); if (error) fail(503, "db_error", "Erreur base de données."); if (!data) fail(404, "conversation_not_found", "Cette conversation n’existe plus. Créez-en une nouvelle."); }

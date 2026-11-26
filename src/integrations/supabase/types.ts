@@ -400,6 +400,7 @@ export type Database = {
         Row: {
           consent_type: string
           created_at: string
+          decision_sequence: number
           granted: boolean
           id: string
           ip_hash: string | null
@@ -411,6 +412,7 @@ export type Database = {
         Insert: {
           consent_type: string
           created_at?: string
+          decision_sequence?: number
           granted: boolean
           id?: string
           ip_hash?: string | null
@@ -422,6 +424,7 @@ export type Database = {
         Update: {
           consent_type?: string
           created_at?: string
+          decision_sequence?: number
           granted?: boolean
           id?: string
           ip_hash?: string | null

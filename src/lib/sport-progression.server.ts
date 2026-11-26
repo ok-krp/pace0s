@@ -2,6 +2,7 @@ import { generateText } from "ai";
 import { z } from "zod";
 import { getAiRuntimeConfig } from "./ai-provider.server";
 import type { Json } from "@/integrations/supabase/types";
+import { hasAiProcessingConsent } from "./ai-consent.server";
 
 const inputSchema = z.object({
   sessionId: z.string().uuid(),
@@ -152,6 +153,15 @@ export async function generateSportProgressionServer(context: { supabase: any; u
       .filter((target): target is ProgressionTarget => Boolean(target));
 
     if (!fallback.length) return { targets: [], source: "none" as const };
+
+    // Keep deterministic local progression available, but never send workout
+    // history to a cloud model without a current AI-processing grant.
+    try {
+      const aiConsentAllowed = await hasAiProcessingConsent(context.supabase, context.userId);
+      if (!aiConsentAllowed) return { targets: fallback, source: "fallback" as const };
+    } catch {
+      return { targets: fallback, source: "fallback" as const };
+    }
 
     try {
       const runtime = await getAiRuntimeConfig(context.supabase, context.userId, "coach");
