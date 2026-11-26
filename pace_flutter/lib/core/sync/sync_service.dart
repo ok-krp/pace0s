@@ -407,19 +407,11 @@ class SyncService {
             value: userId,
           ),
           callback: (_) => _scheduleNutritionRealtime(userId),
-        )
-        .onPostgresChanges(
-          event: PostgresChangeEvent.delete,
-          schema: 'public',
-          table: 'food_log',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'user_id',
-            value: userId,
-          ),
-          callback: (_) => _scheduleNutritionRealtime(userId),
         );
 
+    // Supabase Postgres Changes cannot filter DELETE events. RLS is not
+    // applied to DELETE payloads, which expose only primary keys when RLS is
+    // enabled. Use the bounded 60-second canonical pull to reconcile deletes. 
     _realtimeChannel = channel;
     _realtimeUserId = userId;
 
