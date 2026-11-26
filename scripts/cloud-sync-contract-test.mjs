@@ -143,7 +143,8 @@ assert.match(nutritionLog, /expectedUserId = activeNutritionAccountId\(\)[\s\S]*
 assert.match(nutritionLog, /for \(const \{ id, day, item \} of nextRows\)[\s\S]*activeNutritionAccountId\(\) !== userId/, "Nutrition bridge must abort row-by-row after an account switch");
 assert.match(nutritionLog, /function deletedIdsStorageKey\(userId: string\)[\s\S]*encodeURIComponent\(userId\)/, "Nutrition deletion tombstones must use a distinct storage namespace per account");
 assert.match(nutritionLog, /localStorage\.getItem\(deletedIdsStorageKey\(userId\)\)[\s\S]*legacy\?\.userId === userId[\s\S]*localStorage\.removeItem\(DELETED_IDS_KEY\)/, "Legacy single-account tombstones must migrate only to their owning account");
-const userStateBroadcastMigration = read("supabase/migrations/20261126180000_realtime_user_state_broadcast_sync.sql");
+const userStateBroadcastMigration = read("supabase/migrations/20261126171744_realtime_user_state_broadcast_sync.sql");
+const userStateBroadcastHardeningMigration = read("supabase/migrations/20261126173000_harden_realtime_user_state_broadcast_filters.sql");
 assert.match(userStateBroadcastMigration, /CREATE OR REPLACE FUNCTION pace_private\.broadcast_user_state_sync_event\(\)[\s\S]*realtime\.send\([\s\S]*'key'[\s\S]*'updated_at'[\s\S]*'user_state_changed'[\s\S]*'pace-user-state:'[\s\S]*true/);
 assert.match(userStateBroadcastMigration, /CREATE TRIGGER user_state_broadcast_sync_event[\s\S]*AFTER INSERT OR UPDATE ON public\.user_state/);
 assert.match(userStateBroadcastMigration, /ON realtime\.messages[\s\S]*FOR SELECT[\s\S]*TO authenticated[\s\S]*realtime\.topic\(\)[\s\S]*auth\.uid\(\)/);
@@ -152,6 +153,22 @@ assert.doesNotMatch(userStateBroadcastMigration, /CREATE OR REPLACE FUNCTION pub
   "The SECURITY DEFINER broadcast trigger must not live in the exposed public schema");
 assert.match(userStateBroadcastMigration, /pace\.finance|pace\.ai\.conversations|pace\.__/,
   "The database trigger must not announce device-local or private keys");
+assert.ok(
+  userStateBroadcastHardeningMigration.includes("v_key !~ '^pace[.]'") &&
+    userStateBroadcastHardeningMigration.includes("v_key ~ '^pace[.]__'") &&
+    userStateBroadcastHardeningMigration.includes("v_key ~ '^pace[.]domain[.]ai[.](local[.]|debug|pending:)'"),
+  "Realtime key allow-list and exclusions must use literal-dot matching regardless of string settings",
+);
+assert.equal(
+  userStateBroadcastHardeningMigration.includes("\\."),
+  false,
+  "Realtime key filtering must not rely on backslash-escaped regex dots",
+);
+assert.ok(
+  userStateBroadcastHardeningMigration.includes("realtime.messages.extension = 'broadcast'") &&
+    userStateBroadcastHardeningMigration.includes("realtime.topic() = 'pace-user-state:'"),
+  "Realtime authorization must only allow Broadcast reads on the authenticated user's own topic",
+);
 const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const domainStore = read("src/lib/domain-store.ts");
 const wallpaperKeys = [
