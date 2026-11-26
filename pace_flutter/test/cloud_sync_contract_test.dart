@@ -251,7 +251,27 @@ void main() {
       expect(result.updatedAt, '2026-09-30T07:31:00+00:00');
     });
 
-    test('rejects the old boolean response shape', () {
+    test('accepts the legacy boolean response using the submitted timestamp', () {
+      final result = CloudSyncWriteResponse.fromRpc(
+        true,
+        fallbackUpdatedAt: '2026-09-30T07:32:00+00:00',
+      );
+
+      expect(result.accepted, isTrue);
+      expect(result.updatedAt, '2026-09-30T07:32:00+00:00');
+    });
+
+    test('accepts a rejected legacy boolean response', () {
+      final result = CloudSyncWriteResponse.fromRpc(
+        false,
+        fallbackUpdatedAt: '2026-09-30T07:33:00+00:00',
+      );
+
+      expect(result.accepted, isFalse);
+      expect(result.updatedAt, '2026-09-30T07:33:00+00:00');
+    });
+
+    test('rejects a boolean response without a fallback timestamp', () {
       expect(
         () => CloudSyncWriteResponse.fromRpc(true),
         throwsA(isA<FormatException>()),
