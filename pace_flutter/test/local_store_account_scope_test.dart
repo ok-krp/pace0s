@@ -1,0 +1,270 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:pace/core/storage/local_store.dart';
+
+void main() {
+  group('LocalStore mutation notifications', () {
+    test('notifies sync listeners after durable queued writes and deletes only', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-mutations-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final store = await LocalStore.openAt(
+        File('${directory.path}/pace_local.json'),
+      );
+      await store.activateAccount('user-a');
+      final mutations = <String>[];
+      void onMutation(String key) => mutations.add(key);
+      store.addMutationListener(onMutation);
+
+      await store.write('pace.notes', {'id': 'note-a'});
+      await store.write('pace.device.cache', true, enqueueSync: false);
+      await store.remove('pace.shopping',);
+      await store.remove('pace.device.cache', enqueueSync: false);
+      await store.applyRemote(
+        'pace.sleep',
+        {'hours': 8},
+        '2026-11-18T12:00:00.000Z',
+      );
+
+      expect(mutations, ['pace.notes', 'pace.shopping']);
+      store.removeMutationListener(onMutation);
+      await store.write('pace.routine.list', [{'id': 'habit-a'}]);
+      expect(mutations, ['pace.notes', 'pace.shopping']);
+    });
+  });
+
+  group('LocalStore account namespaces', () {
+    test('first authenticated account adopts the legacy v1 snapshot intact', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-v1-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final file = File('${directory.path}/pace_local.json');
+      final legacyItems = {
+        '2026-11-11': [
+          {
+            'id': '1731340800000000',
+            'name': 'Repas manuel historique',
+            'meal': 'Déjeuner',
+            'kcal': 620,
+            'p': 32,
+            'c': 74,
+            'f': 18,
+            'qty': 1,
+          }
+        ]
+      };
+      final legacyOutbox = [
+        {
+          'key': 'pace.nutrition.items',
+          'value': legacyItems,
+          'operation': 'upsert',
+          'queuedAt': '2026-11-11T20:00:00.000Z',
+        }
+      ];
+      await file.writeAsString(jsonEncode({
+        'pace.nutrition.items': legacyItems,
+        '__outbox': legacyOutbox,
+      }));
+
+      final store = await LocalStore.openAt(file);
+      expect(store.currentAccountId, isNull);
+      expect(store.read('pace.nutrition.items'), legacyItems);
+      expect(store.pendingOperations(), hasLength(1));
+
+      // Exercise the defensive guest-to-account migration path: even if a
+      // caller activates guest before login, the first user must inherit v1.
+      await store.activateAccount(null);
+      expect(store.currentAccountId, isNull);
+      expect(store.read('pace.nutrition.items'), isNull);
+      await store.activateAccount('user-a');
+
+      expect(store.currentAccountId, 'user-a');
+      expect(store.read('pace.nutrition.items'), legacyItems);
+      expect(store.pendingOperations(), hasLength(1));
+
+      await store.activateAccount('user-b');
+
+      expect(store.currentAccountId, 'user-b');
+      expect(store.read('pace.nutrition.items'), isNull);
+      expect(store.pendingOperations(), isEmpty);
+    });
+
+    test('recovers the last complete snapshot when interrupted replacement leaves only a backup', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-backup-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final file = File('${directory.path}/pace_local.json');
+      final backup = File('${file.path}.bak');
+      await backup.writeAsString(jsonEncode({
+        'pace.nutrition.items': {
+          '2026-11-11': [
+            {'id': 'meal-recovered', 'name': 'Repas récupéré'}
+          ]
+        }
+      }));
+
+      final store = await LocalStore.openAt(file);
+      expect(store.read('pace.nutrition.items'), {
+        '2026-11-11': [
+          {'id': 'meal-recovered', 'name': 'Repas récupéré'}
+        ]
+      });
+      expect(await file.exists(), isTrue);
+      expect(await backup.exists(), isFalse);
+    });
+
+    test('fails closed and preserves an unreadable existing local file', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-corrupt-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final file = File('${directory.path}/pace_local.json');
+      const corrupted = '{invalid-json';
+      await file.writeAsString(corrupted);
+
+      await expectLater(
+        LocalStore.openAt(file),
+        throwsA(isA<StateError>()),
+      );
+      expect(await file.readAsString(), corrupted);
+    });
+
+    test('keeps Nutrition deletion tombstones isolated by account and out of sync outboxes', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-nutrition-tombstones-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final store = await LocalStore.openAt(
+        File('${directory.path}/pace_local.json'),
+      );
+
+      await store.activateAccount('user-a');
+      await store.write(
+        'pace.__sync_food_log_deleted_ids',
+        {
+          'userId': 'user-a',
+          'ids': ['meal-deleted-a'],
+          'pending': ['meal-deleted-a'],
+        },
+        enqueueSync: false,
+      );
+      expect(store.pendingOperations(), isEmpty);
+
+      await store.activateAccount('user-b');
+      expect(store.read('pace.__sync_food_log_deleted_ids'), isNull);
+      await store.write(
+        'pace.__sync_food_log_deleted_ids',
+        {'userId': 'user-b', 'ids': ['meal-deleted-b'], 'pending': []},
+        enqueueSync: false,
+      );
+
+      await store.activateAccount('user-a');
+      expect(store.read('pace.__sync_food_log_deleted_ids'), {
+        'userId': 'user-a',
+        'ids': ['meal-deleted-a'],
+        'pending': ['meal-deleted-a'],
+      });
+      expect(store.pendingOperations(), isEmpty);
+    });
+
+    test('discards device-local outbox entries without marking them synced', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-discard-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final file = File('${directory.path}/pace_local.json');
+      final store = await LocalStore.openAt(file);
+
+      await store.activateAccount('user-a');
+      final wallpaper = {'cacheKey': 'local-wallpaper-1'};
+      await store.write('pace.wallpaper', wallpaper);
+      final operationA = store.pendingOperations().single;
+
+      await store.activateAccount('user-b');
+      await store.write('pace.notes', {'id': 'note-b'});
+      final operationB = store.pendingOperations().single;
+
+      await store.discardOperationForAccount('user-a', operationA);
+
+      expect(store.currentAccountId, 'user-b');
+      expect(store.pendingOperations(), [operationB]);
+      expect(store.lastSyncedAt('pace.wallpaper'), isNull);
+
+      await store.activateAccount('user-a');
+      expect(store.read('pace.wallpaper'), wallpaper);
+      expect(store.pendingOperations(), isEmpty);
+      expect(store.lastSyncedAt('pace.wallpaper'), isNull);
+    });
+
+    test('keeps account outboxes isolated when a late acknowledgement arrives', () async {
+      final directory = await Directory.systemTemp.createTemp('pace-local-v2-');
+      addTearDown(() async {
+        if (await directory.exists()) {
+          await directory.delete(recursive: true);
+        }
+      });
+      final file = File('${directory.path}/pace_local.json');
+      final store = await LocalStore.openAt(file);
+
+      await store.activateAccount('user-a');
+      final nutritionA = {
+        '2026-11-11': [
+          {'id': 'meal-a', 'name': 'Repas A', 'kcal': 500}
+        ]
+      };
+      await store.write('pace.nutrition.items', nutritionA);
+      final operationA = store.pendingOperations().single;
+
+      await store.activateAccount('user-b');
+      expect(store.read('pace.nutrition.items'), isNull);
+      expect(store.pendingOperations(), isEmpty);
+
+      await store.write('pace.settings.theme', 'dark');
+      final operationB = store.pendingOperations().single;
+
+      await store.acknowledgeOperationForAccount(
+        'user-a',
+        operationA,
+        '2026-11-11T20:01:00.000Z',
+      );
+
+      // The late response for A must update A's saved outbox, not B's active one.
+      expect(store.currentAccountId, 'user-b');
+      expect(store.read('pace.settings.theme'), 'dark');
+      expect(store.pendingOperations(), [operationB]);
+      expect(store.lastSyncedAt('pace.settings.theme'), isNull);
+
+      await store.activateAccount('user-a');
+      expect(store.read('pace.nutrition.items'), nutritionA);
+      expect(store.pendingOperations(), isEmpty);
+      expect(
+        store.lastSyncedAt('pace.nutrition.items'),
+        '2026-11-11T20:01:00.000Z',
+      );
+
+      final reopened = await LocalStore.openAt(file);
+      expect(reopened.currentAccountId, 'user-a');
+      expect(reopened.read('pace.nutrition.items'), nutritionA);
+      await reopened.activateAccount('user-b');
+      expect(reopened.read('pace.settings.theme'), 'dark');
+      expect(reopened.pendingOperations(), [operationB]);
+    });
+  });
+}

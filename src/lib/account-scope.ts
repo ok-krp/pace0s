@@ -1,27 +1,159 @@
 const ACCOUNT_SCOPE_KEY = "pace.__account_scope";
-const DEVICE_KEY = "pace.__sync_device_id";
-const PRESERVED_KEYS = new Set([ACCOUNT_SCOPE_KEY, DEVICE_KEY]);
+const ACCOUNT_DATA_PREFIX = "pace.__account_data:";
 
 /**
- * Keep the signed-in user's local cache across a normal sign-out/sign-in cycle.
- * When a different account signs in, discard the previous user's app state so
- * it cannot leak into the new account while cloud hydration is running.
+ * App-owned browser state that must follow the authenticated user across
+ * sign-out/sign-in cycles. Internal keys (pace.__*) stay in place: in
+ * particular, account-scoped sync queues and the device ID are not moved.
  */
-export function switchLocalAccountScope(userId: string | null) {
-  if (typeof window === "undefined" || !userId) return false;
-  const nextScope = userId;
+function isAccountLocalKey(key: string): boolean {
+  return (key.startsWith("pace.") && !key.startsWith("pace.__")) ||
+    key.startsWith("lt.");
+}
+
+function accountSnapshotKey(scope: string): string {
+  return ACCOUNT_DATA_PREFIX + encodeURIComponent(scope);
+}
+
+const LEGACY_SYNC_KEYS = [
+  "pace.__sync_queue",
+  "pace.__sync_meta",
+  "pace.__sync_conflicts",
+] as const;
+
+function migrateLegacySyncState(scope: string): void {
+  for (const legacyKey of LEGACY_SYNC_KEYS) {
+    const legacyValue = localStorage.getItem(legacyKey);
+    if (legacyValue === null) continue;
+    const scopedKey = legacyKey + ":account:" + encodeURIComponent(scope);
+    if (localStorage.getItem(scopedKey) === null) {
+      localStorage.setItem(scopedKey, legacyValue);
+    }
+    // The global legacy slot must never remain available to a later account.
+    localStorage.removeItem(legacyKey);
+  }
+}
+
+function captureCurrentAccountState(): Record<string, string> {
+  const snapshot: Record<string, string> = {};
+  for (const key of Object.keys(localStorage)) {
+    if (!isAccountLocalKey(key)) continue;
+    const value = localStorage.getItem(key);
+    if (value !== null) snapshot[key] = value;
+  }
+  return snapshot;
+}
+
+function readAccountSnapshot(scope: string): Record<string, string> {
+  const raw = localStorage.getItem(accountSnapshotKey(scope));
+  if (raw === null) return {};
+  const value: unknown = JSON.parse(raw);
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Snapshot local de compte invalide.");
+  }
+  const snapshot: Record<string, string> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (isAccountLocalKey(key) && typeof entry === "string") {
+      snapshot[key] = entry;
+    }
+  }
+  return snapshot;
+}
+
+function restoreAccountSnapshot(snapshot: Record<string, string>): void {
+  for (const [key, value] of Object.entries(snapshot)) {
+    if (isAccountLocalKey(key)) localStorage.setItem(key, value);
+  }
+}
+
+function clearCurrentAccountState(): void {
+  for (const key of Object.keys(localStorage)) {
+    if (isAccountLocalKey(key)) localStorage.removeItem(key);
+  }
+}
+
+/**
+ * Switch the shared app-facing localStorage view while preserving a private
+ * snapshot for every account. The first authenticated account adopts legacy
+ * unscoped local data instead of losing it. Later account switches save the
+ * previous account before restoring the next one.
+ *
+ * Passing null moves the signed-out view to a separate guest snapshot.
+ */
+export function switchLocalAccountScope(userId: string | null): boolean {
+  if (typeof window === "undefined") return false;
+  const nextScope = userId ?? "__guest__";
+
   try {
     const previousScope = localStorage.getItem(ACCOUNT_SCOPE_KEY);
     if (previousScope === nextScope) return false;
 
-    for (const key of Object.keys(localStorage)) {
-      if ((key.startsWith("pace.") || key.startsWith("lt.")) && !PRESERVED_KEYS.has(key)) {
-        localStorage.removeItem(key);
+    const currentSnapshot = captureCurrentAccountState();
+
+    // Preserve the first install's legacy state for the first authenticated
+    // account. A signed-out initial render leaves it untouched as guest data.
+    if (previousScope === null) {
+      if (!userId) return false;
+      migrateLegacySyncState(nextScope);
+      // If a prior browser session left an account snapshot but lost its
+      // marker, that snapshot is authoritative; never replace it with whatever
+      // unscoped values happen to be visible after the reset.
+      const savedSnapshot = localStorage.getItem(accountSnapshotKey(nextScope));
+      if (savedSnapshot === null) {
+        localStorage.setItem(
+          accountSnapshotKey(nextScope),
+          JSON.stringify(currentSnapshot),
+        );
+      } else {
+        const restored = readAccountSnapshot(nextScope);
+        try {
+          clearCurrentAccountState();
+          restoreAccountSnapshot(restored);
+        } catch (error) {
+          clearCurrentAccountState();
+          restoreAccountSnapshot(currentSnapshot);
+          throw error;
+        }
       }
+      localStorage.setItem(ACCOUNT_SCOPE_KEY, nextScope);
+      window.dispatchEvent(new Event("pace.account.scope.changed"));
+      window.dispatchEvent(new Event("pace.remote.write"));
+      return true;
     }
-    localStorage.setItem(ACCOUNT_SCOPE_KEY, nextScope);
+
+    // Move any pre-account-scoping sync state to the namespace that owns
+    // the currently visible local app data before another user can sign in.
+    migrateLegacySyncState(previousScope);
+
+    // Parse the target snapshot before mutating the current visible data.
+    const nextSnapshot = readAccountSnapshot(nextScope);
+
+    // Save the previous account first. If this fails, leave the current view
+    // untouched so an account switch cannot silently discard manual entries.
+    localStorage.setItem(
+      accountSnapshotKey(previousScope),
+      JSON.stringify(currentSnapshot),
+    );
+
+    try {
+      clearCurrentAccountState();
+      restoreAccountSnapshot(nextSnapshot);
+      localStorage.setItem(ACCOUNT_SCOPE_KEY, nextScope);
+    } catch (error) {
+      // Best-effort rollback to the previous account's visible state.
+      clearCurrentAccountState();
+      restoreAccountSnapshot(currentSnapshot);
+      localStorage.setItem(ACCOUNT_SCOPE_KEY, previousScope);
+      throw error;
+    }
+
+    // AuthProvider remounts the user subtree after this function returns.
+    // These events also let any long-lived domain readers rehydrate promptly.
+    window.dispatchEvent(new Event("pace.account.scope.changed"));
+    window.dispatchEvent(new Event("pace.remote.write"));
     return true;
-  } catch {
-    return false;
+  } catch (error) {
+    console.error("[account-scope] local account switch failed", error);
+    throw new Error("Impossible de préserver les données locales avant le changement de compte.");
   }
 }

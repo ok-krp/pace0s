@@ -130,26 +130,6 @@ function applyRemoteDomainRecord(domain: string, value: unknown, updatedAt: stri
   } catch {}
 }
 
-function mergeRecipeCustomRemote(value: unknown, localValue?: unknown): unknown[] | null {
-  if (!Array.isArray(value)) return null;
-  try {
-    const rawLocal = localValue !== undefined ? localValue : localStorage.getItem("pace.recipes.custom");
-    const local = typeof rawLocal === "string" ? JSON.parse(rawLocal) : rawLocal ?? [];
-    if (!Array.isArray(local)) return value;
-    const byId = new Map<string, unknown>();
-    for (const item of local) {
-      if (item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string") byId.set((item as Record<string, unknown>).id as string, item);
-    }
-    const merged = [...value];
-    const remoteIds = new Set<string>();
-    for (const item of value) {
-      if (item && typeof item === "object" && typeof (item as Record<string, unknown>).id === "string") remoteIds.add((item as Record<string, unknown>).id as string);
-    }
-    for (const [id, item] of byId) if (!remoteIds.has(id)) merged.push(item);
-    return merged;
-  } catch { return value; }
-}
-
 function hasCompatibleTopLevelShape<T>(parsed: unknown, initial: T): parsed is T {
   if (Array.isArray(initial)) return Array.isArray(parsed);
   if (initial !== null && typeof initial === "object") return !!parsed && typeof parsed === "object" && !Array.isArray(parsed);
@@ -161,8 +141,9 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   const [loaded, setLoaded] = useState(false);
   const valueRef = useRef<T>(initial);
   const hydratedRef = useRef(false);
-  const suppressPersistRef = useRef(false);
-  useEffect(() => { hydratedRef.current = false; suppressPersistRef.current = false; }, [key]);
+  const pendingRemoteValueRef = useRef<unknown>(undefined);
+  const hasPendingRemoteValueRef = useRef(false);
+  useEffect(() => { hydratedRef.current = false; hasPendingRemoteValueRef.current = false; pendingRemoteValueRef.current = undefined; }, [key]);
   useEffect(() => {
     try {
       const raw = localStorage.getItem(key);
@@ -179,8 +160,23 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   useEffect(() => { valueRef.current = value; }, [value]);
   useEffect(() => {
     if (!loaded) return;
-    if (suppressPersistRef.current) { suppressPersistRef.current = false; return; }
-    if (!hydratedRef.current) { hydratedRef.current = true; return; }
+    if (!hydratedRef.current) {
+      hydratedRef.current = true;
+      // Complete the initial local/remote hydration without persisting it.
+      // Mark hydration complete even when the first state came from Realtime
+      // so the next manual change is never swallowed.
+      if (hasPendingRemoteValueRef.current && Object.is(pendingRemoteValueRef.current, value)) {
+        hasPendingRemoteValueRef.current = false;
+        pendingRemoteValueRef.current = undefined;
+      }
+      return;
+    }
+    if (hasPendingRemoteValueRef.current) {
+      const isRemoteEcho = Object.is(pendingRemoteValueRef.current, value);
+      hasPendingRemoteValueRef.current = false;
+      pendingRemoteValueRef.current = undefined;
+      if (isRemoteEcho) return;
+    }
     try {
       const serialized = JSON.stringify(value); const previous = localStorage.getItem(key); if (previous === serialized) return;
       localStorage.setItem(key, serialized);
@@ -193,9 +189,10 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
     const onRemote = (e: Event) => {
       const detail = (e as CustomEvent<{ key: string; value: unknown }>).detail;
       if (!detail || detail.key !== key) return;
-      suppressPersistRef.current = true;
-      const next = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(detail.value, valueRef.current) : detail.value;
-      if (!hasCompatibleTopLevelShape(next, initial)) return;
+      const next = detail.value;
+      if (!hasCompatibleTopLevelShape(next, initial) || Object.is(valueRef.current, next)) return;
+      hasPendingRemoteValueRef.current = true;
+      pendingRemoteValueRef.current = next;
       valueRef.current = next as T;
       setValue(next as T);
     };
@@ -204,13 +201,25 @@ export function useLocalState<T>(key: string, initial: T): [T, (v: T | ((p: T) =
   }, [key]);
   const set = useCallback((next: T | ((p: T) => T)) => {
     const resolved = typeof next === "function" ? (next as (p: T) => T)(valueRef.current) : next;
+    // A user mutation arriving before the remote-state effect runs is local
+    // intent and must be persisted, not mistaken for a Realtime echo.
+    hasPendingRemoteValueRef.current = false;
+    pendingRemoteValueRef.current = undefined;
     valueRef.current = resolved;
-    if (key === "pace.recipes.custom" && typeof window !== "undefined") {
+    // Persist every local mutation synchronously at the setter boundary.
+    // The follow-up React effect remains a safety net, but now observes the
+    // exact value already stored and does not emit a duplicate cloud mutation.
+    if (typeof window !== "undefined") {
       try {
-        localStorage.setItem(key, JSON.stringify(resolved));
-        const updatedAt = new Date().toISOString();
-        const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
-        window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, { detail: { key, value: resolved, updatedAt, mutationId } }));
+        const serialized = JSON.stringify(resolved);
+        const previous = localStorage.getItem(key);
+        if (previous !== serialized) {
+          localStorage.setItem(key, serialized);
+          if (key === "pace.sport.overload") syncLatestOverloadRowsToTraining(resolved);
+          const updatedAt = new Date().toISOString();
+          const mutationId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${updatedAt}-${Math.random()}`;
+          window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, { detail: { key, value: resolved, updatedAt, mutationId } }));
+        }
       } catch {}
     }
     setValue(resolved);
@@ -226,7 +235,7 @@ function canonicalDomainFromRemoteKey(key: string): string | null {
 }
 
 export function applyRemoteWrite(key: string, value: unknown, updatedAt?: string) {
-  const safeValue = key === "pace.recipes.custom" ? mergeRecipeCustomRemote(value) ?? value : value;
+  const safeValue = value;
   const canonicalDomain = canonicalDomainFromRemoteKey(key);
   const storageKey = canonicalDomain ? `pace.domain.${canonicalDomain}` : key;
   try { localStorage.setItem(storageKey, JSON.stringify(safeValue)); } catch {}
