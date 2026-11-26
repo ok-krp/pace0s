@@ -691,7 +691,7 @@ export function useCloudSyncEngineInternal() {
       window.removeEventListener("pace.legal.changed", onLegalChanged);
       window.removeEventListener("pace.sync.conflict.resolved", onConflictResolved);
     };
-  }, [user]);
+  }, [user, session?.access_token]);
 
   const resolveConflict = useCallback(async (conflictId: string, choice: "local" | "remote" | "merge") => {
     const userId = user?.id; if (!userId) return; const conflict = readConflicts(userId).find((item) => item.id === conflictId); if (!conflict) return;
