@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.18"
   }
   public: {
     Tables: {
@@ -253,7 +253,22 @@ export type Database = {
           tool_name?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ai_tool_idempotency_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "ai_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_tool_idempotency_food_log_id_fkey"
+            columns: ["food_log_id"]
+            isOneToOne: false
+            referencedRelation: "food_log"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       audit_log: {
         Row: {
@@ -441,7 +456,7 @@ export type Database = {
           requested_at: string
           status: string
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           completed_at?: string | null
@@ -451,7 +466,7 @@ export type Database = {
           requested_at?: string
           status?: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           completed_at?: string | null
@@ -461,7 +476,7 @@ export type Database = {
           requested_at?: string
           status?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -647,6 +662,100 @@ export type Database = {
         }
         Relationships: []
       }
+      grocery_list_items: {
+        Row: {
+          category: string
+          checked: boolean
+          created_at: string
+          created_by: string | null
+          grocery_list_id: string
+          id: string
+          name: string
+          note: string | null
+          quantity: string | null
+          source: string
+          source_ref: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          checked?: boolean
+          created_at?: string
+          created_by?: string | null
+          grocery_list_id: string
+          id?: string
+          name: string
+          note?: string | null
+          quantity?: string | null
+          source?: string
+          source_ref?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          checked?: boolean
+          created_at?: string
+          created_by?: string | null
+          grocery_list_id?: string
+          id?: string
+          name?: string
+          note?: string | null
+          quantity?: string | null
+          source?: string
+          source_ref?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grocery_list_items_grocery_list_id_fkey"
+            columns: ["grocery_list_id"]
+            isOneToOne: false
+            referencedRelation: "grocery_lists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      grocery_lists: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          status: string
+          updated_at: string
+          week_start: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+          week_start?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+          week_start?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grocery_lists_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       health_e2ee_devices: {
         Row: {
           algorithm: string
@@ -677,7 +786,85 @@ export type Database = {
         }
         Relationships: []
       }
-
+      health_e2ee_key_envelopes: {
+        Row: {
+          algorithm: string
+          created_at: string
+          device_id: string
+          envelope: string
+          id: string
+          key_version: number
+          nonce: string | null
+          pairing_session_id: string | null
+          sender_device_id: string | null
+          user_id: string
+        }
+        Insert: {
+          algorithm?: string
+          created_at?: string
+          device_id: string
+          envelope: string
+          id?: string
+          key_version?: number
+          nonce?: string | null
+          pairing_session_id?: string | null
+          sender_device_id?: string | null
+          user_id: string
+        }
+        Update: {
+          algorithm?: string
+          created_at?: string
+          device_id?: string
+          envelope?: string
+          id?: string
+          key_version?: number
+          nonce?: string | null
+          pairing_session_id?: string | null
+          sender_device_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "health_e2ee_key_envelopes_device_id_fkey"
+            columns: ["device_id"]
+            isOneToOne: false
+            referencedRelation: "health_e2ee_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "health_e2ee_key_envelopes_pairing_session_id_fkey"
+            columns: ["pairing_session_id"]
+            isOneToOne: false
+            referencedRelation: "health_e2ee_pairing_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "health_e2ee_key_envelopes_sender_device_id_fkey"
+            columns: ["sender_device_id"]
+            isOneToOne: false
+            referencedRelation: "health_e2ee_devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      health_e2ee_key_versions: {
+        Row: {
+          current_key_version: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          current_key_version?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          current_key_version?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       health_e2ee_pairing_sessions: {
         Row: {
           attempt_count: number
@@ -742,79 +929,22 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
-      }
-      health_e2ee_key_envelopes: {
-        Row: {
-          algorithm: string
-          created_at: string
-          device_id: string
-          envelope: string
-          id: string
-          key_version: number
-          nonce: string | null
-          sender_device_id: string | null
-          pairing_session_id: string | null
-          user_id: string
-        }
-        Insert: {
-          algorithm?: string
-          created_at?: string
-          device_id: string
-          envelope: string
-          id?: string
-          key_version?: number
-          nonce?: string | null
-          sender_device_id?: string | null
-          pairing_session_id?: string | null
-          user_id: string
-        }
-        Update: {
-          algorithm?: string
-          created_at?: string
-          device_id?: string
-          envelope?: string
-          id?: string
-          key_version?: number
-          nonce?: string | null
-          sender_device_id?: string | null
-          pairing_session_id?: string | null
-          user_id?: string
-        }
         Relationships: [
           {
-            foreignKeyName: "health_e2ee_key_envelopes_device_id_fkey"
-            columns: ["device_id"]
+            foreignKeyName: "health_e2ee_pairing_sessions_initiator_device_id_fkey"
+            columns: ["initiator_device_id"]
             isOneToOne: false
             referencedRelation: "health_e2ee_devices"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "health_e2ee_key_envelopes_sender_device_id_fkey"
-            columns: ["sender_device_id"]
+            foreignKeyName: "health_e2ee_pairing_sessions_recipient_device_id_fkey"
+            columns: ["recipient_device_id"]
             isOneToOne: false
             referencedRelation: "health_e2ee_devices"
             referencedColumns: ["id"]
           },
         ]
-      }
-      health_e2ee_key_versions: {
-        Row: {
-          current_key_version: number
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          current_key_version?: number
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          current_key_version?: number
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
       }
       health_e2ee_recovery_envelopes: {
         Row: {
@@ -908,30 +1038,30 @@ export type Database = {
           algorithm: string
           ciphertext: string
           created_at: string
+          dedupe_hash: string | null
           id: string
           key_version: number
           nonce: string
-          dedupe_hash: string | null
           user_id: string
         }
         Insert: {
           algorithm?: string
           ciphertext: string
           created_at?: string
+          dedupe_hash?: string | null
           id?: string
           key_version?: number
           nonce: string
-          dedupe_hash?: string | null
           user_id: string
         }
         Update: {
           algorithm?: string
           ciphertext?: string
           created_at?: string
+          dedupe_hash?: string | null
           id?: string
           key_version?: number
           nonce?: string
-          dedupe_hash?: string | null
           user_id?: string
         }
         Relationships: []
@@ -996,6 +1126,45 @@ export type Database = {
           sent_at?: string
           type?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      nutrition_calibration_feedback: {
+        Row: {
+          corrected_result: Json
+          created_at: string
+          dish_name: string
+          id: string
+          input_items: Json
+          original_result: Json
+          source: string
+          status: string
+          user_id: string
+          validated_at: string | null
+        }
+        Insert: {
+          corrected_result: Json
+          created_at?: string
+          dish_name: string
+          id?: string
+          input_items: Json
+          original_result: Json
+          source?: string
+          status?: string
+          user_id: string
+          validated_at?: string | null
+        }
+        Update: {
+          corrected_result?: Json
+          created_at?: string
+          dish_name?: string
+          id?: string
+          input_items?: Json
+          original_result?: Json
+          source?: string
+          status?: string
+          user_id?: string
+          validated_at?: string | null
         }
         Relationships: []
       }
@@ -1233,6 +1402,7 @@ export type Database = {
           carbs_g_per_100g: number
           category: string | null
           confidence: number
+          created_at: string
           fat_g_per_100g: number
           fiber_g_per_100g: number
           id: string
@@ -1244,6 +1414,7 @@ export type Database = {
           source_id: string | null
           source_record_id: string | null
           sugar_g_per_100g: number
+          updated_at: string
           verified_at: string | null
           version: string
         }
@@ -1253,6 +1424,7 @@ export type Database = {
           carbs_g_per_100g?: number
           category?: string | null
           confidence?: number
+          created_at?: string
           fat_g_per_100g?: number
           fiber_g_per_100g?: number
           id?: string
@@ -1264,6 +1436,7 @@ export type Database = {
           source_id?: string | null
           source_record_id?: string | null
           sugar_g_per_100g?: number
+          updated_at?: string
           verified_at?: string | null
           version?: string
         }
@@ -1273,6 +1446,7 @@ export type Database = {
           carbs_g_per_100g?: number
           category?: string | null
           confidence?: number
+          created_at?: string
           fat_g_per_100g?: number
           fiber_g_per_100g?: number
           id?: string
@@ -1284,6 +1458,7 @@ export type Database = {
           source_id?: string | null
           source_record_id?: string | null
           sugar_g_per_100g?: number
+          updated_at?: string
           verified_at?: string | null
           version?: string
         }
@@ -1333,12 +1508,57 @@ export type Database = {
         }
         Relationships: []
       }
+      pantry_items: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          name: string
+          quantity: string | null
+          unit: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          name: string
+          quantity?: string | null
+          unit?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          name?: string
+          quantity?: string | null
+          unit?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pantry_items_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           activity_level: string | null
           age: number | null
           avatar_url: string | null
           body_fat_goal_pct: number | null
+          created_at: string
           daily_calorie_goal: number | null
           daily_protein_goal: number | null
           daily_water_ml_goal: number | null
@@ -1362,6 +1582,7 @@ export type Database = {
           age?: number | null
           avatar_url?: string | null
           body_fat_goal_pct?: number | null
+          created_at?: string
           daily_calorie_goal?: number | null
           daily_protein_goal?: number | null
           daily_water_ml_goal?: number | null
@@ -1369,7 +1590,7 @@ export type Database = {
           email?: string | null
           full_name?: string | null
           height_cm?: number | null
-          id: string
+          id?: string
           muscle_mass_goal_pct?: number | null
           sex?: string | null
           training_goal?: string | null
@@ -1385,6 +1606,7 @@ export type Database = {
           age?: number | null
           avatar_url?: string | null
           body_fat_goal_pct?: number | null
+          created_at?: string
           daily_calorie_goal?: number | null
           daily_protein_goal?: number | null
           daily_water_ml_goal?: number | null
@@ -1892,12 +2114,120 @@ export type Database = {
         }
         Relationships: []
       }
+      workspace_members: {
+        Row: {
+          created_at: string
+          role: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          role?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          role?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          owner_user_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          owner_user_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          owner_user_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      backfill_health_e2ee_dedupe_hashes: {
+        Args: { p_updates: Json }
+        Returns: number
+      }
       canonicalize_nutrition_meal: { Args: { p_meal: string }; Returns: string }
+      complete_pairing_session: {
+        Args: { p_recipient_device_id: string; p_session_id: string }
+        Returns: undefined
+      }
+      confirm_pairing_session: {
+        Args: { p_initiator_device_id: string; p_session_id: string }
+        Returns: undefined
+      }
+      create_pairing_envelope: {
+        Args: {
+          p_algorithm: string
+          p_envelope: string
+          p_key_version: number
+          p_recipient_device_id: string
+          p_sender_device_id: string
+          p_session_id: string
+        }
+        Returns: string
+      }
+      create_pairing_session: {
+        Args: {
+          p_challenge: string
+          p_ephemeral_pub: Json
+          p_expires_in_seconds?: number
+          p_initiator_device_id: string
+          p_secret_hash: string
+        }
+        Returns: string
+      }
+      delete_user_data: { Args: { p_user_id: string }; Returns: undefined }
+      get_current_health_consent_state: {
+        Args: never
+        Returns: {
+          health_cloud_sync: boolean
+          health_data: boolean
+        }[]
+      }
+      get_pairing_session: {
+        Args: { p_session_id: string }
+        Returns: {
+          challenge: string
+          expires_at: string
+          id: string
+          initiator_device_id: string
+          initiator_ephemeral_public_key: Json
+          protocol_version: string
+          recipient_device_id: string
+          recipient_ephemeral_public_key: Json
+          status: string
+        }[]
+      }
       has_current_health_e2ee_consent: { Args: never; Returns: boolean }
       insert_coach_ai_food_idempotent: {
         Args: {
@@ -1944,6 +2274,22 @@ export type Database = {
           log_date: string
         }[]
       }
+      join_pairing_session: {
+        Args: {
+          p_ephemeral_pub: Json
+          p_recipient_device_id: string
+          p_secret_plaintext: string
+          p_session_id: string
+        }
+        Returns: undefined
+      }
+      list_account_storage_objects: {
+        Args: { p_user_id: string }
+        Returns: {
+          bucket_id: string
+          name: string
+        }[]
+      }
       migrate_health_legacy_chunk: {
         Args: { p_records: Json }
         Returns: number
@@ -1957,71 +2303,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      prepare_account_deletion: { Args: { p_user_id: string }; Returns: Json }
       rotate_health_e2ee_key: {
         Args: { p_new_key_version: number; p_revoked_device_id?: string }
         Returns: undefined
-      }
-      backfill_health_e2ee_dedupe_hashes: {
-        Args: { p_updates: Json }
-        Returns: number
-      }
-      create_pairing_session: {
-        Args: {
-          p_challenge: string
-          p_ephemeral_pub: Json
-          p_expires_in_seconds?: number
-          p_initiator_device_id: string
-          p_secret_hash: string
-        }
-        Returns: string
-      }
-      join_pairing_session: {
-        Args: {
-          p_ephemeral_pub: Json
-          p_recipient_device_id: string
-          p_secret_plaintext: string
-          p_session_id: string
-        }
-        Returns: undefined
-      }
-      confirm_pairing_session: {
-        Args: {
-          p_initiator_device_id: string
-          p_session_id: string
-        }
-        Returns: undefined
-      }
-      complete_pairing_session: {
-        Args: {
-          p_recipient_device_id: string
-          p_session_id: string
-        }
-        Returns: undefined
-      }
-      create_pairing_envelope: {
-        Args: {
-          p_algorithm: string
-          p_envelope: string
-          p_key_version: number
-          p_recipient_device_id: string
-          p_sender_device_id: string
-          p_session_id: string
-        }
-        Returns: string
-      }
-      get_pairing_session: {
-        Args: { p_session_id: string }
-        Returns: {
-          challenge: string
-          expires_at: string
-          id: string
-          initiator_device_id: string
-          initiator_ephemeral_public_key: Json
-          protocol_version: string
-          recipient_device_id: string | null
-          recipient_ephemeral_public_key: Json | null
-          status: string
-        }[]
       }
       sport_delete_exercise: { Args: { p_id: string }; Returns: boolean }
       sport_delete_program: { Args: { p_id: string }; Returns: boolean }
@@ -2075,7 +2360,7 @@ export type Database = {
           p_user_id: string
           p_value: Json
         }
-        Returns: Json
+        Returns: boolean
       }
     }
     Enums: {
