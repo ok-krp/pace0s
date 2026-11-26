@@ -12,10 +12,7 @@ class PaceSupabase {
     );
     final key = const String.fromEnvironment(
       'SUPABASE_PUBLISHABLE_KEY',
-      defaultValue: String.fromEnvironment(
-        'SUPABASE_ANON_KEY',
-        defaultValue: 'sb_publishable_LNvF5dXGd49ZUKi1rC8y_Q_5xxGkrmF',
-      ),
+      defaultValue: 'sb_publishable_LNvF5dXGd49ZUKi1rC8y_Q_5xxGkrmF',
     );
     if (url.isEmpty || key.isEmpty) return null;
     await Supabase.initialize(
