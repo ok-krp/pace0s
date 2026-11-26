@@ -589,6 +589,22 @@ export function useCloudSyncEngineInternal() {
       pruneEquivalentConflicts();
     };
 
+    // Low-payload private Broadcast is the primary remote-change signal.
+    // The database trigger publishes only the changed key and server timestamp;
+    // clients then pull the authoritative JSONB value through the existing
+    // account-scoped, device-local-filtered PostgREST query.
+    const realtimeChannel = supabase
+      .channel(`pace-user-state:${user.id}`, { config: { private: true } })
+      .on("broadcast", { event: "user_state_changed" }, (message) => {
+        if (cancelled || !allowed() || !navigator.onLine) return;
+        const payload = message.payload as { key?: unknown } | undefined;
+        if (typeof payload?.key !== "string" || !isSyncableKey(payload.key)) return;
+        void syncNow();
+      })
+      .subscribe((state) => {
+        if (state === "SUBSCRIBED" && !cancelled) void syncNow();
+      });
+
     const offLocal = onLocalWrite((key, value, updatedAt, mutationId) => {
       if (!isSyncableKey(key) || !updatedAt) return;
       const encoded = serialize(value);
@@ -635,6 +651,7 @@ export function useCloudSyncEngineInternal() {
     void syncNow();
     return () => {
       cancelled = true; offLocal();
+      void supabase.removeChannel(realtimeChannel);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
       window.clearInterval(reconcileTimer);
