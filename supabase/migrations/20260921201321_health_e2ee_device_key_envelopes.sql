@@ -11,8 +11,11 @@ create index if not exists health_e2ee_devices_user_idx on public.health_e2ee_de
 alter table public.health_e2ee_devices enable row level security;
 revoke all on public.health_e2ee_devices from anon;
 grant select, insert, update on public.health_e2ee_devices to authenticated;
+drop policy if exists health_e2ee_devices_select_own on public.health_e2ee_devices;
 create policy health_e2ee_devices_select_own on public.health_e2ee_devices for select to authenticated using ((select auth.uid()) = user_id);
+drop policy if exists health_e2ee_devices_insert_own on public.health_e2ee_devices;
 create policy health_e2ee_devices_insert_own on public.health_e2ee_devices for insert to authenticated with check ((select auth.uid()) = user_id);
+drop policy if exists health_e2ee_devices_update_own on public.health_e2ee_devices;
 create policy health_e2ee_devices_update_own on public.health_e2ee_devices for update to authenticated using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
 create table if not exists public.health_e2ee_key_envelopes (
@@ -30,6 +33,9 @@ create index if not exists health_e2ee_envelopes_device_idx on public.health_e2e
 alter table public.health_e2ee_key_envelopes enable row level security;
 revoke all on public.health_e2ee_key_envelopes from anon;
 grant select, insert, delete on public.health_e2ee_key_envelopes to authenticated;
+drop policy if exists health_e2ee_envelopes_select_own on public.health_e2ee_key_envelopes;
 create policy health_e2ee_envelopes_select_own on public.health_e2ee_key_envelopes for select to authenticated using ((select auth.uid()) = user_id);
+drop policy if exists health_e2ee_envelopes_insert_own on public.health_e2ee_key_envelopes;
 create policy health_e2ee_envelopes_insert_own on public.health_e2ee_key_envelopes for insert to authenticated with check ((select auth.uid()) = user_id);
+drop policy if exists health_e2ee_envelopes_delete_own on public.health_e2ee_key_envelopes;
 create policy health_e2ee_envelopes_delete_own on public.health_e2ee_key_envelopes for delete to authenticated using ((select auth.uid()) = user_id);
