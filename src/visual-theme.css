@@ -411,6 +411,7 @@ html[data-visual-theme="glass"][data-glass="low"] {
 }
 [data-visual-theme="glass"] .glass-card,
 [data-visual-theme="glass"] [class*="glass-card"],
+[data-visual-theme="glass"] [data-slot="card"],
 [data-visual-theme="glass"] .glass-thin,
 [data-visual-theme="glass"] .glass-icon,
 [data-visual-theme="glass"] aside,
