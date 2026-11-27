@@ -125,6 +125,7 @@ const DEFAULT: WallpaperChoice = { id: "graphite" };
 
 const wallpaperObjectUrls = new Map<string, Promise<string>>();
 const legacyWallpaperMigrations = new Map<string, Promise<string>>();
+let wallpaperRenderVersion = 0;
 
 function releaseWallpaperObjectUrl(path: string | undefined) {
   if (!path) return;
@@ -290,6 +291,7 @@ export function useWallpaper() {
 export function applyWallpaper(choice: WallpaperChoice) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
+  const renderVersion = ++wallpaperRenderVersion;
   const isDark = root.classList.contains("dark");
 
   if ("kind" in choice && choice.kind === "custom") {
@@ -311,7 +313,10 @@ export function applyWallpaper(choice: WallpaperChoice) {
         : "linear-gradient(135deg, #e7e7e7, #f5f5f5)");
       const objectUrlRequest = getWallpaperObjectUrl(choice.storagePath);
       void objectUrlRequest.then((url) => {
-        if (root.dataset.wallpaperPath !== choice.storagePath) {
+        if (
+          renderVersion !== wallpaperRenderVersion ||
+          root.dataset.wallpaperPath !== choice.storagePath
+        ) {
           // A fast sequence of wallpaper changes can finish downloads out of
           // order. Never retain or apply an ObjectURL for a no-longer-active image.
           if (wallpaperObjectUrls.get(choice.storagePath) === objectUrlRequest) {
