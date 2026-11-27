@@ -371,6 +371,12 @@ assert.ok(
   engine.includes("if (!isSyncableRecord(key, row.value)) continue;"),
   "Web remote pulls must reject inline image data, device-local paths and malformed custom wallpaper records",
 );
+assert.ok(
+  engine.includes("const ownerPrefix = `\u0024{userId}/`;") &&
+    engine.includes("const objectName = storagePath.slice(ownerPrefix.length);") &&
+    engine.includes("/^[A-Za-z0-9._-]+$/.test(objectName)"),
+  "Web must reject wallpaper object paths outside the account folder or containing nested, traversal-like, or encoded names",
+);
 const webWallpaperPreserveStart = engine.indexOf("const localWallpaperOverride =");
 const webWallpaperPreserveEnd = engine.indexOf("const localIsEmpty", webWallpaperPreserveStart);
 const webWallpaperPreserve = engine.slice(webWallpaperPreserveStart, webWallpaperPreserveEnd);
