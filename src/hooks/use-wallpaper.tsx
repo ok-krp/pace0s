@@ -206,8 +206,13 @@ export function useWallpaper() {
       void migration.then((storagePath) => {
         if (!cancelled) setChoice({ kind: "custom", storagePath });
       }).catch((error) => {
-        legacyWallpaperMigrations.delete(migrationKey);
         console.warn("[wallpaper] legacy image migration failed", error);
+      }).finally(() => {
+        // Do not retain potentially multi-megabyte data URLs as Map keys after
+        // their one-time migration has completed.
+        if (legacyWallpaperMigrations.get(migrationKey) === migration) {
+          legacyWallpaperMigrations.delete(migrationKey);
+        }
       });
     };
 
