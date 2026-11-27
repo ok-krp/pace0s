@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Bug, Lightbulb, ListChecks, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/Stat";
-import { supabase } from "@/integrations/supabase/client";
+import { createPrivateRealtimeChannel, supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/development")({
@@ -43,7 +43,7 @@ function DevelopmentPage() {
       setTasks((data ?? []) as Task[]);
     };
     void load();
-    const channel = supabase.channel(`development-tasks-${user.id}`, { config: { private: true } })
+    const channel = createPrivateRealtimeChannel(`development-tasks-${user.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "development_tasks", filter: `user_id=eq.${user.id}` }, () => { void load(); })
       .subscribe((status) => {
         if (!active) return;
