@@ -6,6 +6,10 @@ on:
       - "src/hooks/use-cloud-sync-engine.tsx"
       - "src/components/CloudSyncSettings.tsx"
       - "src/hooks/use-cloud-sync.tsx"
+      - "src/hooks/use-health.tsx"
+      - "src/lib/health.functions.ts"
+      - "src/lib/legal.functions.ts"
+      - "src/lib/privacy.functions.ts"
       - "src/lib/storage.ts"
       - "src/lib/ai-chat.server.ts"
       - "src/lib/nutrition-log.ts"
@@ -17,11 +21,17 @@ on:
       - "bun.lock"
       - ".github/workflows/cloud-sync-audit.yml"
   push:
-    branches: [main]
+    branches:
+      - main
+      - "fix/**"
     paths:
       - "src/hooks/use-cloud-sync-engine.tsx"
       - "src/components/CloudSyncSettings.tsx"
       - "src/hooks/use-cloud-sync.tsx"
+      - "src/hooks/use-health.tsx"
+      - "src/lib/health.functions.ts"
+      - "src/lib/legal.functions.ts"
+      - "src/lib/privacy.functions.ts"
       - "src/lib/storage.ts"
       - "src/lib/ai-chat.server.ts"
       - "src/lib/nutrition-log.ts"
