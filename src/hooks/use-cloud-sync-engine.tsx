@@ -99,12 +99,18 @@ function isSyncableKey(key: string) {
     key !== DOMAIN_OUTBOX_KEY &&
     !isDeviceLocalSyncKey(key);
 }
-function isInlineWallpaperValue(key: string, value: unknown) {
+function readWallpaperCandidate(key: string, value: unknown): unknown {
   const canonicalKey = key.startsWith("lt.") ? `pace.${key.slice(3)}` : key;
-  if (!["pace.wallpaper", "pace.domain.wallpaper"].includes(canonicalKey)) return false;
-  const candidate = value && typeof value === "object" && "value" in value
-    ? (value as { value: unknown }).value
-    : value;
+  if (!["pace.wallpaper", "pace.domain.wallpaper"].includes(canonicalKey)) return undefined;
+  let candidate = value;
+  while (candidate && typeof candidate === "object" && "value" in candidate &&
+      "version" in candidate && (candidate as { version?: unknown }).version === 1) {
+    candidate = (candidate as { value: unknown }).value;
+  }
+  return candidate;
+}
+function isInlineWallpaperValue(key: string, value: unknown) {
+  const candidate = readWallpaperCandidate(key, value);
   if (!candidate || typeof candidate !== "object" || !("kind" in candidate) ||
       (candidate as { kind?: unknown }).kind !== "custom") return false;
   const wallpaper = candidate as {
@@ -122,8 +128,17 @@ function isInlineWallpaperValue(key: string, value: unknown) {
     wallpaper.storagePath.trim().length === 0
   );
 }
-function isSyncableRecord(key: string, value: unknown) {
-  return isSyncableKey(key) && !isInlineWallpaperValue(key, value);
+function isWallpaperPathOwnedByUser(key: string, value: unknown, userId: string) {
+  const candidate = readWallpaperCandidate(key, value);
+  if (!candidate || typeof candidate !== "object" || !("kind" in candidate) ||
+      (candidate as { kind?: unknown }).kind !== "custom") return true;
+  const storagePath = (candidate as { storagePath?: unknown }).storagePath;
+  return typeof storagePath === "string" && storagePath.startsWith(`${userId}/`);
+}
+function isSyncableRecord(key: string, value: unknown, userId: string) {
+  return isSyncableKey(key) &&
+    !isInlineWallpaperValue(key, value) &&
+    isWallpaperPathOwnedByUser(key, value, userId);
 }
 function scopedSyncStorageKey(base: string, userId: string) {
   return `${base}:account:${encodeURIComponent(userId)}`;
@@ -163,11 +178,15 @@ function readQueue(userId: string): QueueItem[] {
         if (!timestamp) return [];
         let value: unknown;
         try { value = JSON.parse(localStorage.getItem(item) ?? "null"); } catch { value = null; }
-        return [{ key: item, value, updatedAt: timestamp, ownerUserId: userId }];
+        return isSyncableRecord(item, value, userId)
+          ? [{ key: item, value, updatedAt: timestamp, ownerUserId: userId }]
+          : [];
       }
       if (!item?.key || !item?.updatedAt) return [];
       if (item.ownerUserId && item.ownerUserId !== userId) return [];
-      return [{ ...item, ownerUserId: userId }];
+      return isSyncableRecord(item.key, item.value, userId)
+        ? [{ ...item, ownerUserId: userId }]
+        : [];
     });
   } catch { return []; }
 }
@@ -176,12 +195,12 @@ function writeQueue(items: QueueItem[], userId: string) {
     QUEUE_KEY,
     userId,
     items
-      .filter((item) => isSyncableRecord(item.key, item.value) && (!item.ownerUserId || item.ownerUserId === userId))
+      .filter((item) => isSyncableRecord(item.key, item.value, userId) && (!item.ownerUserId || item.ownerUserId === userId))
       .map((item) => ({ ...item, ownerUserId: userId })),
   );
 }
 function queueItem(item: QueueItem, userId: string) {
-  if (!isSyncableRecord(item.key, item.value) || !item.updatedAt) return;
+  if (!isSyncableRecord(item.key, item.value, userId) || !item.updatedAt) return;
   const next = readQueue(userId).filter((queued) => queued.key !== item.key);
   next.push({ ...item, ownerUserId: userId });
   writeQueue(next, userId);
@@ -415,7 +434,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const pushItem = async (item: QueueItem) => {
-      if (cancelled || !allowed() || !isSyncableRecord(item.key, item.value) || !navigator.onLine) return;
+      if (cancelled || !allowed() || !isSyncableRecord(item.key, item.value, user.id) || !navigator.onLine) return;
       const writeKey = `${user.id}:${item.key}`;
       const previous = keyWrites.current[writeKey] ?? Promise.resolve();
       const current = previous.then(async () => {
@@ -502,7 +521,7 @@ export function useCloudSyncEngineInternal() {
         for (const raw of data) {
           const row = raw as unknown as SyncRow;
           const key = row.key.startsWith("lt.") ? `${PACE_PREFIX}${row.key.slice(3)}` : row.key;
-          if (!isSyncableRecord(key, row.value)) continue;
+          if (!isSyncableRecord(key, row.value, user.id)) continue;
           const bucket = grouped.get(key) ?? {};
           if (row.key.startsWith("lt.")) bucket.legacy = row;
           else bucket.canonical = row;
@@ -711,7 +730,7 @@ export function useCloudSyncEngineInternal() {
     }
 
     const offLocal = onLocalWrite((key, value, updatedAt, mutationId) => {
-      if (!isSyncableRecord(key, value) || !updatedAt) return;
+      if (!isSyncableRecord(key, value, user.id) || !updatedAt) return;
       const encoded = serialize(value);
       const memoryKey = user.id + ':' + key;
       if (encoded !== undefined && lastRemoteValues.current[memoryKey] === encoded) { delete lastRemoteValues.current[memoryKey]; return; }
