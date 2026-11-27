@@ -959,6 +959,22 @@ assert.equal(sleepPersistDecision({ cloudLoaded: true, hasUserEdited: true }), t
 assert.deepEqual(sleepDefaults, { start: "23:30", end: "07:00", quality: 8 });
 
 
+const scanRoute = read("src/routes/scan.tsx");
+const photoButtonStart = scanRoute.indexOf('onClick={() => fileRef.current?.click()}');
+const photoButtonEnd = scanRoute.indexOf("</motion.button>", photoButtonStart);
+const photoInputIndex = scanRoute.indexOf("<input ref={fileRef}");
+assert.ok(photoButtonStart >= 0 && photoButtonEnd > photoButtonStart && photoInputIndex > photoButtonEnd,
+  "The photo file input must be outside its trigger button to prevent recursive click bubbling");
+assert.ok(scanRoute.includes("const analyzePhoto = useServerFn(analyzeFoodPhoto)"),
+  "The scan route must invoke photo analysis through the TanStack server-function client");
+assert.ok(scanRoute.includes("preparePhotoForAi(file)"),
+  "The scan route must compress large phone photos before Storage upload");
+assert.ok(scanRoute.includes("file.size > MAX_NUTRITION_PHOTO_BYTES"),
+  "The scan route must use the shared 25 MiB source-photo limit");
+const nutritionPhoto = read("src/lib/nutrition-photo.ts");
+assert.ok(nutritionPhoto.includes("const MAX_UPLOAD_BYTES = 6.5 * 1024 * 1024;"),
+  "Both nutrition photo entry points must share the 6.5 MiB compressed upload target");
+
 console.log("cloud-sync-contract-test: PASS");
 
 assert.match(engine, /pruneEquivalentConflicts\(\);\s*if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
