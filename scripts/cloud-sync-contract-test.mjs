@@ -9,17 +9,17 @@ const rootShell = read("src/routes/__root.tsx");
 const appSidebar = read("src/components/AppSidebar.tsx");
 assert.match(
   rootShell,
-  /pb-20 xl:pb-6 flex flex-col xl:ml-\\[312px\\]/,
+  /pb-20 xl:pb-6 flex flex-col xl:ml-\[312px\]/,
   "A fixed desktop sidebar must reserve horizontal space only from the wide-screen breakpoint",
 );
 assert.doesNotMatch(
   rootShell,
-  /md:ml-\\[312px\\]/,
+  /md:ml-\[312px\]/,
   "Tablet widths must not reserve the desktop sidebar gutter",
 );
 assert.match(
   rootShell,
-  /max-w-\\[1400px\\] mx-auto min-h-0 px-3 xl:px-8 pt-2 xl:pt-8/,
+  /max-w-\[1400px\] mx-auto min-h-0 px-3 xl:px-8 pt-2 xl:pt-8/,
   "Tablet content must use the full available width and wide-screen padding only on desktop",
 );
 assert.match(
