@@ -395,3 +395,56 @@ html.dark:not([data-visual-theme="glass"]) .pace-auth-page .glass-thin { backgro
 html.dark:not([data-visual-theme="glass"]) .pace-auth-page input { background:#0b0b0b !important; border-color:rgb(255 255 255/.16) !important; color:#f5f5f5 !important; }
 .pace-logo { background:#000; color:#fff; border:1px solid rgb(0 0 0); box-shadow:0 8px 24px -10px rgb(0 0 0/.5); }
 html.dark .pace-logo { background:#000; color:#fff; border-color:rgb(255 255 255/.28); box-shadow:0 0 0 1px rgb(255 255 255/.06), 0 12px 36px -16px rgb(255 255 255/.25); }
+
+/* Uniform Liquid Glass material: every translucent surface uses the same fill, opacity and blur. */
+[data-visual-theme="glass"] {
+  --lg-material-fill: var(--lg-fill);
+  --lg-material-border: var(--lg-border);
+  --lg-material-blur: 22px;
+  --lg-material-saturate: 100%;
+}
+html[data-visual-theme="glass"][data-glass="balanced"] {
+  --lg-material-blur: 5px;
+}
+html[data-visual-theme="glass"][data-glass="low"] {
+  --lg-material-blur: 0px;
+}
+[data-visual-theme="glass"] .glass-card,
+[data-visual-theme="glass"] [class*="glass-card"],
+[data-visual-theme="glass"] .glass-thin,
+[data-visual-theme="glass"] .glass-icon,
+[data-visual-theme="glass"] aside,
+[data-visual-theme="glass"] header,
+[data-visual-theme="glass"] [role="dialog"],
+[data-visual-theme="glass"] [data-slot="select-content"],
+[data-visual-theme="glass"] [data-slot="dropdown-menu-content"],
+[data-visual-theme="glass"] [data-slot="popover-content"],
+[data-visual-theme="glass"] [cmdk-root],
+[data-visual-theme="glass"] input,
+[data-visual-theme="glass"] textarea,
+[data-visual-theme="glass"] select,
+[data-visual-theme="glass"] button[data-variant="outline"],
+[data-visual-theme="glass"] button[data-variant="secondary"],
+[data-visual-theme="glass"] nav a[aria-current="page"],
+[data-visual-theme="glass"] nav a[data-active="true"],
+[data-visual-theme="glass"] .pace-logo {
+  background: var(--lg-material-fill) !important;
+  border-color: var(--lg-material-border) !important;
+  backdrop-filter: blur(var(--lg-material-blur)) saturate(var(--lg-material-saturate)) !important;
+  -webkit-backdrop-filter: blur(var(--lg-material-blur)) saturate(var(--lg-material-saturate)) !important;
+}
+
+/* Chromium refraction retains the same blur value as every other glass surface. */
+html[data-visual-theme="glass"][data-lg-refract] .glass-card,
+html[data-visual-theme="glass"][data-lg-refract] .glass-thin,
+html[data-visual-theme="glass"][data-lg-refract] .glass-icon,
+html[data-visual-theme="glass"][data-lg-refract] aside,
+html[data-visual-theme="glass"][data-lg-refract] header,
+html[data-visual-theme="glass"][data-lg-refract] [role="dialog"],
+html[data-visual-theme="glass"][data-lg-refract] [data-slot="select-content"],
+html[data-visual-theme="glass"][data-lg-refract] [data-slot="dropdown-menu-content"],
+html[data-visual-theme="glass"][data-lg-refract] [data-slot="popover-content"],
+html[data-visual-theme="glass"][data-lg-refract] [cmdk-root] {
+  backdrop-filter: url(#pace-liquid-refract) blur(var(--lg-material-blur)) saturate(var(--lg-material-saturate)) !important;
+  -webkit-backdrop-filter: url(#pace-liquid-refract) blur(var(--lg-material-blur)) saturate(var(--lg-material-saturate)) !important;
+}
