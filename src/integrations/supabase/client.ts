@@ -42,7 +42,7 @@ export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>,
 type RealtimeChannelOptions = NonNullable<Parameters<typeof supabase.channel>[1]>;
 export function createPrivateRealtimeChannel(
   topic: string,
-  options: RealtimeChannelOptions = {},
+  options: Partial<RealtimeChannelOptions> = {},
 ) {
   return supabase.channel(topic, {
     ...options,
