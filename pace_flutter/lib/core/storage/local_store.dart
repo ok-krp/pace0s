@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 /// Durable local state used by the native app. It is independent from the web
 /// application and is safe to use while completely offline.
 typedef LocalMutationListener = void Function(String key);
+typedef LocalChangeListener = void Function(String key);
 
 class LocalStore {
   LocalStore._(this._file);
@@ -17,6 +18,23 @@ class LocalStore {
   String _scope = '__unscoped__';
   Future<void> _flushQueue = Future<void>.value();
   final Set<LocalMutationListener> _mutationListeners = <LocalMutationListener>{};
+  final Set<LocalChangeListener> _changeListeners = <LocalChangeListener>{};
+
+  void addChangeListener(LocalChangeListener listener) {
+    _changeListeners.add(listener);
+  }
+
+  void removeChangeListener(LocalChangeListener listener) {
+    _changeListeners.remove(listener);
+  }
+
+  void _notifyChange(String key) {
+    for (final listener in List<LocalChangeListener>.from(_changeListeners)) {
+      try {
+        listener(key);
+      } catch (_) {}
+    }
+  }
 
   void addMutationListener(LocalMutationListener listener) {
     _mutationListeners.add(listener);
@@ -133,6 +151,7 @@ class LocalStore {
       _accounts[targetScope] ?? <String, dynamic>{},
     );
     await _flush();
+    _notifyChange('*');
   }
 
   Future<void> write(String key, dynamic value, {bool enqueueSync = true}) async {
@@ -149,6 +168,7 @@ class LocalStore {
       _data['__outbox'] = outbox;
     }
     await _flush();
+    _notifyChange(key);
     if (enqueueSync) _notifyMutation(key);
   }
 
@@ -165,6 +185,7 @@ class LocalStore {
       _data['__outbox'] = outbox;
     }
     await _flush();
+    _notifyChange(key);
     if (enqueueSync) _notifyMutation(key);
   }
 
@@ -172,6 +193,7 @@ class LocalStore {
     _data[key] = value;
     _setSyncedAt(key, updatedAt);
     await _flush();
+    _notifyChange(key);
   }
 
   Future<void> markSyncedAt(String key, String updatedAt) async {
