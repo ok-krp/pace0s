@@ -1,4 +1,7 @@
 import { useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
+import { isLegalCategoryAllowed } from "@/lib/legal";
 import { useLocalState } from "@/lib/storage";
 
 /**
@@ -112,24 +115,83 @@ export const WALLPAPERS: WallpaperPreset[] = [
   },
 ];
 
-type CustomWallpaper = { kind: "custom"; dataUrl: string };
+type CustomWallpaper =
+  | { kind: "custom"; dataUrl: string }
+  | { kind: "custom"; storagePath: string };
 type WallpaperChoice = { id: string } | CustomWallpaper;
 
 const KEY = "pace.wallpaper";
 const DEFAULT: WallpaperChoice = { id: "graphite" };
 
+const wallpaperObjectUrls = new Map<string, Promise<string>>();
+
+async function uploadWallpaper(blob: Blob, userId: string): Promise<string> {
+  const extension = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+  const path = `${userId}/${crypto.randomUUID()}.${extension}`;
+  const { error } = await supabase.storage.from("pace-wallpapers").upload(path, blob, {
+    contentType: blob.type,
+    cacheControl: "31536000",
+    upsert: false,
+  });
+  if (error) throw error;
+  return path;
+}
+
+function getWallpaperObjectUrl(path: string): Promise<string> {
+  const cached = wallpaperObjectUrls.get(path);
+  if (cached) return cached;
+  const request = supabase.storage.from("pace-wallpapers").download(path).then(({ data, error }) => {
+    if (error || !data) throw error ?? new Error("Fond d'écran introuvable.");
+    return URL.createObjectURL(data);
+  }).catch((error) => {
+    wallpaperObjectUrls.delete(path);
+    throw error;
+  });
+  wallpaperObjectUrls.set(path, request);
+  return request;
+}
+
 export function useWallpaper() {
+  const { user } = useAuth();
   const [choice, setChoice] = useLocalState<WallpaperChoice>(KEY, DEFAULT);
 
   useEffect(() => {
     applyWallpaper(choice);
-  }, [choice]);
+    // Migrate an existing local-only custom image to private Storage once the
+    // account has explicitly enabled cross-device sync. Never put image bytes
+    // into user_state: only the small Storage object path is synchronized.
+    if (
+      user?.id &&
+      "kind" in choice &&
+      choice.kind === "custom" &&
+      "dataUrl" in choice &&
+      isLegalCategoryAllowed("sync_cloud")
+    ) {
+      let cancelled = false;
+      void fetch(choice.dataUrl)
+        .then((response) => response.blob())
+        .then((blob) => uploadWallpaper(blob, user.id))
+        .then((storagePath) => {
+          if (!cancelled) setChoice({ kind: "custom", storagePath });
+        })
+        .catch((error) => console.warn("[wallpaper] legacy image migration failed", error));
+      return () => { cancelled = true; };
+    }
+  }, [choice, user?.id]);
 
   return {
     choice,
     presets: WALLPAPERS,
     set: (id: string) => setChoice({ id }),
-    setCustom: (dataUrl: string) => setChoice({ kind: "custom", dataUrl }),
+    setCustom: async (file: File) => {
+      if (!user?.id) throw new Error("Connecte-toi pour enregistrer un fond d'écran synchronisable.");
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        throw new Error("Formats acceptés : JPG, PNG ou WebP.");
+      }
+      if (file.size > 4 * 1024 * 1024) throw new Error("Image trop lourde (maximum 4 Mo).");
+      const storagePath = await uploadWallpaper(file, user.id);
+      setChoice({ kind: "custom", storagePath });
+    },
     reset: () => setChoice(DEFAULT),
   };
 }
@@ -141,17 +203,27 @@ export function applyWallpaper(choice: WallpaperChoice) {
   const isDark = root.classList.contains("dark");
 
   if ("kind" in choice && choice.kind === "custom") {
-    root.style.setProperty(
-      "--wallpaper",
-      `linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.15)), url("${choice.dataUrl}") center/cover no-repeat`,
-    );
-    // Neutral tint for custom photos + a slightly stronger floor so text stays
-    // readable on busy imagery (accessibility guard).
+    const overlay = isDark
+      ? "linear-gradient(180deg, rgba(0,0,0,0.16), rgba(0,0,0,0.28))"
+      : "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.10))";
+    if ("dataUrl" in choice) {
+      root.style.setProperty("--wallpaper", `${overlay}, url("${choice.dataUrl}") center/cover no-repeat`);
+    } else {
+      root.dataset.wallpaperPath = choice.storagePath;
+      root.style.setProperty("--wallpaper", isDark
+        ? "linear-gradient(135deg, #111315, #242629)"
+        : "linear-gradient(135deg, #e7e7e7, #f5f5f5)");
+      void getWallpaperObjectUrl(choice.storagePath).then((url) => {
+        if (root.dataset.wallpaperPath !== choice.storagePath) return;
+        root.style.setProperty("--wallpaper", `${overlay}, url("${url}") center/cover no-repeat`);
+      }).catch((error) => console.warn("[wallpaper] image download failed", error));
+    }
     root.style.setProperty("--glass-tint", isDark ? "10 14 22" : "255 255 255");
-    root.style.setProperty("--glass-tint-base", isDark ? "0.34" : "0.2");
+    root.style.setProperty("--glass-tint-base", isDark ? "0.22" : "0.10");
     root.setAttribute("data-wallpaper", "custom");
     return;
   }
+  delete root.dataset.wallpaperPath;
 
   const preset = WALLPAPERS.find((w) => w.id === (choice as { id: string }).id) ?? WALLPAPERS[0];
   const css = (isDark && preset.cssDark) ? preset.cssDark : preset.css;
