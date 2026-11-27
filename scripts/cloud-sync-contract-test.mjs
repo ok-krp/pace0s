@@ -248,7 +248,6 @@ assert.ok(
     appearanceConsentRevocationMigration.includes("revoked_at = pg_catalog.now()"),
   "Withdrawing cloud-sync consent on either side must revoke the active relationship",
 );
-  "Withdrawing cloud-sync consent on either side must revoke the active relationship");
 assert.match(appearanceInviteInvalidationMigration, /SET consumed_at = pg_catalog\.now\(\)/,
   "Superseded or consent-invalidated appearance invitations must be consumed without violating expiry constraints");
 assert.doesNotMatch(appearanceInviteInvalidationMigration, /expires_at\s*=\s*LEAST/,
@@ -260,7 +259,6 @@ assert.ok(
     /ORDER BY us\.updated_at DESC[\s\S]*CASE us\.key/.test(appearanceCurrentValueMigration),
   "Shared appearance must resolve the newest canonical, domain-envelope or legacy preference value",
 );
-  "Shared appearance must resolve the newest canonical, domain-envelope or legacy preference value");
 assert.match(appearanceCurrentValueMigration, /SELECT us\.value INTO v_wallpaper[\s\S]*ORDER BY us\.updated_at DESC[\s\S]*jsonb_path_exists\(\s*v_wallpaper/,
   "Storage RLS must authorize only the latest wallpaper reference rather than any historical path");
 assert.match(appearanceCurrentValueMigration, /IF TG_OP = 'DELETE'[\s\S]*OLD\.user_id[\s\S]*OLD\.key/,
