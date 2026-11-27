@@ -68,8 +68,16 @@ class _PaceAppState extends State<PaceApp> {
     _themeMode = dark ? ThemeMode.dark : ThemeMode.light;
   }
 
+  String? _lastSharedWallpaperOwnerId;
+
   void _onSharedAppearanceChange() {
     if (!mounted) return;
+    final nextOwnerId = _appearanceSharing.sharedOwnerUserId;
+    final previousOwnerId = _lastSharedWallpaperOwnerId;
+    if (previousOwnerId != null && previousOwnerId != nextOwnerId) {
+      unawaited(PaceWallpaperBackground.purgeSharedWallpaperCache(previousOwnerId));
+    }
+    _lastSharedWallpaperOwnerId = nextOwnerId;
     setState(_readAppearance);
   }
 
