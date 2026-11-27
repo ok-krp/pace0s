@@ -131,6 +131,333 @@ class PaceWallpaperBackground extends StatelessWidget {
     }
   }
 
+  /// Removes one replaced shared wallpaper from memory and persistent cache.
+  static Future<void> purgeSharedWallpaperPath(String path) async {
+    final slash = path.indexOf('/');
+    final ownerId = slash > 0 ? path.substring(0, slash) : '';
+    final filename = slash > 0 ? path.substring(slash + 1) : '';
+    if (!RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+    SupabaseClient client,
+    String path,
+  ) {
+    return _downloads.putIfAbsent(path, () async {
+      final directory = await getApplicationSupportDirectory();
+      // Keep the cache filename stable across app launches. String.hashCode
+      // is not a persistence format and must not identify on-disk cache files.
+      final cacheName = Uri.encodeComponent(path);
+      final cachedFile = File(
+        '${directory.path}/pace_wallpaper_$cacheName.cache',
+      );
+      if (await cachedFile.exists()) return cachedFile.readAsBytes();
+      final bytes = await client.storage.from('pace-wallpapers').download(path);
+      await cachedFile.writeAsBytes(bytes, flush: true);
+      return bytes;
+    }).catchError((Object error) {
+      _downloads.remove(path);
+      throw error;
+    });
+  }
+
+  Widget _wallpaper(
+    BuildContext context,
+    dynamic choice, {
+    String? sharedOwnerId,
+  }) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fallback = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? const [Color(0xFF111214), Color(0xFF303236), Color(0xFF17181A)]
+              : const [Color(0xFFE5E5E7), Color(0xFFF8F8F9), Color(0xFFD8D8DB)],
+        ),
+      ),
+    );
+
+    if (choice is Map && choice['kind'] == 'custom') {
+      final localPath = choice['localPath'];
+      if (sharedOwnerId == null && localPath is String && localPath.isNotEmpty) {
+        return Image.file(
+          File(localPath),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        );
+      }
+      final storagePath = choice['storagePath'];
+      final userId = client?.auth.currentUser?.id;
+      final ownerId = sharedOwnerId;
+      final isSharedOwnerPath = ownerId != null &&
+          RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', caseSensitive: false)
+              .hasMatch(ownerId) &&
+          storagePath is String &&
+          storagePath.startsWith('$ownerId/');
+      final pathOwnerId = isSharedOwnerPath ? ownerId : userId;
+      final filename = storagePath is String && pathOwnerId != null &&
+              storagePath.startsWith('$pathOwnerId/')
+          ? storagePath.substring(pathOwnerId.length + 1)
+          : '';
+      if (storagePath is String &&
+          userId != null &&
+          localStore.currentAccountId == userId &&
+          pathOwnerId != null &&
+          RegExp(r'^[A-Za-z0-9._-]+\.(jpg|png|webp)$', caseSensitive: false)
+              .hasMatch(filename) &&
+          (isSharedOwnerPath || storagePath.startsWith('$userId/')) &&
+          client != null) {
+        return FutureBuilder<Uint8List>(
+          future: _loadStorageWallpaper(client!, storagePath),
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              return Image.memory(snapshot.data!, fit: BoxFit.cover);
+            }
+            return fallback;
+          },
+        );
+      }
+    }
+
+    final preset = choice is Map ? choice['id'] : null;
+    final List<Color>? colors = switch (preset) {
+      'aurora' => dark
+          ? const [Color(0xFF1E2439), Color(0xFF202B45), Color(0xFF182A35)]
+          : const [Color(0xFFFFF1D6), Color(0xFFE6F0FF), Color(0xFFE0FBFA)],
+      'ocean' => dark
+          ? const [Color(0xFF16314A), Color(0xFF132D3F), Color(0xFF183C43)]
+          : const [Color(0xFFD8F0FB), Color(0xFFA8D9EE), Color(0xFFB7E9E6)],
+      'sunset' => dark
+          ? const [Color(0xFF4A211D), Color(0xFF371B39), Color(0xFF2D1C2A)]
+          : const [Color(0xFFFFE4C8), Color(0xFFFFC7C4), Color(0xFFF9D1E4)],
+      'forest' => dark
+          ? const [Color(0xFF193A2C), Color(0xFF142C29), Color(0xFF1D3425)]
+          : const [Color(0xFFDDF2E2), Color(0xFFBBDCC9), Color(0xFFE3EBD4)],
+      'graphite' => dark
+          ? const [Color(0xFF111315), Color(0xFF242629)]
+          : const [Color(0xFFE5E5E7), Color(0xFFF8F8F9), Color(0xFFD8D8DB)],
+      'orchid' => dark
+          ? const [Color(0xFF30203B), Color(0xFF271C39), Color(0xFF38243E)]
+          : const [Color(0xFFF2DDF7), Color(0xFFE3D8FA), Color(0xFFF0E0EF)],
+      // Keep old native-only preset IDs renderable for clients that already synced them.
+      'mist' => dark
+          ? const [Color(0xFF202124), Color(0xFF45464A)]
+          : const [Color(0xFFF3F3F4), Color(0xFFD9DADD)],
+      'slate' => dark
+          ? const [Color(0xFF0D0E10), Color(0xFF27292D)]
+          : const [Color(0xFFD2D3D5), Color(0xFFECECEE)],
+      _ => null,
+    };
+    if (colors == null) return fallback;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final choice = wallpaperOverride ??
+        localStore.read('pace.wallpaper') ??
+        const {'id': 'graphite'};
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _wallpaper(context, choice, sharedOwnerId: sharedWallpaperOwnerId),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: Theme.of(context).brightness == Brightness.dark
+                  ? [Colors.black.withValues(alpha: 0.18), Colors.black.withValues(alpha: 0.36)]
+                  : [Colors.white.withValues(alpha: 0.10), Colors.black.withValues(alpha: 0.08)],
+            ),
+          ),
+        ),
+        child,
+      ],
+    );
+  }
+}
+,
+          caseSensitive: false,
+        ).hasMatch(ownerId) ||
+        !RegExp(r'^[A-Za-z0-9._-]+\\.(jpg|png|webp)
+    SupabaseClient client,
+    String path,
+  ) {
+    return _downloads.putIfAbsent(path, () async {
+      final directory = await getApplicationSupportDirectory();
+      // Keep the cache filename stable across app launches. String.hashCode
+      // is not a persistence format and must not identify on-disk cache files.
+      final cacheName = Uri.encodeComponent(path);
+      final cachedFile = File(
+        '${directory.path}/pace_wallpaper_$cacheName.cache',
+      );
+      if (await cachedFile.exists()) return cachedFile.readAsBytes();
+      final bytes = await client.storage.from('pace-wallpapers').download(path);
+      await cachedFile.writeAsBytes(bytes, flush: true);
+      return bytes;
+    }).catchError((Object error) {
+      _downloads.remove(path);
+      throw error;
+    });
+  }
+
+  Widget _wallpaper(
+    BuildContext context,
+    dynamic choice, {
+    String? sharedOwnerId,
+  }) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fallback = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: dark
+              ? const [Color(0xFF111214), Color(0xFF303236), Color(0xFF17181A)]
+              : const [Color(0xFFE5E5E7), Color(0xFFF8F8F9), Color(0xFFD8D8DB)],
+        ),
+      ),
+    );
+
+    if (choice is Map && choice['kind'] == 'custom') {
+      final localPath = choice['localPath'];
+      if (sharedOwnerId == null && localPath is String && localPath.isNotEmpty) {
+        return Image.file(
+          File(localPath),
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => fallback,
+        );
+      }
+      final storagePath = choice['storagePath'];
+      final userId = client?.auth.currentUser?.id;
+      final ownerId = sharedOwnerId;
+      final isSharedOwnerPath = ownerId != null &&
+          RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', caseSensitive: false)
+              .hasMatch(ownerId) &&
+          storagePath is String &&
+          storagePath.startsWith('$ownerId/');
+      final pathOwnerId = isSharedOwnerPath ? ownerId : userId;
+      final filename = storagePath is String && pathOwnerId != null &&
+              storagePath.startsWith('$pathOwnerId/')
+          ? storagePath.substring(pathOwnerId.length + 1)
+          : '';
+      if (storagePath is String &&
+          userId != null &&
+          localStore.currentAccountId == userId &&
+          pathOwnerId != null &&
+          RegExp(r'^[A-Za-z0-9._-]+\.(jpg|png|webp)$', caseSensitive: false)
+              .hasMatch(filename) &&
+          (isSharedOwnerPath || storagePath.startsWith('$userId/')) &&
+          client != null) {
+        return FutureBuilder<Uint8List>(
+          future: _loadStorageWallpaper(client!, storagePath),
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              return Image.memory(snapshot.data!, fit: BoxFit.cover);
+            }
+            return fallback;
+          },
+        );
+      }
+    }
+
+    final preset = choice is Map ? choice['id'] : null;
+    final List<Color>? colors = switch (preset) {
+      'aurora' => dark
+          ? const [Color(0xFF1E2439), Color(0xFF202B45), Color(0xFF182A35)]
+          : const [Color(0xFFFFF1D6), Color(0xFFE6F0FF), Color(0xFFE0FBFA)],
+      'ocean' => dark
+          ? const [Color(0xFF16314A), Color(0xFF132D3F), Color(0xFF183C43)]
+          : const [Color(0xFFD8F0FB), Color(0xFFA8D9EE), Color(0xFFB7E9E6)],
+      'sunset' => dark
+          ? const [Color(0xFF4A211D), Color(0xFF371B39), Color(0xFF2D1C2A)]
+          : const [Color(0xFFFFE4C8), Color(0xFFFFC7C4), Color(0xFFF9D1E4)],
+      'forest' => dark
+          ? const [Color(0xFF193A2C), Color(0xFF142C29), Color(0xFF1D3425)]
+          : const [Color(0xFFDDF2E2), Color(0xFFBBDCC9), Color(0xFFE3EBD4)],
+      'graphite' => dark
+          ? const [Color(0xFF111315), Color(0xFF242629)]
+          : const [Color(0xFFE5E5E7), Color(0xFFF8F8F9), Color(0xFFD8D8DB)],
+      'orchid' => dark
+          ? const [Color(0xFF30203B), Color(0xFF271C39), Color(0xFF38243E)]
+          : const [Color(0xFFF2DDF7), Color(0xFFE3D8FA), Color(0xFFF0E0EF)],
+      // Keep old native-only preset IDs renderable for clients that already synced them.
+      'mist' => dark
+          ? const [Color(0xFF202124), Color(0xFF45464A)]
+          : const [Color(0xFFF3F3F4), Color(0xFFD9DADD)],
+      'slate' => dark
+          ? const [Color(0xFF0D0E10), Color(0xFF27292D)]
+          : const [Color(0xFFD2D3D5), Color(0xFFECECEE)],
+      _ => null,
+    };
+    if (colors == null) return fallback;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final choice = wallpaperOverride ??
+        localStore.read('pace.wallpaper') ??
+        const {'id': 'graphite'};
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _wallpaper(context, choice, sharedOwnerId: sharedWallpaperOwnerId),
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: Theme.of(context).brightness == Brightness.dark
+                  ? [Colors.black.withValues(alpha: 0.18), Colors.black.withValues(alpha: 0.36)]
+                  : [Colors.white.withValues(alpha: 0.10), Colors.black.withValues(alpha: 0.08)],
+            ),
+          ),
+        ),
+        child,
+      ],
+    );
+  }
+}
+, caseSensitive: false)
+            .hasMatch(filename)) {
+      return;
+    }
+
+    final pending = _downloads.remove(path);
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (_) {}
+    }
+
+    final directory = await getApplicationSupportDirectory();
+    final cacheName = Uri.encodeComponent(path);
+    final cachedFile = File(
+      '${directory.path}/pace_wallpaper_$cacheName.cache',
+    );
+    try {
+      if (await cachedFile.exists()) await cachedFile.delete();
+    } catch (_) {}
+  }
+
   static Future<Uint8List> _loadStorageWallpaper(
     SupabaseClient client,
     String path,
