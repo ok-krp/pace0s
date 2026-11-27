@@ -243,7 +243,8 @@ assert.ok(
   "Web must filter device-local state in PostgREST before downloading JSONB values",
 );
 assert.ok(
-  engine.includes("createPrivateRealtimeChannel(`pace-user-state:${user.id}`)") &&
+  engine.includes("const topic = `pace-user-state:${user.id}`;") &&
+    engine.includes("realtimeChannel = createPrivateRealtimeChannel(topic)") &&
     engine.includes('.on("broadcast", { event: "user_state_changed" }'),
   "Web must receive private low-payload Broadcast notifications for the authenticated account",
 );
