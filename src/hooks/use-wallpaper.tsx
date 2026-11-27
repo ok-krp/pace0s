@@ -124,6 +124,7 @@ const KEY = "pace.wallpaper";
 const DEFAULT: WallpaperChoice = { id: "graphite" };
 
 const wallpaperObjectUrls = new Map<string, Promise<string>>();
+const legacyWallpaperMigrations = new Map<string, Promise<string>>();
 
 async function uploadWallpaper(blob: Blob, userId: string): Promise<string> {
   const extension = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
@@ -168,16 +169,23 @@ export function useWallpaper() {
       isLegalCategoryAllowed("sync_cloud")
     ) {
       let cancelled = false;
-      void fetch(choice.dataUrl)
-        .then((response) => response.blob())
-        .then((blob) => uploadWallpaper(blob, user.id))
-        .then((storagePath) => {
-          if (!cancelled) setChoice({ kind: "custom", storagePath });
-        })
-        .catch((error) => console.warn("[wallpaper] legacy image migration failed", error));
+      const migrationKey = `${user.id}:${choice.dataUrl}`;
+      let migration = legacyWallpaperMigrations.get(migrationKey);
+      if (!migration) {
+        migration = fetch(choice.dataUrl)
+          .then((response) => response.blob())
+          .then((blob) => uploadWallpaper(blob, user.id));
+        legacyWallpaperMigrations.set(migrationKey, migration);
+      }
+      void migration.then((storagePath) => {
+        if (!cancelled) setChoice({ kind: "custom", storagePath });
+      }).catch((error) => {
+        legacyWallpaperMigrations.delete(migrationKey);
+        console.warn("[wallpaper] legacy image migration failed", error);
+      });
       return () => { cancelled = true; };
     }
-  }, [choice, user?.id]);
+  }, [choice, user?.id, setChoice]);
 
   return {
     choice,
