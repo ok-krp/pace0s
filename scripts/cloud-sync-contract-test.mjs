@@ -930,17 +930,17 @@ assert.match(
 );
 
 const sleepRoute = read("src/routes/sleep.tsx");
-assert.match(sleepRoute, /const \\[hasUserEdited, setHasUserEdited\\] = useState\\(false\\)/,
+assert.match(sleepRoute, /const \[hasUserEdited, setHasUserEdited\] = useState\(false\)/,
   "Sleep defaults must remain presentation-only until the user edits a field");
-assert.match(sleepRoute, /if \\(!cloudLoaded \\|\\| !hasUserEdited\\) return;/,
+assert.match(sleepRoute, /if \(!cloudLoaded \|\| !hasUserEdited\) return;/,
   "Sleep autosave must wait for cloud hydration and an explicit user edit");
-assert.match(sleepRoute, /setStart\\(e\\.target\\.value\\); setHasUserEdited\\(true\\)/,
+assert.match(sleepRoute, /setStart\(e\.target\.value\); setHasUserEdited\(true\)/,
   "Editing the sleep start time must explicitly authorize persistence");
-assert.match(sleepRoute, /setEnd\\(e\\.target\\.value\\); setHasUserEdited\\(true\\)/,
+assert.match(sleepRoute, /setEnd\(e\.target\.value\); setHasUserEdited\(true\)/,
   "Editing the sleep end time must explicitly authorize persistence");
-assert.match(sleepRoute, /setQuality\\(v\\); setHasUserEdited\\(true\\)/,
+assert.match(sleepRoute, /setQuality\(v\); setHasUserEdited\(true\)/,
   "Editing sleep quality must explicitly authorize persistence");
-assert.match(sleepRoute, /disabled=\\{!cloudLoaded\\}/,
+assert.match(sleepRoute, /disabled=\{!cloudLoaded\}/,
   "Sleep inputs must not be editable until cloud state has finished hydrating");
 const sleepDefaults = { start: "23:30", end: "07:00", quality: 8 };
 const sleepPersistDecision = ({ cloudLoaded, hasUserEdited }) => cloudLoaded && hasUserEdited;
