@@ -150,10 +150,12 @@ class SyncService {
         canonicalKey != 'pace.domain.wallpaper') {
       return true;
     }
-    if (value is Map &&
-        value['kind'] == 'custom' &&
-        value['localPath'] is String) {
-      return false;
+    if (value is Map && value['kind'] == 'custom') {
+      // Only a private Storage object path is portable across devices.
+      if (value['localPath'] is String || value['dataUrl'] is String) {
+        return false;
+      }
+      return value['storagePath'] is String;
     }
     return true;
   }
