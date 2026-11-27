@@ -242,13 +242,24 @@ assert.match(appearanceSharingMigration, /pace_wallpapers_select_shared_appearan
   "Shared wallpaper Storage access must be mediated by the exact-object RLS helper");
 assert.match(appearanceSharingMigration, /pace_users_receive_shared_appearance_events[\s\S]*pace-appearance-share:/,
   "Shared appearance notifications must use recipient-scoped private Broadcast topics");
-assert.match(appearanceConsentRevocationMigration, /revoked_at = pg_catalog\.now\(\)[\s\S]*s\.owner_user_id = NEW\.user_id\s+OR s\.recipient_user_id = NEW\.user_id/,
+assert.ok(
+  appearanceConsentRevocationMigration.includes("s.owner_user_id = NEW.user_id") &&
+    appearanceConsentRevocationMigration.includes("s.recipient_user_id = NEW.user_id") &&
+    appearanceConsentRevocationMigration.includes("revoked_at = pg_catalog.now()"),
+  "Withdrawing cloud-sync consent on either side must revoke the active relationship",
+);
   "Withdrawing cloud-sync consent on either side must revoke the active relationship");
 assert.match(appearanceInviteInvalidationMigration, /SET consumed_at = pg_catalog\.now\(\)/,
   "Superseded or consent-invalidated appearance invitations must be consumed without violating expiry constraints");
 assert.doesNotMatch(appearanceInviteInvalidationMigration, /expires_at\s*=\s*LEAST/,
   "Invite invalidation must not write an expiry earlier than created_at");
-assert.match(appearanceCurrentValueMigration, /ORDER BY us\.updated_at DESC[\s\S]*lt\.domain\.visual-theme[\s\S]*lt\.domain\.dark[\s\S]*lt\.domain\.wallpaper/,
+assert.ok(
+  appearanceCurrentValueMigration.includes("lt.domain.visual-theme") &&
+    appearanceCurrentValueMigration.includes("lt.domain.dark") &&
+    appearanceCurrentValueMigration.includes("lt.domain.wallpaper") &&
+    /ORDER BY us\.updated_at DESC[\s\S]*CASE us\.key/.test(appearanceCurrentValueMigration),
+  "Shared appearance must resolve the newest canonical, domain-envelope or legacy preference value",
+);
   "Shared appearance must resolve the newest canonical, domain-envelope or legacy preference value");
 assert.match(appearanceCurrentValueMigration, /SELECT us\.value INTO v_wallpaper[\s\S]*ORDER BY us\.updated_at DESC[\s\S]*jsonb_path_exists\(\s*v_wallpaper/,
   "Storage RLS must authorize only the latest wallpaper reference rather than any historical path");
