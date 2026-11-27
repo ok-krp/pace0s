@@ -869,34 +869,30 @@ assert.deepEqual(deviceA, deviceB, "resolved water must converge across devices"
 assert.deepEqual(conflictsA, []);
 assert.deepEqual(conflictsB, []);
 
-assert.match(
-  read("src/hooks/use-health.tsx"),
-  /createPrivateRealtimeChannel\\(channelName\\)/,
+assert.ok(
+  read("src/hooks/use-health.tsx").includes("createPrivateRealtimeChannel(channelName)"),
   "Health E2EE Postgres Changes must use the private-channel factory",
 );
-assert.match(
-  read("src/hooks/use-profile-realtime.ts"),
-  /createPrivateRealtimeChannel\\(\\x60pace-profile-\\$\\{user\\.id\\}\\x60\\)/,
+assert.ok(
+  read("src/hooks/use-profile-realtime.ts").includes("createPrivateRealtimeChannel(`pace-profile-${user.id}`)"),
   "Profile Postgres Changes must use the private-channel factory",
 );
-assert.match(
-  read("src/lib/nutrition-log.ts"),
-  /createPrivateRealtimeChannel\\(\\x60pace-food-log-\\$\\{user\\.id\\}\\x60\\)/,
+assert.ok(
+  read("src/lib/nutrition-log.ts").includes("createPrivateRealtimeChannel(`pace-food-log-${user.id}`)"),
   "Nutrition Postgres Changes must use the private-channel factory",
 );
-assert.match(
-  read("src/routes/development.tsx"),
-  /createPrivateRealtimeChannel\\(\\x60development-tasks-\\$\\{user\\.id\\}\\x60\\)/,
+assert.ok(
+  read("src/routes/development.tsx").includes("createPrivateRealtimeChannel(`development-tasks-${user.id}`)"),
   "Development-task Postgres Changes must use the private-channel factory",
 );
-assert.match(
-  supabaseClient,
-  /export function createPrivateRealtimeChannel[\\s\\S]*config: \\{ \\.\\.\\.options\\.config, private: true \\}/,
+assert.ok(
+  supabaseClient.includes("export function createPrivateRealtimeChannel") &&
+    supabaseClient.includes("config: { ...options.config, private: true }"),
   "The shared Realtime factory must force private: true even when a caller omits the option",
 );
-assert.doesNotMatch(
-  engine + read("src/hooks/use-profile-realtime.ts") + read("src/hooks/use-health.tsx") + read("src/lib/nutrition-log.ts") + read("src/routes/development.tsx"),
-  /supabase\\.channel\\(/,
+assert.equal(
+  (engine + read("src/hooks/use-profile-realtime.ts") + read("src/hooks/use-health.tsx") + read("src/lib/nutrition-log.ts") + read("src/routes/development.tsx")).includes("supabase.channel("),
+  false,
   "All web Realtime subscriptions must use the centralized private-channel factory",
 );
 
