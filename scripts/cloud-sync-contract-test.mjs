@@ -252,7 +252,18 @@ assert.match(appearanceCurrentValueMigration, /ORDER BY us\.updated_at DESC[\s\S
   "Shared appearance must resolve the newest canonical, domain-envelope or legacy preference value");
 assert.match(appearanceCurrentValueMigration, /SELECT us\.value INTO v_wallpaper[\s\S]*ORDER BY us\.updated_at DESC[\s\S]*jsonb_path_exists\(\s*v_wallpaper/,
   "Storage RLS must authorize only the latest wallpaper reference rather than any historical path");
-assert.match(appearanceCurrentValueMigration, /AFTER INSERT OR UPDATE OR DELETE ON public\.user_state[\s\S]*TG_OP = 'DELETE'/,
+assert.match(appearanceCurrentValueMigration, /IF TG_OP = 'DELETE'[\\s\\S]*OLD\\.user_id[\\s\\S]*OLD\\.key/,
+  "Shared appearance delete events must read the OLD user_state row safely");
+assert.match(appearanceCurrentValueMigration, /AFTER INSERT OR UPDATE OR DELETE ON public\\.user_state/,
+  "Shared appearance reconciliation must also broadcast on preference deletion");
+const sharedAppearanceHook = read("src/hooks/use-shared-appearance.tsx");
+assert.match(sharedAppearanceHook, /const reconcileTimer = window\\.setInterval\\([\\s\\S]*document\\.visibilityState === "visible"[\\s\\S]*reconcile\\(\\)[\\s\\S]*60_000/,
+  "Cross-account shared appearance must recover missed Realtime events with a bounded visible-tab refresh");
+assert.match(sharedAppearanceHook, /window\\.clearInterval\\(reconcileTimer\\)/,
+  "The shared appearance fallback timer must be cleaned up on account switch");
+const appearanceSharingSettings = read("src/components/AppearanceSharingSettings.tsx");
+assert.match(appearanceSharingSettings, /const onConsentChange = \\(\\) => \\{[\\s\\S]*isLegalCategoryAllowed\\("sync_cloud"\\)[\\s\\S]*refresh\\(\\)/,
+  "Appearance share controls must refresh when cloud consent changes or is withdrawn");
   "Removing a shared appearance preference must notify recipients so the overlay can reconcile");
 const wallpaperHook = read("src/hooks/use-wallpaper.tsx");
 const themeToggle = read("src/components/VisualThemeToggle.tsx");
