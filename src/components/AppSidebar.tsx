@@ -115,7 +115,7 @@ function SidebarContent({ currentPath, onNavigate }: { currentPath: string; onNa
 
 export function AppSidebar() {
   const path = useRouterState({ select: (s) => s.location.pathname });
-  return <aside className="fixed left-3 top-3 bottom-3 z-[100] hidden md:flex w-72 min-h-0 flex-none flex-col overflow-hidden px-3 py-5 glass-card rounded-3xl border border-white/20 bg-white/5 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)] isolate">
+  return <aside className="fixed left-3 top-3 bottom-3 z-[100] hidden xl:flex w-72 min-h-0 flex-none flex-col overflow-hidden px-3 py-5 glass-card rounded-3xl border border-white/20 bg-white/5 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)] isolate">
     <SidebarContent currentPath={path} />
   </aside>;
 }
@@ -126,7 +126,7 @@ export function MobileTopBar() {
   const current = getNavItem(path)?.label ?? "Pace";
 
   return <>
-    <header className="md:hidden sticky top-0 z-[120] flex items-center gap-2 mx-3 mt-[max(0.5rem,env(safe-area-inset-top))] mb-1 px-3 py-2 glass-card rounded-2xl border border-white/20 bg-white/5 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)]">
+    <header className="xl:hidden sticky top-0 z-[120] flex items-center gap-2 mx-3 mt-[max(0.5rem,env(safe-area-inset-top))] mb-1 px-3 py-2 glass-card rounded-2xl border border-white/20 bg-white/5 backdrop-blur-3xl shadow-[0_12px_40px_0_rgba(0,0,0,0.15)]">
       <button
         type="button"
         className={`relative z-[130] size-10 ${interactiveRing}`}
@@ -144,13 +144,13 @@ export function MobileTopBar() {
 
     {open && <>
       <div
-        className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm md:hidden"
+        className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm xl:hidden"
         aria-hidden="true"
         onClick={() => setOpen(false)}
       />
       <aside
         aria-label="Navigation mobile"
-        className="fixed inset-y-0 left-0 z-[9999] w-[280px] h-full max-w-[calc(100vw-1.5rem)] transform bg-[#050507] border-r border-white/10 p-4 shadow-2xl transition-transform duration-300 ease-in-out translate-x-0 md:hidden overflow-hidden"
+        className="fixed inset-y-0 left-0 z-[9999] w-[280px] h-full max-w-[calc(100vw-1.5rem)] transform bg-[#050507] border-r border-white/10 p-4 shadow-2xl transition-transform duration-300 ease-in-out translate-x-0 xl:hidden overflow-hidden"
       >
         <div className="flex h-full min-h-0 flex-col">
           <div className="flex items-center justify-between flex-none pb-3">
@@ -245,7 +245,7 @@ export function MobileTabBar() {
   if (!bottom.length) return null;
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 pointer-events-none select-none">
+    <nav className="xl:hidden fixed bottom-0 inset-x-0 z-50 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 pointer-events-none select-none">
       <div className="glass-card pointer-events-auto mx-auto max-w-md rounded-3xl px-2 py-1.5">
         <div className="grid grid-cols-5 gap-1">
           {bottom.map((to, index) => {
