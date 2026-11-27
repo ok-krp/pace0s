@@ -133,7 +133,16 @@ function isWallpaperPathOwnedByUser(key: string, value: unknown, userId: string)
   if (!candidate || typeof candidate !== "object" || !("kind" in candidate) ||
       (candidate as { kind?: unknown }).kind !== "custom") return true;
   const storagePath = (candidate as { storagePath?: unknown }).storagePath;
-  return typeof storagePath === "string" && storagePath.startsWith(`${userId}/`);
+  if (typeof storagePath !== "string") return false;
+  const ownerPrefix = `${userId}/`;
+  if (!storagePath.startsWith(ownerPrefix)) return false;
+  const objectName = storagePath.slice(ownerPrefix.length);
+  // Current and legacy clients use a single generated object filename below
+  // the user folder. Reject nested, empty, traversal-like, or encoded paths.
+  return objectName.length > 0 &&
+    objectName !== "." &&
+    objectName !== ".." &&
+    /^[A-Za-z0-9._-]+$/.test(objectName);
 }
 function isSyncableRecord(key: string, value: unknown, userId: string) {
   return isSyncableKey(key) &&
