@@ -174,10 +174,15 @@ export function useSharedAppearance(userId?: string) {
       try {
         const { data: sessionData } = await supabase.auth.getSession();
         if (disposed || version !== requestVersion) return;
-        if (sessionData.session?.user.id !== userId) {
+        if (
+          sessionData.session?.user.id !== userId ||
+          !sessionData.session.access_token
+        ) {
           clear();
           return;
         }
+        await supabase.realtime.setAuth(sessionData.session.access_token);
+        if (disposed || version !== requestVersion) return;
 
         const result = await rpc.rpc("get_shared_appearance");
         if (disposed || version !== requestVersion) return;
@@ -204,27 +209,46 @@ export function useSharedAppearance(userId?: string) {
         nextChannel.on("broadcast", { event: "shared_appearance_changed" }, () => {
           void refresh();
         });
-        nextChannel.subscribe();
+        nextChannel.subscribe((status) => {
+          if (disposed || channel !== nextChannel) return;
+          if (status === "SUBSCRIBED") {
+            void refresh();
+            return;
+          }
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            channel = null;
+            void supabase.removeChannel(nextChannel);
+          }
+        });
         channel = nextChannel;
       }
       void refresh();
     };
 
     const onRefresh = () => reconcile();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") reconcile();
+    };
+    const reconcileTimer = window.setInterval(() => {
+      if (document.visibilityState === "visible") reconcile();
+    }, 60_000);
     window.addEventListener("pace.legal.changed", reconcile);
     window.addEventListener("pace.shared-appearance.refresh", onRefresh);
-    window.addEventListener("focus", refresh);
-    window.addEventListener("online", refresh);
+    window.addEventListener("focus", reconcile);
+    window.addEventListener("online", reconcile);
+    document.addEventListener("visibilitychange", onVisible);
     reconcile();
 
     return () => {
       disposed = true;
       requestVersion++;
+      window.clearInterval(reconcileTimer);
       stopChannel();
       window.removeEventListener("pace.legal.changed", reconcile);
       window.removeEventListener("pace.shared-appearance.refresh", onRefresh);
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("online", refresh);
+      window.removeEventListener("focus", reconcile);
+      window.removeEventListener("online", reconcile);
+      document.removeEventListener("visibilitychange", onVisible);
       if (userId && activeUserId === userId) {
         activeUserId = null;
         activeAppearance = null;
