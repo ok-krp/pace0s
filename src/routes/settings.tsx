@@ -69,28 +69,39 @@ function SettingsPage() {
   const handleSendTest = async () => { setSending(true); try { const res = await sendTest({ data: { title: "Test Pace", message: "Notification reçue avec succès 🎉" } }); if (res.ok) toast.success(`Notification envoyée (${res.recipients} appareil${res.recipients === 1 ? "" : "s"})`); else toast.error(`Échec : ${res.error}`); } catch (e) { toast.error((e as Error).message); } finally { setSending(false); } };
   useEffect(() => { let deviceId = localStorage.getItem("pace.billing.device_id"); if (!deviceId) { deviceId = crypto.randomUUID() + "-" + crypto.randomUUID(); localStorage.setItem("pace.billing.device_id", deviceId); } getBilling({ data: { deviceId } }).then(setBilling).catch((error) => console.error("billing status failed", error)).finally(() => setBillingLoading(false)); }, [getBilling]);
   useEffect(() => {
-    const activeSignal = readLocalPreference<string>("pace.visual-theme", "default") === "signal";
-    const activeGlass = readLocalPreference<string>("pace.visual-theme", "default") === "glass";
-    const stored = readLocalPreference<string>("pace.dark", "0") === "1";
+    const following = isFollowingSharedAppearance();
+    const effectiveTheme = following
+      ? document.documentElement.dataset.visualTheme
+      : readLocalPreference<string>("pace.visual-theme", "default");
+    const activeSignal = effectiveTheme === "signal";
+    const activeGlass = effectiveTheme === "glass";
+    const stored = following
+      ? document.documentElement.classList.contains("dark")
+      : readLocalPreference<string>("pace.dark", "0") === "1";
     setSignal(activeSignal);
     setGlass(activeGlass);
     setDark(activeGlass || stored);
-    if (activeSignal || activeGlass) {
-      document.documentElement.dataset.visualTheme = activeSignal ? "signal" : "glass";
-      document.documentElement.classList.toggle("dark", activeGlass || stored);
-    } else {
-      delete document.documentElement.dataset.visualTheme;
-      document.documentElement.classList.toggle("dark", stored);
+    if (!following) {
+      if (activeSignal || activeGlass) {
+        document.documentElement.dataset.visualTheme = activeSignal ? "signal" : "glass";
+        document.documentElement.classList.toggle("dark", activeGlass || stored);
+      } else {
+        delete document.documentElement.dataset.visualTheme;
+        document.documentElement.classList.toggle("dark", stored);
+      }
     }
     setThemeColor(activeGlass || stored, activeSignal, activeGlass);
 
     const handleVisualThemeChange = (event: Event) => {
-      const theme = (event as CustomEvent<{ theme?: string; signal?: boolean }>).detail?.theme;
-      const nextSignal = theme === "signal" || (!theme && (event as CustomEvent<{ signal?: boolean }>).detail?.signal === true);
+      const detail = (event as CustomEvent<{ theme?: string; signal?: boolean; shared?: boolean; dark?: boolean }>).detail;
+      const theme = detail?.theme;
+      const nextSignal = theme === "signal" || (!theme && detail?.signal === true);
       const nextGlass = theme === "glass";
       setSignal(nextSignal);
       setGlass(nextGlass);
-      setDark(nextGlass || readLocalPreference<string>("pace.dark", "0") === "1");
+      setDark(nextGlass || (detail?.shared
+        ? detail.dark === true
+        : readLocalPreference<string>("pace.dark", "0") === "1"));
     };
     window.addEventListener("pace.visual-theme.change", handleVisualThemeChange);
     return () => window.removeEventListener("pace.visual-theme.change", handleVisualThemeChange);

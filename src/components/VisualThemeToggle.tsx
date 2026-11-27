@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Activity, Sparkles, Layers3 } from "lucide-react";
 import { persistLocalPreference, readLocalPreference } from "@/lib/storage";
+import { isFollowingSharedAppearance } from "@/hooks/use-shared-appearance";
 
 const VISUAL_THEME_KEY = "pace.visual-theme";
 const DARK_MODE_KEY = "pace.dark";
@@ -27,13 +28,14 @@ function applyVisualTheme(theme: VisualTheme, persist = true) {
 
 export function VisualThemeToggle({ compact = false, disabled = false }: { compact?: boolean; disabled?: boolean }) {
   const [theme, setTheme] = useState<VisualTheme>("default");
-  const [following, setFollowing] = useState(false);
+  const [following, setFollowing] = useState(() => isFollowingSharedAppearance());
 
   useEffect(() => {
     setTheme(getVisualTheme());
     const onRemotePreference = (event: Event) => {
       const key = (event as CustomEvent<{ key?: string }>).detail?.key;
       if (key && key !== VISUAL_THEME_KEY && key !== DARK_MODE_KEY) return;
+      if (isFollowingSharedAppearance()) return;
       const stored = readLocalPreference<VisualTheme>(VISUAL_THEME_KEY, "default");
       applyVisualTheme(stored, false);
       setTheme(stored === "signal" || stored === "glass" ? stored : "default");

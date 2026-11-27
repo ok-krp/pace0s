@@ -81,6 +81,16 @@ export function AppearanceSharingSettings() {
     }
   };
 
+  const copyInvite = async () => {
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+      await navigator.clipboard.writeText(inviteToken);
+      toast.success("Code copié.");
+    } catch {
+      toast.error("Copie indisponible sur ce navigateur. Sélectionne le code dans le champ.");
+    }
+  };
+
   const acceptInvite = async () => {
     const token = acceptToken.trim().toLowerCase();
     if (!syncConsent || loading) return;
@@ -152,7 +162,7 @@ export function AppearanceSharingSettings() {
         {inviteToken && (
           <div className="flex gap-2">
             <Input aria-label="Code d'invitation à partager" readOnly value={inviteToken} className="font-mono text-xs" onFocus={(event) => event.currentTarget.select()} />
-            <Button type="button" size="icon" variant="outline" aria-label="Copier le code" onClick={() => void navigator.clipboard.writeText(inviteToken).then(() => toast.success("Code copié.")).catch(() => toast.error("Copie indisponible sur ce navigateur."))}>
+            <Button type="button" size="icon" variant="outline" aria-label="Copier le code" onClick={() => void copyInvite()}>
               <Copy className="size-4" />
             </Button>
           </div>
