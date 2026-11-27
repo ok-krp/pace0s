@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { applyWallpaper, readWallpaperChoice, WALLPAPERS } from "@/hooks/use-wallpaper";
+import { applyWallpaper, purgeWallpaperCacheForOwner, readWallpaperChoice, WALLPAPERS } from "@/hooks/use-wallpaper";
 import { createPrivateRealtimeChannel, supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { readLocalPreference } from "@/lib/storage";
@@ -26,6 +26,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 
 let activeUserId: string | null = null;
 let activeAppearance: SharedAppearance | null = null;
+let lastAppliedSharedOwnerId: string | null = null;
 
 function unwrapPreference(value: unknown): unknown {
   let current = value;
@@ -141,6 +142,12 @@ export function applyEffectiveAppearance(userId?: string) {
   );
 
   applyWallpaper(getEffectiveWallpaperChoice(userId));
+  const nextSharedOwnerId = shared?.ownerUserId ?? null;
+  const previousSharedOwnerId = lastAppliedSharedOwnerId;
+  lastAppliedSharedOwnerId = nextSharedOwnerId;
+  if (previousSharedOwnerId && previousSharedOwnerId !== nextSharedOwnerId) {
+    void purgeWallpaperCacheForOwner(previousSharedOwnerId);
+  }
   emitSharedAppearanceChange(theme, dark);
 }
 

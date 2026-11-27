@@ -148,6 +148,44 @@ async function uploadWallpaper(blob: Blob, userId: string): Promise<string> {
   return path;
 }
 
+/**
+ * Remove the private Storage cache for a source account when its appearance
+ * share is revoked or replaced. Keep unrelated local wallpapers untouched.
+ */
+export async function purgeWallpaperCacheForOwner(ownerId: string): Promise<void> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerId)) {
+    return;
+  }
+
+  const prefix = ownerId + "/";
+  for (const path of [...wallpaperObjectUrls.keys()]) {
+    if (path.startsWith(prefix)) releaseWallpaperObjectUrl(path);
+  }
+
+  if (typeof window === "undefined" || !("caches" in window)) return;
+  try {
+    const cache = await window.caches.open("pace-wallpaper-v1");
+    const cachePathPrefix = encodeURIComponent(prefix);
+    const marker = "/__pace-wallpaper-cache/";
+    const keys = await cache.keys();
+    await Promise.all(keys.map(async (request) => {
+      try {
+        const pathname = new URL(request.url).pathname;
+        const markerIndex = pathname.indexOf(marker);
+        if (markerIndex < 0) return;
+        const encodedPath = pathname.slice(markerIndex + marker.length);
+        if (encodedPath.startsWith(cachePathPrefix)) {
+          await cache.delete(request);
+        }
+      } catch {
+        // Ignore malformed/foreign cache entries; only remove verified owner paths.
+      }
+    }));
+  } catch (error) {
+    console.warn("[wallpaper] shared cache purge failed", error);
+  }
+}
+
 function getWallpaperObjectUrl(path: string): Promise<string> {
   const cached = wallpaperObjectUrls.get(path);
   if (cached) return cached;
