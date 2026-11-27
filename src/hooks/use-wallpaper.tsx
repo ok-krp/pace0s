@@ -180,17 +180,21 @@ export function useWallpaper() {
 
   useEffect(() => {
     applyWallpaper(choice);
-    // Migrate an existing local-only custom image to private Storage once the
-    // account has explicitly enabled cross-device sync. Never put image bytes
-    // into user_state: only the small Storage object path is synchronized.
-    if (
-      user?.id &&
-      "kind" in choice &&
-      choice.kind === "custom" &&
-      "dataUrl" in choice &&
-      isLegalCategoryAllowed("sync_cloud")
-    ) {
-      let cancelled = false;
+  }, [choice]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const migrateLegacyWallpaper = () => {
+      // Migrate an existing local-only custom image to private Storage only
+      // after the account explicitly enables cross-device sync.
+      if (
+        !user?.id ||
+        !("kind" in choice) ||
+        choice.kind !== "custom" ||
+        !("dataUrl" in choice) ||
+        !isLegalCategoryAllowed("sync_cloud")
+      ) return;
+
       const migrationKey = `${user.id}:${choice.dataUrl}`;
       let migration = legacyWallpaperMigrations.get(migrationKey);
       if (!migration) {
@@ -205,8 +209,14 @@ export function useWallpaper() {
         legacyWallpaperMigrations.delete(migrationKey);
         console.warn("[wallpaper] legacy image migration failed", error);
       });
-      return () => { cancelled = true; };
-    }
+    };
+
+    migrateLegacyWallpaper();
+    window.addEventListener("pace.legal.changed", migrateLegacyWallpaper);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pace.legal.changed", migrateLegacyWallpaper);
+    };
   }, [choice, user?.id, setChoice]);
 
   return {
