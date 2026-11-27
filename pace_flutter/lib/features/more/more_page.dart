@@ -191,7 +191,10 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
         _marketingConsent = latest['marketing'] ?? false;
       });
       await widget.sync.setCloudSyncConsent(_syncCloudConsent);
-      if (_syncCloudConsent) await widget.sync.syncNow();
+      if (_syncCloudConsent) {
+        await _migrateLocalWallpaperToCloud();
+        await widget.sync.syncNow();
+      }
     } catch (_) {}
   }
 
@@ -365,7 +368,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
               const SnackBar(content: Text("Fond d'écran synchronisable enregistré.")),
             );
           }
-        } catch (uploadError) {
+        } catch (_) {
           if (await file.length() > 3 * 1024 * 1024) rethrow;
           final localPath = await _persistWallpaperLocally(file, extension);
           await widget.localStore.write('pace.wallpaper', {
