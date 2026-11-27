@@ -397,6 +397,8 @@ assert.ok(
 );
 assert.match(flutterTheme, /final neutral = glass \|\| visualTheme == 'signal'[\s\S]*seedColor: neutral \? const Color\(0xFF777777\)/,
   "Flutter Signal and Liquid Glass must use the neutral grayscale palette across devices");
+assert.match(flutterTheme, /Uri\.encodeComponent\(path\)[\s\S]*pace_wallpaper_\$cacheName\.cache/,
+  "Flutter private wallpaper cache filenames must remain stable across app launches");
 assert.match(flutterLocalStore, /Future<void> applyRemote\([\s\S]*_notifyChange\(key\)/,
   "Remote theme and wallpaper updates must notify the Flutter UI without requiring an app restart");
 const syncSchedulerStart = flutterSync.indexOf("void _scheduleSync()");
