@@ -233,6 +233,10 @@ const settingsRoute = read("src/routes/settings.tsx");
 const rootRoute = read("src/routes/__root.tsx");
 assert.match(wallpaperHook, /storage\.from\("pace-wallpapers"\)\.upload[\s\S]*storage\.from\("pace-wallpapers"\)\.download/,
   "Custom wallpaper bytes must be stored in private Storage and downloaded by object path");
+assert.match(wallpaperHook, /setCustom: async \(file: File\): Promise<boolean> =>[\s\S]*if \(!user\?\.id \|\| !isLegalCategoryAllowed\("sync_cloud"\)\)[\s\S]*setChoice\(\{ kind: "custom", dataUrl \}\)[\s\S]*return false;[\s\S]*uploadWallpaper\(file, user\.id\)/,
+  "Custom wallpaper uploads must remain local unless the authenticated user explicitly enabled cloud sync");
+assert.match(read("src/components/WallpaperSettings.tsx"), /const synced = await setCustom\(f\)[\s\S]*enregistré sur cet appareil/,
+  "Wallpaper settings must distinguish local-only saves from cloud-synchronized uploads");
 assert.match(wallpaperHook, /setChoice\(\{ kind: "custom", storagePath \}\)/,
   "Only a small per-user Storage path, never base64 image bytes, may enter account sync");
 assert.match(themeToggle, /persistLocalPreference\(VISUAL_THEME_KEY, theme\)/,
