@@ -5,13 +5,13 @@ import path from "node:path";
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const syncRpcTrimMigration = read("supabase/migrations/20261127103000_fix_user_state_sync_rpc_trim.sql");
-assert.match(syncRpcTrimMigration, /pg_catalog\\.btrim\\(p_updated_by\\)/,
+assert.match(syncRpcTrimMigration, /pg_catalog\.btrim\(p_updated_by\)/,
   "The sync RPC must trim the device identifier using a real pg_catalog function");
-assert.doesNotMatch(syncRpcTrimMigration, /pg_catalog\\.trim\\(p_updated_by\\)/,
+assert.doesNotMatch(syncRpcTrimMigration, /pg_catalog\.trim\(p_updated_by\)/,
   "The sync RPC must not call the nonexistent pg_catalog.trim function");
-assert.match(syncRpcTrimMigration, /SECURITY DEFINER[\\s\\S]*SET search_path = ''[\\s\\S]*auth\\.uid\\(\\) IS NULL OR auth\\.uid\\(\\) <> p_user_id/,
+assert.match(syncRpcTrimMigration, /SECURITY DEFINER[\s\S]*SET search_path = ''[\s\S]*auth\.uid\(\) IS NULL OR auth\.uid\(\) <> p_user_id/,
   "The RPC correction must preserve the hardened execution context and account ownership guard");
-assert.match(syncRpcTrimMigration, /REVOKE ALL ON FUNCTION public\\.upsert_user_state_if_newer[\\s\\S]*FROM PUBLIC, anon[\\s\\S]*GRANT EXECUTE ON FUNCTION public\\.upsert_user_state_if_newer[\\s\\S]*TO authenticated/,
+assert.match(syncRpcTrimMigration, /REVOKE ALL ON FUNCTION public\.upsert_user_state_if_newer[\s\S]*FROM PUBLIC, anon[\s\S]*GRANT EXECUTE ON FUNCTION public\.upsert_user_state_if_newer[\s\S]*TO authenticated/,
   "Only authenticated users may execute the corrected sync RPC");
 assert.match(syncRpcTrimMigration, /NOTIFY pgrst, 'reload schema'/,
   "The migration must refresh the PostgREST schema cache after replacing the RPC");
