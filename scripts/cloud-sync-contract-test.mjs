@@ -319,6 +319,8 @@ assert.match(read("src/hooks/use-shared-appearance.tsx"), /lastAppliedSharedWall
   "The Web shared appearance overlay must purge the old object when the same owner selects a different background");
 assert.match(flutterThemeAppearance, /static Future<void> purgeSharedWallpaperPath\(String path\)[\s\S]*_downloads\.remove\(path\)[\s\S]*await pending[\s\S]*cachedFile\.delete/,
   "Flutter must purge the exact superseded shared wallpaper from memory and persistent cache");
+assert.match(flutterThemeAppearance, /identical\(_downloads\[path\], request\)/,
+  "An older failed wallpaper download must not evict a newer request for the same shared object");
 assert.match(flutterAppAppearance, /_lastSharedWallpaperPath[\s\S]*purgeSharedWallpaperPath\(previousWallpaperPath\)/,
   "Flutter must purge the previous wallpaper path when the same owner changes the shared background");
 
