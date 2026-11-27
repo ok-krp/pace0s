@@ -193,7 +193,11 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       });
       await widget.sync.setCloudSyncConsent(_syncCloudConsent);
       if (_syncCloudConsent) {
-        await _migrateLocalWallpaperToCloud();
+        // A missing/unavailable Storage bucket must not block account theme
+        // and preset synchronization. Keep a custom image locally for retry.
+        try {
+          await _migrateLocalWallpaperToCloud();
+        } catch (_) {}
         await widget.sync.syncNow();
       }
     } catch (_) {}
@@ -335,6 +339,20 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       'kind': 'custom',
       'storagePath': objectPath,
     });
+    if (mounted) setState(() {});
+  }
+
+  String _wallpaperSubtitle() {
+    if (!_syncCloudConsent) {
+      return 'Image locale. Active la synchronisation pour la partager.';
+    }
+    final choice = widget.localStore.read('pace.wallpaper');
+    if (choice is Map &&
+        choice['kind'] == 'custom' &&
+        choice['localPath'] is String) {
+      return "Synchronisation activée ; image conservée sur cet appareil jusqu'à disponibilité du stockage cloud.";
+    }
+    return 'Les préférences de fond et les images privées sont synchronisées entre les appareils de ce compte.';
   }
 
   Future<void> _chooseWallpaper() async {
@@ -368,6 +386,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
             'kind': 'custom',
             'storagePath': objectPath,
           });
+          if (mounted) setState(() {});
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Fond d'écran synchronisable enregistré.")),
@@ -379,6 +398,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
             'kind': 'custom',
             'localPath': localPath,
           });
+          if (mounted) setState(() {});
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text("Stockage synchronisé indisponible : fond enregistré localement. Réessaie après activation du bucket.")),
@@ -391,6 +411,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
           'kind': 'custom',
           'localPath': localPath,
         });
+        if (mounted) setState(() {});
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Fond d'écran enregistré sur cet appareil. Active la synchronisation cloud pour le partager.")),
@@ -453,9 +474,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
               ),
               ListTile(
                 title: const Text("Fond d'écran"),
-                subtitle: Text(_syncCloudConsent
-                    ? 'Image privée synchronisée entre les appareils de ce compte.'
-                    : 'Image locale. Active la synchronisation pour la partager.'),
+                subtitle: Text(_wallpaperSubtitle()),
                 trailing: IconButton(
                   tooltip: 'Choisir une image',
                   onPressed: _chooseWallpaper,
@@ -467,10 +486,13 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 children: [
                   for (final preset in paceWallpaperPresets)
                     OutlinedButton(
-                      onPressed: () => widget.localStore.write(
-                        'pace.wallpaper',
-                        {'id': preset.$1},
-                      ),
+                      onPressed: () async {
+                        await widget.localStore.write(
+                          'pace.wallpaper',
+                          {'id': preset.$1},
+                        );
+                        if (mounted) setState(() {});
+                      },
                       child: Text(preset.$2),
                     ),
                 ],
