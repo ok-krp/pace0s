@@ -15,8 +15,9 @@ class PaceTheme {
 
   static ThemeData _theme(Brightness brightness, String visualTheme) {
     final glass = visualTheme == 'glass';
+    final neutral = glass || visualTheme == 'signal';
     final scheme = ColorScheme.fromSeed(
-      seedColor: glass ? const Color(0xFF777777) : const Color(0xFF7C6FF2),
+      seedColor: neutral ? const Color(0xFF777777) : const Color(0xFF7C6FF2),
       brightness: brightness,
     );
     return ThemeData(
