@@ -220,26 +220,40 @@ void main() {
         SyncService.isSyncableValue('pace.wallpaper', {
           'kind': 'custom',
           'localPath': '/private/device/wallpaper.jpg',
-        }),
+        }, userId: 'user-id'),
         isFalse,
       );
       expect(
         SyncService.isSyncableValue('pace.wallpaper', {
           'kind': 'custom',
           'dataUrl': 'data:image/jpeg;base64,AAAA',
-        }),
+        }, userId: 'user-id'),
         isFalse,
       );
       expect(
         SyncService.isSyncableValue('pace.wallpaper', {
           'kind': 'custom',
           'storagePath': 'user-id/wallpaper.jpg',
-        }),
+        }, userId: 'user-id'),
         isTrue,
       );
       expect(
-        SyncService.isSyncableValue('pace.wallpaper', {'id': 'graphite'}),
+        SyncService.isSyncableValue('pace.wallpaper', {'id': 'graphite'}, userId: 'user-id'),
         isTrue,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {
+          'kind': 'custom',
+          'storagePath': 'another-user/wallpaper.jpg',
+        }, userId: 'user-id'),
+        isFalse,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {
+          'kind': 'custom',
+          'storagePath': 'user-id/nested/wallpaper.jpg',
+        }, userId: 'user-id'),
+        isFalse,
       );
     });
 
@@ -264,11 +278,11 @@ void main() {
       };
 
       expect(
-        SyncService.isSyncableValue('pace.domain.wallpaper', wrappedInline),
+        SyncService.isSyncableValue('pace.domain.wallpaper', wrappedInline, userId: 'user-id'),
         isFalse,
       );
       expect(
-        SyncService.isSyncableValue('pace.domain.wallpaper', wrappedStoragePath),
+        SyncService.isSyncableValue('pace.domain.wallpaper', wrappedStoragePath, userId: 'user-id'),
         isTrue,
       );
     });
