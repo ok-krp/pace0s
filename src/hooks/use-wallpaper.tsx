@@ -237,7 +237,7 @@ export function applyWallpaper(choice: WallpaperChoice) {
       ? "linear-gradient(180deg, rgba(0,0,0,0.16), rgba(0,0,0,0.28))"
       : "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.10))";
     if ("dataUrl" in choice) {
-      root.style.setProperty("--wallpaper", `${overlay}, url("${choice.dataUrl}") center/cover no-repeat`);
+      root.style.setProperty("--wallpaper", `${overlay}, url("${choice.dataUrl}")`);
     } else {
       root.dataset.wallpaperPath = choice.storagePath;
       root.style.setProperty("--wallpaper", isDark
@@ -245,7 +245,7 @@ export function applyWallpaper(choice: WallpaperChoice) {
         : "linear-gradient(135deg, #e7e7e7, #f5f5f5)");
       void getWallpaperObjectUrl(choice.storagePath).then((url) => {
         if (root.dataset.wallpaperPath !== choice.storagePath) return;
-        root.style.setProperty("--wallpaper", `${overlay}, url("${url}") center/cover no-repeat`);
+        root.style.setProperty("--wallpaper", `${overlay}, url("${url}")`);
       }).catch((error) => console.warn("[wallpaper] image download failed", error));
     }
     root.style.setProperty("--glass-tint", isDark ? "10 14 22" : "255 255 255");
