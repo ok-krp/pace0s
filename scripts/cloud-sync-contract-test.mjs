@@ -317,12 +317,6 @@ assert.match(wallpaperHook, /export async function purgeWallpaperCacheForPath\(p
   "Replacing a shared background must revoke and delete only the previous wallpaper path from the browser cache");
 assert.match(read("src/hooks/use-shared-appearance.tsx"), /lastAppliedSharedWallpaperPath[\s\S]*purgeWallpaperCacheForPath\(previousSharedWallpaperPath\)[\s\S]*applyWallpaper/,
   "The Web shared appearance overlay must purge the old object when the same owner selects a different background");
-assert.match(flutterThemeAppearance, /static Future<void> purgeSharedWallpaperPath\(String path\)[\s\S]*_downloads\.remove\(path\)[\s\S]*await pending[\s\S]*cachedFile\.delete/,
-  "Flutter must purge the exact superseded shared wallpaper from memory and persistent cache");
-assert.match(flutterThemeAppearance, /identical\(_downloads\[path\], request\)/,
-  "An older failed wallpaper download must not evict a newer request for the same shared object");
-assert.match(flutterAppAppearance, /_lastSharedWallpaperPath[\s\S]*purgeSharedWallpaperPath\(previousWallpaperPath\)/,
-  "Flutter must purge the previous wallpaper path when the same owner changes the shared background");
 
 const wallpaperApplyStart = wallpaperHook.indexOf("export function applyWallpaper(");
 const wallpaperApplyEnd = wallpaperHook.indexOf("/** Read choice synchronously", wallpaperApplyStart);
@@ -358,6 +352,14 @@ assert.ok(visualThemeStart >= 0 && visualThemeEnd > visualThemeStart &&
 const flutterThemeAppearance = read("pace_flutter/lib/ui/pace_theme.dart");
 const flutterSettingsAppearance = read("pace_flutter/lib/features/more/more_page.dart");
 const flutterAppearanceSharing = read("pace_flutter/lib/core/appearance/appearance_sharing_service.dart");
+
+assert.match(flutterThemeAppearance, /static Future<void> purgeSharedWallpaperPath\(String path\)[\s\S]*_downloads\.remove\(path\)[\s\S]*await pending[\s\S]*cachedFile\.delete/,
+  "Flutter must purge the exact superseded shared wallpaper from memory and persistent cache");
+assert.match(flutterThemeAppearance, /identical\(_downloads\[path\], request\)/,
+  "An older failed wallpaper download must not evict a newer request for the same shared object");
+assert.match(flutterAppAppearance, /_lastSharedWallpaperPath[\s\S]*purgeSharedWallpaperPath\(previousWallpaperPath\)/,
+  "Flutter must purge the previous wallpaper path when the same owner changes the shared background");
+
 assert.ok(
   flutterAppearanceSharing.includes("get_shared_appearance") &&
     flutterAppearanceSharing.includes("create_appearance_share_invite") &&
