@@ -67,15 +67,11 @@ class SyncService {
     'pace.sport.active',
     'pace.ai.conversations',
     'pace.ai.deleted_conversations',
-    'pace.wallpaper',
-    'pace.domain.wallpaper',
     'pace.finance.pin.hash',
     'pace.ai.debug',
     'pace.billing.device_id',
     'pace.watch.last_metrics',
     'pace.legal.consent',
-    'pace.dark',
-    'pace.visual-theme',
     'pace.domain.outbox',
   };
 
