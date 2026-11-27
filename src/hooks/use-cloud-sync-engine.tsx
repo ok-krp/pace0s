@@ -648,22 +648,22 @@ export function useCloudSyncEngineInternal() {
       // Private Broadcast authorization uses the current Supabase user JWT.
       void supabase.realtime.setAuth(session.access_token).then(() => {
         if (cancelled) return;
-        realtimeChannel = supabase
-          createPrivateRealtimeChannel(`pace-user-state:${user.id}`)
+        const topic = `pace-user-state:${user.id}`;
+        realtimeChannel = createPrivateRealtimeChannel(topic)
           .on("broadcast", { event: "user_state_changed" }, (message) => {
             if (cancelled || !allowed() || !navigator.onLine) return;
             const payload = message.payload as { key?: unknown } | undefined;
             if (typeof payload?.key !== "string" || !isSyncableKey(payload.key)) return;
             void syncNow();
           })
-          .subscribe((state) => {
+          .subscribe((state, error) => {
             if (state === "SUBSCRIBED" && !cancelled) {
-              console.info("[Pace sync] private user_state Broadcast subscribed");
+              console.info("[Pace sync] private user_state Broadcast subscribed", { topic });
               void syncNow();
               return;
             }
             if (state === "CHANNEL_ERROR" || state === "TIMED_OUT" || state === "CLOSED") {
-              console.error("[Pace sync] private Broadcast channel unavailable", { state });
+              console.error("[Pace sync] private Broadcast channel unavailable", { topic, state, message: error instanceof Error ? error.message : undefined });
               if (!cancelled) setStatus("error");
             }
           });
