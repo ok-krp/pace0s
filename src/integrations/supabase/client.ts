@@ -36,3 +36,16 @@ export const supabase = new Proxy({} as ReturnType<typeof createSupabaseClient>,
     return Reflect.get(_supabase, prop, receiver);
   },
 });
+
+// Pace's Supabase project rejects public Realtime channels. Keep that
+// invariant in one place so a future subscriber cannot silently omit it.
+type RealtimeChannelOptions = NonNullable<Parameters<typeof supabase.channel>[1]>;
+export function createPrivateRealtimeChannel(
+  topic: string,
+  options: Partial<RealtimeChannelOptions> = {},
+) {
+  return supabase.channel(topic, {
+    ...options,
+    config: { ...options.config, private: true },
+  });
+}
