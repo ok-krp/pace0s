@@ -151,7 +151,8 @@ async function uploadWallpaper(blob: Blob, userId: string): Promise<string> {
 function getWallpaperObjectUrl(path: string): Promise<string> {
   const cached = wallpaperObjectUrls.get(path);
   if (cached) return cached;
-  const request = (async () => {
+  let request: Promise<string>;
+  request = (async () => {
     const cacheKey = new Request(`${window.location.origin}/__pace-wallpaper-cache/${encodeURIComponent(path)}`);
     let cache: Cache | null = null;
     try {
@@ -177,7 +178,11 @@ function getWallpaperObjectUrl(path: string): Promise<string> {
     }
     return URL.createObjectURL(data);
   })().catch((error) => {
-    wallpaperObjectUrls.delete(path);
+    // An older request may fail after the same path has been selected again.
+    // It must not delete the newer request from the cache.
+    if (wallpaperObjectUrls.get(path) === request) {
+      wallpaperObjectUrls.delete(path);
+    }
     throw error;
   });
   wallpaperObjectUrls.set(path, request);
