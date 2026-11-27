@@ -99,6 +99,25 @@ function isSyncableKey(key: string) {
     key !== DOMAIN_OUTBOX_KEY &&
     !isDeviceLocalSyncKey(key);
 }
+function isInlineWallpaperValue(key: string, value: unknown) {
+  const canonicalKey = key.startsWith("lt.") ? `pace.${key.slice(3)}` : key;
+  if (!["pace.wallpaper", "pace.domain.wallpaper"].includes(canonicalKey)) return false;
+  const candidate = value && typeof value === "object" && "value" in value
+    ? (value as { value: unknown }).value
+    : value;
+  return Boolean(
+    candidate &&
+    typeof candidate === "object" &&
+    "kind" in candidate &&
+    (candidate as { kind?: unknown }).kind === "custom" &&
+    "dataUrl" in candidate &&
+    typeof (candidate as { dataUrl?: unknown }).dataUrl === "string" &&
+    (candidate as { dataUrl: string }).dataUrl.startsWith("data:image/"),
+  );
+}
+function isSyncableRecord(key: string, value: unknown) {
+  return isSyncableKey(key) && !isInlineWallpaperValue(key, value);
+}
 function scopedSyncStorageKey(base: string, userId: string) {
   return `${base}:account:${encodeURIComponent(userId)}`;
 }
@@ -150,12 +169,12 @@ function writeQueue(items: QueueItem[], userId: string) {
     QUEUE_KEY,
     userId,
     items
-      .filter((item) => isSyncableKey(item.key) && (!item.ownerUserId || item.ownerUserId === userId))
+      .filter((item) => isSyncableRecord(item.key, item.value) && (!item.ownerUserId || item.ownerUserId === userId))
       .map((item) => ({ ...item, ownerUserId: userId })),
   );
 }
 function queueItem(item: QueueItem, userId: string) {
-  if (!isSyncableKey(item.key) || !item.updatedAt) return;
+  if (!isSyncableRecord(item.key, item.value) || !item.updatedAt) return;
   const next = readQueue(userId).filter((queued) => queued.key !== item.key);
   next.push({ ...item, ownerUserId: userId });
   writeQueue(next, userId);
@@ -389,7 +408,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const pushItem = async (item: QueueItem) => {
-      if (cancelled || !allowed() || !isSyncableKey(item.key) || !navigator.onLine) return;
+      if (cancelled || !allowed() || !isSyncableRecord(item.key, item.value) || !navigator.onLine) return;
       const writeKey = `${user.id}:${item.key}`;
       const previous = keyWrites.current[writeKey] ?? Promise.resolve();
       const current = previous.then(async () => {
@@ -669,7 +688,7 @@ export function useCloudSyncEngineInternal() {
     }
 
     const offLocal = onLocalWrite((key, value, updatedAt, mutationId) => {
-      if (!isSyncableKey(key) || !updatedAt) return;
+      if (!isSyncableRecord(key, value) || !updatedAt) return;
       const encoded = serialize(value);
       const memoryKey = user.id + ':' + key;
       if (encoded !== undefined && lastRemoteValues.current[memoryKey] === encoded) { delete lastRemoteValues.current[memoryKey]; return; }
