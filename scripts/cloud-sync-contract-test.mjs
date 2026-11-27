@@ -384,6 +384,13 @@ assert.ok(
   "Native Flutter must render the same synchronized wallpaper preset IDs as Web/PWA",
 );
 
+assert.match(flutterThemeAppearance, /class PaceWallpaperBackground[\\s\\S]*static Future<void> purgeSharedWallpaperCache\\(String ownerId\\)[\\s\\S]*static Future<Uint8List> _loadStorageWallpaper/,
+  "Flutter wallpaper background must define one coherent cache-purge method before its storage loader");
+assert.match(flutterThemeAppearance, /purgeSharedWallpaperCache[\\s\\S]*directory\.list\(followLinks: false\)[\\s\\S]*entity\.delete\(\)/,
+  "Flutter must remove owner-scoped cached wallpaper files when a share is revoked or replaced");
+assert.match(flutterAppAppearance, /purgeSharedWallpaperCache\(previousOwnerId\)/,
+  "Flutter account appearance changes must purge cached files for the previous shared owner");
+
 const visualThemeCss = read("src/visual-theme.css");
 assert.ok(!visualThemeCss.includes("Pace Glass — legacy implementation kept as annotation."),
   "The malformed nested legacy Glass comment must not be reintroduced by appearance changes");
