@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/storage/local_store.dart';
+import '../core/storage/wallpaper_presets.dart';
 
 class PaceTheme {
   static ThemeData light({String visualTheme = 'default'}) =>
@@ -149,33 +150,44 @@ class PaceWallpaperBackground extends StatelessWidget {
     }
 
     final preset = choice is Map ? choice['id'] : null;
-    if (preset == 'mist') {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomRight,
-            colors: dark
-                ? const [Color(0xFF202124), Color(0xFF45464A)]
-                : const [Color(0xFFF3F3F4), Color(0xFFD9DADD)],
-          ),
+    final List<Color>? colors = switch (preset) {
+      'aurora' => dark
+          ? const [Color(0xFF1E2439), Color(0xFF202B45), Color(0xFF182A35)]
+          : const [Color(0xFFFFF1D6), Color(0xFFE6F0FF), Color(0xFFE0FBFA)],
+      'ocean' => dark
+          ? const [Color(0xFF16314A), Color(0xFF132D3F), Color(0xFF183C43)]
+          : const [Color(0xFFD8F0FB), Color(0xFFA8D9EE), Color(0xFFB7E9E6)],
+      'sunset' => dark
+          ? const [Color(0xFF4A211D), Color(0xFF371B39), Color(0xFF2D1C2A)]
+          : const [Color(0xFFFFE4C8), Color(0xFFFFC7C4), Color(0xFFF9D1E4)],
+      'forest' => dark
+          ? const [Color(0xFF193A2C), Color(0xFF142C29), Color(0xFF1D3425)]
+          : const [Color(0xFFDDF2E2), Color(0xFFBBDCC9), Color(0xFFE3EBD4)],
+      'graphite' => dark
+          ? const [Color(0xFF111315), Color(0xFF242629)]
+          : const [Color(0xFFE5E5E7), Color(0xFFF8F8F9), Color(0xFFD8D8DB)],
+      'orchid' => dark
+          ? const [Color(0xFF30203B), Color(0xFF271C39), Color(0xFF38243E)]
+          : const [Color(0xFFF2DDF7), Color(0xFFE3D8FA), Color(0xFFF0E0EF)],
+      // Keep old native-only preset IDs renderable for clients that already synced them.
+      'mist' => dark
+          ? const [Color(0xFF202124), Color(0xFF45464A)]
+          : const [Color(0xFFF3F3F4), Color(0xFFD9DADD)],
+      'slate' => dark
+          ? const [Color(0xFF0D0E10), Color(0xFF27292D)]
+          : const [Color(0xFFD2D3D5), Color(0xFFECECEE)],
+      _ => null,
+    };
+    if (colors == null) return fallback;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
         ),
-      );
-    }
-    if (preset == 'slate') {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: dark
-                ? const [Color(0xFF0D0E10), Color(0xFF27292D)]
-                : const [Color(0xFFD2D3D5), Color(0xFFECECEE)],
-          ),
-        ),
-      );
-    }
-    return fallback;
+      ),
+    );
   }
 
   @override
