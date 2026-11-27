@@ -286,6 +286,19 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     await widget.sync.syncNow();
   }
 
+  Future<String> _persistWallpaperLocally(File file, String extension) async {
+    final supportDirectory = await getApplicationSupportDirectory();
+    final wallpaperDirectory = Directory(
+      p.join(supportDirectory.path, 'wallpapers'),
+    );
+    await wallpaperDirectory.create(recursive: true);
+    final localFile = await file.copy(p.join(
+      wallpaperDirectory.path,
+      'pace_wallpaper_${DateTime.now().microsecondsSinceEpoch}$extension',
+    ));
+    return localFile.path;
+  }
+
   Future<void> _migrateLocalWallpaperToCloud() async {
     final client = widget.auth.client;
     final userId = widget.auth.currentUser?.id;
@@ -341,34 +354,35 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
           widget.localStore.currentAccountId == userId) {
         final safeExtension = extension == '.jpeg' ? '.jpg' : extension;
         final objectPath = '$userId/${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}$safeExtension';
-        await client.storage.from('pace-wallpapers').upload(
-          objectPath,
-          file,
-        );
-        await widget.localStore.write('pace.wallpaper', {
-          'kind': 'custom',
-          'storagePath': objectPath,
-        });
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Fond d'écran synchronisable enregistré.")),
-          );
+        try {
+          await client.storage.from('pace-wallpapers').upload(objectPath, file);
+          await widget.localStore.write('pace.wallpaper', {
+            'kind': 'custom',
+            'storagePath': objectPath,
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Fond d'écran synchronisable enregistré.")),
+            );
+          }
+        } catch (uploadError) {
+          if (await file.length() > 3 * 1024 * 1024) rethrow;
+          final localPath = await _persistWallpaperLocally(file, extension);
+          await widget.localStore.write('pace.wallpaper', {
+            'kind': 'custom',
+            'localPath': localPath,
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Stockage synchronisé indisponible : fond enregistré localement. Réessaie après activation du bucket.")),
+            );
+          }
         }
       } else {
-        // image_picker returns a cache path; copy it to persistent app support
-        // storage so the local-only wallpaper survives app restarts and cleanup.
-        final supportDirectory = await getApplicationSupportDirectory();
-        final wallpaperDirectory = Directory(
-          p.join(supportDirectory.path, 'wallpapers'),
-        );
-        await wallpaperDirectory.create(recursive: true);
-        final localFile = await file.copy(p.join(
-          wallpaperDirectory.path,
-          'pace_wallpaper_${DateTime.now().microsecondsSinceEpoch}$extension',
-        ));
+        final localPath = await _persistWallpaperLocally(file, extension);
         await widget.localStore.write('pace.wallpaper', {
           'kind': 'custom',
-          'localPath': localFile.path,
+          'localPath': localPath,
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
