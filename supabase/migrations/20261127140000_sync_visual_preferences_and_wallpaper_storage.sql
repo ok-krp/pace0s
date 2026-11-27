@@ -7,7 +7,7 @@ VALUES (
   'pace-wallpapers',
   'pace-wallpapers',
   false,
-  4194304,
+  20971520,
   ARRAY['image/jpeg', 'image/png', 'image/webp']::text[]
 )
 ON CONFLICT (id) DO UPDATE SET
