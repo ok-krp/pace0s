@@ -105,14 +105,14 @@ function isInlineWallpaperValue(key: string, value: unknown) {
   const candidate = value && typeof value === "object" && "value" in value
     ? (value as { value: unknown }).value
     : value;
-  return Boolean(
-    candidate &&
-    typeof candidate === "object" &&
-    "kind" in candidate &&
-    (candidate as { kind?: unknown }).kind === "custom" &&
-    "dataUrl" in candidate &&
-    typeof (candidate as { dataUrl?: unknown }).dataUrl === "string" &&
-    (candidate as { dataUrl: string }).dataUrl.startsWith("data:image/"),
+  if (!candidate || typeof candidate !== "object" || !("kind" in candidate) ||
+      (candidate as { kind?: unknown }).kind !== "custom") return false;
+  const wallpaper = candidate as { dataUrl?: unknown; localPath?: unknown };
+  // Inline browser bytes and native filesystem paths are both device-local.
+  // Only an authenticated private Storage object path may cross devices.
+  return (
+    (typeof wallpaper.dataUrl === "string" && wallpaper.dataUrl.startsWith("data:image/")) ||
+    (typeof wallpaper.localPath === "string" && wallpaper.localPath.length > 0)
   );
 }
 function isSyncableRecord(key: string, value: unknown) {
