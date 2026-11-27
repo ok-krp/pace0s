@@ -309,6 +309,10 @@ assert.match(wallpaperHook, /let wallpaperRenderVersion = 0;[\s\S]*const renderV
   "Late wallpaper downloads must not override a newer selection after rapid background changes");
 assert.match(wallpaperHook, /let request: Promise<string>;[\s\S]*wallpaperObjectUrls\.get\(path\) === request[\s\S]*wallpaperObjectUrls\.delete\(path\)/,
   "A stale failed download must not evict a newer cached request for the same wallpaper path");
+assert.match(wallpaperHook, /purgeWallpaperCacheForOwner\(ownerId: string\)[\s\S]*wallpaperObjectUrls\.keys\(\)[\s\S]*caches\.open\("pace-wallpaper-v1"\)[\s\S]*cache\.keys\(\)[\s\S]*cache\.delete\(request\)/,
+  "Revoking or replacing a cross-account share must purge its owner-scoped in-memory and persistent browser wallpaper cache");
+assert.match(read("src/hooks/use-shared-appearance.tsx"), /lastAppliedSharedOwnerId[\s\S]*purgeWallpaperCacheForOwner\(previousSharedOwnerId\)/,
+  "The shared appearance overlay must purge the previous source account cache when the share is removed or replaced");
 const wallpaperApplyStart = wallpaperHook.indexOf("export function applyWallpaper(");
 const wallpaperApplyEnd = wallpaperHook.indexOf("/** Read choice synchronously", wallpaperApplyStart);
 const wallpaperApply = wallpaperHook.slice(wallpaperApplyStart, wallpaperApplyEnd);
