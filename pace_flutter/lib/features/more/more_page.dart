@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/compliance/compliance_service.dart';
 import '../../core/notifications/notification_service.dart';
 import '../../core/storage/local_store.dart';
+import '../../core/storage/wallpaper_presets.dart';
 import '../../core/supabase/pace_supabase.dart';
 import '../../core/sync/sync_service.dart';
 import '../ai/ai_page.dart';
@@ -464,11 +465,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
               Wrap(
                 spacing: 8,
                 children: [
-                  for (final preset in const [
-                    ('graphite', 'Graphite'),
-                    ('mist', 'Brume'),
-                    ('slate', 'Ardoise'),
-                  ])
+                  for (final preset in paceWallpaperPresets)
                     OutlinedButton(
                       onPressed: () => widget.localStore.write(
                         'pace.wallpaper',
