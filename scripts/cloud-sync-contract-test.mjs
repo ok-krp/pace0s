@@ -256,6 +256,8 @@ assert.match(wallpaperHook, /function releaseWallpaperObjectUrl\(path: string \|
   "Inactive custom wallpaper ObjectURLs must be revoked when the selection changes");
 assert.match(wallpaperHook, /let wallpaperRenderVersion = 0;[\s\S]*const renderVersion = \+\+wallpaperRenderVersion[\s\S]*renderVersion !== wallpaperRenderVersion/,
   "Late wallpaper downloads must not override a newer selection after rapid background changes");
+assert.match(wallpaperHook, /let request: Promise<string>;[\s\S]*wallpaperObjectUrls\.get\(path\) === request[\s\S]*wallpaperObjectUrls\.delete\(path\)/,
+  "A stale failed download must not evict a newer cached request for the same wallpaper path");
 assert.match(themeToggle, /persistLocalPreference\(VISUAL_THEME_KEY, theme\)/,
   "Changing visual theme must immediately enqueue the account preference for cloud sync");
 assert.match(settingsRoute, /persistLocalPreference\("pace\.dark", v \? "1" : "0"\)/,
