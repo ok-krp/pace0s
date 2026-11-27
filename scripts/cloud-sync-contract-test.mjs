@@ -250,6 +250,8 @@ assert.match(read("src/components/WallpaperSettings.tsx"), /const synced = await
   "Wallpaper settings must distinguish local-only saves from cloud-synchronized uploads");
 assert.match(wallpaperHook, /setChoice\(\{ kind: "custom", storagePath \}\)/,
   "Only a small per-user Storage path, never base64 image bytes, may enter account sync");
+assert.match(wallpaperHook, /finally\(\(\) => \{[\s\S]*legacyWallpaperMigrations\.get\(migrationKey\) === migration[\s\S]*legacyWallpaperMigrations\.delete\(migrationKey\)/,
+  "Completed legacy wallpaper migrations must release data URLs retained as Map keys");
 assert.match(themeToggle, /persistLocalPreference\(VISUAL_THEME_KEY, theme\)/,
   "Changing visual theme must immediately enqueue the account preference for cloud sync");
 assert.match(settingsRoute, /persistLocalPreference\("pace\.dark", v \? "1" : "0"\)/,
