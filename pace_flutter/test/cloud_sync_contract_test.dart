@@ -2,8 +2,20 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/compliance/compliance_service.dart';
 import 'package:pace/core/sync/sync_service.dart';
 import 'package:pace/core/storage/wallpaper_presets.dart';
+import 'package:pace/ui/pace_theme.dart';
 
 void main() {
+  group('Native appearance palette parity', () {
+    test('Signal uses the same neutral grayscale primary as Liquid Glass', () {
+      final pace = PaceTheme.light();
+      final signal = PaceTheme.light(visualTheme: 'signal');
+      final glass = PaceTheme.light(visualTheme: 'glass');
+
+      expect(signal.colorScheme.primary, glass.colorScheme.primary);
+      expect(signal.colorScheme.primary, isNot(pace.colorScheme.primary));
+    });
+  });
+
   group('Native Nutrition projection concurrency', () {
     test('preserves local rows created while food_log was being queried', () {
       final newPendingId = newFoodLogUuid();
