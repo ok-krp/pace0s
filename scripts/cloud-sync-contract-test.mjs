@@ -377,8 +377,8 @@ assert.ok(
     flutterTheme.includes("Image.memory("),
   "Flutter must render local and private-Storage wallpapers behind the native application",
 );
-assert.match(flutterTheme, /seedColor: glass \? const Color\(0xFF777777\)/,
-  "Flutter Liquid Glass must use a neutral grayscale palette rather than multicolor accents");
+assert.match(flutterTheme, /final neutral = glass \|\| visualTheme == 'signal'[\s\S]*seedColor: neutral \? const Color\(0xFF777777\)/,
+  "Flutter Signal and Liquid Glass must use the neutral grayscale palette across devices");
 assert.match(flutterLocalStore, /Future<void> applyRemote\([\s\S]*_notifyChange\(key\)/,
   "Remote theme and wallpaper updates must notify the Flutter UI without requiring an app restart");
 const syncSchedulerStart = flutterSync.indexOf("void _scheduleSync()");
