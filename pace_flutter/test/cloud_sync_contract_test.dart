@@ -160,9 +160,14 @@ void main() {
       expect(SyncService.excludedRemotePullKeys, contains('lt.domain.outbox'));
       expect(SyncService.excludedRemotePullKeys, contains('pace.domain.legal.consent'));
       expect(SyncService.excludedRemotePullKeys, contains('lt.domain.legal.consent'));
-      expect(SyncService.excludedRemotePullKeysFilter, contains('"pace.wallpaper"'));
-      expect(SyncService.excludedRemotePullKeysFilter, contains('"lt.wallpaper"'));
       expect(SyncService.excludedRemotePullKeysFilter, contains('"pace.domain.outbox"'));
+      for (final key in [
+        'pace.domain.wallpaper',
+        'pace.domain.dark',
+        'pace.domain.visual-theme',
+      ]) {
+        expect(SyncService.isDeviceLocalKey(key), isFalse, reason: key);
+      }
       expect(SyncService.excludedRemotePullKeyPatterns, hasLength(10));
       for (final pattern in [
         r'^(pace|lt)\.__',
@@ -193,7 +198,6 @@ void main() {
         'pace.domain.import.log',
         'pace.domain.legal.consent',
         'lt.domain.legal.consent',
-        'pace.domain.dark',
         'pace.domain.__sync_meta',
         'pace.domain.ai.debug.trace',
         'lt.domain.ai.debug.trace',
