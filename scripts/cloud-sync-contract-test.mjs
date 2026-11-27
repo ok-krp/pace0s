@@ -432,8 +432,15 @@ assert.ok(
 const flutterLocalStore = read("pace_flutter/lib/core/storage/local_store.dart");
 const flutterLocalStoreTest = read("pace_flutter/test/local_store_account_scope_test.dart");
 const flutterTheme = read("pace_flutter/lib/ui/pace_theme.dart");
-assert.match(flutterSync, /static bool isSyncableValue\(String key, dynamic value\)[\s\S]*localPath[\s\S]*dataUrl[\s\S]*storagePath/,
-  "Flutter may synchronize only portable wallpaper Storage paths, never local files or inline image bytes");
+assert.match(flutterSync, /static bool isSyncableValue\([\s\S]*required String userId[\s\S]*isLocalOnlyWallpaperValue[\s\S]*storagePath\.startsWith\('\$userId\/'\)/,
+  "Flutter may synchronize only portable wallpaper Storage paths owned by the active account");
+assert.ok(flutterSync.includes("SyncService.isSyncableValue(key, localStore.read(key), userId: userId)") &&
+  flutterSync.includes("SyncService.isSyncableValue(key, operation['value'], userId: userId)") &&
+  flutterSync.includes("SyncService.isSyncableValue(key, row['value'], userId: userId)"),
+  "Flutter push, outbox and remote-pull paths must all validate wallpaper ownership against the active account");
+assert.ok(flutterTest.includes("another-user/wallpaper.jpg") &&
+  flutterTest.includes("user-id/nested/wallpaper.jpg"),
+  "Flutter unit tests must reject wallpaper object paths owned by another user or nested outside the expected object namespace");
 assert.match(flutterSync, /static bool isLocalOnlyWallpaperValue\\(String key, dynamic value\\)[\\s\\S]*localPath[\\s\\S]*dataUrl[\\s\\S]*storagePath/,
   "Flutter must identify device-local custom wallpaper overrides separately from portable Storage paths");
 const nativeWallpaperPreserveStart = flutterSync.indexOf("if (SyncService.isLocalOnlyWallpaperValue(");
