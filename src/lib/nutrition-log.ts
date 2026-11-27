@@ -448,8 +448,7 @@ export function subscribeNutritionFoodLogChanges(onChange: () => void): () => vo
     const { data: { user }, error } = await supabase.auth.getUser();
     if (disposed || currentGeneration !== generation || error || !user) return;
 
-    const nextChannel = supabase
-      createPrivateRealtimeChannel(`pace-food-log-${user.id}`)
+    const nextChannel = createPrivateRealtimeChannel(`pace-food-log-${user.id}`)
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
