@@ -334,6 +334,21 @@ const flutterApp = read("pace_flutter/lib/app/pace_app.dart");
 const flutterSettings = read("pace_flutter/lib/features/more/more_page.dart");
 const flutterLocalStore = read("pace_flutter/lib/core/storage/local_store.dart");
 const flutterLocalStoreTest = read("pace_flutter/test/local_store_account_scope_test.dart");
+const flutterTheme = read("pace_flutter/lib/ui/pace_theme.dart");
+assert.match(flutterSync, /static bool isSyncableValue\(String key, dynamic value\)[\s\S]*localPath[\s\S]*dataUrl[\s\S]*storagePath/,
+  "Flutter may synchronize only portable wallpaper Storage paths, never local files or inline image bytes");
+assert.match(flutterSettings, /ImagePicker\(\)[\s\S]*ImageSource\.gallery[\s\S]*pace-wallpapers[\s\S]*storagePath/,
+  "Flutter settings must support choosing a custom wallpaper and uploading it to private Storage when consent is enabled");
+assert.match(flutterSettings, /localPath[\s\S]*Active la synchronisation pour la partager/,
+  "Flutter must keep a local wallpaper usable without cloud consent and explain how to share it");
+assert.match(flutterApp, /pace\.visual-theme[\s\S]*pace\.dark[\s\S]*addChangeListener/,
+  "Flutter must apply account-synced visual theme and dark-mode changes immediately after local or remote writes");
+assert.match(flutterTheme, /class PaceWallpaperBackground[\s\S]*pace-wallpapers[\s\S]*Image\.memory[\s\S]*Image\.file/,
+  "Flutter must render local and private-Storage wallpapers behind the native application");
+assert.match(flutterTheme, /seedColor: glass \? const Color\(0xFF777777\)/,
+  "Flutter Liquid Glass must use a neutral grayscale palette rather than multicolor accents");
+assert.match(flutterLocalStore, /Future<void> applyRemote\([\s\S]*_notifyChange\(key\)/,
+  "Remote theme and wallpaper updates must notify the Flutter UI without requiring an app restart");
 const syncSchedulerStart = flutterSync.indexOf("void _scheduleSync()");
 const syncSchedulerEnd = flutterSync.indexOf("/// A durable local write", syncSchedulerStart);
 assert.ok(
