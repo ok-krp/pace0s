@@ -281,6 +281,12 @@ assert.ok(
 const visualThemeCss = read("src/visual-theme.css");
 assert.ok(!visualThemeCss.includes("Pace Glass — legacy implementation kept as annotation."),
   "The malformed nested legacy Glass comment must not be reintroduced by appearance changes");
+assert.match(visualThemeCss, /Uniform Liquid Glass material[\s\S]*--lg-material-fill: var\(--lg-fill\)[\s\S]*--lg-material-blur: 22px/,
+  "Liquid Glass must define one shared material fill, transparency and blur level");
+assert.match(visualThemeCss, /\.glass-card[\s\S]*\.glass-thin[\s\S]*\.glass-icon[\s\S]*\[role="dialog"\][\s\S]*input[\s\S]*background: var\(--lg-material-fill\)[\s\S]*backdrop-filter: blur\(var\(--lg-material-blur\)\)/,
+  "Cards, controls, dialogs and navigation chrome must share the same Liquid Glass material");
+assert.match(visualThemeCss, /data-lg-refract\][\s\S]*blur\(var\(--lg-material-blur\)\)/,
+  "Chromium refraction must not introduce a separate blur level");
 
 const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const domainStore = read("src/lib/domain-store.ts");
