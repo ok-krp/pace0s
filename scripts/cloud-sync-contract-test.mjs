@@ -287,6 +287,10 @@ assert.match(visualThemeCss, /Uniform Liquid Glass material[\s\S]*--lg-material-
   "Liquid Glass must define one shared material fill, transparency and blur level");
 assert.match(visualThemeCss, /\.glass-card[\s\S]*\.glass-thin[\s\S]*\.glass-icon[\s\S]*\[role="dialog"\][\s\S]*input[\s\S]*background: var\(--lg-material-fill\)[\s\S]*backdrop-filter: blur\(var\(--lg-material-blur\)\)/,
   "Cards, controls, dialogs and navigation chrome must share the same Liquid Glass material");
+assert.ok(visualThemeCss.includes('[data-visual-theme="glass"] [data-slot="card"]') &&
+  visualThemeCss.includes('--lg-material-blur: 5px') &&
+  visualThemeCss.includes('--lg-material-blur: 0px'),
+  "All card implementations must follow the shared blur variable at every glass quality level");
 assert.match(visualThemeCss, /data-lg-refract\][\s\S]*blur\(var\(--lg-material-blur\)\)/,
   "Chromium refraction must not introduce a separate blur level");
 
