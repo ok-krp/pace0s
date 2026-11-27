@@ -174,6 +174,8 @@ function ScanPage() {
     setAiResult(null);
     setAiItems([]);
     setPhoto(null);
+    setProduct(null);
+    setScoreInfo(null);
     try {
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError || !authData.user) throw new Error("Session utilisateur indisponible.");
@@ -188,7 +190,6 @@ function ScanPage() {
       const res = await analyzePhoto({ data: { storagePath } });
       if (res.error || !res.result) throw new Error(res.error ?? "Analyse échouée");
       const result = res.result as AnalysisResult;
-      setProduct(null);
       setAiResult(result);
       setAiItems(result.items);
       setPhoto(previewUrl);
