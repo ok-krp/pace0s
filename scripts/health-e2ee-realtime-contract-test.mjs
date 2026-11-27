@@ -5,7 +5,7 @@ import path from "node:path";
 const root = process.cwd();
 const source = fs.readFileSync(path.join(root, "src/hooks/use-health.tsx"), "utf8");
 
-const channelSetup = source.indexOf("channel = supabase.channel(channelName, { config: { private: true } });");
+const channelSetup = source.indexOf("channel = createPrivateRealtimeChannel(channelName);");
 const callbackRegistration = source.indexOf('channel.on(\n        "postgres_changes"');
 const subscribe = source.indexOf("void channel.subscribe();");
 
