@@ -228,6 +228,12 @@ export function useWallpaper() {
         throw new Error("Formats acceptés : JPG, PNG ou WebP.");
       }
       if (file.size > 20 * 1024 * 1024) throw new Error("Image trop lourde (maximum 20 Mo).");
+      if (
+        (!user?.id || !isLegalCategoryAllowed("sync_cloud")) &&
+        file.size > 3 * 1024 * 1024
+      ) {
+        throw new Error("Sans synchronisation cloud, le fond local est limité à 3 Mo pour éviter de saturer le stockage du navigateur. Active la synchronisation pour utiliser des images jusqu'à 20 Mo.");
+      }
 
       // A wallpaper remains usable locally without an account or cloud-sync
       // opt-in. Never upload image bytes unless the user explicitly consented.
