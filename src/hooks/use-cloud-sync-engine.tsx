@@ -107,12 +107,19 @@ function isInlineWallpaperValue(key: string, value: unknown) {
     : value;
   if (!candidate || typeof candidate !== "object" || !("kind" in candidate) ||
       (candidate as { kind?: unknown }).kind !== "custom") return false;
-  const wallpaper = candidate as { dataUrl?: unknown; localPath?: unknown };
-  // Inline browser bytes and native filesystem paths are both device-local.
-  // Only an authenticated private Storage object path may cross devices.
+  const wallpaper = candidate as {
+    dataUrl?: unknown;
+    localPath?: unknown;
+    storagePath?: unknown;
+  };
+  // A custom wallpaper is portable only when it references an object in the
+  // account-private Storage bucket. Reject legacy inline bytes, native paths,
+  // and malformed custom records before queueing or applying remote state.
   return (
-    (typeof wallpaper.dataUrl === "string" && wallpaper.dataUrl.startsWith("data:image/")) ||
-    (typeof wallpaper.localPath === "string" && wallpaper.localPath.length > 0)
+    typeof wallpaper.dataUrl === "string" ||
+    typeof wallpaper.localPath === "string" ||
+    typeof wallpaper.storagePath !== "string" ||
+    wallpaper.storagePath.trim().length === 0
   );
 }
 function isSyncableRecord(key: string, value: unknown) {
@@ -495,7 +502,7 @@ export function useCloudSyncEngineInternal() {
         for (const raw of data) {
           const row = raw as unknown as SyncRow;
           const key = row.key.startsWith("lt.") ? `${PACE_PREFIX}${row.key.slice(3)}` : row.key;
-          if (!isSyncableKey(key)) continue;
+          if (!isSyncableRecord(key, row.value)) continue;
           const bucket = grouped.get(key) ?? {};
           if (row.key.startsWith("lt.")) bucket.legacy = row;
           else bucket.canonical = row;
