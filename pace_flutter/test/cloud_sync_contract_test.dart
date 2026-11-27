@@ -175,6 +175,46 @@ void main() {
       );
     });
 
+    test('preserves local-only custom wallpaper choices until Storage migration succeeds', () {
+      expect(
+        SyncService.isLocalOnlyWallpaperValue('pace.wallpaper', {
+          'kind': 'custom',
+          'localPath': '/private/device/wallpaper.jpg',
+        }),
+        isTrue,
+      );
+      expect(
+        SyncService.isLocalOnlyWallpaperValue('pace.wallpaper', {
+          'kind': 'custom',
+          'dataUrl': 'data:image/jpeg;base64,AAAA',
+        }),
+        isTrue,
+      );
+      expect(
+        SyncService.isLocalOnlyWallpaperValue('pace.wallpaper', {
+          'kind': 'custom',
+          'storagePath': 'user-id/wallpaper.jpg',
+        }),
+        isFalse,
+      );
+      expect(
+        SyncService.isLocalOnlyWallpaperValue('pace.wallpaper', {'id': 'graphite'}),
+        isFalse,
+      );
+      expect(
+        SyncService.isLocalOnlyWallpaperValue('pace.domain.wallpaper', {
+          'version': 1,
+          'updatedAt': '2026-11-27T12:00:00.000Z',
+          'mutationId': 'local-wallpaper',
+          'value': {
+            'kind': 'custom',
+            'localPath': '/private/device/wallpaper.jpg',
+          },
+        }),
+        isTrue,
+      );
+    });
+
     test('only synchronizes portable wallpaper object paths, never local files or inline bytes', () {
       expect(
         SyncService.isSyncableValue('pace.wallpaper', {
