@@ -471,8 +471,11 @@ assert.ok(
 
 assert.match(flutterSettings, /ImagePicker\(\)[\s\S]*ImageSource\.gallery[\s\S]*pace-wallpapers[\s\S]*storagePath/,
   "Flutter settings must support choosing a custom wallpaper and uploading it to private Storage when consent is enabled");
-assert.match(flutterSettings, /localPath[\s\S]*Active la synchronisation pour la partager/,
-  "Flutter must keep a local wallpaper usable without cloud consent and explain how to share it");
+assert.ok(
+  flutterSettings.includes("Image locale. Active la synchronisation pour la partager.") &&
+    flutterSettings.includes("choice['localPath'] is String"),
+  "Flutter must keep a local wallpaper usable without cloud consent and explain how to share it",
+);
 assert.ok(
   flutterApp.includes("pace.visual-theme") &&
     flutterApp.includes("pace.dark") &&
