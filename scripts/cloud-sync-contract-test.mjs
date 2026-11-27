@@ -244,11 +244,11 @@ assert.ok(
 );
 assert.ok(engine.includes('typeof wallpaper.localPath === "string"'),
   "Native local filesystem wallpaper paths must never enter the shared user_state outbox");
-assert.match(engine, /items[\s\S]*filter\(\(item\) => isSyncableRecord\(item\.key, item\.value\)/,
+assert.match(engine, /items[\s\S]*filter\(\(item\) => isSyncableRecord\(item\.key, item\.value, userId\)/,
   "Previously queued base64 wallpapers must be filtered out when reading the account outbox");
-assert.match(engine, /function queueItem\(item: QueueItem, userId: string\)[\s\S]*!isSyncableRecord\(item\.key, item\.value\)/,
+assert.match(engine, /function queueItem\(item: QueueItem, userId: string\)[\s\S]*!isSyncableRecord\(item\.key, item\.value, userId\)/,
   "No bootstrap or migration path may enqueue inline wallpaper image bytes");
-assert.match(engine, /const pushItem = async \(item: QueueItem\) => \{[\s\S]*!isSyncableRecord\(item\.key, item\.value\)/,
+assert.match(engine, /const pushItem = async \(item: QueueItem\) => \{[\s\S]*!isSyncableRecord\(item\.key, item\.value, user\.id\)/,
   "No queued inline wallpaper image may be uploaded even if it predates the consent guard");
 assert.match(read("src/components/WallpaperSettings.tsx"), /const synced = await setCustom\(f\)[\s\S]*enregistré sur cet appareil/,
   "Wallpaper settings must distinguish local-only saves from cloud-synchronized uploads");
