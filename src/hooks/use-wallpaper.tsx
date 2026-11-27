@@ -227,7 +227,7 @@ export function useWallpaper() {
       if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
         throw new Error("Formats acceptés : JPG, PNG ou WebP.");
       }
-      if (file.size > 4 * 1024 * 1024) throw new Error("Image trop lourde (maximum 4 Mo).");
+      if (file.size > 20 * 1024 * 1024) throw new Error("Image trop lourde (maximum 20 Mo).");
 
       // A wallpaper remains usable locally without an account or cloud-sync
       // opt-in. Never upload image bytes unless the user explicitly consented.
