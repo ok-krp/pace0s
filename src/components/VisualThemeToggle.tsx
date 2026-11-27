@@ -17,7 +17,7 @@ function applyVisualTheme(theme: VisualTheme, persist = true) {
   if (theme === "default") delete root.dataset.visualTheme;
   else root.dataset.visualTheme = theme;
   // Signal et Liquid suivent le mode sombre choisi par l'utilisateur.
-  const dark = theme === "glass" || readLocalPreference(DARK_MODE_KEY, "0") === "1";
+  const dark = theme === "glass" || readLocalPreference<string>(DARK_MODE_KEY, "0") === "1";
   root.classList.toggle("dark", dark);
   if (persist) persistLocalPreference(VISUAL_THEME_KEY, theme);
   const themeColor = document.querySelector('meta[name="theme-color"]');
