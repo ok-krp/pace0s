@@ -63,6 +63,8 @@ function mergeSleep(a: Record<string, SleepEntry>, b: Record<string, SleepEntry>
 function SleepPage() {
   const [entries, setEntries] = useDomainState<Record<string, SleepEntry>>("sleep", {});
   const [cloudLoaded, setCloudLoaded] = useState(false);
+  // Defaults are presentation-only. Persist only after an explicit user edit.
+  const [hasUserEdited, setHasUserEdited] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,7 +132,7 @@ function SleepPage() {
   const debt = Math.max(0, valid.length * 8 - valid.reduce((s, x) => s + x.h, 0));
 
   useEffect(() => {
-    if (!cloudLoaded) return;
+    if (!cloudLoaded || !hasUserEdited) return;
     const h = diffHours(start, end);
     if (h <= 0 || quality < 1 || quality > 10) return;
     const timer = window.setTimeout(() => {
@@ -142,16 +144,16 @@ function SleepPage() {
       });
     }, 350);
     return () => window.clearTimeout(timer);
-  }, [start, end, quality, today, cloudLoaded, setEntries]);
+  }, [start, end, quality, today, cloudLoaded, hasUserEdited, setEntries]);
 
   return (
     <div>
       <PageHeader title="Sommeil" subtitle="Détectez les patterns, comblez la dette." />
       <div className="rounded-2xl glass-card p-5 mb-4">
         <div className="flex flex-wrap items-end gap-3">
-          <div><label className="text-xs text-muted-foreground">Endormi à</label><Input type="time" value={start} onChange={(e) => setStart(e.target.value)} className="w-32" /></div>
-          <div><label className="text-xs text-muted-foreground">Réveil</label><Input type="time" value={end} onChange={(e) => setEnd(e.target.value)} className="w-32" /></div>
-          <div><label className="text-xs text-muted-foreground">Qualité (1-10)</label><NumberField allowDecimal={true} min={1} max={10} value={quality} onChange={(v) => { if (v != null) setQuality(v); }} className="w-24" /></div>
+          <div><label className="text-xs text-muted-foreground">Endormi à</label><Input type="time" value={start} disabled={!cloudLoaded} onChange={(e) => { setStart(e.target.value); setHasUserEdited(true); }} className="w-32" /></div>
+          <div><label className="text-xs text-muted-foreground">Réveil</label><Input type="time" value={end} disabled={!cloudLoaded} onChange={(e) => { setEnd(e.target.value); setHasUserEdited(true); }} className="w-32" /></div>
+          <div><label className="text-xs text-muted-foreground">Qualité (1-10)</label><NumberField allowDecimal={true} min={1} max={10} value={quality} disabled={!cloudLoaded} onChange={(v) => { if (v != null) { setQuality(v); setHasUserEdited(true); } }} className="w-24" /></div>
           <div className="text-sm text-muted-foreground ml-auto" aria-live="polite"><Moon className="inline size-4 mr-1" /> {formatSleepDuration(diffHours(start, end))} · sauvegardé automatiquement</div>
         </div>
       </div>
