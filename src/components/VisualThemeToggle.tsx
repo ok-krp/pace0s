@@ -25,8 +25,9 @@ function applyVisualTheme(theme: VisualTheme, persist = true) {
   window.dispatchEvent(new CustomEvent("pace.visual-theme.change", { detail: { theme, signal: theme === "signal" } }));
 }
 
-export function VisualThemeToggle({ compact = false }: { compact?: boolean }) {
+export function VisualThemeToggle({ compact = false, disabled = false }: { compact?: boolean; disabled?: boolean }) {
   const [theme, setTheme] = useState<VisualTheme>("default");
+  const [following, setFollowing] = useState(false);
 
   useEffect(() => {
     setTheme(getVisualTheme());
@@ -37,11 +38,25 @@ export function VisualThemeToggle({ compact = false }: { compact?: boolean }) {
       applyVisualTheme(stored, false);
       setTheme(stored === "signal" || stored === "glass" ? stored : "default");
     };
+    const onEffectiveTheme = (event: Event) => {
+      const value = (event as CustomEvent<{ theme?: string }>).detail?.theme;
+      setTheme(value === "signal" || value === "glass" ? value : "default");
+    };
+    const onSharedAppearance = (event: Event) => {
+      setFollowing((event as CustomEvent<{ active?: boolean }>).detail?.active === true);
+    };
     window.addEventListener("pace.remote.write", onRemotePreference);
-    return () => window.removeEventListener("pace.remote.write", onRemotePreference);
+    window.addEventListener("pace.visual-theme.change", onEffectiveTheme);
+    window.addEventListener("pace.shared-appearance.change", onSharedAppearance);
+    return () => {
+      window.removeEventListener("pace.remote.write", onRemotePreference);
+      window.removeEventListener("pace.visual-theme.change", onEffectiveTheme);
+      window.removeEventListener("pace.shared-appearance.change", onSharedAppearance);
+    };
   }, []);
 
   const toggle = () => {
+    if (disabled || following) return;
     const current = getVisualTheme();
     const next: VisualTheme = current === "default" ? "signal" : current === "signal" ? "glass" : "default";
     applyVisualTheme(next);
@@ -52,13 +67,15 @@ export function VisualThemeToggle({ compact = false }: { compact?: boolean }) {
     <button
       type="button"
       onClick={toggle}
+      disabled={disabled || following}
       aria-label={`Thème actuel : ${theme === "default" ? "Pace" : theme === "signal" ? "Signal" : "Liquid"}. Cliquer pour changer`}
       aria-pressed={theme !== "default"}
-      title={`Thème : ${theme === "default" ? "Pace" : theme === "signal" ? "Signal" : "Liquid"}`}
+      title={following ? "Apparence suivie depuis un autre compte" : `Thème : ${theme === "default" ? "Pace" : theme === "signal" ? "Signal" : "Liquid"}`}
       className={[
         "signal-theme-control inline-flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-medium transition-[background,border-color,color,box-shadow] duration-200",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/60",
         compact ? "size-9 justify-center px-0" : "",
+        disabled || following ? "cursor-not-allowed opacity-60" : "",
       ].join(" ")}
     >
       <span

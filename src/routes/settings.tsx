@@ -18,6 +18,8 @@ import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
+import { AppearanceSharingSettings } from "@/components/AppearanceSharingSettings";
+import { isFollowingSharedAppearance } from "@/hooks/use-shared-appearance";
 import { AiSettings } from "@/components/AiSettings";
 import { AiLocalModeSettings } from "@/components/AiLocalModeSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
@@ -42,7 +44,19 @@ function SettingsPage() {
   const [dark, setDark] = useState(false);
   const [signal, setSignal] = useState(false);
   const [glass, setGlass] = useState(false);
+  const [followingSharedAppearance, setFollowingSharedAppearance] = useState(() => isFollowingSharedAppearance());
   const push = usePush();
+  useEffect(() => {
+    const updateFollowing = (event?: Event) => {
+      const active = event
+        ? (event as CustomEvent<{ active?: boolean }>).detail?.active === true
+        : isFollowingSharedAppearance();
+      setFollowingSharedAppearance(active);
+    };
+    window.addEventListener("pace.shared-appearance.change", updateFollowing);
+    updateFollowing();
+    return () => window.removeEventListener("pace.shared-appearance.change", updateFollowing);
+  }, []);
   const [sending, setSending] = useState(false);
   const [billing, setBilling] = useState<{ plan: EntitlementPlan; status: string; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; stripeConfigured: boolean; trialEndsAt: string | null; trialActive: boolean } | null>(null);
   const [billingLoading, setBillingLoading] = useState(true);
@@ -83,6 +97,7 @@ function SettingsPage() {
   }, []);
   const downloadNativeAndroidApp = () => { window.open(NATIVE_ANDROID_APK_URL, "_blank", "noopener,noreferrer"); toast.success("Téléchargement de l'application Android Pace lancé."); };
   const toggleDark = (v: boolean) => {
+    if (followingSharedAppearance) return;
     setDark(v);
     document.documentElement.classList.toggle("dark", v);
     persistLocalPreference("pace.dark", v ? "1" : "0");
@@ -108,11 +123,12 @@ function SettingsPage() {
                 <AccordionTrigger>Apparence & appareil</AccordionTrigger>
                 <AccordionContent>
                   <Row icon={<Sparkles className="size-4" />} label="Style visuel" desc="Cycle entre les styles Pace, Signal et Premium Glass">
-                    <VisualThemeToggle compact={false} />
+                    <VisualThemeToggle compact={false} disabled={followingSharedAppearance} />
                   </Row>
-                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} disabled={glass} /></Row>
+                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} disabled={glass || followingSharedAppearance} /></Row>
                   <Row icon={<Smartphone className="size-4" />} label="Application Android" desc="Télécharger la version native de PaceOS"><Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger</Button></Row>
-                  <WallpaperSettings />
+                  <WallpaperSettings disabled={followingSharedAppearance} />
+                  <AppearanceSharingSettings />
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="health">
