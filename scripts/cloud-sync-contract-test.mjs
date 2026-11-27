@@ -473,6 +473,12 @@ assert.ok(
     flutterTheme.includes("Image.memory("),
   "Flutter must render local and private-Storage wallpapers behind the native application",
 );
+assert.ok(
+  flutterTheme.includes("localStore.currentAccountId == userId") &&
+    flutterTheme.includes("storagePath.startsWith('$userId/')") &&
+    flutterTheme.includes("!storagePath.substring(userId.length + 1).contains('/')"),
+  "Flutter must verify wallpaper object ownership and path shape before downloading it",
+);
 assert.match(flutterTheme, /final neutral = glass \|\| visualTheme == 'signal'[\s\S]*seedColor: neutral \? const Color\(0xFF777777\)/,
   "Flutter Signal and Liquid Glass must use the neutral grayscale palette across devices");
 assert.match(flutterTheme, /Uri\.encodeComponent\(path\)[\s\S]*pace_wallpaper_\$cacheName\.cache/,
