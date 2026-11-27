@@ -158,9 +158,16 @@ export async function purgeWallpaperCacheForOwner(ownerId: string): Promise<void
   }
 
   const prefix = ownerId + "/";
+  const pending: Promise<void>[] = [];
   for (const path of [...wallpaperObjectUrls.keys()]) {
-    if (path.startsWith(prefix)) releaseWallpaperObjectUrl(path);
+    if (!path.startsWith(prefix)) continue;
+    const request = wallpaperObjectUrls.get(path);
+    wallpaperObjectUrls.delete(path);
+    if (request) {
+      pending.push(request.then((url) => URL.revokeObjectURL(url)).catch(() => {}));
+    }
   }
+  await Promise.all(pending);
 
   if (typeof window === "undefined" || !("caches" in window)) return;
   try {
@@ -186,6 +193,37 @@ export async function purgeWallpaperCacheForOwner(ownerId: string): Promise<void
   }
 }
 
+/** Remove a single superseded shared wallpaper without evicting the new selection. */
+export async function purgeWallpaperCacheForPath(path: string): Promise<void> {
+  const slash = path.indexOf("/");
+  const ownerId = slash > 0 ? path.slice(0, slash) : "";
+  const filename = slash > 0 ? path.slice(slash + 1) : "";
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerId) ||
+    !/^[A-Za-z0-9._-]+\\.(jpg|png|webp)$/i.test(filename)
+  ) {
+    return;
+  }
+
+  const pending = wallpaperObjectUrls.get(path);
+  wallpaperObjectUrls.delete(path);
+  if (pending) {
+    try {
+      URL.revokeObjectURL(await pending);
+    } catch {}
+  }
+
+  if (typeof window === "undefined" || !("caches" in window)) return;
+  try {
+    const cache = await window.caches.open("pace-wallpaper-v1");
+    const request = new Request(
+      window.location.origin + "/__pace-wallpaper-cache/" + encodeURIComponent(path),
+    );
+    await cache.delete(request);
+  } catch (error) {
+    console.warn("[wallpaper] superseded cache purge failed", error);
+  }
+}
 function getWallpaperObjectUrl(path: string): Promise<string> {
   const cached = wallpaperObjectUrls.get(path);
   if (cached) return cached;
