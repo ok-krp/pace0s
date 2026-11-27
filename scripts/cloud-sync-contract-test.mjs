@@ -258,6 +258,17 @@ assert.match(wallpaperHook, /let wallpaperRenderVersion = 0;[\s\S]*const renderV
   "Late wallpaper downloads must not override a newer selection after rapid background changes");
 assert.match(wallpaperHook, /let request: Promise<string>;[\s\S]*wallpaperObjectUrls\.get\(path\) === request[\s\S]*wallpaperObjectUrls\.delete\(path\)/,
   "A stale failed download must not evict a newer cached request for the same wallpaper path");
+const wallpaperApplyStart = wallpaperHook.indexOf("export function applyWallpaper(");
+const wallpaperApplyEnd = wallpaperHook.indexOf("/** Read choice synchronously", wallpaperApplyStart);
+const wallpaperApply = wallpaperHook.slice(wallpaperApplyStart, wallpaperApplyEnd);
+assert.ok(
+  wallpaperApplyStart >= 0 &&
+    wallpaperApplyEnd > wallpaperApplyStart &&
+    wallpaperApply.includes("const isStillSelected = root.dataset.wallpaperPath === choice.storagePath;") &&
+    wallpaperApply.indexOf("if (!isStillSelected)") < wallpaperApply.indexOf("if (renderVersion !== wallpaperRenderVersion) return;"),
+  "Repeated renders of the same wallpaper must not revoke the ObjectURL still used by the current render",
+);
+
 assert.match(themeToggle, /persistLocalPreference\(VISUAL_THEME_KEY, theme\)/,
   "Changing visual theme must immediately enqueue the account preference for cloud sync");
 assert.match(settingsRoute, /persistLocalPreference\("pace\.dark", v \? "1" : "0"\)/,
