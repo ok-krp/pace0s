@@ -14,8 +14,10 @@ export function WallpaperSettings() {
     if (!f) return;
     setUploading(true);
     try {
-      await setCustom(f);
-      toast.success("Fond d'écran enregistré et synchronisable.");
+      const synced = await setCustom(f);
+      toast.success(synced
+        ? "Fond d'écran enregistré et synchronisable."
+        : "Fond d'écran enregistré sur cet appareil. Active la synchronisation cloud pour le partager.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Impossible d'enregistrer le fond d'écran.");
     } finally {
