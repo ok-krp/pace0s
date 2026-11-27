@@ -165,10 +165,13 @@ class PaceWallpaperBackground extends StatelessWidget {
     SupabaseClient client,
     String path,
   ) {
-    return _downloads.putIfAbsent(path, () async {
+    final cached = _downloads[path];
+    if (cached != null) return cached;
+
+    late final Future<Uint8List> request;
+    request = (() async {
       final directory = await getApplicationSupportDirectory();
-      // Keep the cache filename stable across app launches. String.hashCode
-      // is not a persistence format and must not identify on-disk cache files.
+      // Keep the cache filename stable across app launches.
       final cacheName = Uri.encodeComponent(path);
       final cachedFile = File(
         '${directory.path}/pace_wallpaper_$cacheName.cache',
@@ -177,12 +180,13 @@ class PaceWallpaperBackground extends StatelessWidget {
       final bytes = await client.storage.from('pace-wallpapers').download(path);
       await cachedFile.writeAsBytes(bytes, flush: true);
       return bytes;
-    }).catchError((Object error) {
-      _downloads.remove(path);
+    })().catchError((Object error) {
+      if (identical(_downloads[path], request)) _downloads.remove(path);
       throw error;
     });
+    _downloads[path] = request;
+    return request;
   }
-
   Widget _wallpaper(
     BuildContext context,
     dynamic choice, {
