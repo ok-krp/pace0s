@@ -4,6 +4,39 @@ import path from "node:path";
 
 const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
+
+const rootShell = read("src/routes/__root.tsx");
+const appSidebar = read("src/components/AppSidebar.tsx");
+assert.match(
+  rootShell,
+  /pb-20 xl:pb-6 flex flex-col xl:ml-\\[312px\\]/,
+  "A fixed desktop sidebar must reserve horizontal space only from the wide-screen breakpoint",
+);
+assert.doesNotMatch(
+  rootShell,
+  /md:ml-\\[312px\\]/,
+  "Tablet widths must not reserve the desktop sidebar gutter",
+);
+assert.match(
+  rootShell,
+  /max-w-\\[1400px\\] mx-auto min-h-0 px-3 xl:px-8 pt-2 xl:pt-8/,
+  "Tablet content must use the full available width and wide-screen padding only on desktop",
+);
+assert.match(
+  appSidebar,
+  /hidden xl:flex w-72/,
+  "The fixed sidebar must stay hidden below the wide-screen breakpoint",
+);
+assert.equal(
+  (appSidebar.match(/xl:hidden/g) ?? []).length,
+  4,
+  "Tablet navigation must expose the top bar, drawer, overlay and bottom tab bar together",
+);
+assert.doesNotMatch(
+  appSidebar,
+  /md:hidden|hidden md:flex/,
+  "The custom app navigation must not switch to desktop mode at the tablet breakpoint",
+);
 const syncRpcTrimMigration = read("supabase/migrations/20261127103000_fix_user_state_sync_rpc_trim.sql");
 assert.match(syncRpcTrimMigration, /pg_catalog\.btrim\(p_updated_by\)/,
   "The sync RPC must trim the device identifier using a real pg_catalog function");
