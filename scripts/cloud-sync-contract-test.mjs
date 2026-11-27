@@ -242,11 +242,13 @@ assert.ok(
   engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)'),
   "Web must filter device-local state in PostgREST before downloading JSONB values",
 );
-assert.match(
-  engine,
-  /\.channel\(\`pace-user-state:\$\{user\.id\}\`, \{ config: \{ private: true \} \}\)[\s\S]*\.on\("broadcast", \{ event: "user_state_changed" \}/,
+assert.ok(
+  engine.includes("const topic = `pace-user-state:${user.id}`;") &&
+    engine.includes("realtimeChannel = createPrivateRealtimeChannel(topic)") &&
+    engine.includes('.on("broadcast", { event: "user_state_changed" }'),
   "Web must receive private low-payload Broadcast notifications for the authenticated account",
 );
+
 assert.match(
   engine,
   /message\.payload as \{ key\?: unknown \}[\s\S]*isSyncableKey\(payload\.key\)[\s\S]*void syncNow\(\)/,
@@ -869,25 +871,31 @@ assert.deepEqual(deviceA, deviceB, "resolved water must converge across devices"
 assert.deepEqual(conflictsA, []);
 assert.deepEqual(conflictsB, []);
 
-assert.match(
-  read("src/hooks/use-health.tsx"),
-  /supabase\.channel\(channelName, \{ config: \{ private: true \} \}\)/,
-  "Health E2EE Postgres Changes must join a private-only Realtime topic",
+assert.ok(
+  read("src/hooks/use-health.tsx").includes("createPrivateRealtimeChannel(channelName)"),
+  "Health E2EE Postgres Changes must use the private-channel factory",
 );
-assert.match(
-  read("src/hooks/use-profile-realtime.ts"),
-  /\.channel\(\x60pace-profile-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
-  "Profile Postgres Changes must join a private-only Realtime topic",
+assert.ok(
+  read("src/hooks/use-profile-realtime.ts").includes("createPrivateRealtimeChannel(`pace-profile-${user.id}`)"),
+  "Profile Postgres Changes must use the private-channel factory",
 );
-assert.match(
-  read("src/lib/nutrition-log.ts"),
-  /\.channel\(\x60pace-food-log-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
-  "Nutrition Postgres Changes must join a private-only Realtime topic",
+assert.ok(
+  read("src/lib/nutrition-log.ts").includes("createPrivateRealtimeChannel(`pace-food-log-${user.id}`)"),
+  "Nutrition Postgres Changes must use the private-channel factory",
 );
-assert.match(
-  read("src/routes/development.tsx"),
-  /supabase\.channel\(\x60development-tasks-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
-  "Development-task Postgres Changes must join a private-only Realtime topic",
+assert.ok(
+  read("src/routes/development.tsx").includes("createPrivateRealtimeChannel(`development-tasks-${user.id}`)"),
+  "Development-task Postgres Changes must use the private-channel factory",
+);
+assert.ok(
+  supabaseClient.includes("export function createPrivateRealtimeChannel") &&
+    supabaseClient.includes("config: { ...options.config, private: true }"),
+  "The shared Realtime factory must force private: true even when a caller omits the option",
+);
+assert.equal(
+  (engine + read("src/hooks/use-profile-realtime.ts") + read("src/hooks/use-health.tsx") + read("src/lib/nutrition-log.ts") + read("src/routes/development.tsx")).includes("supabase.channel("),
+  false,
+  "All web Realtime subscriptions must use the centralized private-channel factory",
 );
 
 const nutritionAiServer = read("src/lib/nutrition-ai.functions.ts");
@@ -949,6 +957,7 @@ assert.equal(sleepPersistDecision({ cloudLoaded: true, hasUserEdited: false }), 
 assert.equal(sleepPersistDecision({ cloudLoaded: true, hasUserEdited: true }), true,
   "An explicit Sleep edit must remain eligible for autosave");
 assert.deepEqual(sleepDefaults, { start: "23:30", end: "07:00", quality: 8 });
+
 
 console.log("cloud-sync-contract-test: PASS");
 
