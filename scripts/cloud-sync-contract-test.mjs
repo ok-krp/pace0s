@@ -340,8 +340,13 @@ assert.match(flutterSettings, /ImagePicker\(\)[\s\S]*ImageSource\.gallery[\s\S]*
   "Flutter settings must support choosing a custom wallpaper and uploading it to private Storage when consent is enabled");
 assert.match(flutterSettings, /localPath[\s\S]*Active la synchronisation pour la partager/,
   "Flutter must keep a local wallpaper usable without cloud consent and explain how to share it");
-assert.match(flutterApp, /pace\.visual-theme[\s\S]*pace\.dark[\s\S]*addChangeListener/,
-  "Flutter must apply account-synced visual theme and dark-mode changes immediately after local or remote writes");
+assert.ok(
+  flutterApp.includes("pace.visual-theme") &&
+    flutterApp.includes("pace.dark") &&
+    flutterApp.includes("addChangeListener") &&
+    flutterApp.includes("_onLocalStoreChange"),
+  "Flutter must apply account-synced visual theme and dark-mode changes immediately after local or remote writes",
+);
 assert.match(flutterTheme, /class PaceWallpaperBackground[\s\S]*pace-wallpapers[\s\S]*Image\.memory[\s\S]*Image\.file/,
   "Flutter must render local and private-Storage wallpapers behind the native application");
 assert.match(flutterTheme, /seedColor: glass \? const Color\(0xFF777777\)/,
