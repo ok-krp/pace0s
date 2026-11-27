@@ -234,6 +234,8 @@ assert.match(wallpaperHook, /storage\.from\("pace-wallpapers"\)\.upload[\s\S]*st
   "Custom wallpaper bytes must be stored in private Storage and downloaded by object path");
 assert.match(wallpaperHook, /setCustom: async \(file: File\): Promise<boolean> =>[\s\S]*if \(!user\?\.id \|\| !isLegalCategoryAllowed\("sync_cloud"\)\)[\s\S]*setChoice\(\{ kind: "custom", dataUrl \}\)[\s\S]*return false;[\s\S]*uploadWallpaper\(file, user\.id\)/,
   "Custom wallpaper uploads must remain local unless the authenticated user explicitly enabled cloud sync");
+assert.match(wallpaperHook, /file\.size > 3 \* 1024 \* 1024[\s\S]*stockage du navigateur/,
+  "Local-only base64 wallpapers must stay below browser local-storage limits");
 assert.match(engine, /function isInlineWallpaperValue\(key: string, value: unknown\)[\s\S]*dataUrl[\s\S]*startsWith\("data:image\/"[\s\S]*function isSyncableRecord\(key: string, value: unknown\)/,
   "The sync engine must identify inline wallpaper image bytes before they enter the cloud outbox");
 assert.match(engine, /items[\s\S]*filter\(\(item\) => isSyncableRecord\(item\.key, item\.value\)/,
