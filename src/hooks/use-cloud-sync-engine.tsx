@@ -522,6 +522,22 @@ export function useCloudSyncEngineInternal() {
           if (!Number.isFinite(sourceTime)) continue;
           const updatedAt = new Date(sourceTime).toISOString();
           const localDomain = readDomainRecord(key);
+          let localStoredValue: unknown;
+          try {
+            const rawLocalValue = localStorage.getItem(key);
+            if (rawLocalValue !== null) localStoredValue = JSON.parse(rawLocalValue);
+          } catch {}
+          // A custom wallpaper kept locally because Storage upload failed is a
+          // device-local override. Do not replace it with an older cloud pointer
+          // during the periodic pull; a successful migration or an explicit
+          // preset/custom replacement will make the next local write syncable.
+          const localWallpaperOverride = isInlineWallpaperValue(key, localStoredValue) ||
+            Boolean(localDomain && isInlineWallpaperValue(key, localDomain.value));
+          if (localWallpaperOverride) {
+            meta[key] = updatedAt;
+            newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
+            continue;
+          }
           const localIsEmpty = localDomain ? isEmptyRecoveredValue(localDomain.value) : true;
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           const queued = getQueued(key, user.id);
