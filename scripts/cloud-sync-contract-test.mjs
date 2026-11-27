@@ -225,7 +225,7 @@ assert.ok(
     userStateBroadcastHardeningMigration.includes("realtime.topic() = 'pace-user-state:'"),
   "Realtime authorization must only allow Broadcast reads on the authenticated user's own topic",
 );
-const appearanceSyncMigration = read("supabase/migrations/20261127140000_sync_visual_preferences_and_wallpaper_storage.sql");
+const appearanceSyncMigration = read("supabase/migrations/20261127143227_sync_visual_preferences_and_wallpaper_storage.sql");
 const wallpaperHook = read("src/hooks/use-wallpaper.tsx");
 const themeToggle = read("src/components/VisualThemeToggle.tsx");
 const settingsRoute = read("src/routes/settings.tsx");
