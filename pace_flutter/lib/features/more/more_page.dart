@@ -313,11 +313,6 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     await client.storage.from('pace-wallpapers').upload(
       objectPath,
       file,
-      fileOptions: FileOptions(
-        cacheControl: '31536000',
-        upsert: false,
-        contentType: contentType,
-      ),
     );
     await widget.localStore.write('pace.wallpaper', {
       'kind': 'custom',
@@ -358,11 +353,6 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
         await client.storage.from('pace-wallpapers').upload(
           objectPath,
           file,
-          fileOptions: FileOptions(
-            cacheControl: '31536000',
-            upsert: false,
-            contentType: contentType,
-          ),
         );
         await widget.localStore.write('pace.wallpaper', {
           'kind': 'custom',
@@ -390,17 +380,6 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
           SnackBar(content: Text(error.toString())),
         );
       }
-    }
-  }
-
-  String _themeLabel(ThemeMode mode) {
-    switch (mode) {
-      case ThemeMode.light:
-        return 'Clair';
-      case ThemeMode.dark:
-        return 'Sombre';
-      case ThemeMode.system:
-        return 'Système';
     }
   }
 
