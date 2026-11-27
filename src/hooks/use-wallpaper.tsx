@@ -235,9 +235,12 @@ export function useWallpaper() {
         throw new Error("Sans synchronisation cloud, le fond local est limité à 3 Mo pour éviter de saturer le stockage du navigateur. Active la synchronisation pour utiliser des images jusqu'à 20 Mo.");
       }
 
-      // A wallpaper remains usable locally without an account or cloud-sync
-      // opt-in. Never upload image bytes unless the user explicitly consented.
-      if (!user?.id || !isLegalCategoryAllowed("sync_cloud")) {
+      // Local fallback is intentionally small enough for browser storage.
+      // Never upload image bytes unless the user explicitly consented.
+      const saveLocally = async () => {
+        if (file.size > 3 * 1024 * 1024) {
+          throw new Error("Le stockage synchronisé n'est pas encore disponible. Sans celui-ci, le fond local est limité à 3 Mo.");
+        }
         const dataUrl = await new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = () => typeof reader.result === "string"
@@ -248,11 +251,22 @@ export function useWallpaper() {
         });
         setChoice({ kind: "custom", dataUrl });
         return false;
+      };
+
+      if (!user?.id || !isLegalCategoryAllowed("sync_cloud")) {
+        return saveLocally();
       }
 
-      const storagePath = await uploadWallpaper(file, user.id);
-      setChoice({ kind: "custom", storagePath });
-      return true;
+      try {
+        const storagePath = await uploadWallpaper(file, user.id);
+        setChoice({ kind: "custom", storagePath });
+        return true;
+      } catch (error) {
+        // Keep small images usable while the private Storage migration is not
+        // deployed; large images must wait for the synchronized bucket.
+        if (file.size <= 3 * 1024 * 1024) return saveLocally();
+        throw error;
+      }
     },
     reset: () => setChoice(DEFAULT),
   };
