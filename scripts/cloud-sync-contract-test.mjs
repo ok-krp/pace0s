@@ -235,6 +235,14 @@ assert.match(wallpaperHook, /storage\.from\("pace-wallpapers"\)\.upload[\s\S]*st
   "Custom wallpaper bytes must be stored in private Storage and downloaded by object path");
 assert.match(wallpaperHook, /setCustom: async \(file: File\): Promise<boolean> =>[\s\S]*if \(!user\?\.id \|\| !isLegalCategoryAllowed\("sync_cloud"\)\)[\s\S]*setChoice\(\{ kind: "custom", dataUrl \}\)[\s\S]*return false;[\s\S]*uploadWallpaper\(file, user\.id\)/,
   "Custom wallpaper uploads must remain local unless the authenticated user explicitly enabled cloud sync");
+assert.match(engine, /function isInlineWallpaperValue\(key: string, value: unknown\)[\s\S]*dataUrl[\s\S]*startsWith\("data:image\/"[\s\S]*function isSyncableRecord\(key: string, value: unknown\)/,
+  "The sync engine must identify inline wallpaper image bytes before they enter the cloud outbox");
+assert.match(engine, /items[\s\S]*filter\(\(item\) => isSyncableRecord\(item\.key, item\.value\)/,
+  "Previously queued base64 wallpapers must be filtered out when reading the account outbox");
+assert.match(engine, /function queueItem\(item: QueueItem, userId: string\)[\s\S]*!isSyncableRecord\(item\.key, item\.value\)/,
+  "No bootstrap or migration path may enqueue inline wallpaper image bytes");
+assert.match(engine, /const pushItem = async \(item: QueueItem\) => \{[\s\S]*!isSyncableRecord\(item\.key, item\.value\)/,
+  "No queued inline wallpaper image may be uploaded even if it predates the consent guard");
 assert.match(read("src/components/WallpaperSettings.tsx"), /const synced = await setCustom\(f\)[\s\S]*enregistré sur cet appareil/,
   "Wallpaper settings must distinguish local-only saves from cloud-synchronized uploads");
 assert.match(wallpaperHook, /setChoice\(\{ kind: "custom", storagePath \}\)/,
