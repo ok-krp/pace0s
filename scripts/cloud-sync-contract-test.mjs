@@ -238,6 +238,8 @@ assert.match(wallpaperHook, /file\.size > 3 \* 1024 \* 1024[\s\S]*stockage du na
   "Local-only base64 wallpapers must stay below browser local-storage limits");
 assert.match(engine, /function isInlineWallpaperValue\(key: string, value: unknown\)[\s\S]*dataUrl[\s\S]*startsWith\("data:image\/"[\s\S]*function isSyncableRecord\(key: string, value: unknown\)/,
   "The sync engine must identify inline wallpaper image bytes before they enter the cloud outbox");
+assert.ok(engine.includes('(typeof wallpaper.localPath === "string" && wallpaper.localPath.length > 0)'),
+  "Native local filesystem wallpaper paths must never enter the shared user_state outbox");
 assert.match(engine, /items[\s\S]*filter\(\(item\) => isSyncableRecord\(item\.key, item\.value\)/,
   "Previously queued base64 wallpapers must be filtered out when reading the account outbox");
 assert.match(engine, /function queueItem\(item: QueueItem, userId: string\)[\s\S]*!isSyncableRecord\(item\.key, item\.value\)/,
@@ -260,6 +262,21 @@ assert.match(appearanceSyncMigration, /pace-wallpapers[\s\S]*CREATE POLICY "pace
   "Custom wallpaper objects must live in a private, per-user Storage bucket");
 assert.doesNotMatch(appearanceSyncMigration, /'pace\.dark'[\s\S]*'pace\.visual-theme'[\s\S]*'pace\.wallpaper'/,
   "Realtime must broadcast account appearance keys rather than excluding them");
+
+const flutterApp = read("pace_flutter/lib/app/pace_app.dart");
+const visualThemeStart = flutterApp.indexOf("Future<void> setVisualTheme(String theme) async {");
+const visualThemeEnd = flutterApp.indexOf("void dispose()", visualThemeStart);
+const visualThemeHandler = flutterApp.slice(visualThemeStart, visualThemeEnd);
+assert.ok(visualThemeStart >= 0 && visualThemeEnd > visualThemeStart &&
+  !visualThemeHandler.includes("write('pace.dark'"),
+  "Selecting Glass must force dark presentation without overwriting the user's separate dark-mode preference");
+const flutterTheme = read("pace_flutter/lib/ui/pace_theme.dart");
+const flutterMore = read("pace_flutter/lib/features/more/more_page.dart");
+assert.ok(
+  flutterTheme.includes("'aurora'") && flutterTheme.includes("'orchid'") &&
+    flutterMore.includes("for (final preset in paceWallpaperPresets)"),
+  "Native Flutter must render the same synchronized wallpaper preset IDs as Web/PWA",
+);
 
 const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const domainStore = read("src/lib/domain-store.ts");
