@@ -18,6 +18,7 @@ import { useNutritionCols, NUT_COLS, type NutCol } from "@/hooks/use-nutrition-c
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { isLegalCategoryAllowed } from "@/lib/legal";
+import { MAX_NUTRITION_PHOTO_BYTES, preparePhotoForAi } from "@/lib/nutrition-photo";
 
 const SHORT: Record<NutCol, string> = {
   kcal: "kcal", protein: "P", carbs: "G", fat: "L", sat_fat: "Sat", sugar: "Suc",
@@ -80,6 +81,7 @@ const scoreColors = {
 
 function ScanPage() {
   const { user } = useAuth();
+  const analyzePhoto = useServerFn(analyzeFoodPhoto);
   const navigate = useNavigate();
   const search = Route.useSearch();
   const [scanning, setScanning] = useState(false);
@@ -95,6 +97,11 @@ function ScanPage() {
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [nutCols] = useNutritionCols();
+
+  useEffect(() => {
+    if (!photo || !photo.startsWith("blob:")) return;
+    return () => URL.revokeObjectURL(photo);
+  }, [photo]);
 
   useEffect(() => {
     if (!user) return;
@@ -154,36 +161,46 @@ function ScanPage() {
 
   const handlePhoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
     if (!isLegalCategoryAllowed("ai")) { toast.error("Consentement Analyse IA requis."); return; }
-    if (file.size > 6 * 1024 * 1024) { toast.error("Image trop lourde (max 6 Mo)"); return; }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const b64 = reader.result as string;
-      setPhoto(b64);
-      setProduct(null);
-      setBusy(true);
-      try {
-        const extension = file.type === "image/png" ? "png" : file.type === "image/webp" ? "webp" : "jpg";
-        const storagePath = `${user.id}/${crypto.randomUUID()}.${extension}`;
-        const { error: uploadError } = await supabase.storage
-          .from("nutrition-ai")
-          .upload(storagePath, file, { contentType: file.type || "image/jpeg", upsert: false });
-        if (uploadError) throw new Error(`Upload image impossible : ${uploadError.message}`);
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) { toast.error("Format image non autorisé"); return; }
+    if (file.size > MAX_NUTRITION_PHOTO_BYTES) { toast.error("Image trop lourde (max 25 Mo)"); return; }
 
-        const res = await analyzeFoodPhoto({ data: { storagePath } });
-        if (res.error || !res.result) { toast.error(res.error ?? "Analyse échouée"); return; }
-        const r = res.result as AnalysisResult;
-        setAiResult(r);
-        setAiItems(r.items);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Erreur IA");
-      } finally {
-        setBusy(false);
-        if (fileRef.current) fileRef.current.value = "";
-      }
-    };
-    reader.readAsDataURL(file);
+    const previewUrl = URL.createObjectURL(file);
+    let keepPreview = false;
+    let storagePath: string | null = null;
+    setBusy(true);
+    setAiResult(null);
+    setAiItems([]);
+    setPhoto(null);
+    try {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError || !authData.user) throw new Error("Session utilisateur indisponible.");
+      const analysisFile = await preparePhotoForAi(file);
+      const extension = analysisFile.type === "image/png" ? "png" : analysisFile.type === "image/webp" ? "webp" : "jpg";
+      storagePath = `${authData.user.id}/${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from("nutrition-ai").upload(storagePath, analysisFile, {
+        contentType: analysisFile.type,
+        upsert: false,
+      });
+      if (uploadError) throw new Error(`Envoi de la photo impossible : ${uploadError.message}`);
+      const res = await analyzePhoto({ data: { storagePath } });
+      if (res.error || !res.result) throw new Error(res.error ?? "Analyse échouée");
+      const result = res.result as AnalysisResult;
+      setProduct(null);
+      setAiResult(result);
+      setAiItems(result.items);
+      setPhoto(previewUrl);
+      keepPreview = true;
+    } catch (err) {
+      if (storagePath) await supabase.storage.from("nutrition-ai").remove([storagePath]).catch(() => undefined);
+      toast.error(err instanceof Error ? err.message : "Erreur IA");
+    } finally {
+      if (!keepPreview) URL.revokeObjectURL(previewUrl);
+      setBusy(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
   };
 
   const addProductToLog = async () => {
@@ -241,8 +258,9 @@ function ScanPage() {
           <div className="size-11 rounded-xl bg-gradient-to-br from-fuchsia-500 to-purple-600 grid place-items-center text-white mb-3 shadow-[var(--shadow-glow)]"><Camera className="size-5" /></div>
           <h2 className="font-display text-lg font-semibold">Photo IA</h2>
           <div className="text-xs text-muted-foreground mt-1">Analyse vision · macros estimées</div>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={handlePhoto} className="hidden" />
+          
         </motion.button>
+        <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={handlePhoto} className="hidden" />
       </div>
       <div className="flex items-center gap-3 mb-4">
         <span className="text-sm text-muted-foreground">Ajouter au repas :</span>
