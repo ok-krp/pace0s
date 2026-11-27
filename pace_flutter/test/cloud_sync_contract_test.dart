@@ -203,6 +203,36 @@ void main() {
       );
     });
 
+    test('unwraps legacy domain envelopes before excluding inline wallpaper bytes', () {
+      const wrappedInline = {
+        'version': 1,
+        'updatedAt': '2026-11-27T12:00:00.000Z',
+        'mutationId': 'legacy-wallpaper',
+        'value': {
+          'kind': 'custom',
+          'dataUrl': 'data:image/jpeg;base64,AAAA',
+        },
+      };
+      const wrappedStoragePath = {
+        'version': 1,
+        'updatedAt': '2026-11-27T12:00:00.000Z',
+        'mutationId': 'portable-wallpaper',
+        'value': {
+          'kind': 'custom',
+          'storagePath': 'user-id/wallpaper.jpg',
+        },
+      };
+
+      expect(
+        SyncService.isSyncableValue('pace.domain.wallpaper', wrappedInline),
+        isFalse,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.domain.wallpaper', wrappedStoragePath),
+        isTrue,
+      );
+    });
+
     test('filters canonical and legacy device-local aliases before a remote pull', () {
       expect(SyncService.excludedRemotePullKeys, contains('pace.domain.outbox'));
       expect(SyncService.excludedRemotePullKeys, contains('lt.domain.outbox'));
