@@ -1,4 +1,9 @@
+import 'dart:io';
+import 'dart:math';
+
+import 'package:image_picker/image_picker.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:path/path.dart' as p;
 
 import '../../core/compliance/compliance_service.dart';
 import '../../core/notifications/notification_service.dart';
@@ -20,13 +25,17 @@ class MorePage extends StatelessWidget {
     required this.auth,
     required this.sync,
     required this.themeMode,
+    required this.visualTheme,
     required this.onThemeChanged,
+    required this.onVisualThemeChanged,
   });
   final LocalStore localStore;
   final PaceAuthService auth;
   final SyncService sync;
   final ThemeMode themeMode;
+  final String visualTheme;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<String> onVisualThemeChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -82,7 +91,9 @@ class MorePage extends StatelessWidget {
             sync: sync,
             localStore: localStore,
             themeMode: themeMode,
+            visualTheme: visualTheme,
             onThemeChanged: onThemeChanged,
+            onVisualThemeChanged: onVisualThemeChanged,
           ),
         ),
       );
@@ -95,13 +106,17 @@ class SettingsPageBridge extends StatefulWidget {
     required this.sync,
     required this.localStore,
     required this.themeMode,
+    required this.visualTheme,
     required this.onThemeChanged,
+    required this.onVisualThemeChanged,
   });
   final PaceAuthService auth;
   final SyncService sync;
   final LocalStore localStore;
   final ThemeMode themeMode;
+  final String visualTheme;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<String> onVisualThemeChanged;
 
   @override
   State<SettingsPageBridge> createState() => _SettingsPageBridgeState();
@@ -205,7 +220,10 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       });
       if (type == 'sync_cloud') {
         await widget.sync.setCloudSyncConsent(value);
-        if (value) await widget.sync.syncNow();
+        if (value) {
+          await _migrateLocalWallpaperToCloud();
+          await widget.sync.syncNow();
+        }
       }
     } catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.toString())));
@@ -267,6 +285,114 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     await widget.sync.syncNow();
   }
 
+  Future<void> _migrateLocalWallpaperToCloud() async {
+    final client = widget.auth.client;
+    final userId = widget.auth.currentUser?.id;
+    if (!_syncCloudConsent || client == null || userId == null ||
+        widget.localStore.currentAccountId != userId) {
+      return;
+    }
+    final choice = widget.localStore.read('pace.wallpaper');
+    if (choice is! Map || choice['kind'] != 'custom' ||
+        choice['localPath'] is! String) {
+      return;
+    }
+    final localPath = choice['localPath'] as String;
+    final file = File(localPath);
+    if (!await file.exists()) return;
+    final extension = p.extension(localPath).toLowerCase();
+    final safeExtension = const {'.jpg', '.jpeg', '.png', '.webp'}.contains(extension)
+        ? (extension == '.jpeg' ? '.jpg' : extension)
+        : '.jpg';
+    final contentType = safeExtension == '.png'
+        ? 'image/png'
+        : safeExtension == '.webp'
+            ? 'image/webp'
+            : 'image/jpeg';
+    final objectPath = '$userId/${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}$safeExtension';
+    await client.storage.from('pace-wallpapers').upload(
+      objectPath,
+      file,
+      fileOptions: FileOptions(
+        cacheControl: '31536000',
+        upsert: false,
+        contentType: contentType,
+      ),
+    );
+    await widget.localStore.write('pace.wallpaper', {
+      'kind': 'custom',
+      'storagePath': objectPath,
+    });
+  }
+
+  Future<void> _chooseWallpaper() async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 2560,
+      maxHeight: 2560,
+      imageQuality: 90,
+    );
+    if (picked == null || !mounted) return;
+    try {
+      final file = File(picked.path);
+      if (!await file.exists()) throw StateError("Fichier image introuvable.");
+      if (await file.length() > 20 * 1024 * 1024) {
+        throw StateError("Image trop lourde (maximum 20 Mo).");
+      }
+      final extension = p.extension(picked.path).toLowerCase();
+      if (!const {'.jpg', '.jpeg', '.png', '.webp'}.contains(extension)) {
+        throw StateError("Formats acceptés : JPG, PNG ou WebP.");
+      }
+      final client = widget.auth.client;
+      final userId = widget.auth.currentUser?.id;
+      if (_syncCloudConsent && client != null && userId != null &&
+          widget.localStore.currentAccountId == userId) {
+        final safeExtension = extension == '.jpeg' ? '.jpg' : extension;
+        final contentType = safeExtension == '.png'
+            ? 'image/png'
+            : safeExtension == '.webp'
+                ? 'image/webp'
+                : 'image/jpeg';
+        final objectPath = '$userId/${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}$safeExtension';
+        await client.storage.from('pace-wallpapers').upload(
+          objectPath,
+          file,
+          fileOptions: FileOptions(
+            cacheControl: '31536000',
+            upsert: false,
+            contentType: contentType,
+          ),
+        );
+        await widget.localStore.write('pace.wallpaper', {
+          'kind': 'custom',
+          'storagePath': objectPath,
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Fond d'écran synchronisable enregistré.")),
+          );
+        }
+      } else {
+        await widget.localStore.write('pace.wallpaper', {
+          'kind': 'custom',
+          'localPath': file.path,
+        });
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Fond d'écran enregistré sur cet appareil. Active la synchronisation cloud pour le partager.")),
+          );
+        }
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    }
+  }
+
   String _themeLabel(ThemeMode mode) {
     switch (mode) {
       case ThemeMode.light:
@@ -296,18 +422,60 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
             _section('Apparence', [
               ListTile(
                 title: const Text('Thème'),
-                subtitle: Text(_themeLabel(widget.themeMode)),
+                subtitle: const Text('Le choix est synchronisé avec les autres appareils du compte.'),
                 trailing: DropdownButton<ThemeMode>(
                   value: widget.themeMode,
                   onChanged: (mode) {
                     if (mode != null) widget.onThemeChanged(mode);
                   },
                   items: const [
-                    DropdownMenuItem(value: ThemeMode.system, child: Text('Système')),
                     DropdownMenuItem(value: ThemeMode.light, child: Text('Clair')),
                     DropdownMenuItem(value: ThemeMode.dark, child: Text('Sombre')),
                   ],
                 ),
+              ),
+              ListTile(
+                title: const Text('Style visuel'),
+                subtitle: const Text('Liquid Glass utilise une palette neutre, sans dégradés multicolores.'),
+                trailing: DropdownButton<String>(
+                  value: widget.visualTheme,
+                  onChanged: (theme) {
+                    if (theme != null) widget.onVisualThemeChanged(theme);
+                  },
+                  items: const [
+                    DropdownMenuItem(value: 'default', child: Text('Pace')),
+                    DropdownMenuItem(value: 'signal', child: Text('Signal')),
+                    DropdownMenuItem(value: 'glass', child: Text('Liquid Glass')),
+                  ],
+                ),
+              ),
+              ListTile(
+                title: const Text("Fond d'écran"),
+                subtitle: Text(_syncCloudConsent
+                    ? 'Image privée synchronisée entre les appareils de ce compte.'
+                    : 'Image locale. Active la synchronisation pour la partager.'),
+                trailing: IconButton(
+                  tooltip: 'Choisir une image',
+                  onPressed: _chooseWallpaper,
+                  icon: const Icon(Icons.wallpaper_outlined),
+                ),
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  for (final preset in const [
+                    ('graphite', 'Graphite'),
+                    ('mist', 'Brume'),
+                    ('slate', 'Ardoise'),
+                  ])
+                    OutlinedButton(
+                      onPressed: () => widget.localStore.write(
+                        'pace.wallpaper',
+                        {'id': preset.$1},
+                      ),
+                      child: Text(preset.$2),
+                    ),
+                ],
               ),
             ]),
             _section('IA', [
