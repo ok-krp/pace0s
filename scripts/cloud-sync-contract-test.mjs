@@ -227,6 +227,22 @@ assert.ok(
 );
 const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const appearanceSyncMigration = read("supabase/migrations/20261127140000_sync_visual_preferences_and_wallpaper_storage.sql");
+const wallpaperHook = read("src/hooks/use-wallpaper.tsx");
+const themeToggle = read("src/components/VisualThemeToggle.tsx");
+const settingsRoute = read("src/routes/settings.tsx");
+const rootRoute = read("src/routes/__root.tsx");
+assert.match(wallpaperHook, /storage\.from\("pace-wallpapers"\)\.upload[\s\S]*storage\.from\("pace-wallpapers"\)\.download/,
+  "Custom wallpaper bytes must be stored in private Storage and downloaded by object path");
+assert.match(wallpaperHook, /setChoice\(\{ kind: "custom", storagePath \}\)/,
+  "Only a small per-user Storage path, never base64 image bytes, may enter account sync");
+assert.match(themeToggle, /persistLocalPreference\(VISUAL_THEME_KEY, theme\)/,
+  "Changing visual theme must immediately enqueue the account preference for cloud sync");
+assert.match(settingsRoute, /persistLocalPreference\("pace\.dark", v \? "1" : "0"\)/,
+  "Changing dark mode must immediately enqueue the account preference for cloud sync");
+assert.match(storage, /export function persistLocalPreference[\s\S]*CustomEvent<LocalWriteDetail>\(LOCAL_WRITE_EVENT/,
+  "Appearance preferences must use the same durable local-write event as the rest of cloud sync");
+assert.match(rootRoute, /onRemoteAppearance[\s\S]*readLocalPreference\("pace\.visual-theme"/,
+  "Remote theme and dark-mode updates must be applied to the document without a manual reload");
 assert.match(appearanceSyncMigration, /pace-wallpapers[\s\S]*CREATE POLICY "pace_wallpapers_select_own"[\s\S]*auth\.uid\(\)/,
   "Custom wallpaper objects must live in a private, per-user Storage bucket");
 assert.doesNotMatch(appearanceSyncMigration, /'pace\.dark'[\s\S]*'pace\.visual-theme'[\s\S]*'pace\.wallpaper'/,
