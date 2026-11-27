@@ -242,11 +242,12 @@ assert.ok(
   engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)'),
   "Web must filter device-local state in PostgREST before downloading JSONB values",
 );
-assert.match(
-  engine,
-  /createPrivateRealtimeChannel\(\`pace-user-state:\$\{user\.id\}\`\)[\s\S]*\.on\("broadcast", \{ event: "user_state_changed" \}/,
+assert.ok(
+  engine.includes("createPrivateRealtimeChannel(`pace-user-state:${user.id}`)") &&
+    engine.includes('.on("broadcast", { event: "user_state_changed" }'),
   "Web must receive private low-payload Broadcast notifications for the authenticated account",
 );
+
 assert.match(
   engine,
   /message\.payload as \{ key\?: unknown \}[\s\S]*isSyncableKey\(payload\.key\)[\s\S]*void syncNow\(\)/,
