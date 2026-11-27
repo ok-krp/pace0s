@@ -55,9 +55,9 @@ function SettingsPage() {
   const handleSendTest = async () => { setSending(true); try { const res = await sendTest({ data: { title: "Test Pace", message: "Notification reçue avec succès 🎉" } }); if (res.ok) toast.success(`Notification envoyée (${res.recipients} appareil${res.recipients === 1 ? "" : "s"})`); else toast.error(`Échec : ${res.error}`); } catch (e) { toast.error((e as Error).message); } finally { setSending(false); } };
   useEffect(() => { let deviceId = localStorage.getItem("pace.billing.device_id"); if (!deviceId) { deviceId = crypto.randomUUID() + "-" + crypto.randomUUID(); localStorage.setItem("pace.billing.device_id", deviceId); } getBilling({ data: { deviceId } }).then(setBilling).catch((error) => console.error("billing status failed", error)).finally(() => setBillingLoading(false)); }, [getBilling]);
   useEffect(() => {
-    const activeSignal = readLocalPreference("pace.visual-theme", "default") === "signal";
-    const activeGlass = readLocalPreference("pace.visual-theme", "default") === "glass";
-    const stored = readLocalPreference("pace.dark", "0") === "1";
+    const activeSignal = readLocalPreference<string>("pace.visual-theme", "default") === "signal";
+    const activeGlass = readLocalPreference<string>("pace.visual-theme", "default") === "glass";
+    const stored = readLocalPreference<string>("pace.dark", "0") === "1";
     setSignal(activeSignal);
     setGlass(activeGlass);
     setDark(activeGlass || stored);
@@ -76,7 +76,7 @@ function SettingsPage() {
       const nextGlass = theme === "glass";
       setSignal(nextSignal);
       setGlass(nextGlass);
-      setDark(nextGlass || readLocalPreference("pace.dark", "0") === "1");
+      setDark(nextGlass || readLocalPreference<string>("pace.dark", "0") === "1");
     };
     window.addEventListener("pace.visual-theme.change", handleVisualThemeChange);
     return () => window.removeEventListener("pace.visual-theme.change", handleVisualThemeChange);
@@ -86,7 +86,7 @@ function SettingsPage() {
     setDark(v);
     document.documentElement.classList.toggle("dark", v);
     persistLocalPreference("pace.dark", v ? "1" : "0");
-    setThemeColor(v, readLocalPreference("pace.visual-theme", "default") === "signal", readLocalPreference("pace.visual-theme", "default") === "glass");
+    setThemeColor(v, readLocalPreference<string>("pace.visual-theme", "default") === "signal", readLocalPreference<string>("pace.visual-theme", "default") === "glass");
   };
   const exportData = () => { const data: Record<string, unknown> = {}; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => { try { data[k] = JSON.parse(localStorage.getItem(k) ?? "null"); } catch {} }); const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `lifetracker-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); toast.success("Export téléchargé"); };
   const reset = () => { if (!confirm("Réinitialiser TOUTES vos données ?")) return; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k)); toast.success("Données effacées"); setTimeout(() => location.reload(), 600); };
