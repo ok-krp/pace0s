@@ -522,7 +522,10 @@ html[data-visual-theme="glass"][data-lg-refract] .glass-icon {
 }
 
 /* ================================================================
-   
+   Interaction policy — hover is non-destructive.
+   Keep component-authored surfaces intact; remove only decorative lift,
+   glow and scale. This prevents global hover rules from breaking controls.
+   ================================================================ */
 
 /* Unified Liquid Glass material — settings, desktop chrome and mobile taskbar.
    Primary surfaces share identical fill/transparency and quality-controlled blur. */
@@ -550,10 +553,6 @@ html[data-visual-theme="glass"][data-glass="low"] {
   -webkit-backdrop-filter: blur(var(--lg-material-blur)) saturate(var(--lg-material-saturate)) !important;
 }
 
-Interaction policy — hover is non-destructive.
-   Keep component-authored surfaces intact; remove only decorative lift,
-   glow and scale. This prevents global hover rules from breaking controls.
-   ================================================================ */
 [data-visual-theme="signal"] button,
 [data-visual-theme="signal"] a,
 [data-visual-theme="signal"] [role="button"] {
