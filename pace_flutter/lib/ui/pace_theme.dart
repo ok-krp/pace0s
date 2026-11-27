@@ -139,7 +139,14 @@ class PaceWallpaperBackground extends StatelessWidget {
         );
       }
       final storagePath = choice['storagePath'];
-      if (storagePath is String && storagePath.isNotEmpty && client != null) {
+      final userId = client?.auth.currentUser?.id;
+      final isOwnedStoragePath = storagePath is String &&
+          storagePath.startsWith('${userId ?? ''}/') &&
+          userId != null &&
+          localStore.currentAccountId == userId &&
+          storagePath.substring(userId.length + 1).isNotEmpty &&
+          !storagePath.substring(userId.length + 1).contains('/');
+      if (isOwnedStoragePath && client != null) {
         return FutureBuilder<Uint8List>(
           future: _loadStorageWallpaper(client!, storagePath),
           builder: (context, snapshot) {
