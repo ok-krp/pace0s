@@ -314,10 +314,10 @@ assert.ok(
   "Web PostgREST pulls must exclude device-local keys and legacy prefixes before downloading JSONB values",
 );
 assert.ok(
-  engine.includes("...WALLPAPER_SYNC_KEYS") &&
+  !engine.includes("...WALLPAPER_SYNC_KEYS") &&
     engine.includes("...DEVICE_LOCAL_SYNC_KEYS") &&
     engine.includes("const EXCLUDED = new Set<string>"),
-  "Web sync must retain wallpaper and explicit device-local exclusions",
+  "Web sync must allow account wallpaper metadata while retaining unrelated device-local exclusions",
 );
 
 
@@ -389,7 +389,7 @@ assert.match(flutterSync, /_cloudSyncConsent = null/, "A failed consent lookup m
 assert.match(flutterNutrition, /impossible de vérifier le consentement cloud/, "Nutrition must explain when consent lookup is unavailable instead of falsely claiming consent was denied");
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*userId == null[\s\S]*localStore\.currentAccountId != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not push local outbox mutations without an authenticated matching account and sync_cloud consent");
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*localStore\.currentAccountId != userId[\s\S]*client\?\.auth\.currentUser\?\.id != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not pull remote state for a mismatched account or without sync_cloud consent");
-assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native sync must keep both canonical wallpaper keys device-local");
+assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native sync must keep AI transcripts and finance PINs device-local");
 assert.match(flutterSync, /static String get excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeys\.map\(\(key\) =>/,
   "Native PostgREST exact-key filter must be generated from the canonical device-local exclusion set");
 assert.doesNotMatch(flutterSync, /onPostgresChanges\([\s\S]{0,300}table: 'user_state'/,
@@ -421,7 +421,7 @@ assert.ok(
     scheduleEligibleMutationIndex > discardDeviceLocalIndex,
   "Flutter must immediately sync eligible local writes and purge device-local outbox items without uploading them",
 );
-assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native user_state writes must explicitly exclude AI transcripts, wallpapers and finance PIN keys");
+assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native user_state writes must explicitly exclude AI transcripts and finance PIN keys");
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeyPatterns/, "Native pulls must exclude canonical/legacy device-local keys in PostgREST before downloading rows");
 assert.match(flutterSync, /localStore\.read\('__cloud_sync_last_pull_at'\)[\s\S]*query\.gt\([\s\S]*'updated_at'[\s\S]*localStore\.write\([\s\S]*'__cloud_sync_last_pull_at'[\s\S]*enqueueSync: false/, "Native cloud pulls must persist an account-scoped cursor and fetch only recently changed user_state rows after the initial bootstrap");
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableValue\(key, operation\['value'\]\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys must be removed from the owning outbox without reaching Supabase");
