@@ -252,6 +252,10 @@ assert.match(wallpaperHook, /setChoice\(\{ kind: "custom", storagePath \}\)/,
   "Only a small per-user Storage path, never base64 image bytes, may enter account sync");
 assert.match(wallpaperHook, /finally\(\(\) => \{[\s\S]*legacyWallpaperMigrations\.get\(migrationKey\) === migration[\s\S]*legacyWallpaperMigrations\.delete\(migrationKey\)/,
   "Completed legacy wallpaper migrations must release data URLs retained as Map keys");
+assert.match(wallpaperHook, /function releaseWallpaperObjectUrl\(path: string \| undefined\)[\s\S]*wallpaperObjectUrls\.delete\(path\)[\s\S]*URL\.revokeObjectURL\(url\)/,
+  "Inactive custom wallpaper ObjectURLs must be revoked when the selection changes");
+assert.match(wallpaperHook, /let wallpaperRenderVersion = 0;[\s\S]*const renderVersion = \+\+wallpaperRenderVersion[\s\S]*renderVersion !== wallpaperRenderVersion/,
+  "Late wallpaper downloads must not override a newer selection after rapid background changes");
 assert.match(themeToggle, /persistLocalPreference\(VISUAL_THEME_KEY, theme\)/,
   "Changing visual theme must immediately enqueue the account preference for cloud sync");
 assert.match(settingsRoute, /persistLocalPreference\("pace\.dark", v \? "1" : "0"\)/,
