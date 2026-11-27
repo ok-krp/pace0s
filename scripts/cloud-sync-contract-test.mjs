@@ -347,7 +347,7 @@ assert.ok(
     flutterApp.includes("_onLocalStoreChange"),
   "Flutter must apply account-synced visual theme and dark-mode changes immediately after local or remote writes",
 );
-assert.match(flutterTheme, /class PaceWallpaperBackground[\s\S]*pace-wallpapers[\s\S]*Image\.memory[\s\S]*Image\.file/,
+assert.match(flutterTheme, /class PaceWallpaperBackground[\s\S]*Image\.file[\s\S]*pace-wallpapers[\s\S]*Image\.memory/,
   "Flutter must render local and private-Storage wallpapers behind the native application");
 assert.match(flutterTheme, /seedColor: glass \? const Color\(0xFF777777\)/,
   "Flutter Liquid Glass must use a neutral grayscale palette rather than multicolor accents");
