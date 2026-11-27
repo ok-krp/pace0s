@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
+import { createPrivateRealtimeChannel, supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { applyRemoteWrite, onLocalWrite } from "@/lib/storage";
@@ -649,7 +649,7 @@ export function useCloudSyncEngineInternal() {
       void supabase.realtime.setAuth(session.access_token).then(() => {
         if (cancelled) return;
         realtimeChannel = supabase
-          .channel(`pace-user-state:${user.id}`, { config: { private: true } })
+          createPrivateRealtimeChannel(`pace-user-state:${user.id}`)
           .on("broadcast", { event: "user_state_changed" }, (message) => {
             if (cancelled || !allowed() || !navigator.onLine) return;
             const payload = message.payload as { key?: unknown } | undefined;
