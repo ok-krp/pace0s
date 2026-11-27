@@ -143,18 +143,27 @@ function getWallpaperObjectUrl(path: string): Promise<string> {
   if (cached) return cached;
   const request = (async () => {
     const cacheKey = new Request(`${window.location.origin}/__pace-wallpaper-cache/${encodeURIComponent(path)}`);
-    const cache = "caches" in window ? await window.caches.open("pace-wallpaper-v1") : null;
-    const cachedResponse = cache ? await cache.match(cacheKey) : undefined;
-    if (cachedResponse) return URL.createObjectURL(await cachedResponse.blob());
+    let cache: Cache | null = null;
+    try {
+      if ("caches" in window) {
+        cache = await window.caches.open("pace-wallpaper-v1");
+        const cachedResponse = await cache.match(cacheKey);
+        if (cachedResponse) return URL.createObjectURL(await cachedResponse.blob());
+      }
+    } catch {
+      cache = null;
+    }
 
     const { data, error } = await supabase.storage.from("pace-wallpapers").download(path);
     if (error || !data) throw error ?? new Error("Fond d'écran introuvable.");
     // A per-device browser cache prevents a multi-megabyte wallpaper download
     // on every navigation/reload. The account-scoped object path is immutable.
     if (cache) {
-      await cache.put(cacheKey, new Response(data.slice(0), {
-        headers: { "Content-Type": data.type || "application/octet-stream" },
-      }));
+      try {
+        await cache.put(cacheKey, new Response(data.slice(0), {
+          headers: { "Content-Type": data.type || "application/octet-stream" },
+        }));
+      } catch {}
     }
     return URL.createObjectURL(data);
   })().catch((error) => {
