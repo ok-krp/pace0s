@@ -223,14 +223,30 @@ export function useWallpaper() {
     choice,
     presets: WALLPAPERS,
     set: (id: string) => setChoice({ id }),
-    setCustom: async (file: File) => {
-      if (!user?.id) throw new Error("Connecte-toi pour enregistrer un fond d'écran synchronisable.");
+    setCustom: async (file: File): Promise<boolean> => {
       if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
         throw new Error("Formats acceptés : JPG, PNG ou WebP.");
       }
       if (file.size > 4 * 1024 * 1024) throw new Error("Image trop lourde (maximum 4 Mo).");
+
+      // A wallpaper remains usable locally without an account or cloud-sync
+      // opt-in. Never upload image bytes unless the user explicitly consented.
+      if (!user?.id || !isLegalCategoryAllowed("sync_cloud")) {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => typeof reader.result === "string"
+            ? resolve(reader.result)
+            : reject(new Error("Impossible de lire l'image."));
+          reader.onerror = () => reject(new Error("Impossible de lire l'image."));
+          reader.readAsDataURL(file);
+        });
+        setChoice({ kind: "custom", dataUrl });
+        return false;
+      }
+
       const storagePath = await uploadWallpaper(file, user.id);
       setChoice({ kind: "custom", storagePath });
+      return true;
     },
     reset: () => setChoice(DEFAULT),
   };
