@@ -200,7 +200,7 @@ export async function purgeWallpaperCacheForPath(path: string): Promise<void> {
   const filename = slash > 0 ? path.slice(slash + 1) : "";
   if (
     !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerId) ||
-    !/^[A-Za-z0-9._-]+\\.(jpg|png|webp)$/i.test(filename)
+    !/^[A-Za-z0-9._-]+\.(jpg|png|webp)$/i.test(filename)
   ) {
     return;
   }
