@@ -313,6 +313,15 @@ assert.match(wallpaperHook, /purgeWallpaperCacheForOwner\(ownerId: string\)[\s\S
   "Revoking or replacing a cross-account share must purge its owner-scoped in-memory and persistent browser wallpaper cache");
 assert.match(read("src/hooks/use-shared-appearance.tsx"), /lastAppliedSharedOwnerId[\s\S]*purgeWallpaperCacheForOwner\(previousSharedOwnerId\)/,
   "The shared appearance overlay must purge the previous source account cache when the share is removed or replaced");
+assert.match(wallpaperHook, /export async function purgeWallpaperCacheForPath\(path: string\)[\s\S]*wallpaperObjectUrls\.get\(path\)[\s\S]*await pending[\s\S]*cache\.delete\(request\)/,
+  "Replacing a shared background must revoke and delete only the previous wallpaper path from the browser cache");
+assert.match(read("src/hooks/use-shared-appearance.tsx"), /lastAppliedSharedWallpaperPath[\s\S]*purgeWallpaperCacheForPath\(previousSharedWallpaperPath\)[\s\S]*applyWallpaper/,
+  "The Web shared appearance overlay must purge the old object when the same owner selects a different background");
+assert.match(flutterThemeAppearance, /static Future<void> purgeSharedWallpaperPath\(String path\)[\s\S]*_downloads\.remove\(path\)[\s\S]*await pending[\s\S]*cachedFile\.delete/,
+  "Flutter must purge the exact superseded shared wallpaper from memory and persistent cache");
+assert.match(flutterAppAppearance, /_lastSharedWallpaperPath[\s\S]*purgeSharedWallpaperPath\(previousWallpaperPath\)/,
+  "Flutter must purge the previous wallpaper path when the same owner changes the shared background");
+
 const wallpaperApplyStart = wallpaperHook.indexOf("export function applyWallpaper(");
 const wallpaperApplyEnd = wallpaperHook.indexOf("/** Read choice synchronously", wallpaperApplyStart);
 const wallpaperApply = wallpaperHook.slice(wallpaperApplyStart, wallpaperApplyEnd);
