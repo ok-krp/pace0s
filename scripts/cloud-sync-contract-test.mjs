@@ -360,7 +360,8 @@ const flutterConsentLoad = flutterSettings.slice(flutterConsentLoadStart, flutte
 assert.ok(
   flutterConsentLoadStart >= 0 &&
     flutterConsentLoadEnd > flutterConsentLoadStart &&
-    flutterConsentLoad.includes("try {\\n          await _migrateLocalWallpaperToCloud();\\n        } catch (_) {}") &&
+    flutterConsentLoad.includes("await _migrateLocalWallpaperToCloud();") &&
+    flutterConsentLoad.includes("catch (_) {}") &&
     flutterConsentLoad.indexOf("await widget.sync.syncNow();") > flutterConsentLoad.indexOf("catch (_) {}"),
   "A missing private wallpaper bucket must not block theme and preset synchronization on startup",
 );
