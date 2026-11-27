@@ -10,12 +10,6 @@ const PACE_PREFIX = "pace.";
 const INTERNAL_PREFIX = "pace.__";
 const DOMAIN_PREFIX = "pace.domain.";
 const DOMAIN_OUTBOX_KEY = "pace.domain.outbox";
-const WALLPAPER_SYNC_KEYS = [
-  "pace.wallpaper",
-  "pace.domain.wallpaper",
-  "lt.wallpaper",
-  "lt.domain.wallpaper",
-] as const;
 function keyPrefixRegex(prefix: string) {
   // Prefixes contain literal dots and underscores; a regex keeps underscores
   // literal (unlike SQL LIKE, where _ is a one-character wildcard).
@@ -28,8 +22,6 @@ const DEVICE_LOCAL_SYNC_KEYS = [
   "pace.watch.last_metrics",
   "pace.ai.conversations",
   "pace.ai.deleted_conversations",
-  "pace.dark",
-  "pace.visual-theme",
   DOMAIN_OUTBOX_KEY,
 ] as const;
 const DEVICE_LOCAL_SYNC_PREFIXES = [
@@ -60,14 +52,13 @@ const ALL_DEVICE_LOCAL_SYNC_PREFIXES = [
   ...DEVICE_LOCAL_DOMAIN_SYNC_PREFIXES,
 ] as const;
 const DEVICE_LOCAL_PULL_KEYS = [
-  ...WALLPAPER_SYNC_KEYS,
   ...DEVICE_LOCAL_SYNC_KEYS,
   ...LEGACY_DEVICE_LOCAL_SYNC_KEYS,
   ...DEVICE_LOCAL_DOMAIN_SYNC_KEYS,
   ...LEGACY_DEVICE_LOCAL_DOMAIN_SYNC_KEYS,
 ] as const;
 const DEVICE_LOCAL_PULL_FILTER = `(${DEVICE_LOCAL_PULL_KEYS.map((key) => `"${key}"`).join(",")})`;
-const EXCLUDED = new Set<string>([...WALLPAPER_SYNC_KEYS, ...DEVICE_LOCAL_SYNC_KEYS]);
+const EXCLUDED = new Set<string>(DEVICE_LOCAL_SYNC_KEYS);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
