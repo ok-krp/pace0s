@@ -139,36 +139,34 @@ class SyncService {
       !key.startsWith('pace.__nutrition_cache:') &&
       !isDeviceLocalKey(key);
 
-  /// Local filesystem wallpaper paths are device-specific and must never be
-  /// uploaded to user_state. Only private Storage object paths are portable.
-  static bool isSyncableValue(String key, dynamic value) {
+  /// Identifies a custom wallpaper that exists only on this device. Preserve
+  /// it locally if cloud Storage is unavailable; never upload its bytes/path.
+  static bool isLocalOnlyWallpaperValue(String key, dynamic value) {
     final canonicalKey = key.startsWith('lt.')
         ? 'pace.${key.substring(3)}'
         : key;
-    if (!isSyncableKey(key)) return false;
     if (canonicalKey != 'pace.wallpaper' &&
         canonicalKey != 'pace.domain.wallpaper') {
-      return true;
+      return false;
     }
     dynamic candidate = value;
-    // Domain-store records wrap the payload in a versioned envelope. Unwrap
-    // it before checking so legacy base64 values cannot bypass this guard.
     while (candidate is Map &&
         candidate['version'] == 1 &&
         candidate['updatedAt'] is String &&
         candidate.containsKey('value')) {
       candidate = candidate['value'];
     }
-    if (candidate is Map && candidate['kind'] == 'custom') {
-      // Only a non-empty private Storage object path is portable across devices.
-      if (candidate['localPath'] is String || candidate['dataUrl'] is String) {
-        return false;
-      }
-      final storagePath = candidate['storagePath'];
-      return storagePath is String && storagePath.trim().isNotEmpty;
+    if (candidate is! Map || candidate['kind'] != 'custom') return false;
+    if (candidate['dataUrl'] is String || candidate['localPath'] is String) {
+      return true;
     }
-    return true;
+    final storagePath = candidate['storagePath'];
+    return storagePath is! String || storagePath.trim().isEmpty;
   }
+
+  /// Only non-empty private Storage object paths are portable across devices.
+  static bool isSyncableValue(String key, dynamic value) =>
+      isSyncableKey(key) && !isLocalOnlyWallpaperValue(key, value);
 
 
   Future<bool> _hasCloudSyncConsent(String userId) async {
@@ -945,6 +943,17 @@ class SyncService {
       final remoteUpdatedAt = row['updated_at'] as String?;
       if (remoteUpdatedAt == null ||
           localStore.pendingOperations().any((op) => op['key'] == key)) {
+        continue;
+      }
+
+      // Preserve a local-only custom image while its upload is unavailable.
+      // Remember the observed cloud version to avoid reprocessing it on every
+      // pull, but never replace the device-local image with that older pointer.
+      if (SyncService.isLocalOnlyWallpaperValue(
+        key,
+        localStore.read(key),
+      )) {
+        await localStore.markSyncedAt(key, remoteUpdatedAt);
         continue;
       }
 
