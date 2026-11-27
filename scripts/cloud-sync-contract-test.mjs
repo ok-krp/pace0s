@@ -279,7 +279,7 @@ assert.match(settingsRoute, /persistLocalPreference\("pace\.dark", v \? "1" : "0
   "Changing dark mode must immediately enqueue the account preference for cloud sync");
 assert.match(storage, /export function persistLocalPreference[\s\S]*CustomEvent<LocalWriteDetail>\(LOCAL_WRITE_EVENT/,
   "Appearance preferences must use the same durable local-write event as the rest of cloud sync");
-assert.match(rootRoute, /onRemoteAppearance[\s\S]*readLocalPreference(?:<string>)?\("pace\.visual-theme"/,
+assert.match(rootRoute, /onRemoteAppearance[\s\S]*applyEffectiveAppearance\(user\?\.id\)/,
   "Remote theme and dark-mode updates must be applied to the document without a manual reload");
 assert.match(appearanceSyncMigration, /pace-wallpapers[\s\S]*CREATE POLICY "pace_wallpapers_select_own"[\s\S]*auth\.uid\(\)/,
   "Custom wallpaper objects must live in a private, per-user Storage bucket");
