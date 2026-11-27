@@ -318,18 +318,20 @@ export function applyWallpaper(choice: WallpaperChoice) {
         : "linear-gradient(135deg, #e7e7e7, #f5f5f5)");
       const objectUrlRequest = getWallpaperObjectUrl(choice.storagePath);
       void objectUrlRequest.then((url) => {
-        if (
-          renderVersion !== wallpaperRenderVersion ||
-          root.dataset.wallpaperPath !== choice.storagePath
-        ) {
-          // A fast sequence of wallpaper changes can finish downloads out of
-          // order. Never retain or apply an ObjectURL for a no-longer-active image.
+        const isStillSelected = root.dataset.wallpaperPath === choice.storagePath;
+        if (!isStillSelected) {
+          // The selection changed. Revoke only this inactive request, never a
+          // newer request that may already be registered for the same path.
           if (wallpaperObjectUrls.get(choice.storagePath) === objectUrlRequest) {
             wallpaperObjectUrls.delete(choice.storagePath);
             URL.revokeObjectURL(url);
           }
           return;
         }
+        // A later applyWallpaper call may have re-used this exact in-flight
+        // promise (for example after a dark-mode change). Its callback owns the
+        // current render; an older callback must not revoke the active URL.
+        if (renderVersion !== wallpaperRenderVersion) return;
         root.style.setProperty("--wallpaper", `${overlay}, url("${url}")`);
       }).catch((error) => console.warn("[wallpaper] image download failed", error));
     }
