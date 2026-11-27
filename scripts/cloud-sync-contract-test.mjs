@@ -358,6 +358,19 @@ assert.ok(
   engine.includes("if (!isSyncableRecord(key, row.value)) continue;"),
   "Web remote pulls must reject inline image data, device-local paths and malformed custom wallpaper records",
 );
+const webWallpaperPreserveStart = engine.indexOf("const localWallpaperOverride =");
+const webWallpaperPreserveEnd = engine.indexOf("const localIsEmpty", webWallpaperPreserveStart);
+const webWallpaperPreserve = engine.slice(webWallpaperPreserveStart, webWallpaperPreserveEnd);
+assert.ok(
+  webWallpaperPreserveStart >= 0 &&
+    webWallpaperPreserveEnd > webWallpaperPreserveStart &&
+    webWallpaperPreserve.includes("isInlineWallpaperValue(key, localStoredValue)") &&
+    webWallpaperPreserve.includes("isInlineWallpaperValue(key, localDomain.value)") &&
+    webWallpaperPreserve.includes("meta[key] = updatedAt") &&
+    webWallpaperPreserve.includes("continue;"),
+  "Web remote pulls must preserve a device-local custom wallpaper fallback until upload or explicit replacement",
+);
+
 
 assert.ok(
   engine.includes("for (const prefix of ALL_DEVICE_LOCAL_SYNC_PREFIXES)") &&
@@ -408,6 +421,19 @@ const flutterLocalStoreTest = read("pace_flutter/test/local_store_account_scope_
 const flutterTheme = read("pace_flutter/lib/ui/pace_theme.dart");
 assert.match(flutterSync, /static bool isSyncableValue\(String key, dynamic value\)[\s\S]*localPath[\s\S]*dataUrl[\s\S]*storagePath/,
   "Flutter may synchronize only portable wallpaper Storage paths, never local files or inline image bytes");
+assert.match(flutterSync, /static bool isLocalOnlyWallpaperValue\\(String key, dynamic value\\)[\\s\\S]*localPath[\\s\\S]*dataUrl[\\s\\S]*storagePath/,
+  "Flutter must identify device-local custom wallpaper overrides separately from portable Storage paths");
+const nativeWallpaperPreserveStart = flutterSync.indexOf("if (SyncService.isLocalOnlyWallpaperValue(");
+const nativeWallpaperPreserveEnd = flutterSync.indexOf("final localUpdatedAt", nativeWallpaperPreserveStart);
+const nativeWallpaperPreserve = flutterSync.slice(nativeWallpaperPreserveStart, nativeWallpaperPreserveEnd);
+assert.ok(
+  nativeWallpaperPreserveStart >= 0 &&
+    nativeWallpaperPreserveEnd > nativeWallpaperPreserveStart &&
+    nativeWallpaperPreserve.includes("localStore.markSyncedAt(key, remoteUpdatedAt)") &&
+    nativeWallpaperPreserve.includes("continue;"),
+  "Flutter remote pulls must not replace a local custom wallpaper while its Storage upload is unavailable",
+);
+
 assert.match(flutterSettings, /ImagePicker\(\)[\s\S]*ImageSource\.gallery[\s\S]*pace-wallpapers[\s\S]*storagePath/,
   "Flutter settings must support choosing a custom wallpaper and uploading it to private Storage when consent is enabled");
 assert.match(flutterSettings, /localPath[\s\S]*Active la synchronisation pour la partager/,
