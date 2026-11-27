@@ -150,12 +150,22 @@ class SyncService {
         canonicalKey != 'pace.domain.wallpaper') {
       return true;
     }
-    if (value is Map && value['kind'] == 'custom') {
-      // Only a private Storage object path is portable across devices.
-      if (value['localPath'] is String || value['dataUrl'] is String) {
+    dynamic candidate = value;
+    // Domain-store records wrap the payload in a versioned envelope. Unwrap
+    // it before checking so legacy base64 values cannot bypass this guard.
+    while (candidate is Map &&
+        candidate['version'] == 1 &&
+        candidate['updatedAt'] is String &&
+        candidate.containsKey('value')) {
+      candidate = candidate['value'];
+    }
+    if (candidate is Map && candidate['kind'] == 'custom') {
+      // Only a non-empty private Storage object path is portable across devices.
+      if (candidate['localPath'] is String || candidate['dataUrl'] is String) {
         return false;
       }
-      return value['storagePath'] is String;
+      final storagePath = candidate['storagePath'];
+      return storagePath is String && storagePath.trim().isNotEmpty;
     }
     return true;
   }
