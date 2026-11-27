@@ -304,11 +304,6 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     final safeExtension = const {'.jpg', '.jpeg', '.png', '.webp'}.contains(extension)
         ? (extension == '.jpeg' ? '.jpg' : extension)
         : '.jpg';
-    final contentType = safeExtension == '.png'
-        ? 'image/png'
-        : safeExtension == '.webp'
-            ? 'image/webp'
-            : 'image/jpeg';
     final objectPath = '$userId/${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}$safeExtension';
     await client.storage.from('pace-wallpapers').upload(
       objectPath,
@@ -344,11 +339,6 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       if (_syncCloudConsent && client != null && userId != null &&
           widget.localStore.currentAccountId == userId) {
         final safeExtension = extension == '.jpeg' ? '.jpg' : extension;
-        final contentType = safeExtension == '.png'
-            ? 'image/png'
-            : safeExtension == '.webp'
-                ? 'image/webp'
-                : 'image/jpeg';
         final objectPath = '$userId/${DateTime.now().microsecondsSinceEpoch}_${Random.secure().nextInt(1 << 32)}$safeExtension';
         await client.storage.from('pace-wallpapers').upload(
           objectPath,
