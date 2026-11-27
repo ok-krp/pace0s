@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
+import { createPrivateRealtimeChannel, supabase } from "@/integrations/supabase/client";
 
 const DEVICE_KEY = "pace.__sync_device_id";
 const PROFILE_REMOTE_EVENT = "pace.profile.remote";
@@ -30,8 +30,7 @@ export function useProfileRealtime() {
   useEffect(() => {
     if (!user) return;
     const deviceId = getDeviceId();
-    const channel = supabase
-      .channel(`pace-profile-${user.id}`, { config: { private: true } })
+    const channel = createPrivateRealtimeChannel(`pace-profile-${user.id}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "profiles", filter: `user_id=eq.${user.id}` },
