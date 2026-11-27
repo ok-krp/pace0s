@@ -226,6 +226,34 @@ assert.ok(
   "Realtime authorization must only allow Broadcast reads on the authenticated user's own topic",
 );
 const appearanceSyncMigration = read("supabase/migrations/20261127143227_sync_visual_preferences_and_wallpaper_storage.sql");
+const appearanceSharingMigration = read("supabase/migrations/20261127191454_secure_cross_account_appearance_sharing.sql");
+const appearanceConsentRevocationMigration = read("supabase/migrations/20261127193932_revoke_appearance_shares_on_consent_withdrawal.sql");
+const appearanceInviteInvalidationMigration = read("supabase/migrations/20261127194017_fix_appearance_invite_invalidation.sql");
+const appearanceCurrentValueMigration = read("supabase/migrations/20261127194440_fix_shared_appearance_current_value_selection.sql");
+assert.match(appearanceSharingMigration, /gen_random_bytes\(32\)[\s\S]*digest\(v_token, 'sha256'\)[\s\S]*interval '24 hours'/,
+  "Cross-account appearance sharing must use a hashed one-time 256-bit invitation with a bounded lifetime");
+assert.match(appearanceSharingMigration, /recipient_user_id[\s\S]*appearance_shares_one_source_per_recipient_idx[\s\S]*revoked_at IS NULL/,
+  "A recipient may follow only one active appearance source at a time");
+assert.match(appearanceSharingMigration, /get_shared_appearance\(\)[\s\S]*visualTheme[\s\S]*dark[\s\S]*wallpaper/,
+  "The cross-account RPC may expose only the three allow-listed appearance preferences");
+assert.match(appearanceSharingMigration, /pace_can_read_shared_wallpaper[\s\S]*auth\.uid\(\) IS DISTINCT FROM p_recipient_id/,
+  "Shared wallpaper reads must bind the recipient argument to the authenticated user");
+assert.match(appearanceSharingMigration, /pace_wallpapers_select_shared_appearance[\s\S]*pace_can_read_shared_wallpaper/,
+  "Shared wallpaper Storage access must be mediated by the exact-object RLS helper");
+assert.match(appearanceSharingMigration, /pace_users_receive_shared_appearance_events[\s\S]*pace-appearance-share:/,
+  "Shared appearance notifications must use recipient-scoped private Broadcast topics");
+assert.match(appearanceConsentRevocationMigration, /revoked_at = pg_catalog\.now\(\)[\s\S]*s\.owner_user_id = NEW\.user_id\s+OR s\.recipient_user_id = NEW\.user_id/,
+  "Withdrawing cloud-sync consent on either side must revoke the active relationship");
+assert.match(appearanceInviteInvalidationMigration, /SET consumed_at = pg_catalog\.now\(\)/,
+  "Superseded or consent-invalidated appearance invitations must be consumed without violating expiry constraints");
+assert.doesNotMatch(appearanceInviteInvalidationMigration, /expires_at\s*=\s*LEAST/,
+  "Invite invalidation must not write an expiry earlier than created_at");
+assert.match(appearanceCurrentValueMigration, /ORDER BY us\.updated_at DESC[\s\S]*lt\.domain\.visual-theme[\s\S]*lt\.domain\.dark[\s\S]*lt\.domain\.wallpaper/,
+  "Shared appearance must resolve the newest canonical, domain-envelope or legacy preference value");
+assert.match(appearanceCurrentValueMigration, /SELECT us\.value INTO v_wallpaper[\s\S]*ORDER BY us\.updated_at DESC[\s\S]*jsonb_path_exists\(\s*v_wallpaper/,
+  "Storage RLS must authorize only the latest wallpaper reference rather than any historical path");
+assert.match(appearanceCurrentValueMigration, /AFTER INSERT OR UPDATE OR DELETE ON public\.user_state[\s\S]*TG_OP = 'DELETE'/,
+  "Removing a shared appearance preference must notify recipients so the overlay can reconcile");
 const wallpaperHook = read("src/hooks/use-wallpaper.tsx");
 const themeToggle = read("src/components/VisualThemeToggle.tsx");
 const settingsRoute = read("src/routes/settings.tsx");
