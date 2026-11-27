@@ -6,7 +6,6 @@ import 'package:path_provider/path_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../core/storage/local_store.dart';
-import '../core/storage/wallpaper_presets.dart';
 
 class PaceTheme {
   static ThemeData light({String visualTheme = 'default'}) =>
