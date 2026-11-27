@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../../core/compliance/compliance_service.dart';
 import '../../core/notifications/notification_service.dart';
@@ -354,9 +355,20 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
           );
         }
       } else {
+        // image_picker returns a cache path; copy it to persistent app support
+        // storage so the local-only wallpaper survives app restarts and cleanup.
+        final supportDirectory = await getApplicationSupportDirectory();
+        final wallpaperDirectory = Directory(
+          p.join(supportDirectory.path, 'wallpapers'),
+        );
+        await wallpaperDirectory.create(recursive: true);
+        final localFile = await file.copy(p.join(
+          wallpaperDirectory.path,
+          'pace_wallpaper_${DateTime.now().microsecondsSinceEpoch}$extension',
+        ));
         await widget.localStore.write('pace.wallpaper', {
           'kind': 'custom',
-          'localPath': file.path,
+          'localPath': localFile.path,
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
