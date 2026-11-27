@@ -141,9 +141,9 @@ class PaceWallpaperBackground extends StatelessWidget {
       final storagePath = choice['storagePath'];
       final userId = client?.auth.currentUser?.id;
       final isOwnedStoragePath = storagePath is String &&
-          storagePath.startsWith('${userId ?? ''}/') &&
           userId != null &&
           localStore.currentAccountId == userId &&
+          storagePath.startsWith('$userId/') &&
           storagePath.substring(userId.length + 1).isNotEmpty &&
           !storagePath.substring(userId.length + 1).contains('/');
       if (isOwnedStoragePath && client != null) {
