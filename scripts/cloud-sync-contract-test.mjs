@@ -275,6 +275,10 @@ assert.ok(
   "Native Flutter must render the same synchronized wallpaper preset IDs as Web/PWA",
 );
 
+const visualThemeCss = read("src/visual-theme.css");
+assert.ok(!visualThemeCss.includes("Pace Glass — legacy implementation kept as annotation."),
+  "The malformed nested legacy Glass comment must not be reintroduced by appearance changes");
+
 const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const domainStore = read("src/lib/domain-store.ts");
 assert.doesNotMatch(engine, /WALLPAPER_SYNC_KEYS/,
