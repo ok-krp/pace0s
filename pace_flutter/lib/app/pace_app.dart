@@ -78,9 +78,6 @@ class _PaceAppState extends State<PaceApp> {
       if (theme == 'glass') _themeMode = ThemeMode.dark;
     });
     await widget.localStore.write('pace.visual-theme', theme);
-    if (theme == 'glass') {
-      await widget.localStore.write('pace.dark', '1');
-    }
   }
 
   @override
