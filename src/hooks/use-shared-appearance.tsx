@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { applyWallpaper, purgeWallpaperCacheForOwner, readWallpaperChoice, WALLPAPERS } from "@/hooks/use-wallpaper";
+import { applyWallpaper, purgeWallpaperCacheForOwner, purgeWallpaperCacheForPath, readWallpaperChoice, WALLPAPERS } from "@/hooks/use-wallpaper";
 import { createPrivateRealtimeChannel, supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 import { readLocalPreference } from "@/lib/storage";
@@ -27,6 +27,7 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 let activeUserId: string | null = null;
 let activeAppearance: SharedAppearance | null = null;
 let lastAppliedSharedOwnerId: string | null = null;
+let lastAppliedSharedWallpaperPath: string | null = null;
 
 function unwrapPreference(value: unknown): unknown {
   let current = value;
@@ -85,6 +86,14 @@ function sharedWallpaperChoice(appearance: SharedAppearance): WallpaperRenderCho
   return { id: "graphite" } as WallpaperRenderChoice;
 }
 
+function sharedWallpaperStoragePath(appearance: SharedAppearance | null): string | null {
+  if (!appearance) return null;
+  const choice = sharedWallpaperChoice(appearance) as { kind?: string; storagePath?: string };
+  return choice.kind === "custom" && typeof choice.storagePath === "string"
+    ? choice.storagePath
+    : null;
+}
+
 function emitSharedAppearanceChange(theme?: string, dark?: boolean) {
   if (typeof window === "undefined") return;
   window.dispatchEvent(new CustomEvent("pace.shared-appearance.change", {
@@ -141,13 +150,24 @@ export function applyEffectiveAppearance(userId?: string) {
         : dark ? "#1f242c" : "#f8fafc",
   );
 
-  applyWallpaper(getEffectiveWallpaperChoice(userId));
   const nextSharedOwnerId = shared?.ownerUserId ?? null;
+  const nextSharedWallpaperPath = sharedWallpaperStoragePath(shared);
   const previousSharedOwnerId = lastAppliedSharedOwnerId;
+  const previousSharedWallpaperPath = lastAppliedSharedWallpaperPath;
   lastAppliedSharedOwnerId = nextSharedOwnerId;
+  lastAppliedSharedWallpaperPath = nextSharedWallpaperPath;
+
   if (previousSharedOwnerId && previousSharedOwnerId !== nextSharedOwnerId) {
     void purgeWallpaperCacheForOwner(previousSharedOwnerId);
+  } else if (
+    previousSharedOwnerId &&
+    previousSharedWallpaperPath &&
+    previousSharedWallpaperPath !== nextSharedWallpaperPath
+  ) {
+    void purgeWallpaperCacheForPath(previousSharedWallpaperPath);
   }
+
+  applyWallpaper(getEffectiveWallpaperChoice(userId));
   emitSharedAppearanceChange(theme, dark);
 }
 
