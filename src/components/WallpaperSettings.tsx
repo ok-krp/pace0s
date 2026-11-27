@@ -28,7 +28,7 @@ export function WallpaperSettings() {
     <div className="space-y-4 pt-3 border-t border-border">
       <div className="flex items-center gap-3">
         <div className="glass-icon size-10"><ImageIcon className="size-4" /></div>
-        <div className="flex-1 min-w-0"><div className="font-medium">Fond d'écran</div><div className="text-xs text-muted-foreground">Le fond choisi reste visible derrière les surfaces Liquid Glass et se synchronise avec ton compte.</div></div>
+        <div className="flex-1 min-w-0"><div className="font-medium">Fond d'écran</div><div className="text-xs text-muted-foreground">Le fond choisi reste visible derrière les surfaces Liquid Glass. Pour le retrouver sur tes autres appareils, active « Synchronisation entre appareils » dans Confidentialité.</div></div>
       </div>
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
         {presets.map((p) => { const active = activeId === p.id && !isCustom; return <button key={p.id} type="button" onClick={() => set(p.id)} aria-pressed={active} className="group relative aspect-square rounded-2xl overflow-hidden ring-1 ring-black/5 dark:ring-white/10 transition-transform hover:scale-[1.03] active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/60" style={{ background: p.swatch }} title={p.label}>{active && <span className="absolute inset-0 grid place-items-center bg-black/25"><span className="glass-icon size-7"><Check className="size-3.5" /></span></span>}<span className="absolute bottom-1 left-1.5 right-1.5 text-[10px] font-medium text-white/95 drop-shadow">{p.label}</span></button>; })}
