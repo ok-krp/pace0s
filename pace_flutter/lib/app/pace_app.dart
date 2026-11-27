@@ -26,47 +26,84 @@ class PaceApp extends StatefulWidget {
 
 class _PaceAppState extends State<PaceApp> {
   ThemeMode _themeMode = ThemeMode.system;
+  String _visualTheme = 'default';
 
   @override
   void initState() {
     super.initState();
-    _themeMode = _themeModeFromValue(widget.localStore.read('pace.settings.theme'));
+    _readAppearance();
+    widget.localStore.addChangeListener(_onLocalStoreChange);
   }
 
-  ThemeMode _themeModeFromValue(dynamic value) {
-    switch (value) {
-      case 'light':
-        return ThemeMode.light;
-      case 'dark':
-        return ThemeMode.dark;
-      default:
-        return ThemeMode.system;
+  void _readAppearance() {
+    final storedTheme = widget.localStore.read('pace.visual-theme');
+    final visualTheme = storedTheme is String &&
+            const {'default', 'signal', 'glass'}.contains(storedTheme)
+        ? storedTheme
+        : 'default';
+    final storedDark = widget.localStore.read('pace.dark');
+    final legacyTheme = widget.localStore.read('pace.settings.theme');
+    final dark = visualTheme == 'glass' ||
+        (storedDark != null
+            ? storedDark == '1' || storedDark == true
+            : legacyTheme == 'dark');
+    _visualTheme = visualTheme;
+    _themeMode = dark ? ThemeMode.dark : ThemeMode.light;
+  }
+
+  void _onLocalStoreChange(String key) {
+    if (key != '*' &&
+        key != 'pace.visual-theme' &&
+        key != 'pace.dark' &&
+        key != 'pace.wallpaper') {
+      return;
     }
+    if (!mounted) return;
+    setState(_readAppearance);
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
-    setState(() => _themeMode = mode);
-    await widget.localStore.write('pace.settings.theme', switch (mode) {
-      ThemeMode.light => 'light',
-      ThemeMode.dark => 'dark',
-      ThemeMode.system => 'system',
+    final effectiveMode = _visualTheme == 'glass' ? ThemeMode.dark : mode;
+    setState(() => _themeMode = effectiveMode);
+    await widget.localStore.write(
+      'pace.dark',
+      effectiveMode == ThemeMode.dark ? '1' : '0',
+    );
+  }
+
+  Future<void> setVisualTheme(String theme) async {
+    if (!const {'default', 'signal', 'glass'}.contains(theme)) return;
+    setState(() {
+      _visualTheme = theme;
+      if (theme == 'glass') _themeMode = ThemeMode.dark;
     });
-    // LocalStore's durable mutation listener starts the sync cycle.
+    await widget.localStore.write('pace.visual-theme', theme);
+    if (theme == 'glass') {
+      await widget.localStore.write('pace.dark', '1');
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeChangeListener(_onLocalStoreChange);
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Pace',
         debugShowCheckedModeBanner: false,
-        theme: PaceTheme.light(),
-        darkTheme: PaceTheme.dark(),
+        theme: PaceTheme.light(visualTheme: _visualTheme),
+        darkTheme: PaceTheme.dark(visualTheme: _visualTheme),
         themeMode: _themeMode,
         home: _AuthGate(
           localStore: widget.localStore,
           auth: widget.auth,
           sync: widget.sync,
           onThemeChanged: setThemeMode,
+          onVisualThemeChanged: setVisualTheme,
           themeMode: _themeMode,
+          visualTheme: _visualTheme,
         ),
       );
 }
@@ -77,13 +114,17 @@ class _AuthGate extends StatefulWidget {
     required this.auth,
     required this.sync,
     required this.onThemeChanged,
+    required this.onVisualThemeChanged,
     required this.themeMode,
+    required this.visualTheme,
   });
   final LocalStore localStore;
   final PaceAuthService auth;
   final SyncService sync;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<String> onVisualThemeChanged;
   final ThemeMode themeMode;
+  final String visualTheme;
 
   @override
   State<_AuthGate> createState() => _AuthGateState();
@@ -179,7 +220,9 @@ class _AuthGateState extends State<_AuthGate> {
         sync: widget.sync,
         auth: widget.auth,
         onThemeChanged: widget.onThemeChanged,
+        onVisualThemeChanged: widget.onVisualThemeChanged,
         themeMode: widget.themeMode,
+        visualTheme: widget.visualTheme,
       );
     }
     if (_activationError != null) {
@@ -203,7 +246,9 @@ class _AuthGateState extends State<_AuthGate> {
             sync: widget.sync,
             auth: widget.auth,
             onThemeChanged: widget.onThemeChanged,
+            onVisualThemeChanged: widget.onVisualThemeChanged,
             themeMode: widget.themeMode,
+            visualTheme: widget.visualTheme,
           )
         : AuthPage(auth: widget.auth);
   }
@@ -216,13 +261,17 @@ class PaceShell extends StatefulWidget {
     required this.sync,
     required this.auth,
     required this.onThemeChanged,
+    required this.onVisualThemeChanged,
     required this.themeMode,
+    required this.visualTheme,
   });
   final LocalStore localStore;
   final SyncService sync;
   final PaceAuthService auth;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<String> onVisualThemeChanged;
   final ThemeMode themeMode;
+  final String visualTheme;
 
   @override
   State<PaceShell> createState() => _PaceShellState();
@@ -268,10 +317,16 @@ class _PaceShellState extends State<PaceShell> with WidgetsBindingObserver {
         sync: widget.sync,
         auth: widget.auth,
         themeMode: widget.themeMode,
+        visualTheme: widget.visualTheme,
         onThemeChanged: widget.onThemeChanged,
+        onVisualThemeChanged: widget.onVisualThemeChanged,
       ),
     ];
-    return Scaffold(
+    return PaceWallpaperBackground(
+      localStore: widget.localStore,
+      client: widget.auth.client,
+      child: Scaffold(
+      backgroundColor: Colors.transparent,
       body: SafeArea(child: IndexedStack(index: _index, children: pages)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
@@ -283,6 +338,7 @@ class _PaceShellState extends State<PaceShell> with WidgetsBindingObserver {
           NavigationDestination(icon: Icon(Icons.bedtime_outlined), selectedIcon: Icon(Icons.bedtime), label: 'Sommeil'),
           NavigationDestination(icon: Icon(Icons.apps_outlined), selectedIcon: Icon(Icons.apps), label: 'Plus'),
         ],
+      ),
       ),
     );
   }
