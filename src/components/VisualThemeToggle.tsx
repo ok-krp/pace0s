@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Activity, Sparkles, Layers3 } from "lucide-react";
+import { persistLocalPreference, readLocalPreference } from "@/lib/storage";
 
 const VISUAL_THEME_KEY = "pace.visual-theme";
 const DARK_MODE_KEY = "pace.dark";
@@ -11,14 +12,14 @@ function getVisualTheme(): VisualTheme {
   return value === "signal" || value === "glass" ? value : "default";
 }
 
-function applyVisualTheme(theme: VisualTheme) {
+function applyVisualTheme(theme: VisualTheme, persist = true) {
   const root = document.documentElement;
   if (theme === "default") delete root.dataset.visualTheme;
   else root.dataset.visualTheme = theme;
   // Signal et Liquid suivent le mode sombre choisi par l'utilisateur.
-  const dark = localStorage.getItem(DARK_MODE_KEY) === "1";
+  const dark = theme === "glass" || readLocalPreference(DARK_MODE_KEY, "0") === "1";
   root.classList.toggle("dark", dark);
-  localStorage.setItem(VISUAL_THEME_KEY, theme);
+  if (persist) persistLocalPreference(VISUAL_THEME_KEY, theme);
   const themeColor = document.querySelector('meta[name="theme-color"]');
   themeColor?.setAttribute("content", theme === "glass" ? (dark ? "#070a14" : "#e9e7ee") : theme === "signal" ? dark ? "#000000" : "#f6f7f9" : dark ? "#1f242c" : "#f8fafc");
   window.dispatchEvent(new CustomEvent("pace.visual-theme.change", { detail: { theme, signal: theme === "signal" } }));
@@ -29,6 +30,15 @@ export function VisualThemeToggle({ compact = false }: { compact?: boolean }) {
 
   useEffect(() => {
     setTheme(getVisualTheme());
+    const onRemotePreference = (event: Event) => {
+      const key = (event as CustomEvent<{ key?: string }>).detail?.key;
+      if (key && key !== VISUAL_THEME_KEY && key !== DARK_MODE_KEY) return;
+      const stored = readLocalPreference<VisualTheme>(VISUAL_THEME_KEY, "default");
+      applyVisualTheme(stored, false);
+      setTheme(stored === "signal" || stored === "glass" ? stored : "default");
+    };
+    window.addEventListener("pace.remote.write", onRemotePreference);
+    return () => window.removeEventListener("pace.remote.write", onRemotePreference);
   }, []);
 
   const toggle = () => {
