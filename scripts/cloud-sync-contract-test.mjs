@@ -372,7 +372,7 @@ assert.ok(
   "Web may sync custom wallpapers only as non-empty private Storage object paths",
 );
 assert.ok(
-  engine.includes("if (!isSyncableRecord(key, row.value)) continue;"),
+  engine.includes("if (!isSyncableRecord(key, row.value, user.id)) continue;"),
   "Web remote pulls must reject inline image data, device-local paths and malformed custom wallpaper records",
 );
 assert.ok(
