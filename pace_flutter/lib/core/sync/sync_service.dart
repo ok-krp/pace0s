@@ -30,7 +30,7 @@ class SyncService {
   void _onLocalMutation(String key) {
     final userId = client?.auth.currentUser?.id;
     if (userId == null || localStore.currentAccountId != userId) return;
-    if (!SyncService.isSyncableKey(key)) {
+    if (!SyncService.isSyncableValue(key, localStore.read(key))) {
       final obsolete = localStore.pendingOperations()
           .where((operation) => operation['key'] == key)
           .toList();
@@ -138,6 +138,25 @@ class SyncService {
       !key.startsWith('pace.__sync_') &&
       !key.startsWith('pace.__nutrition_cache:') &&
       !isDeviceLocalKey(key);
+
+  /// Local filesystem wallpaper paths are device-specific and must never be
+  /// uploaded to user_state. Only private Storage object paths are portable.
+  static bool isSyncableValue(String key, dynamic value) {
+    final canonicalKey = key.startsWith('lt.')
+        ? 'pace.${key.substring(3)}'
+        : key;
+    if (!isSyncableKey(key)) return false;
+    if (canonicalKey != 'pace.wallpaper' &&
+        canonicalKey != 'pace.domain.wallpaper') {
+      return true;
+    }
+    if (value is Map &&
+        value['kind'] == 'custom' &&
+        value['localPath'] is String) {
+      return false;
+    }
+    return true;
+  }
 
 
   Future<bool> _hasCloudSyncConsent(String userId) async {
@@ -475,7 +494,8 @@ class SyncService {
       }
       try {
         final key = operation['key'];
-        if (key is! String || !SyncService.isSyncableKey(key)) {
+        if (key is! String ||
+            !SyncService.isSyncableValue(key, operation['value'])) {
           await localStore.discardOperationForAccount(userId, operation);
           continue;
         }
@@ -906,7 +926,7 @@ class SyncService {
       }
       final row = Map<String, dynamic>.from(raw);
       final key = row['key'] as String;
-      if (!SyncService.isSyncableKey(key) ||
+      if (!SyncService.isSyncableValue(key, row['value']) ||
           SyncService.excludedRemotePullKeys.contains(key)) {
         continue;
       }
