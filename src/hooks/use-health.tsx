@@ -5,7 +5,7 @@ import { decryptHealthPayload } from "@/lib/health.crypto";
 import { migrateLegacyHealthSamplesToE2ee } from "@/lib/health.migration";
 import { backfillHealthE2eeDedupeHashes } from "@/lib/health.dedupe.backfill";
 import { useAuth } from "@/hooks/use-auth";
-import { supabase } from "@/integrations/supabase/client";
+import { createPrivateRealtimeChannel, supabase } from "@/integrations/supabase/client";
 
 export type HealthToday = {
   steps: number; kcalActive: number; kcalTotal: number; distanceM: number; sleepMin: number; exerciseMin: number;
@@ -217,7 +217,7 @@ export function useHealthToday() {
       }
       if (cancelled) return;
 
-      channel = supabase.channel(channelName, { config: { private: true } });
+      channel = createPrivateRealtimeChannel(channelName);
       channel.on(
         "postgres_changes",
         {

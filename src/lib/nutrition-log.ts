@@ -1,6 +1,6 @@
 import { todayKey, onLocalWrite } from "@/lib/storage";
 import { writeDomain, readDomain } from "@/lib/domain-store";
-import { supabase } from "@/integrations/supabase/client";
+import { createPrivateRealtimeChannel, supabase } from "@/integrations/supabase/client";
 import { isLegalCategoryAllowed } from "@/lib/legal";
 
 export type NutritionItem = {
@@ -448,8 +448,7 @@ export function subscribeNutritionFoodLogChanges(onChange: () => void): () => vo
     const { data: { user }, error } = await supabase.auth.getUser();
     if (disposed || currentGeneration !== generation || error || !user) return;
 
-    const nextChannel = supabase
-      .channel(`pace-food-log-${user.id}`, { config: { private: true } })
+    const nextChannel = createPrivateRealtimeChannel(`pace-food-log-${user.id}`)
       .on("postgres_changes", {
         event: "INSERT",
         schema: "public",
