@@ -244,7 +244,7 @@ assert.ok(
 );
 assert.match(
   engine,
-  /\.channel\(\`pace-user-state:\$\{user\.id\}\`, \{ config: \{ private: true \} \}\)[\s\S]*\.on\("broadcast", \{ event: "user_state_changed" \}/,
+  /createPrivateRealtimeChannel\(\`pace-user-state:\$\{user\.id\}\`\)[\s\S]*\.on\("broadcast", \{ event: "user_state_changed" \}/,
   "Web must receive private low-payload Broadcast notifications for the authenticated account",
 );
 assert.match(
@@ -871,23 +871,33 @@ assert.deepEqual(conflictsB, []);
 
 assert.match(
   read("src/hooks/use-health.tsx"),
-  /supabase\.channel\(channelName, \{ config: \{ private: true \} \}\)/,
-  "Health E2EE Postgres Changes must join a private-only Realtime topic",
+  /createPrivateRealtimeChannel\\(channelName\\)/,
+  "Health E2EE Postgres Changes must use the private-channel factory",
 );
 assert.match(
   read("src/hooks/use-profile-realtime.ts"),
-  /\.channel\(\x60pace-profile-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
-  "Profile Postgres Changes must join a private-only Realtime topic",
+  /createPrivateRealtimeChannel\\(\\x60pace-profile-\\$\\{user\\.id\\}\\x60\\)/,
+  "Profile Postgres Changes must use the private-channel factory",
 );
 assert.match(
   read("src/lib/nutrition-log.ts"),
-  /\.channel\(\x60pace-food-log-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
-  "Nutrition Postgres Changes must join a private-only Realtime topic",
+  /createPrivateRealtimeChannel\\(\\x60pace-food-log-\\$\\{user\\.id\\}\\x60\\)/,
+  "Nutrition Postgres Changes must use the private-channel factory",
 );
 assert.match(
   read("src/routes/development.tsx"),
-  /supabase\.channel\(\x60development-tasks-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
-  "Development-task Postgres Changes must join a private-only Realtime topic",
+  /createPrivateRealtimeChannel\\(\\x60development-tasks-\\$\\{user\\.id\\}\\x60\\)/,
+  "Development-task Postgres Changes must use the private-channel factory",
+);
+assert.match(
+  supabaseClient,
+  /export function createPrivateRealtimeChannel[\\s\\S]*config: \\{ \\.\\.\\.options\\.config, private: true \\}/,
+  "The shared Realtime factory must force private: true even when a caller omits the option",
+);
+assert.doesNotMatch(
+  engine + read("src/hooks/use-profile-realtime.ts") + read("src/hooks/use-health.tsx") + read("src/lib/nutrition-log.ts") + read("src/routes/development.tsx"),
+  /supabase\\.channel\\(/,
+  "All web Realtime subscriptions must use the centralized private-channel factory",
 );
 
 const nutritionAiServer = read("src/lib/nutrition-ai.functions.ts");
