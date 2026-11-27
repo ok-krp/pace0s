@@ -155,6 +155,34 @@ void main() {
       }
     });
 
+    test('only synchronizes portable wallpaper object paths, never local files or inline bytes', () {
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {
+          'kind': 'custom',
+          'localPath': '/private/device/wallpaper.jpg',
+        }),
+        isFalse,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {
+          'kind': 'custom',
+          'dataUrl': 'data:image/jpeg;base64,AAAA',
+        }),
+        isFalse,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {
+          'kind': 'custom',
+          'storagePath': 'user-id/wallpaper.jpg',
+        }),
+        isTrue,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {'id': 'graphite'}),
+        isTrue,
+      );
+    });
+
     test('filters canonical and legacy device-local aliases before a remote pull', () {
       expect(SyncService.excludedRemotePullKeys, contains('pace.domain.outbox'));
       expect(SyncService.excludedRemotePullKeys, contains('lt.domain.outbox'));
