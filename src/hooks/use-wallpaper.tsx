@@ -126,6 +126,15 @@ const DEFAULT: WallpaperChoice = { id: "graphite" };
 const wallpaperObjectUrls = new Map<string, Promise<string>>();
 const legacyWallpaperMigrations = new Map<string, Promise<string>>();
 
+function releaseWallpaperObjectUrl(path: string | undefined) {
+  if (!path) return;
+  const pending = wallpaperObjectUrls.get(path);
+  if (!pending) return;
+  wallpaperObjectUrls.delete(path);
+  // Revocation also runs when the download is still in flight.
+  void pending.then((url) => URL.revokeObjectURL(url)).catch(() => {});
+}
+
 async function uploadWallpaper(blob: Blob, userId: string): Promise<string> {
   const extension = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
   const path = `${userId}/${crypto.randomUUID()}.${extension}`;
@@ -288,14 +297,29 @@ export function applyWallpaper(choice: WallpaperChoice) {
       ? "linear-gradient(180deg, rgba(0,0,0,0.16), rgba(0,0,0,0.28))"
       : "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.10))";
     if ("dataUrl" in choice) {
+      releaseWallpaperObjectUrl(root.dataset.wallpaperPath);
+      delete root.dataset.wallpaperPath;
       root.style.setProperty("--wallpaper", `${overlay}, url("${choice.dataUrl}")`);
     } else {
+      const previousPath = root.dataset.wallpaperPath;
+      if (previousPath !== choice.storagePath) {
+        releaseWallpaperObjectUrl(previousPath);
+      }
       root.dataset.wallpaperPath = choice.storagePath;
       root.style.setProperty("--wallpaper", isDark
         ? "linear-gradient(135deg, #111315, #242629)"
         : "linear-gradient(135deg, #e7e7e7, #f5f5f5)");
-      void getWallpaperObjectUrl(choice.storagePath).then((url) => {
-        if (root.dataset.wallpaperPath !== choice.storagePath) return;
+      const objectUrlRequest = getWallpaperObjectUrl(choice.storagePath);
+      void objectUrlRequest.then((url) => {
+        if (root.dataset.wallpaperPath !== choice.storagePath) {
+          // A fast sequence of wallpaper changes can finish downloads out of
+          // order. Never retain or apply an ObjectURL for a no-longer-active image.
+          if (wallpaperObjectUrls.get(choice.storagePath) === objectUrlRequest) {
+            wallpaperObjectUrls.delete(choice.storagePath);
+            URL.revokeObjectURL(url);
+          }
+          return;
+        }
         root.style.setProperty("--wallpaper", `${overlay}, url("${url}")`);
       }).catch((error) => console.warn("[wallpaper] image download failed", error));
     }
@@ -304,6 +328,7 @@ export function applyWallpaper(choice: WallpaperChoice) {
     root.setAttribute("data-wallpaper", "custom");
     return;
   }
+  releaseWallpaperObjectUrl(root.dataset.wallpaperPath);
   delete root.dataset.wallpaperPath;
 
   const preset = WALLPAPERS.find((w) => w.id === (choice as { id: string }).id) ?? WALLPAPERS[0];
