@@ -452,8 +452,12 @@ assert.ok(flutterSync.includes("SyncService.isSyncableValue(key, localStore.read
 assert.ok(flutterTest.includes("another-user/wallpaper.jpg") &&
   flutterTest.includes("user-id/nested/wallpaper.jpg"),
   "Flutter unit tests must reject wallpaper object paths owned by another user or nested outside the expected object namespace");
-assert.match(flutterSync, /static bool isLocalOnlyWallpaperValue\\(String key, dynamic value\\)[\\s\\S]*localPath[\\s\\S]*dataUrl[\\s\\S]*storagePath/,
-  "Flutter must identify device-local custom wallpaper overrides separately from portable Storage paths");
+assert.ok(
+  flutterSync.includes("static bool isLocalOnlyWallpaperValue(String key, dynamic value)") &&
+    flutterSync.includes("candidate['dataUrl'] is String || candidate['localPath'] is String") &&
+    flutterSync.includes("candidate['storagePath']"),
+  "Flutter must identify device-local custom wallpaper overrides separately from portable Storage paths",
+);
 const nativeWallpaperPreserveStart = flutterSync.indexOf("if (SyncService.isLocalOnlyWallpaperValue(");
 const nativeWallpaperPreserveEnd = flutterSync.indexOf("final localUpdatedAt", nativeWallpaperPreserveStart);
 const nativeWallpaperPreserve = flutterSync.slice(nativeWallpaperPreserveStart, nativeWallpaperPreserveEnd);
