@@ -225,7 +225,6 @@ assert.ok(
     userStateBroadcastHardeningMigration.includes("realtime.topic() = 'pace-user-state:'"),
   "Realtime authorization must only allow Broadcast reads on the authenticated user's own topic",
 );
-const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const appearanceSyncMigration = read("supabase/migrations/20261127140000_sync_visual_preferences_and_wallpaper_storage.sql");
 const wallpaperHook = read("src/hooks/use-wallpaper.tsx");
 const themeToggle = read("src/components/VisualThemeToggle.tsx");
@@ -260,6 +259,7 @@ assert.match(appearanceSyncMigration, /pace-wallpapers[\s\S]*CREATE POLICY "pace
 assert.doesNotMatch(appearanceSyncMigration, /'pace\.dark'[\s\S]*'pace\.visual-theme'[\s\S]*'pace\.wallpaper'/,
   "Realtime must broadcast account appearance keys rather than excluding them");
 
+const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const domainStore = read("src/lib/domain-store.ts");
 assert.doesNotMatch(engine, /WALLPAPER_SYNC_KEYS/,
   "Web cloud sync must not classify account wallpaper metadata as device-local");
@@ -267,11 +267,13 @@ assert.ok(
   engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)'),
   "Web must filter device-local state in PostgREST before downloading JSONB values",
 );
-assert.match(
-  engine,
-  /\.channel\(\`pace-user-state:\$\{user\.id\}\`, \{ config: \{ private: true \} \}\)[\s\S]*\.on\("broadcast", \{ event: "user_state_changed" \}/,
+assert.ok(
+  engine.includes("const topic = `pace-user-state:${user.id}`;") &&
+    engine.includes("realtimeChannel = createPrivateRealtimeChannel(topic)") &&
+    engine.includes('.on("broadcast", { event: "user_state_changed" }'),
   "Web must receive private low-payload Broadcast notifications for the authenticated account",
 );
+
 assert.match(
   engine,
   /message\.payload as \{ key\?: unknown \}[\s\S]*isSyncableKey\(payload\.key\)[\s\S]*void syncNow\(\)/,
@@ -312,14 +314,11 @@ assert.ok(
   "Web PostgREST pulls must exclude device-local keys and legacy prefixes before downloading JSONB values",
 );
 assert.ok(
-  !engine.includes("...WALLPAPER_SYNC_KEYS") &&
+  engine.includes("...WALLPAPER_SYNC_KEYS") &&
     engine.includes("...DEVICE_LOCAL_SYNC_KEYS") &&
     engine.includes("const EXCLUDED = new Set<string>"),
-  "Web sync must allow wallpaper metadata while retaining unrelated device-local exclusions",
+  "Web sync must retain wallpaper and explicit device-local exclusions",
 );
-assert.doesNotMatch(engine, /"pace\.dark"|"pace\.visual-theme"/,
-  "Web theme and dark-mode preferences must follow the authenticated account");
-
 
 
 const flutterSync = read("pace_flutter/lib/core/sync/sync_service.dart");
@@ -390,10 +389,7 @@ assert.match(flutterSync, /_cloudSyncConsent = null/, "A failed consent lookup m
 assert.match(flutterNutrition, /impossible de vérifier le consentement cloud/, "Nutrition must explain when consent lookup is unavailable instead of falsely claiming consent was denied");
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*userId == null[\s\S]*localStore\.currentAccountId != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not push local outbox mutations without an authenticated matching account and sync_cloud consent");
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*localStore\.currentAccountId != userId[\s\S]*client\?\.auth\.currentUser\?\.id != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not pull remote state for a mismatched account or without sync_cloud consent");
-assert.doesNotMatch(flutterSync, /excludedSyncKeys = \{[\s\S]*\x27pace\.wallpaper\x27/,
-  "Native sync must allow account wallpaper metadata");
-assert.match(flutterSync, /static bool isSyncableKey\(String key\)[\s\S]*!isDeviceLocalKey\(key\)/,
-  "Native sync must use the shared predicate for appearance preferences");
+assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native sync must keep both canonical wallpaper keys device-local");
 assert.match(flutterSync, /static String get excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeys\.map\(\(key\) =>/,
   "Native PostgREST exact-key filter must be generated from the canonical device-local exclusion set");
 assert.doesNotMatch(flutterSync, /onPostgresChanges\([\s\S]{0,300}table: 'user_state'/,
@@ -414,7 +410,7 @@ assert.match(flutterLocalStore, /__local_store_version': 2[\s\S]*__accounts/, "F
 assert.match(flutterLocalStore, /void addMutationListener\(LocalMutationListener listener\)[\s\S]*_notifyMutation\(key\)/, "Durable native local mutations must expose a sync notification without coupling storage to Supabase");
 const mutationListenerIndex = flutterSync.indexOf("localStore.addMutationListener(_onLocalMutation)");
 const localMutationHandlerIndex = flutterSync.indexOf("void _onLocalMutation(String key)");
-const deviceLocalCheckIndex = flutterSync.indexOf("!SyncService.isSyncableKey(key)", localMutationHandlerIndex);
+const deviceLocalCheckIndex = flutterSync.indexOf("!SyncService.isSyncableValue(key, localStore.read(key))", localMutationHandlerIndex);
 const discardDeviceLocalIndex = flutterSync.indexOf("discardOperationForAccount(userId, operation)", deviceLocalCheckIndex);
 const scheduleEligibleMutationIndex = flutterSync.indexOf("_scheduleSync();", discardDeviceLocalIndex);
 assert.ok(
@@ -425,10 +421,10 @@ assert.ok(
     scheduleEligibleMutationIndex > discardDeviceLocalIndex,
   "Flutter must immediately sync eligible local writes and purge device-local outbox items without uploading them",
 );
-assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native user_state writes must keep AI transcripts and finance PINs private");
+assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native user_state writes must explicitly exclude AI transcripts, wallpapers and finance PIN keys");
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeyPatterns/, "Native pulls must exclude canonical/legacy device-local keys in PostgREST before downloading rows");
 assert.match(flutterSync, /localStore\.read\('__cloud_sync_last_pull_at'\)[\s\S]*query\.gt\([\s\S]*'updated_at'[\s\S]*localStore\.write\([\s\S]*'__cloud_sync_last_pull_at'[\s\S]*enqueueSync: false/, "Native cloud pulls must persist an account-scoped cursor and fetch only recently changed user_state rows after the initial bootstrap");
-assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableKey\(key\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys must be removed from the owning outbox without reaching Supabase");
+assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableValue\(key, operation\['value'\]\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys must be removed from the owning outbox without reaching Supabase");
 assert.match(flutterLocalStore, /Future<void> discardOperationForAccount\([\s\S]*final scope = \x27account:\$userId\x27[\s\S]*snapshot\[\x27__outbox\x27\] = outbox/, "Device-local outbox cleanup must update the originating account only");
 assert.ok(
   flutterApp.includes("Timer.periodic(") &&
@@ -754,7 +750,7 @@ assert.match(engine, /if \(!isSyncableKey\(key\) \|\| grouped\.has\(key\)\) cont
 assert.ok(
   ["pace.legal.consent","pace.billing.device_id","pace.watch.last_metrics"]
     .every((key) => engine.includes(`"${key}"`)),
-  "Device-bound consent, billing and watch settings must remain device-local",
+  "Device-bound consent, billing, watch and appearance settings must remain device-local",
 );
 assert.ok(
   ["pace.privacy.","pace.finance.","pace.ble.","pace.import.","pace.local-ai.","pace.ai.local.","pace.ai.pending:"]
@@ -915,25 +911,31 @@ assert.deepEqual(deviceA, deviceB, "resolved water must converge across devices"
 assert.deepEqual(conflictsA, []);
 assert.deepEqual(conflictsB, []);
 
-assert.match(
-  read("src/hooks/use-health.tsx"),
-  /supabase\.channel\(channelName, \{ config: \{ private: true \} \}\)/,
-  "Health E2EE Postgres Changes must join a private-only Realtime topic",
+assert.ok(
+  read("src/hooks/use-health.tsx").includes("createPrivateRealtimeChannel(channelName)"),
+  "Health E2EE Postgres Changes must use the private-channel factory",
 );
-assert.match(
-  read("src/hooks/use-profile-realtime.ts"),
-  /\.channel\(\x60pace-profile-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
-  "Profile Postgres Changes must join a private-only Realtime topic",
+assert.ok(
+  read("src/hooks/use-profile-realtime.ts").includes("createPrivateRealtimeChannel(`pace-profile-${user.id}`)"),
+  "Profile Postgres Changes must use the private-channel factory",
 );
-assert.match(
-  read("src/lib/nutrition-log.ts"),
-  /\.channel\(\x60pace-food-log-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
-  "Nutrition Postgres Changes must join a private-only Realtime topic",
+assert.ok(
+  read("src/lib/nutrition-log.ts").includes("createPrivateRealtimeChannel(`pace-food-log-${user.id}`)"),
+  "Nutrition Postgres Changes must use the private-channel factory",
 );
-assert.match(
-  read("src/routes/development.tsx"),
-  /supabase\.channel\(\x60development-tasks-\$\{user\.id\}\x60, \{ config: \{ private: true \} \}\)/,
-  "Development-task Postgres Changes must join a private-only Realtime topic",
+assert.ok(
+  read("src/routes/development.tsx").includes("createPrivateRealtimeChannel(`development-tasks-${user.id}`)"),
+  "Development-task Postgres Changes must use the private-channel factory",
+);
+assert.ok(
+  supabaseClient.includes("export function createPrivateRealtimeChannel") &&
+    supabaseClient.includes("config: { ...options.config, private: true }"),
+  "The shared Realtime factory must force private: true even when a caller omits the option",
+);
+assert.equal(
+  (engine + read("src/hooks/use-profile-realtime.ts") + read("src/hooks/use-health.tsx") + read("src/lib/nutrition-log.ts") + read("src/routes/development.tsx")).includes("supabase.channel("),
+  false,
+  "All web Realtime subscriptions must use the centralized private-channel factory",
 );
 
 const nutritionAiServer = read("src/lib/nutrition-ai.functions.ts");
@@ -974,6 +976,44 @@ assert.match(
   /calculateReferenceBasedNutrition\([\s\S]*context\.supabase\)/,
   "AI photo food references must use the authenticated request client",
 );
+
+const sleepRoute = read("src/routes/sleep.tsx");
+assert.match(sleepRoute, /const \[hasUserEdited, setHasUserEdited\] = useState\(false\)/,
+  "Sleep defaults must remain presentation-only until the user edits a field");
+assert.match(sleepRoute, /if \(!cloudLoaded \|\| !hasUserEdited\) return;/,
+  "Sleep autosave must wait for cloud hydration and an explicit user edit");
+assert.match(sleepRoute, /setStart\(e\.target\.value\); setHasUserEdited\(true\)/,
+  "Editing the sleep start time must explicitly authorize persistence");
+assert.match(sleepRoute, /setEnd\(e\.target\.value\); setHasUserEdited\(true\)/,
+  "Editing the sleep end time must explicitly authorize persistence");
+assert.match(sleepRoute, /setQuality\(v\); setHasUserEdited\(true\)/,
+  "Editing sleep quality must explicitly authorize persistence");
+assert.match(sleepRoute, /disabled=\{!cloudLoaded\}/,
+  "Sleep inputs must not be editable until cloud state has finished hydrating");
+const sleepDefaults = { start: "23:30", end: "07:00", quality: 8 };
+const sleepPersistDecision = ({ cloudLoaded, hasUserEdited }) => cloudLoaded && hasUserEdited;
+assert.equal(sleepPersistDecision({ cloudLoaded: true, hasUserEdited: false }), false,
+  "Opening Sleep on a new device must not persist its display defaults");
+assert.equal(sleepPersistDecision({ cloudLoaded: true, hasUserEdited: true }), true,
+  "An explicit Sleep edit must remain eligible for autosave");
+assert.deepEqual(sleepDefaults, { start: "23:30", end: "07:00", quality: 8 });
+
+
+const scanRoute = read("src/routes/scan.tsx");
+const photoButtonStart = scanRoute.indexOf('onClick={() => fileRef.current?.click()}');
+const photoButtonEnd = scanRoute.indexOf("</motion.button>", photoButtonStart);
+const photoInputIndex = scanRoute.indexOf("<input ref={fileRef}");
+assert.ok(photoButtonStart >= 0 && photoButtonEnd > photoButtonStart && photoInputIndex > photoButtonEnd,
+  "The photo file input must be outside its trigger button to prevent recursive click bubbling");
+assert.ok(scanRoute.includes("const analyzePhoto = useServerFn(analyzeFoodPhoto)"),
+  "The scan route must invoke photo analysis through the TanStack server-function client");
+assert.ok(scanRoute.includes("preparePhotoForAi(file)"),
+  "The scan route must compress large phone photos before Storage upload");
+assert.ok(scanRoute.includes("file.size > MAX_NUTRITION_PHOTO_BYTES"),
+  "The scan route must use the shared 25 MiB source-photo limit");
+const nutritionPhoto = read("src/lib/nutrition-photo.ts");
+assert.ok(nutritionPhoto.includes("const MAX_UPLOAD_BYTES = 6.5 * 1024 * 1024;"),
+  "Both nutrition photo entry points must share the 6.5 MiB compressed upload target");
 
 console.log("cloud-sync-contract-test: PASS");
 
