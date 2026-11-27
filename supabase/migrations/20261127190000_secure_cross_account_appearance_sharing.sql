@@ -554,6 +554,11 @@ USING (
   AND realtime.topic() = 'pace-appearance-share:' || (SELECT auth.uid())::text
 );
 
+REVOKE ALL ON FUNCTION pace_private.broadcast_shared_appearance_event()
+  FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION pace_private.broadcast_shared_appearance_consent_revocation()
+  FROM PUBLIC, anon, authenticated;
+
 REVOKE ALL ON FUNCTION public.create_appearance_share_invite() FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.accept_appearance_share_invite(text) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.get_shared_appearance() FROM PUBLIC, anon;
