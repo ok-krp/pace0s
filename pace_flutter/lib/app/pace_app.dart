@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/appearance/appearance_sharing_service.dart';
 import '../core/storage/local_store.dart';
 import '../core/supabase/pace_supabase.dart';
 import '../core/sync/sync_service.dart';
@@ -27,15 +28,31 @@ class PaceApp extends StatefulWidget {
 class _PaceAppState extends State<PaceApp> {
   ThemeMode _themeMode = ThemeMode.system;
   String _visualTheme = 'default';
+  late final AppearanceSharingService _appearanceSharing;
+  StreamSubscription<AuthState>? _appearanceAuthSubscription;
 
   @override
   void initState() {
     super.initState();
+    _appearanceSharing = AppearanceSharingService(widget.auth.client);
+    _appearanceSharing.addListener(_onSharedAppearanceChange);
+    _appearanceAuthSubscription = widget.auth.authStateChanges.listen((state) {
+      unawaited(_appearanceSharing.activate(state.session?.user.id));
+    });
+    unawaited(_appearanceSharing.activate(widget.auth.currentUser?.id));
     _readAppearance();
     widget.localStore.addChangeListener(_onLocalStoreChange);
   }
 
   void _readAppearance() {
+    if (_appearanceSharing.isFollowing &&
+        _appearanceSharing.activeUserId == widget.auth.currentUser?.id) {
+      _visualTheme = _appearanceSharing.effectiveVisualTheme;
+      _themeMode = _visualTheme == 'glass' || _appearanceSharing.effectiveDarkMode
+          ? ThemeMode.dark
+          : ThemeMode.light;
+      return;
+    }
     final storedTheme = widget.localStore.read('pace.visual-theme');
     final visualTheme = storedTheme is String &&
             const {'default', 'signal', 'glass'}.contains(storedTheme)
@@ -51,6 +68,11 @@ class _PaceAppState extends State<PaceApp> {
     _themeMode = dark ? ThemeMode.dark : ThemeMode.light;
   }
 
+  void _onSharedAppearanceChange() {
+    if (!mounted) return;
+    setState(_readAppearance);
+  }
+
   void _onLocalStoreChange(String key) {
     if (key != '*' &&
         key != 'pace.visual-theme' &&
@@ -63,6 +85,7 @@ class _PaceAppState extends State<PaceApp> {
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
+    if (_appearanceSharing.isFollowing) return;
     final effectiveMode = _visualTheme == 'glass' ? ThemeMode.dark : mode;
     setState(() => _themeMode = effectiveMode);
     await widget.localStore.write(
@@ -72,6 +95,7 @@ class _PaceAppState extends State<PaceApp> {
   }
 
   Future<void> setVisualTheme(String theme) async {
+    if (_appearanceSharing.isFollowing) return;
     if (!const {'default', 'signal', 'glass'}.contains(theme)) return;
     setState(() {
       _visualTheme = theme;
@@ -83,6 +107,9 @@ class _PaceAppState extends State<PaceApp> {
   @override
   void dispose() {
     widget.localStore.removeChangeListener(_onLocalStoreChange);
+    _appearanceAuthSubscription?.cancel();
+    _appearanceSharing.removeListener(_onSharedAppearanceChange);
+    _appearanceSharing.dispose();
     super.dispose();
   }
 
@@ -97,6 +124,7 @@ class _PaceAppState extends State<PaceApp> {
           localStore: widget.localStore,
           auth: widget.auth,
           sync: widget.sync,
+          appearanceSharing: _appearanceSharing,
           onThemeChanged: setThemeMode,
           onVisualThemeChanged: setVisualTheme,
           themeMode: _themeMode,
@@ -110,6 +138,7 @@ class _AuthGate extends StatefulWidget {
     required this.localStore,
     required this.auth,
     required this.sync,
+    required this.appearanceSharing,
     required this.onThemeChanged,
     required this.onVisualThemeChanged,
     required this.themeMode,
@@ -118,6 +147,7 @@ class _AuthGate extends StatefulWidget {
   final LocalStore localStore;
   final PaceAuthService auth;
   final SyncService sync;
+  final AppearanceSharingService appearanceSharing;
   final ValueChanged<ThemeMode> onThemeChanged;
   final ValueChanged<String> onVisualThemeChanged;
   final ThemeMode themeMode;
@@ -216,6 +246,7 @@ class _AuthGateState extends State<_AuthGate> {
         localStore: widget.localStore,
         sync: widget.sync,
         auth: widget.auth,
+        appearanceSharing: widget.appearanceSharing,
         onThemeChanged: widget.onThemeChanged,
         onVisualThemeChanged: widget.onVisualThemeChanged,
         themeMode: widget.themeMode,
@@ -242,6 +273,7 @@ class _AuthGateState extends State<_AuthGate> {
             localStore: widget.localStore,
             sync: widget.sync,
             auth: widget.auth,
+            appearanceSharing: widget.appearanceSharing,
             onThemeChanged: widget.onThemeChanged,
             onVisualThemeChanged: widget.onVisualThemeChanged,
             themeMode: widget.themeMode,
@@ -257,6 +289,7 @@ class PaceShell extends StatefulWidget {
     required this.localStore,
     required this.sync,
     required this.auth,
+    required this.appearanceSharing,
     required this.onThemeChanged,
     required this.onVisualThemeChanged,
     required this.themeMode,
@@ -265,6 +298,7 @@ class PaceShell extends StatefulWidget {
   final LocalStore localStore;
   final SyncService sync;
   final PaceAuthService auth;
+  final AppearanceSharingService appearanceSharing;
   final ValueChanged<ThemeMode> onThemeChanged;
   final ValueChanged<String> onVisualThemeChanged;
   final ThemeMode themeMode;
@@ -292,6 +326,7 @@ class _PaceShellState extends State<PaceShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(widget.sync.syncNow().catchError((Object _) {}));
+      unawaited(widget.appearanceSharing.reconcile());
     }
   }
 
@@ -313,6 +348,7 @@ class _PaceShellState extends State<PaceShell> with WidgetsBindingObserver {
         localStore: widget.localStore,
         sync: widget.sync,
         auth: widget.auth,
+        appearanceSharing: widget.appearanceSharing,
         themeMode: widget.themeMode,
         visualTheme: widget.visualTheme,
         onThemeChanged: widget.onThemeChanged,
@@ -322,6 +358,8 @@ class _PaceShellState extends State<PaceShell> with WidgetsBindingObserver {
     return PaceWallpaperBackground(
       localStore: widget.localStore,
       client: widget.auth.client,
+      wallpaperOverride: widget.appearanceSharing.sharedWallpaper,
+      sharedWallpaperOwnerId: widget.appearanceSharing.sharedOwnerUserId,
       child: Scaffold(
       backgroundColor: Colors.transparent,
       body: SafeArea(child: IndexedStack(index: _index, children: pages)),

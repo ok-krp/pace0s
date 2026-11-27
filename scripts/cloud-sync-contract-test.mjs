@@ -295,6 +295,38 @@ assert.ok(visualThemeStart >= 0 && visualThemeEnd > visualThemeStart &&
   "Selecting Glass must force dark presentation without overwriting the user's separate dark-mode preference");
 const flutterThemeAppearance = read("pace_flutter/lib/ui/pace_theme.dart");
 const flutterSettingsAppearance = read("pace_flutter/lib/features/more/more_page.dart");
+const flutterAppearanceSharing = read("pace_flutter/lib/core/appearance/appearance_sharing_service.dart");
+assert.ok(
+  flutterAppearanceSharing.includes("get_shared_appearance") &&
+    flutterAppearanceSharing.includes("create_appearance_share_invite") &&
+    flutterAppearanceSharing.includes("accept_appearance_share_invite") &&
+    flutterAppearanceSharing.includes("list_appearance_shares") &&
+    flutterAppearanceSharing.includes("revoke_appearance_share") &&
+    flutterAppearanceSharing.includes("pace-appearance-share:$userId") &&
+    flutterAppearanceSharing.includes("PaceComplianceService(value).hasConsent('sync_cloud')"),
+  "Flutter must use the authenticated one-time invitation, recipient-only Realtime channel and explicit cloud-sync consent for cross-account appearance sharing",
+);
+assert.ok(
+  !flutterAppearanceSharing.includes("localStore.write") &&
+    !flutterAppearanceSharing.includes("persistLocalPreference") &&
+    !flutterAppearanceSharing.includes("localStorage"),
+  "A remote appearance overlay must never overwrite the recipient's personal preferences",
+);
+assert.ok(
+  flutterAppAppearance.includes("AppearanceSharingService") &&
+    flutterAppAppearance.includes("_appearanceSharing.isFollowing") &&
+    flutterAppAppearance.includes("wallpaperOverride:") &&
+    flutterAppAppearance.includes("sharedWallpaperOwnerId:"),
+  "Flutter must apply the account appearance as a reversible UI overlay rather than writing it into the recipient's LocalStore",
+);
+assert.ok(
+  flutterSettingsAppearance.includes("_createAppearanceInvite") &&
+    flutterSettingsAppearance.includes("_acceptAppearanceInvite") &&
+    flutterSettingsAppearance.includes("_revokeAppearanceShare") &&
+    flutterSettingsAppearance.includes("_followingSharedAppearance ? null :"),
+  "Flutter settings must expose invitation creation, acceptance, revocation and lock local appearance controls while following another account",
+);
+
 assert.ok(
   flutterThemeAppearance.includes("'aurora'") && flutterThemeAppearance.includes("'orchid'") &&
     flutterSettingsAppearance.includes("for (final preset in paceWallpaperPresets)"),
@@ -493,8 +525,11 @@ assert.ok(
 assert.ok(
   flutterTheme.includes("localStore.currentAccountId == userId") &&
     flutterTheme.includes("storagePath.startsWith('$userId/')") &&
-    flutterTheme.includes("!storagePath.substring(userId.length + 1).contains('/')"),
-  "Flutter must verify wallpaper object ownership and path shape before downloading it",
+    flutterTheme.includes("storagePath.startsWith('$ownerId/')") &&
+    flutterTheme.includes("pathOwnerId != null") &&
+    flutterThemeAppearance.includes("RegExp(r'^[A-Za-z0-9._-]+") &&
+    flutterThemeAppearance.includes("hasMatch(filename)"),
+  "Flutter must authorize either the active account's own wallpaper or the exact owner-scoped shared object path before downloading it",
 );
 assert.match(flutterTheme, /final neutral = glass \|\| visualTheme == 'signal'[\s\S]*seedColor: neutral \? const Color\(0xFF777777\)/,
   "Flutter Signal and Liquid Glass must use the neutral grayscale palette across devices");

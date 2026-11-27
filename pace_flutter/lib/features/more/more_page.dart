@@ -1,11 +1,14 @@
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../core/appearance/appearance_sharing_service.dart';
 import '../../core/compliance/compliance_service.dart';
 import '../../core/notifications/notification_service.dart';
 import '../../core/storage/local_store.dart';
@@ -26,6 +29,7 @@ class MorePage extends StatelessWidget {
     required this.localStore,
     required this.auth,
     required this.sync,
+    required this.appearanceSharing,
     required this.themeMode,
     required this.visualTheme,
     required this.onThemeChanged,
@@ -34,6 +38,7 @@ class MorePage extends StatelessWidget {
   final LocalStore localStore;
   final PaceAuthService auth;
   final SyncService sync;
+  final AppearanceSharingService appearanceSharing;
   final ThemeMode themeMode;
   final String visualTheme;
   final ValueChanged<ThemeMode> onThemeChanged;
@@ -91,6 +96,7 @@ class MorePage extends StatelessWidget {
           builder: (_) => SettingsPageBridge(
             auth: auth,
             sync: sync,
+            appearanceSharing: appearanceSharing,
             localStore: localStore,
             themeMode: themeMode,
             visualTheme: visualTheme,
@@ -106,6 +112,7 @@ class SettingsPageBridge extends StatefulWidget {
     super.key,
     required this.auth,
     required this.sync,
+    required this.appearanceSharing,
     required this.localStore,
     required this.themeMode,
     required this.visualTheme,
@@ -114,6 +121,7 @@ class SettingsPageBridge extends StatefulWidget {
   });
   final PaceAuthService auth;
   final SyncService sync;
+  final AppearanceSharingService appearanceSharing;
   final LocalStore localStore;
   final ThemeMode themeMode;
   final String visualTheme;
@@ -136,6 +144,12 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
   bool _aiConsent = false;
   bool _marketingConsent = false;
   bool _deleting = false;
+  bool _appearanceBusy = false;
+  bool _followingSharedAppearance = false;
+  String? _appearanceInviteToken;
+  String _appearanceAcceptToken = '';
+  final TextEditingController _appearanceAcceptController = TextEditingController();
+  List<Map<String, dynamic>> _appearanceShares = [];
 
   @override
   void initState() {
@@ -143,7 +157,142 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
     _aiConfirmations = _ai.confirmActions;
     _notifications = widget.localStore.read('pace.settings.notifications') as bool? ?? true;
     _memory = _ai.memoryEnabled;
+    _followingSharedAppearance = widget.appearanceSharing.isFollowing;
+    widget.appearanceSharing.addListener(_onAppearanceSharingChanged);
+    _refreshAppearanceShares();
     _loadConsent();
+  }
+
+  @override
+  void dispose() {
+    widget.appearanceSharing.removeListener(_onAppearanceSharingChanged);
+    _appearanceAcceptController.dispose();
+    super.dispose();
+  }
+
+  void _onAppearanceSharingChanged() {
+    if (!mounted) return;
+    setState(() {
+      _followingSharedAppearance = widget.appearanceSharing.isFollowing;
+    });
+    _refreshAppearanceShares();
+  }
+
+  Future<void> _refreshAppearanceShares() async {
+    final userId = widget.auth.currentUser?.id;
+    if (userId == null || widget.localStore.currentAccountId != userId) return;
+    try {
+      final rows = await widget.appearanceSharing.listShares();
+      if (!mounted || widget.auth.currentUser?.id != userId) return;
+      setState(() => _appearanceShares = rows);
+    } catch (error) {
+      debugPrint('[appearance-sharing] list failed: $error');
+    }
+  }
+
+  Future<void> _createAppearanceInvite() async {
+    if (!_syncCloudConsent || _appearanceBusy) return;
+    setState(() => _appearanceBusy = true);
+    try {
+      final token = await widget.appearanceSharing.createInvite();
+      if (!mounted) return;
+      setState(() => _appearanceInviteToken = token);
+      try {
+        await Clipboard.setData(ClipboardData(text: token));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Code copié. Il expire dans 24 heures et ne peut être utilisé qu'une fois.")),
+          );
+        }
+      } catch (_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Code créé. Sélectionne le code affiché pour le copier.")),
+          );
+        }
+      }
+      await _refreshAppearanceShares();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _appearanceBusy = false);
+    }
+  }
+
+  Future<void> _acceptAppearanceInvite() async {
+    if (!_syncCloudConsent || _appearanceBusy) return;
+    final token = _appearanceAcceptToken.trim().toLowerCase();
+    if (token.length != 64 ||
+        !RegExp(r'^[0-9a-f]{64}$').hasMatch(token)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Le code doit contenir 64 caractères hexadécimaux.')),
+      );
+      return;
+    }
+    setState(() => _appearanceBusy = true);
+    try {
+      await widget.appearanceSharing.acceptInvite(token);
+      if (!mounted) return;
+      setState(() => _appearanceAcceptToken = '');
+      _appearanceAcceptController.clear();
+      await _refreshAppearanceShares();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Apparence acceptée. Tes préférences personnelles restent conservées.")),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _appearanceBusy = false);
+    }
+  }
+
+  Future<void> _revokeAppearanceShare(String otherUserId) async {
+    if (_appearanceBusy) return;
+    setState(() => _appearanceBusy = true);
+    try {
+      final revoked = await widget.appearanceSharing.revokeShare(otherUserId);
+      await _refreshAppearanceShares();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(revoked ? 'Partage révoqué.' : 'Aucun partage actif trouvé.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _appearanceBusy = false);
+    }
+  }
+
+  Future<void> _copyAppearanceInvite() async {
+    final token = _appearanceInviteToken;
+    if (token == null) return;
+    try {
+      await Clipboard.setData(ClipboardData(text: token));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Code copié.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Copie indisponible sur cet appareil.')),
+        );
+      }
+    }
   }
 
   Future<void> _loadConsent() async {
@@ -229,6 +378,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       });
       if (type == 'sync_cloud') {
         await widget.sync.setCloudSyncConsent(value);
+        await widget.appearanceSharing.activate(userId);
         if (value) {
           try {
             await _migrateLocalWallpaperToCloud();
@@ -448,7 +598,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 subtitle: const Text('Le choix est synchronisé avec les autres appareils du compte.'),
                 trailing: DropdownButton<ThemeMode>(
                   value: widget.themeMode,
-                  onChanged: (mode) {
+                  onChanged: _followingSharedAppearance ? null : (mode) {
                     if (mode != null) widget.onThemeChanged(mode);
                   },
                   items: const [
@@ -462,7 +612,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 subtitle: const Text('Liquid Glass utilise une palette neutre, sans dégradés multicolores.'),
                 trailing: DropdownButton<String>(
                   value: widget.visualTheme,
-                  onChanged: (theme) {
+                  onChanged: _followingSharedAppearance ? null : (theme) {
                     if (theme != null) widget.onVisualThemeChanged(theme);
                   },
                   items: const [
@@ -477,7 +627,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 subtitle: Text(_wallpaperSubtitle()),
                 trailing: IconButton(
                   tooltip: 'Choisir une image',
-                  onPressed: _chooseWallpaper,
+                  onPressed: _followingSharedAppearance ? null : _chooseWallpaper,
                   icon: const Icon(Icons.wallpaper_outlined),
                 ),
               ),
@@ -486,7 +636,7 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                 children: [
                   for (final preset in paceWallpaperPresets)
                     OutlinedButton(
-                      onPressed: () async {
+                      onPressed: _followingSharedAppearance ? null : () async {
                         await widget.localStore.write(
                           'pace.wallpaper',
                           {'id': preset.$1},
@@ -497,6 +647,100 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
                     ),
                 ],
               ),
+            ]),
+            _section('Partage entre comptes', [
+              if (_followingSharedAppearance)
+                const ListTile(
+                  leading: Icon(Icons.link),
+                  title: Text('Apparence suivie'),
+                  subtitle: Text('Les préférences du compte source sont appliquées ici. Tes valeurs personnelles sont conservées et réapparaîtront après la révocation.'),
+                ),
+              const Divider(height: 28),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Partager avec un autre compte'),
+                subtitle: const Text("Génère un code à usage unique, valable 24 heures. Le partage porte uniquement sur le thème, le mode sombre et le fond d'écran."),
+                trailing: FilledButton.tonal(
+                  onPressed: !_syncCloudConsent || _appearanceBusy ? null : _createAppearanceInvite,
+                  child: Text(_appearanceBusy ? '…' : 'Créer un code'),
+                ),
+              ),
+              if (_appearanceInviteToken != null)
+                Row(
+                  children: [
+                    Expanded(child: SelectableText(
+                      _appearanceInviteToken!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+                    )),
+                    IconButton(
+                      tooltip: 'Copier le code',
+                      onPressed: _copyAppearanceInvite,
+                      icon: const Icon(Icons.copy_outlined),
+                    ),
+                  ],
+                ),
+              TextField(
+                controller: _appearanceAcceptController,
+                enabled: _syncCloudConsent && !_appearanceBusy,
+                autocorrect: false,
+                enableSuggestions: false,
+                textCapitalization: TextCapitalization.none,
+                decoration: const InputDecoration(
+                  labelText: "Code d'invitation reçu",
+                  hintText: '64 caractères hexadécimaux',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (value) {
+                  final cleaned = value.replaceAll(RegExp(r'[^0-9a-f]', caseSensitive: false), '');
+                  setState(() {
+                    _appearanceAcceptToken = cleaned.length > 64
+                        ? cleaned.substring(0, 64)
+                        : cleaned;
+                  });
+                },
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton(
+                  onPressed: !_syncCloudConsent ||
+                          _appearanceBusy ||
+                          _appearanceAcceptToken.length != 64
+                      ? null
+                      : _acceptAppearanceInvite,
+                  child: const Text('Accepter le partage'),
+                ),
+              ),
+              if (!_syncCloudConsent)
+                const Padding(
+                  padding: EdgeInsets.only(top: 6),
+                  child: Text(
+                    'Active « Synchronisation entre appareils » dans Confidentialité pour gérer les partages.',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ),
+              if (_appearanceShares.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                const Text('Partages actifs', style: TextStyle(fontWeight: FontWeight.w600)),
+                for (final share in _appearanceShares)
+                  ListTile(
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(share['direction'] == 'incoming' ? Icons.call_received : Icons.call_made),
+                    title: Text(share['direction'] == 'incoming' ? 'Apparence suivie' : 'Partagée avec'),
+                    subtitle: Text(
+                      (share['other_user_id'] ?? '').toString(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing: IconButton(
+                      tooltip: share['direction'] == 'incoming' ? 'Ne plus suivre' : 'Révoquer',
+                      onPressed: _appearanceBusy
+                          ? null
+                          : () => _revokeAppearanceShare((share['other_user_id'] ?? '').toString()),
+                      icon: const Icon(Icons.link_off),
+                    ),
+                  ),
+              ],
             ]),
             _section('IA', [
               SwitchListTile.adaptive(

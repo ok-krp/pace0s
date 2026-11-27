@@ -84,11 +84,15 @@ class PaceWallpaperBackground extends StatelessWidget {
     super.key,
     required this.localStore,
     required this.client,
+    this.wallpaperOverride,
+    this.sharedWallpaperOwnerId,
     required this.child,
   });
 
   final LocalStore localStore;
   final SupabaseClient? client;
+  final Map<String, dynamic>? wallpaperOverride;
+  final String? sharedWallpaperOwnerId;
   final Widget child;
 
   static final Map<String, Future<Uint8List>> _downloads = {};
@@ -115,7 +119,11 @@ class PaceWallpaperBackground extends StatelessWidget {
     });
   }
 
-  Widget _wallpaper(BuildContext context, dynamic choice) {
+  Widget _wallpaper(
+    BuildContext context,
+    dynamic choice, {
+    String? sharedOwnerId,
+  }) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final fallback = DecoratedBox(
       decoration: BoxDecoration(
@@ -131,7 +139,7 @@ class PaceWallpaperBackground extends StatelessWidget {
 
     if (choice is Map && choice['kind'] == 'custom') {
       final localPath = choice['localPath'];
-      if (localPath is String && localPath.isNotEmpty) {
+      if (sharedOwnerId == null && localPath is String && localPath.isNotEmpty) {
         return Image.file(
           File(localPath),
           fit: BoxFit.cover,
@@ -140,12 +148,24 @@ class PaceWallpaperBackground extends StatelessWidget {
       }
       final storagePath = choice['storagePath'];
       final userId = client?.auth.currentUser?.id;
+      final ownerId = sharedOwnerId;
+      final isSharedOwnerPath = ownerId != null &&
+          RegExp(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', caseSensitive: false)
+              .hasMatch(ownerId) &&
+          storagePath is String &&
+          storagePath.startsWith('$ownerId/');
+      final pathOwnerId = isSharedOwnerPath ? ownerId : userId;
+      final filename = storagePath is String && pathOwnerId != null &&
+              storagePath.startsWith('$pathOwnerId/')
+          ? storagePath.substring(pathOwnerId.length + 1)
+          : '';
       if (storagePath is String &&
           userId != null &&
           localStore.currentAccountId == userId &&
-          storagePath.startsWith('$userId/') &&
-          storagePath.substring(userId.length + 1).isNotEmpty &&
-          !storagePath.substring(userId.length + 1).contains('/') &&
+          pathOwnerId != null &&
+          RegExp(r'^[A-Za-z0-9._-]+\.(jpg|png|webp)$', caseSensitive: false)
+              .hasMatch(filename) &&
+          (isSharedOwnerPath || storagePath.startsWith('$userId/')) &&
           client != null) {
         return FutureBuilder<Uint8List>(
           future: _loadStorageWallpaper(client!, storagePath),
@@ -202,11 +222,13 @@ class PaceWallpaperBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final choice = localStore.read('pace.wallpaper') ?? const {'id': 'graphite'};
+    final choice = wallpaperOverride ??
+        localStore.read('pace.wallpaper') ??
+        const {'id': 'graphite'};
     return Stack(
       fit: StackFit.expand,
       children: [
-        _wallpaper(context, choice),
+        _wallpaper(context, choice, sharedOwnerId: sharedWallpaperOwnerId),
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(
