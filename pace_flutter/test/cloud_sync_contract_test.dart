@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/compliance/compliance_service.dart';
 import 'package:pace/core/sync/sync_service.dart';
+import 'package:pace/core/storage/wallpaper_presets.dart';
 
 void main() {
   group('Native Nutrition projection concurrency', () {
@@ -153,6 +154,13 @@ void main() {
         expect(SyncService.isSyncableKey(key), isTrue, reason: key);
         expect(SyncService.excludedRemotePullKeys, isNot(contains(key)), reason: key);
       }
+    });
+
+    test('native wallpaper presets use the same IDs as the Web/PWA app', () {
+      expect(
+        paceWallpaperPresets.map((preset) => preset.$1).toList(),
+        ['aurora', 'ocean', 'sunset', 'forest', 'graphite', 'orchid'],
+      );
     });
 
     test('only synchronizes portable wallpaper object paths, never local files or inline bytes', () {
