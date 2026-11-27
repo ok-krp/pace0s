@@ -354,6 +354,23 @@ assert.match(
 const flutterNutrition = read("pace_flutter/lib/features/nutrition/nutrition_page.dart");
 const flutterApp = read("pace_flutter/lib/app/pace_app.dart");
 const flutterSettings = read("pace_flutter/lib/features/more/more_page.dart");
+const flutterConsentLoadStart = flutterSettings.indexOf("Future<void> _loadConsent() async {");
+const flutterConsentLoadEnd = flutterSettings.indexOf("Future<void> _setConsent", flutterConsentLoadStart);
+const flutterConsentLoad = flutterSettings.slice(flutterConsentLoadStart, flutterConsentLoadEnd);
+assert.ok(
+  flutterConsentLoadStart >= 0 &&
+    flutterConsentLoadEnd > flutterConsentLoadStart &&
+    flutterConsentLoad.includes("try {\\n          await _migrateLocalWallpaperToCloud();\\n        } catch (_) {}") &&
+    flutterConsentLoad.indexOf("await widget.sync.syncNow();") > flutterConsentLoad.indexOf("catch (_) {}"),
+  "A missing private wallpaper bucket must not block theme and preset synchronization on startup",
+);
+assert.ok(
+  flutterSettings.includes("String _wallpaperSubtitle()") &&
+    flutterSettings.includes("choice['localPath'] is String") &&
+    flutterSettings.includes("image conservée sur cet appareil"),
+  "Native settings must not claim a local-only custom wallpaper is already cloud-synchronized",
+);
+
 const flutterLocalStore = read("pace_flutter/lib/core/storage/local_store.dart");
 const flutterLocalStoreTest = read("pace_flutter/test/local_store_account_scope_test.dart");
 const flutterTheme = read("pace_flutter/lib/ui/pace_theme.dart");
