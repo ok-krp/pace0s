@@ -99,8 +99,11 @@ class PaceWallpaperBackground extends StatelessWidget {
   ) {
     return _downloads.putIfAbsent(path, () async {
       final directory = await getApplicationSupportDirectory();
+      // Keep the cache filename stable across app launches. String.hashCode
+      // is not a persistence format and must not identify on-disk cache files.
+      final cacheName = Uri.encodeComponent(path);
       final cachedFile = File(
-        '${directory.path}/pace_wallpaper_${path.hashCode.abs()}.cache',
+        '${directory.path}/pace_wallpaper_$cacheName.cache',
       );
       if (await cachedFile.exists()) return cachedFile.readAsBytes();
       final bytes = await client.storage.from('pace-wallpapers').download(path);
