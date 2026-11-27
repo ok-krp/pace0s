@@ -40,7 +40,15 @@ export function AppearanceSharingSettings() {
   }, []);
 
   useEffect(() => {
-    const onConsentChange = () => setSyncConsent(isLegalCategoryAllowed("sync_cloud"));
+    const onConsentChange = () => {
+      const allowed = isLegalCategoryAllowed("sync_cloud");
+      setSyncConsent(allowed);
+      if (!allowed) {
+        setInviteToken("");
+        setAcceptToken("");
+      }
+      void refresh().catch((error) => console.warn("[appearance-sharing] consent refresh failed", error));
+    };
     const onSharedAppearanceChange = (event: Event) => {
       const active = (event as CustomEvent<{ active?: boolean }>).detail?.active === true;
       setFollowing(active);
