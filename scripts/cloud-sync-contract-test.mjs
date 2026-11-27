@@ -263,15 +263,18 @@ assert.match(appearanceSyncMigration, /pace-wallpapers[\s\S]*CREATE POLICY "pace
 assert.doesNotMatch(appearanceSyncMigration, /'pace\.dark'[\s\S]*'pace\.visual-theme'[\s\S]*'pace\.wallpaper'/,
   "Realtime must broadcast account appearance keys rather than excluding them");
 
-const visualThemeStart = flutterApp.indexOf("Future<void> setVisualTheme(String theme) async {");
-const visualThemeEnd = flutterApp.indexOf("void dispose()", visualThemeStart);
-const visualThemeHandler = flutterApp.slice(visualThemeStart, visualThemeEnd);
+const flutterAppAppearance = read("pace_flutter/lib/app/pace_app.dart");
+const visualThemeStart = flutterAppAppearance.indexOf("Future<void> setVisualTheme(String theme) async {");
+const visualThemeEnd = flutterAppAppearance.indexOf("void dispose()", visualThemeStart);
+const visualThemeHandler = flutterAppAppearance.slice(visualThemeStart, visualThemeEnd);
 assert.ok(visualThemeStart >= 0 && visualThemeEnd > visualThemeStart &&
   !visualThemeHandler.includes("write('pace.dark'"),
   "Selecting Glass must force dark presentation without overwriting the user's separate dark-mode preference");
+const flutterThemeAppearance = read("pace_flutter/lib/ui/pace_theme.dart");
+const flutterSettingsAppearance = read("pace_flutter/lib/features/more/more_page.dart");
 assert.ok(
-  flutterTheme.includes("'aurora'") && flutterTheme.includes("'orchid'") &&
-    flutterSettings.includes("for (final preset in paceWallpaperPresets)"),
+  flutterThemeAppearance.includes("'aurora'") && flutterThemeAppearance.includes("'orchid'") &&
+    flutterSettingsAppearance.includes("for (final preset in paceWallpaperPresets)"),
   "Native Flutter must render the same synchronized wallpaper preset IDs as Web/PWA",
 );
 
