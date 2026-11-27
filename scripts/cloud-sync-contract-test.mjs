@@ -431,6 +431,7 @@ assert.ok(
 
 const flutterLocalStore = read("pace_flutter/lib/core/storage/local_store.dart");
 const flutterLocalStoreTest = read("pace_flutter/test/local_store_account_scope_test.dart");
+const flutterTest = read("pace_flutter/test/cloud_sync_contract_test.dart");
 const flutterTheme = read("pace_flutter/lib/ui/pace_theme.dart");
 assert.match(flutterSync, /static bool isSyncableValue\([\s\S]*required String userId[\s\S]*isLocalOnlyWallpaperValue[\s\S]*storagePath\.startsWith\('\$userId\/'\)/,
   "Flutter may synchronize only portable wallpaper Storage paths owned by the active account");
@@ -540,7 +541,7 @@ assert.match(flutterLocalStore, /__local_store_version': 2[\s\S]*__accounts/, "F
 assert.match(flutterLocalStore, /void addMutationListener\(LocalMutationListener listener\)[\s\S]*_notifyMutation\(key\)/, "Durable native local mutations must expose a sync notification without coupling storage to Supabase");
 const mutationListenerIndex = flutterSync.indexOf("localStore.addMutationListener(_onLocalMutation)");
 const localMutationHandlerIndex = flutterSync.indexOf("void _onLocalMutation(String key)");
-const deviceLocalCheckIndex = flutterSync.indexOf("!SyncService.isSyncableValue(key, localStore.read(key))", localMutationHandlerIndex);
+const deviceLocalCheckIndex = flutterSync.indexOf("!SyncService.isSyncableValue(key, localStore.read(key), userId: userId)", localMutationHandlerIndex);
 const discardDeviceLocalIndex = flutterSync.indexOf("discardOperationForAccount(userId, operation)", deviceLocalCheckIndex);
 const scheduleEligibleMutationIndex = flutterSync.indexOf("_scheduleSync();", discardDeviceLocalIndex);
 assert.ok(
@@ -554,7 +555,7 @@ assert.ok(
 assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native user_state writes must explicitly exclude AI transcripts and finance PIN keys");
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeyPatterns/, "Native pulls must exclude canonical/legacy device-local keys in PostgREST before downloading rows");
 assert.match(flutterSync, /localStore\.read\('__cloud_sync_last_pull_at'\)[\s\S]*query\.gt\([\s\S]*'updated_at'[\s\S]*localStore\.write\([\s\S]*'__cloud_sync_last_pull_at'[\s\S]*enqueueSync: false/, "Native cloud pulls must persist an account-scoped cursor and fetch only recently changed user_state rows after the initial bootstrap");
-assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableValue\(key, operation\['value'\]\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys must be removed from the owning outbox without reaching Supabase");
+assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableValue\(key, operation\['value'\], userId: userId\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys and foreign-owner wallpaper paths must be removed from the owning outbox without reaching Supabase");
 assert.match(flutterLocalStore, /Future<void> discardOperationForAccount\([\s\S]*final scope = \x27account:\$userId\x27[\s\S]*snapshot\[\x27__outbox\x27\] = outbox/, "Device-local outbox cleanup must update the originating account only");
 assert.ok(
   flutterApp.includes("Timer.periodic(") &&
