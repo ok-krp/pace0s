@@ -30,8 +30,7 @@ export function useProfileRealtime() {
   useEffect(() => {
     if (!user) return;
     const deviceId = getDeviceId();
-    const channel = supabase
-      createPrivateRealtimeChannel(`pace-profile-${user.id}`)
+    const channel = createPrivateRealtimeChannel(`pace-profile-${user.id}`)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "profiles", filter: `user_id=eq.${user.id}` },
