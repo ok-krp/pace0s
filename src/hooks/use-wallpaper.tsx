@@ -194,8 +194,13 @@ export function useWallpaper() {
   const [choice, setChoice] = useLocalState<WallpaperChoice>(KEY, DEFAULT);
 
   useEffect(() => {
-    applyWallpaper(choice);
-  }, [choice]);
+    const isOwnedStorageChoice =
+      !("kind" in choice) ||
+      choice.kind !== "custom" ||
+      !("storagePath" in choice) ||
+      Boolean(user?.id && choice.storagePath.startsWith(`${user.id}/`));
+    applyWallpaper(isOwnedStorageChoice ? choice : DEFAULT);
+  }, [choice, user?.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -354,12 +359,21 @@ export function applyWallpaper(choice: WallpaperChoice) {
 }
 
 /** Read choice synchronously from storage (for early paint in root). */
-export function readWallpaperChoice(): WallpaperChoice {
+export function readWallpaperChoice(userId?: string): WallpaperChoice {
   if (typeof window === "undefined") return DEFAULT;
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return DEFAULT;
-    return JSON.parse(raw) as WallpaperChoice;
+    const choice = JSON.parse(raw) as WallpaperChoice;
+    if (
+      "kind" in choice &&
+      choice.kind === "custom" &&
+      "storagePath" in choice &&
+      (!userId || !choice.storagePath.startsWith(`${userId}/`))
+    ) {
+      return DEFAULT;
+    }
+    return choice;
   } catch {
     return DEFAULT;
   }
