@@ -340,6 +340,21 @@ assert.equal(`^${"pace.__".replaceAll(".", "[.]")}`, "^pace[.]__",
   "The internal-key regex must treat underscores literally instead of as SQL LIKE wildcards");
 assert.match(engine, /function isSyncableKey\(key: string\)[\s\S]*!isDeviceLocalSyncKey\(key\)/,
   "Web pushes, queues and bootstrap must reject device-local keys");
+const wallpaperGuardStart = engine.indexOf("function isInlineWallpaperValue(");
+const wallpaperGuardEnd = engine.indexOf("function isSyncableRecord", wallpaperGuardStart);
+const wallpaperGuard = engine.slice(wallpaperGuardStart, wallpaperGuardEnd);
+assert.ok(
+  wallpaperGuardStart >= 0 &&
+    wallpaperGuardEnd > wallpaperGuardStart &&
+    wallpaperGuard.includes('typeof wallpaper.storagePath !== "string"') &&
+    wallpaperGuard.includes("wallpaper.storagePath.trim().length === 0"),
+  "Web may sync custom wallpapers only as non-empty private Storage object paths",
+);
+assert.ok(
+  engine.includes("if (!isSyncableRecord(key, row.value)) continue;"),
+  "Web remote pulls must reject inline image data, device-local paths and malformed custom wallpaper records",
+);
+
 assert.ok(
   engine.includes("for (const prefix of ALL_DEVICE_LOCAL_SYNC_PREFIXES)") &&
     engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)') &&
