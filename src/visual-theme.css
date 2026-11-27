@@ -526,6 +526,33 @@ html[data-visual-theme="glass"][data-lg-refract] .glass-icon {
    Keep component-authored surfaces intact; remove only decorative lift,
    glow and scale. This prevents global hover rules from breaking controls.
    ================================================================ */
+
+/* Unified Liquid Glass material — settings, desktop chrome and mobile taskbar.
+   Primary surfaces share identical fill/transparency and quality-controlled blur. */
+[data-visual-theme="glass"] {
+  --lg-material-fill: var(--lg-fill);
+  --lg-material-border: var(--lg-border);
+  --lg-material-blur: 22px;
+  --lg-material-saturate: 185%;
+}
+html[data-visual-theme="glass"][data-glass="balanced"] {
+  --lg-material-blur: 5px;
+  --lg-material-saturate: 135%;
+}
+html[data-visual-theme="glass"][data-glass="low"] {
+  --lg-material-blur: 0px;
+  --lg-material-saturate: 110%;
+}
+[data-visual-theme="glass"] .glass-card,
+[data-visual-theme="glass"] [class*="glass-card"],
+[data-visual-theme="glass"] aside,
+[data-visual-theme="glass"] header {
+  background: var(--lg-material-fill) !important;
+  border: 1px solid var(--lg-material-border) !important;
+  backdrop-filter: blur(var(--lg-material-blur)) saturate(var(--lg-material-saturate)) !important;
+  -webkit-backdrop-filter: blur(var(--lg-material-blur)) saturate(var(--lg-material-saturate)) !important;
+}
+
 [data-visual-theme="signal"] button,
 [data-visual-theme="signal"] a,
 [data-visual-theme="signal"] [role="button"] {
