@@ -69,15 +69,29 @@ class _PaceAppState extends State<PaceApp> {
   }
 
   String? _lastSharedWallpaperOwnerId;
+  String? _lastSharedWallpaperPath;
 
   void _onSharedAppearanceChange() {
     if (!mounted) return;
     final nextOwnerId = _appearanceSharing.sharedOwnerUserId;
+    final sharedWallpaper = _appearanceSharing.sharedWallpaper;
+    final pathValue = sharedWallpaper?['storagePath'];
+    final nextWallpaperPath = pathValue is String ? pathValue : null;
     final previousOwnerId = _lastSharedWallpaperOwnerId;
+    final previousWallpaperPath = _lastSharedWallpaperPath;
+
     if (previousOwnerId != null && previousOwnerId != nextOwnerId) {
       unawaited(PaceWallpaperBackground.purgeSharedWallpaperCache(previousOwnerId));
+    } else if (
+      previousOwnerId != null &&
+      previousWallpaperPath != null &&
+      previousWallpaperPath != nextWallpaperPath
+    ) {
+      unawaited(PaceWallpaperBackground.purgeSharedWallpaperPath(previousWallpaperPath));
     }
+
     _lastSharedWallpaperOwnerId = nextOwnerId;
+    _lastSharedWallpaperPath = nextWallpaperPath;
     setState(_readAppearance);
   }
 
