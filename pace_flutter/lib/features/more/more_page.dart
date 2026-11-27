@@ -225,7 +225,11 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
       if (type == 'sync_cloud') {
         await widget.sync.setCloudSyncConsent(value);
         if (value) {
-          await _migrateLocalWallpaperToCloud();
+          try {
+            await _migrateLocalWallpaperToCloud();
+          } catch (_) {
+            // Keep the local file; account-level theme sync can still proceed.
+          }
           await widget.sync.syncNow();
         }
       }
@@ -369,7 +373,6 @@ class _SettingsPageBridgeState extends State<SettingsPageBridge> {
             );
           }
         } catch (_) {
-          if (await file.length() > 3 * 1024 * 1024) rethrow;
           final localPath = await _persistWallpaperLocally(file, extension);
           await widget.localStore.write('pace.wallpaper', {
             'kind': 'custom',
