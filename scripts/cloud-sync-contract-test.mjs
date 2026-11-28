@@ -1275,7 +1275,6 @@ const nutritionPhoto = read("src/lib/nutrition-photo.ts");
 assert.ok(nutritionPhoto.includes("const MAX_UPLOAD_BYTES = 6.5 * 1024 * 1024;"),
   "Both nutrition photo entry points must share the 6.5 MiB compressed upload target");
 
-console.log("cloud-sync-contract-test: PASS");
 
 assert.match(engine, /pruneEquivalentConflicts\(\);\s*if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
 assert.match(engine, /remainingConflicts = currentConflicts\.filter\(\(item\) => item\.key !== key\)/, "queued equivalent values must clear stale conflicts");
@@ -1322,3 +1321,5 @@ assert.match(
   /remainingQueueKeys[\s\S]*localStorage\.setItem\(appearanceBootstrapMarker, "done"\)/,
   "The appearance bootstrap marker must not be completed while a seeded preference remains queued",
 );
+
+console.log("cloud-sync-contract-test: PASS");

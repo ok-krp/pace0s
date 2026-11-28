@@ -648,6 +648,7 @@ export function useCloudSyncEngineInternal() {
               const domain = storageKey.slice(DOMAIN_PREFIX.length);
               if (!domain || domain.startsWith("__")) continue;
               const key = PACE_PREFIX + domain;
+              if (APPEARANCE_SYNC_KEY_FAMILIES.some((family) => family.localKey === key)) continue;
               if (!isSyncableKey(key) || grouped.has(key)) continue;
               const localDomain = readDomainRecord(key);
               if (!localDomain || isEmptyRecoveredValue(localDomain.value)) continue;
@@ -668,6 +669,7 @@ export function useCloudSyncEngineInternal() {
           try {
             for (const key of Object.keys(localStorage)) {
               if (!key.startsWith(PACE_PREFIX) || key.startsWith(INTERNAL_PREFIX) || key.startsWith(DOMAIN_PREFIX)) continue;
+              if (APPEARANCE_SYNC_KEY_FAMILIES.some((family) => family.localKey === key)) continue;
               if (!isSyncableKey(key) || grouped.has(key) || getQueued(key, user.id) || readDomainRecord(key)) continue;
               let value: unknown;
               try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { continue; }
