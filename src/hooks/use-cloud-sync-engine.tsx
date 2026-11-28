@@ -10,12 +10,6 @@ const PACE_PREFIX = "pace.";
 const INTERNAL_PREFIX = "pace.__";
 const DOMAIN_PREFIX = "pace.domain.";
 const DOMAIN_OUTBOX_KEY = "pace.domain.outbox";
-const WALLPAPER_SYNC_KEYS = [
-  "pace.wallpaper",
-  "pace.domain.wallpaper",
-  "lt.wallpaper",
-  "lt.domain.wallpaper",
-] as const;
 function keyPrefixRegex(prefix: string) {
   // Prefixes contain literal dots and underscores; a regex keeps underscores
   // literal (unlike SQL LIKE, where _ is a one-character wildcard).
@@ -28,8 +22,6 @@ const DEVICE_LOCAL_SYNC_KEYS = [
   "pace.watch.last_metrics",
   "pace.ai.conversations",
   "pace.ai.deleted_conversations",
-  "pace.dark",
-  "pace.visual-theme",
   DOMAIN_OUTBOX_KEY,
 ] as const;
 const DEVICE_LOCAL_SYNC_PREFIXES = [
@@ -60,19 +52,33 @@ const ALL_DEVICE_LOCAL_SYNC_PREFIXES = [
   ...DEVICE_LOCAL_DOMAIN_SYNC_PREFIXES,
 ] as const;
 const DEVICE_LOCAL_PULL_KEYS = [
-  ...WALLPAPER_SYNC_KEYS,
   ...DEVICE_LOCAL_SYNC_KEYS,
   ...LEGACY_DEVICE_LOCAL_SYNC_KEYS,
   ...DEVICE_LOCAL_DOMAIN_SYNC_KEYS,
   ...LEGACY_DEVICE_LOCAL_DOMAIN_SYNC_KEYS,
 ] as const;
 const DEVICE_LOCAL_PULL_FILTER = `(${DEVICE_LOCAL_PULL_KEYS.map((key) => `"${key}"`).join(",")})`;
-const EXCLUDED = new Set<string>([...WALLPAPER_SYNC_KEYS, ...DEVICE_LOCAL_SYNC_KEYS]);
+const EXCLUDED = new Set<string>(DEVICE_LOCAL_SYNC_KEYS);
 const QUEUE_KEY = "pace.__sync_queue";
 const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
 const DEVICE_ID = getDeviceId();
 const CONFLICTS_KEY = "pace.__sync_conflicts";
+const APPEARANCE_BOOTSTRAP_KEY = "pace.__appearance_sync_bootstrapped:v1";
+const APPEARANCE_SYNC_KEY_FAMILIES = [
+  {
+    localKey: "pace.visual-theme",
+    remoteKeys: ["pace.visual-theme", "pace.domain.visual-theme", "lt.visual-theme", "lt.domain.visual-theme"],
+  },
+  {
+    localKey: "pace.dark",
+    remoteKeys: ["pace.dark", "pace.domain.dark", "lt.dark", "lt.domain.dark"],
+  },
+  {
+    localKey: "pace.wallpaper",
+    remoteKeys: ["pace.wallpaper", "pace.domain.wallpaper", "lt.wallpaper", "lt.domain.wallpaper"],
+  },
+] as const;
 
 type SyncMeta = Record<string, string>;
 export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
@@ -107,6 +113,56 @@ function isSyncableKey(key: string) {
     !key.startsWith(INTERNAL_PREFIX) &&
     key !== DOMAIN_OUTBOX_KEY &&
     !isDeviceLocalSyncKey(key);
+}
+function readWallpaperCandidate(key: string, value: unknown): unknown {
+  const canonicalKey = key.startsWith("lt.") ? `pace.${key.slice(3)}` : key;
+  if (!["pace.wallpaper", "pace.domain.wallpaper"].includes(canonicalKey)) return undefined;
+  let candidate = value;
+  while (candidate && typeof candidate === "object" && "value" in candidate &&
+      "version" in candidate && (candidate as { version?: unknown }).version === 1) {
+    candidate = (candidate as { value: unknown }).value;
+  }
+  return candidate;
+}
+function isInlineWallpaperValue(key: string, value: unknown) {
+  const candidate = readWallpaperCandidate(key, value);
+  if (!candidate || typeof candidate !== "object" || !("kind" in candidate) ||
+      (candidate as { kind?: unknown }).kind !== "custom") return false;
+  const wallpaper = candidate as {
+    dataUrl?: unknown;
+    localPath?: unknown;
+    storagePath?: unknown;
+  };
+  // A custom wallpaper is portable only when it references an object in the
+  // account-private Storage bucket. Reject legacy inline bytes, native paths,
+  // and malformed custom records before queueing or applying remote state.
+  return (
+    typeof wallpaper.dataUrl === "string" ||
+    typeof wallpaper.localPath === "string" ||
+    typeof wallpaper.storagePath !== "string" ||
+    wallpaper.storagePath.trim().length === 0
+  );
+}
+function isWallpaperPathOwnedByUser(key: string, value: unknown, userId: string) {
+  const candidate = readWallpaperCandidate(key, value);
+  if (!candidate || typeof candidate !== "object" || !("kind" in candidate) ||
+      (candidate as { kind?: unknown }).kind !== "custom") return true;
+  const storagePath = (candidate as { storagePath?: unknown }).storagePath;
+  if (typeof storagePath !== "string") return false;
+  const ownerPrefix = `${userId}/`;
+  if (!storagePath.startsWith(ownerPrefix)) return false;
+  const objectName = storagePath.slice(ownerPrefix.length);
+  // Current and legacy clients use a single generated object filename below
+  // the user folder. Reject nested, empty, traversal-like, or encoded paths.
+  return objectName.length > 0 &&
+    objectName !== "." &&
+    objectName !== ".." &&
+    /^[A-Za-z0-9._-]+$/.test(objectName);
+}
+function isSyncableRecord(key: string, value: unknown, userId: string) {
+  return isSyncableKey(key) &&
+    !isInlineWallpaperValue(key, value) &&
+    isWallpaperPathOwnedByUser(key, value, userId);
 }
 function scopedSyncStorageKey(base: string, userId: string) {
   return `${base}:account:${encodeURIComponent(userId)}`;
@@ -146,11 +202,15 @@ function readQueue(userId: string): QueueItem[] {
         if (!timestamp) return [];
         let value: unknown;
         try { value = JSON.parse(localStorage.getItem(item) ?? "null"); } catch { value = null; }
-        return [{ key: item, value, updatedAt: timestamp, ownerUserId: userId }];
+        return isSyncableRecord(item, value, userId)
+          ? [{ key: item, value, updatedAt: timestamp, ownerUserId: userId }]
+          : [];
       }
       if (!item?.key || !item?.updatedAt) return [];
       if (item.ownerUserId && item.ownerUserId !== userId) return [];
-      return [{ ...item, ownerUserId: userId }];
+      return isSyncableRecord(item.key, item.value, userId)
+        ? [{ ...item, ownerUserId: userId }]
+        : [];
     });
   } catch { return []; }
 }
@@ -159,12 +219,12 @@ function writeQueue(items: QueueItem[], userId: string) {
     QUEUE_KEY,
     userId,
     items
-      .filter((item) => isSyncableKey(item.key) && (!item.ownerUserId || item.ownerUserId === userId))
+      .filter((item) => isSyncableRecord(item.key, item.value, userId) && (!item.ownerUserId || item.ownerUserId === userId))
       .map((item) => ({ ...item, ownerUserId: userId })),
   );
 }
 function queueItem(item: QueueItem, userId: string) {
-  if (!isSyncableKey(item.key) || !item.updatedAt) return;
+  if (!isSyncableRecord(item.key, item.value, userId) || !item.updatedAt) return;
   const next = readQueue(userId).filter((queued) => queued.key !== item.key);
   next.push({ ...item, ownerUserId: userId });
   writeQueue(next, userId);
@@ -398,7 +458,7 @@ export function useCloudSyncEngineInternal() {
     };
 
     const pushItem = async (item: QueueItem) => {
-      if (cancelled || !allowed() || !isSyncableKey(item.key) || !navigator.onLine) return;
+      if (cancelled || !allowed() || !isSyncableRecord(item.key, item.value, user.id) || !navigator.onLine) return;
       const writeKey = `${user.id}:${item.key}`;
       const previous = keyWrites.current[writeKey] ?? Promise.resolve();
       const current = previous.then(async () => {
@@ -485,7 +545,7 @@ export function useCloudSyncEngineInternal() {
         for (const raw of data) {
           const row = raw as unknown as SyncRow;
           const key = row.key.startsWith("lt.") ? `${PACE_PREFIX}${row.key.slice(3)}` : row.key;
-          if (!isSyncableKey(key)) continue;
+          if (!isSyncableRecord(key, row.value, user.id)) continue;
           const bucket = grouped.get(key) ?? {};
           if (row.key.startsWith("lt.")) bucket.legacy = row;
           else bucket.canonical = row;
@@ -505,6 +565,22 @@ export function useCloudSyncEngineInternal() {
           if (!Number.isFinite(sourceTime)) continue;
           const updatedAt = new Date(sourceTime).toISOString();
           const localDomain = readDomainRecord(key);
+          let localStoredValue: unknown;
+          try {
+            const rawLocalValue = localStorage.getItem(key);
+            if (rawLocalValue !== null) localStoredValue = JSON.parse(rawLocalValue);
+          } catch {}
+          // A custom wallpaper kept locally because Storage upload failed is a
+          // device-local override. Do not replace it with an older cloud pointer
+          // during the periodic pull; a successful migration or an explicit
+          // preset/custom replacement will make the next local write syncable.
+          const localWallpaperOverride = isInlineWallpaperValue(key, localStoredValue) ||
+            Boolean(localDomain && isInlineWallpaperValue(key, localDomain.value));
+          if (localWallpaperOverride) {
+            meta[key] = updatedAt;
+            newest = newest && Date.parse(newest) > sourceTime ? newest : updatedAt;
+            continue;
+          }
           const localIsEmpty = localDomain ? isEmptyRecoveredValue(localDomain.value) : true;
           const localTime = Date.parse(meta[key] ?? "1970-01-01T00:00:00.000Z");
           const queued = getQueued(key, user.id);
@@ -560,44 +636,116 @@ export function useCloudSyncEngineInternal() {
             } catch {}
           }
         }
-        // Bootstrap pre-existing local domain state that has no cloud row yet.
-        try {
-          for (const storageKey of Object.keys(localStorage)) {
-            if (!storageKey.startsWith(DOMAIN_PREFIX)) continue;
-            const domain = storageKey.slice(DOMAIN_PREFIX.length);
-            if (!domain || domain.startsWith("__")) continue;
-            const key = PACE_PREFIX + domain;
-            if (!isSyncableKey(key) || grouped.has(key)) continue;
-            const localDomain = readDomainRecord(key);
-            if (!localDomain || isEmptyRecoveredValue(localDomain.value)) continue;
-            queueItem({
-              key,
-              value: localDomain.value,
-              updatedAt: localDomain.updatedAt,
-              mutationId: localDomain.mutationId,
-            }, user.id);
-            meta[key] = localDomain.updatedAt;
-            newest = newest && Date.parse(newest) > Date.parse(localDomain.updatedAt) ? newest : localDomain.updatedAt;
-          }
-        } catch {}
+        // Incremental pulls contain only rows newer than the cursor. Local-state
+        // recovery must therefore run only during the first complete account pull;
+        // otherwise an older, already-synced row would look absent and be overwritten
+        // by stale local values on every 60-second reconciliation.
+        if (!Number.isFinite(previousPullTime)) {
+          // Bootstrap pre-existing local domain state that has no cloud row yet.
+          try {
+            for (const storageKey of Object.keys(localStorage)) {
+              if (!storageKey.startsWith(DOMAIN_PREFIX)) continue;
+              const domain = storageKey.slice(DOMAIN_PREFIX.length);
+              if (!domain || domain.startsWith("__")) continue;
+              const key = PACE_PREFIX + domain;
+              if (APPEARANCE_SYNC_KEY_FAMILIES.some((family) => family.localKey === key)) continue;
+              if (!isSyncableKey(key) || grouped.has(key)) continue;
+              const localDomain = readDomainRecord(key);
+              if (!localDomain || isEmptyRecoveredValue(localDomain.value)) continue;
+              queueItem({
+                key,
+                value: localDomain.value,
+                updatedAt: localDomain.updatedAt,
+                mutationId: localDomain.mutationId,
+              }, user.id);
+              meta[key] = localDomain.updatedAt;
+              newest = newest && Date.parse(newest) > Date.parse(localDomain.updatedAt) ? newest : localDomain.updatedAt;
+            }
+          } catch {}
+  
+          // Recover pre-existing local app state written by useLocalState (raw
+          // pace.* keys). A key is bootstrapped only when no cloud/legacy row
+          // exists, so this cannot overwrite an existing server snapshot.
+          try {
+            for (const key of Object.keys(localStorage)) {
+              if (!key.startsWith(PACE_PREFIX) || key.startsWith(INTERNAL_PREFIX) || key.startsWith(DOMAIN_PREFIX)) continue;
+              if (APPEARANCE_SYNC_KEY_FAMILIES.some((family) => family.localKey === key)) continue;
+              if (!isSyncableKey(key) || grouped.has(key) || getQueued(key, user.id) || readDomainRecord(key)) continue;
+              let value: unknown;
+              try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { continue; }
+              if (isEmptyRecoveredValue(value)) continue;
+              const updatedAt = new Date().toISOString();
+              const mutationId = `local-bootstrap-${updatedAt}-${key}`;
+              queueItem({ key, value, updatedAt, mutationId }, user.id);
+              meta[key] = updatedAt;
+              newest = newest && Date.parse(newest) > Date.parse(updatedAt) ? newest : updatedAt;
+            }
+          } catch {}
+  
+        }
 
-        // Recover pre-existing local app state written by useLocalState (raw
-        // pace.* keys). A key is bootstrapped only when no cloud/legacy row
-        // exists, so this cannot overwrite an existing server snapshot.
-        try {
-          for (const key of Object.keys(localStorage)) {
-            if (!key.startsWith(PACE_PREFIX) || key.startsWith(INTERNAL_PREFIX) || key.startsWith(DOMAIN_PREFIX)) continue;
-            if (!isSyncableKey(key) || grouped.has(key) || getQueued(key, user.id) || readDomainRecord(key)) continue;
+        // Appearance preferences may predate cloud sync or this browser origin.
+        // Query only their small key set (not the full user_state payload) and seed
+        // local values only when no canonical or legacy server row exists.
+        const appearanceBootstrapMarker =
+          `${APPEARANCE_BOOTSTRAP_KEY}:${encodeURIComponent(user.id)}`;
+        if (localStorage.getItem(appearanceBootstrapMarker) !== "done") {
+          const appearanceRemoteKeys = APPEARANCE_SYNC_KEY_FAMILIES.flatMap(
+            (family) => family.remoteKeys,
+          );
+          const { data: appearanceRows, error: appearanceError } = await supabase
+            .from("user_state")
+            .select("key")
+            .eq("user_id", user.id)
+            .in("key", appearanceRemoteKeys);
+          if (appearanceError) throw appearanceError;
+
+          const existingAppearanceKeys = new Set(
+            (appearanceRows ?? []).map((row) => row.key),
+          );
+          const queuedAppearanceKeys = new Set(
+            readQueue(user.id).map((item) => item.key),
+          );
+          const seededAppearanceKeys = new Set<string>();
+
+          for (const family of APPEARANCE_SYNC_KEY_FAMILIES) {
+            if (family.remoteKeys.some((key) => existingAppearanceKeys.has(key))) continue;
+            if (queuedAppearanceKeys.has(family.localKey)) continue;
+            const raw = localStorage.getItem(family.localKey);
+            if (raw === null) continue;
+
             let value: unknown;
-            try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { continue; }
-            if (isEmptyRecoveredValue(value)) continue;
+            try {
+              value = JSON.parse(raw);
+            } catch {
+              value = raw;
+            }
+            // In particular, custom wallpapers with inline bytes or another
+            // device's Storage path are never promoted to cloud user_state.
+            if (!isSyncableRecord(family.localKey, value, user.id)) continue;
+
             const updatedAt = new Date().toISOString();
-            const mutationId = `local-bootstrap-${updatedAt}-${key}`;
-            queueItem({ key, value, updatedAt, mutationId }, user.id);
-            meta[key] = updatedAt;
-            newest = newest && Date.parse(newest) > Date.parse(updatedAt) ? newest : updatedAt;
+            const mutationId = typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `appearance-bootstrap-${updatedAt}-${family.localKey}`;
+            queueItem(
+              { key: family.localKey, value, updatedAt, mutationId },
+              user.id,
+            );
+            seededAppearanceKeys.add(family.localKey);
           }
-        } catch {}
+
+          if (seededAppearanceKeys.size > 0) {
+            await flushQueue();
+          }
+          const remainingQueueKeys = new Set(
+            readQueue(user.id).map((item) => item.key),
+          );
+          if (![...seededAppearanceKeys].some((key) => remainingQueueKeys.has(key))) {
+            localStorage.setItem(appearanceBootstrapMarker, "done");
+          }
+        }
+
         writeMeta(meta, user.id);
         localStorage.setItem(pullCursorKey, new Date(pullStartedAt).toISOString());
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
@@ -678,7 +826,7 @@ export function useCloudSyncEngineInternal() {
     }
 
     const offLocal = onLocalWrite((key, value, updatedAt, mutationId) => {
-      if (!isSyncableKey(key) || !updatedAt) return;
+      if (!isSyncableRecord(key, value, user.id) || !updatedAt) return;
       const encoded = serialize(value);
       const memoryKey = user.id + ':' + key;
       if (encoded !== undefined && lastRemoteValues.current[memoryKey] === encoded) { delete lastRemoteValues.current[memoryKey]; return; }

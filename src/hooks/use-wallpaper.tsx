@@ -1,4 +1,7 @@
 import { useEffect } from "react";
+import { useAuth } from "@/hooks/use-auth";
+import { supabase } from "@/integrations/supabase/client";
+import { isLegalCategoryAllowed } from "@/lib/legal";
 import { useLocalState } from "@/lib/storage";
 
 /**
@@ -112,24 +115,260 @@ export const WALLPAPERS: WallpaperPreset[] = [
   },
 ];
 
-type CustomWallpaper = { kind: "custom"; dataUrl: string };
+type CustomWallpaper =
+  | { kind: "custom"; dataUrl: string }
+  | { kind: "custom"; storagePath: string };
 type WallpaperChoice = { id: string } | CustomWallpaper;
 
 const KEY = "pace.wallpaper";
 const DEFAULT: WallpaperChoice = { id: "graphite" };
 
+const wallpaperObjectUrls = new Map<string, Promise<string>>();
+const legacyWallpaperMigrations = new Map<string, Promise<string>>();
+let wallpaperRenderVersion = 0;
+
+function releaseWallpaperObjectUrl(path: string | undefined) {
+  if (!path) return;
+  const pending = wallpaperObjectUrls.get(path);
+  if (!pending) return;
+  wallpaperObjectUrls.delete(path);
+  // Revocation also runs when the download is still in flight.
+  void pending.then((url) => URL.revokeObjectURL(url)).catch(() => {});
+}
+
+async function uploadWallpaper(blob: Blob, userId: string): Promise<string> {
+  const extension = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+  const path = `${userId}/${crypto.randomUUID()}.${extension}`;
+  const { error } = await supabase.storage.from("pace-wallpapers").upload(path, blob, {
+    contentType: blob.type,
+    cacheControl: "31536000",
+    upsert: false,
+  });
+  if (error) throw error;
+  return path;
+}
+
+/**
+ * Remove the private Storage cache for a source account when its appearance
+ * share is revoked or replaced. Keep unrelated local wallpapers untouched.
+ */
+export async function purgeWallpaperCacheForOwner(ownerId: string): Promise<void> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerId)) {
+    return;
+  }
+
+  const prefix = ownerId + "/";
+  const pending: Promise<void>[] = [];
+  for (const path of [...wallpaperObjectUrls.keys()]) {
+    if (!path.startsWith(prefix)) continue;
+    const request = wallpaperObjectUrls.get(path);
+    wallpaperObjectUrls.delete(path);
+    if (request) {
+      pending.push(request.then((url) => URL.revokeObjectURL(url)).catch(() => {}));
+    }
+  }
+  await Promise.all(pending);
+
+  if (typeof window === "undefined" || !("caches" in window)) return;
+  try {
+    const cache = await window.caches.open("pace-wallpaper-v1");
+    const cachePathPrefix = encodeURIComponent(prefix);
+    const marker = "/__pace-wallpaper-cache/";
+    const keys = await cache.keys();
+    await Promise.all(keys.map(async (request) => {
+      try {
+        const pathname = new URL(request.url).pathname;
+        const markerIndex = pathname.indexOf(marker);
+        if (markerIndex < 0) return;
+        const encodedPath = pathname.slice(markerIndex + marker.length);
+        if (encodedPath.startsWith(cachePathPrefix)) {
+          await cache.delete(request);
+        }
+      } catch {
+        // Ignore malformed/foreign cache entries; only remove verified owner paths.
+      }
+    }));
+  } catch (error) {
+    console.warn("[wallpaper] shared cache purge failed", error);
+  }
+}
+
+/** Remove a single superseded shared wallpaper without evicting the new selection. */
+export async function purgeWallpaperCacheForPath(path: string): Promise<void> {
+  const slash = path.indexOf("/");
+  const ownerId = slash > 0 ? path.slice(0, slash) : "";
+  const filename = slash > 0 ? path.slice(slash + 1) : "";
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ownerId) ||
+    !/^[A-Za-z0-9._-]+\.(jpg|png|webp)$/i.test(filename)
+  ) {
+    return;
+  }
+
+  const pending = wallpaperObjectUrls.get(path);
+  wallpaperObjectUrls.delete(path);
+  if (pending) {
+    try {
+      URL.revokeObjectURL(await pending);
+    } catch {}
+  }
+
+  if (typeof window === "undefined" || !("caches" in window)) return;
+  try {
+    const cache = await window.caches.open("pace-wallpaper-v1");
+    const request = new Request(
+      window.location.origin + "/__pace-wallpaper-cache/" + encodeURIComponent(path),
+    );
+    await cache.delete(request);
+  } catch (error) {
+    console.warn("[wallpaper] superseded cache purge failed", error);
+  }
+}
+function getWallpaperObjectUrl(path: string): Promise<string> {
+  const cached = wallpaperObjectUrls.get(path);
+  if (cached) return cached;
+  let request: Promise<string>;
+  request = (async () => {
+    const cacheKey = new Request(`${window.location.origin}/__pace-wallpaper-cache/${encodeURIComponent(path)}`);
+    let cache: Cache | null = null;
+    try {
+      if ("caches" in window) {
+        cache = await window.caches.open("pace-wallpaper-v1");
+        const cachedResponse = await cache.match(cacheKey);
+        if (cachedResponse) return URL.createObjectURL(await cachedResponse.blob());
+      }
+    } catch {
+      cache = null;
+    }
+
+    const { data, error } = await supabase.storage.from("pace-wallpapers").download(path);
+    if (error || !data) throw error ?? new Error("Fond d'écran introuvable.");
+    // A per-device browser cache prevents a multi-megabyte wallpaper download
+    // on every navigation/reload. The account-scoped object path is immutable.
+    if (cache) {
+      try {
+        await cache.put(cacheKey, new Response(data.slice(0), {
+          headers: { "Content-Type": data.type || "application/octet-stream" },
+        }));
+      } catch {}
+    }
+    return URL.createObjectURL(data);
+  })().catch((error) => {
+    // An older request may fail after the same path has been selected again.
+    // It must not delete the newer request from the cache.
+    if (wallpaperObjectUrls.get(path) === request) {
+      wallpaperObjectUrls.delete(path);
+    }
+    throw error;
+  });
+  wallpaperObjectUrls.set(path, request);
+  return request;
+}
+
 export function useWallpaper() {
+  const { user } = useAuth();
   const [choice, setChoice] = useLocalState<WallpaperChoice>(KEY, DEFAULT);
 
   useEffect(() => {
-    applyWallpaper(choice);
-  }, [choice]);
+    const isOwnedStorageChoice =
+      !("kind" in choice) ||
+      choice.kind !== "custom" ||
+      !("storagePath" in choice) ||
+      Boolean(user?.id && choice.storagePath.startsWith(`${user.id}/`));
+    applyWallpaper(isOwnedStorageChoice ? choice : DEFAULT);
+  }, [choice, user?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const migrateLegacyWallpaper = () => {
+      // Migrate an existing local-only custom image to private Storage only
+      // after the account explicitly enables cross-device sync.
+      if (
+        !user?.id ||
+        !("kind" in choice) ||
+        choice.kind !== "custom" ||
+        !("dataUrl" in choice) ||
+        !isLegalCategoryAllowed("sync_cloud")
+      ) return;
+
+      const migrationKey = `${user.id}:${choice.dataUrl}`;
+      let migration = legacyWallpaperMigrations.get(migrationKey);
+      if (!migration) {
+        migration = fetch(choice.dataUrl)
+          .then((response) => response.blob())
+          .then((blob) => uploadWallpaper(blob, user.id));
+        legacyWallpaperMigrations.set(migrationKey, migration);
+      }
+      void migration.then((storagePath) => {
+        if (!cancelled) setChoice({ kind: "custom", storagePath });
+      }).catch((error) => {
+        console.warn("[wallpaper] legacy image migration failed", error);
+      }).finally(() => {
+        // Do not retain potentially multi-megabyte data URLs as Map keys after
+        // their one-time migration has completed.
+        if (legacyWallpaperMigrations.get(migrationKey) === migration) {
+          legacyWallpaperMigrations.delete(migrationKey);
+        }
+      });
+    };
+
+    migrateLegacyWallpaper();
+    window.addEventListener("pace.legal.changed", migrateLegacyWallpaper);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pace.legal.changed", migrateLegacyWallpaper);
+    };
+  }, [choice, user?.id, setChoice]);
 
   return {
     choice,
     presets: WALLPAPERS,
     set: (id: string) => setChoice({ id }),
-    setCustom: (dataUrl: string) => setChoice({ kind: "custom", dataUrl }),
+    setCustom: async (file: File): Promise<boolean> => {
+      if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+        throw new Error("Formats acceptés : JPG, PNG ou WebP.");
+      }
+      if (file.size > 20 * 1024 * 1024) throw new Error("Image trop lourde (maximum 20 Mo).");
+      if (
+        (!user?.id || !isLegalCategoryAllowed("sync_cloud")) &&
+        file.size > 3 * 1024 * 1024
+      ) {
+        throw new Error("Sans synchronisation cloud, le fond local est limité à 3 Mo pour éviter de saturer le stockage du navigateur. Active la synchronisation pour utiliser des images jusqu'à 20 Mo.");
+      }
+
+      // Local fallback is intentionally small enough for browser storage.
+      // Never upload image bytes unless the user explicitly consented.
+      const saveLocally = async () => {
+        if (file.size > 3 * 1024 * 1024) {
+          throw new Error("Le stockage synchronisé n'est pas encore disponible. Sans celui-ci, le fond local est limité à 3 Mo.");
+        }
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => typeof reader.result === "string"
+            ? resolve(reader.result)
+            : reject(new Error("Impossible de lire l'image."));
+          reader.onerror = () => reject(new Error("Impossible de lire l'image."));
+          reader.readAsDataURL(file);
+        });
+        setChoice({ kind: "custom", dataUrl });
+        return false;
+      };
+
+      if (!user?.id || !isLegalCategoryAllowed("sync_cloud")) {
+        return saveLocally();
+      }
+
+      try {
+        const storagePath = await uploadWallpaper(file, user.id);
+        setChoice({ kind: "custom", storagePath });
+        return true;
+      } catch (error) {
+        // Keep small images usable while the private Storage migration is not
+        // deployed; large images must wait for the synchronized bucket.
+        if (file.size <= 3 * 1024 * 1024) return saveLocally();
+        throw error;
+      }
+    },
     reset: () => setChoice(DEFAULT),
   };
 }
@@ -138,20 +377,52 @@ export function useWallpaper() {
 export function applyWallpaper(choice: WallpaperChoice) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
+  const renderVersion = ++wallpaperRenderVersion;
   const isDark = root.classList.contains("dark");
 
   if ("kind" in choice && choice.kind === "custom") {
-    root.style.setProperty(
-      "--wallpaper",
-      `linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.15)), url("${choice.dataUrl}") center/cover no-repeat`,
-    );
-    // Neutral tint for custom photos + a slightly stronger floor so text stays
-    // readable on busy imagery (accessibility guard).
+    const overlay = isDark
+      ? "linear-gradient(180deg, rgba(0,0,0,0.16), rgba(0,0,0,0.28))"
+      : "linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.10))";
+    if ("dataUrl" in choice) {
+      releaseWallpaperObjectUrl(root.dataset.wallpaperPath);
+      delete root.dataset.wallpaperPath;
+      root.style.setProperty("--wallpaper", `${overlay}, url("${choice.dataUrl}")`);
+    } else {
+      const previousPath = root.dataset.wallpaperPath;
+      if (previousPath !== choice.storagePath) {
+        releaseWallpaperObjectUrl(previousPath);
+      }
+      root.dataset.wallpaperPath = choice.storagePath;
+      root.style.setProperty("--wallpaper", isDark
+        ? "linear-gradient(135deg, #111315, #242629)"
+        : "linear-gradient(135deg, #e7e7e7, #f5f5f5)");
+      const objectUrlRequest = getWallpaperObjectUrl(choice.storagePath);
+      void objectUrlRequest.then((url) => {
+        const isStillSelected = root.dataset.wallpaperPath === choice.storagePath;
+        if (!isStillSelected) {
+          // The selection changed. Revoke only this inactive request, never a
+          // newer request that may already be registered for the same path.
+          if (wallpaperObjectUrls.get(choice.storagePath) === objectUrlRequest) {
+            wallpaperObjectUrls.delete(choice.storagePath);
+            URL.revokeObjectURL(url);
+          }
+          return;
+        }
+        // A later applyWallpaper call may have re-used this exact in-flight
+        // promise (for example after a dark-mode change). Its callback owns the
+        // current render; an older callback must not revoke the active URL.
+        if (renderVersion !== wallpaperRenderVersion) return;
+        root.style.setProperty("--wallpaper", `${overlay}, url("${url}")`);
+      }).catch((error) => console.warn("[wallpaper] image download failed", error));
+    }
     root.style.setProperty("--glass-tint", isDark ? "10 14 22" : "255 255 255");
-    root.style.setProperty("--glass-tint-base", isDark ? "0.34" : "0.2");
+    root.style.setProperty("--glass-tint-base", isDark ? "0.22" : "0.10");
     root.setAttribute("data-wallpaper", "custom");
     return;
   }
+  releaseWallpaperObjectUrl(root.dataset.wallpaperPath);
+  delete root.dataset.wallpaperPath;
 
   const preset = WALLPAPERS.find((w) => w.id === (choice as { id: string }).id) ?? WALLPAPERS[0];
   const css = (isDark && preset.cssDark) ? preset.cssDark : preset.css;
@@ -164,12 +435,21 @@ export function applyWallpaper(choice: WallpaperChoice) {
 }
 
 /** Read choice synchronously from storage (for early paint in root). */
-export function readWallpaperChoice(): WallpaperChoice {
+export function readWallpaperChoice(userId?: string): WallpaperChoice {
   if (typeof window === "undefined") return DEFAULT;
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return DEFAULT;
-    return JSON.parse(raw) as WallpaperChoice;
+    const choice = JSON.parse(raw) as WallpaperChoice;
+    if (
+      "kind" in choice &&
+      choice.kind === "custom" &&
+      "storagePath" in choice &&
+      (!userId || !choice.storagePath.startsWith(`${userId}/`))
+    ) {
+      return DEFAULT;
+    }
+    return choice;
   } catch {
     return DEFAULT;
   }

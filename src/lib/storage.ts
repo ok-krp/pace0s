@@ -67,6 +67,37 @@ type StoredProgram = { id: string; items: StoredProgramItem[]; [key: string]: un
 type DomainRecord = { version: 1; updatedAt: string; mutationId: string; value: unknown };
 type LocalWriteDetail = { key: string; value: unknown; updatedAt: string; mutationId: string };
 
+/** Read JSON-backed preferences while remaining compatible with legacy raw strings. */
+export function readLocalPreference<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw === null) return fallback;
+    try { return JSON.parse(raw) as T; } catch { return raw as T; }
+  } catch {
+    return fallback;
+  }
+}
+
+/** Persist a small account preference and immediately enqueue it for cloud sync. */
+export function persistLocalPreference<T>(key: string, value: T): void {
+  if (typeof window === "undefined") return;
+  try {
+    const serialized = JSON.stringify(value);
+    if (localStorage.getItem(key) === serialized) return;
+    localStorage.setItem(key, serialized);
+    const updatedAt = new Date().toISOString();
+    const mutationId = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${updatedAt}-${Math.random()}`;
+    window.dispatchEvent(new CustomEvent<LocalWriteDetail>(LOCAL_WRITE_EVENT, {
+      detail: { key, value, updatedAt, mutationId },
+    }));
+  } catch (error) {
+    console.warn("[storage] preference persistence failed", key, error);
+  }
+}
+
 function syncLatestOverloadRowsToTraining(value: unknown) {
   if (typeof window === "undefined" || !value || typeof value !== "object" || Array.isArray(value)) return;
   try {

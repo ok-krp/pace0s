@@ -225,19 +225,203 @@ assert.ok(
     userStateBroadcastHardeningMigration.includes("realtime.topic() = 'pace-user-state:'"),
   "Realtime authorization must only allow Broadcast reads on the authenticated user's own topic",
 );
+const appearanceSyncMigration = read("supabase/migrations/20261127143227_sync_visual_preferences_and_wallpaper_storage.sql");
+const appearanceSharingMigration = read("supabase/migrations/20261127191454_secure_cross_account_appearance_sharing.sql");
+const appearanceConsentRevocationMigration = read("supabase/migrations/20261127193932_revoke_appearance_shares_on_consent_withdrawal.sql");
+const appearanceInviteInvalidationMigration = read("supabase/migrations/20261127194017_fix_appearance_invite_invalidation.sql");
+const appearanceCurrentValueMigration = read("supabase/migrations/20261127194440_fix_shared_appearance_current_value_selection.sql");
+assert.match(appearanceSharingMigration, /gen_random_bytes\(32\)[\s\S]*digest\(v_token, 'sha256'\)[\s\S]*interval '24 hours'/,
+  "Cross-account appearance sharing must use a hashed one-time 256-bit invitation with a bounded lifetime");
+assert.match(appearanceSharingMigration, /recipient_user_id[\s\S]*appearance_shares_one_source_per_recipient_idx[\s\S]*revoked_at IS NULL/,
+  "A recipient may follow only one active appearance source at a time");
+assert.match(appearanceSharingMigration, /get_shared_appearance\(\)[\s\S]*visualTheme[\s\S]*dark[\s\S]*wallpaper/,
+  "The cross-account RPC may expose only the three allow-listed appearance preferences");
+assert.match(appearanceSharingMigration, /pace_can_read_shared_wallpaper[\s\S]*auth\.uid\(\) IS DISTINCT FROM p_recipient_id/,
+  "Shared wallpaper reads must bind the recipient argument to the authenticated user");
+assert.match(appearanceSharingMigration, /pace_wallpapers_select_shared_appearance[\s\S]*pace_can_read_shared_wallpaper/,
+  "Shared wallpaper Storage access must be mediated by the exact-object RLS helper");
+assert.match(appearanceSharingMigration, /pace_users_receive_shared_appearance_events[\s\S]*pace-appearance-share:/,
+  "Shared appearance notifications must use recipient-scoped private Broadcast topics");
+assert.ok(
+  appearanceConsentRevocationMigration.includes("s.owner_user_id = NEW.user_id") &&
+    appearanceConsentRevocationMigration.includes("s.recipient_user_id = NEW.user_id") &&
+    appearanceConsentRevocationMigration.includes("revoked_at = pg_catalog.now()"),
+  "Withdrawing cloud-sync consent on either side must revoke the active relationship",
+);
+assert.match(appearanceInviteInvalidationMigration, /SET consumed_at = pg_catalog\.now\(\)/,
+  "Superseded or consent-invalidated appearance invitations must be consumed without violating expiry constraints");
+assert.doesNotMatch(appearanceInviteInvalidationMigration, /expires_at\s*=\s*LEAST/,
+  "Invite invalidation must not write an expiry earlier than created_at");
+assert.ok(
+  appearanceCurrentValueMigration.includes("lt.domain.visual-theme") &&
+    appearanceCurrentValueMigration.includes("lt.domain.dark") &&
+    appearanceCurrentValueMigration.includes("lt.domain.wallpaper") &&
+    /ORDER BY us\.updated_at DESC[\s\S]*CASE us\.key/.test(appearanceCurrentValueMigration),
+  "Shared appearance must resolve the newest canonical, domain-envelope or legacy preference value",
+);
+assert.match(appearanceCurrentValueMigration, /SELECT us\.value INTO v_wallpaper[\s\S]*ORDER BY us\.updated_at DESC[\s\S]*jsonb_path_exists\(\s*v_wallpaper/,
+  "Storage RLS must authorize only the latest wallpaper reference rather than any historical path");
+assert.match(appearanceCurrentValueMigration, /IF TG_OP = 'DELETE'[\s\S]*OLD\.user_id[\s\S]*OLD\.key/,
+  "Shared appearance delete events must read the OLD user_state row safely");
+assert.match(appearanceCurrentValueMigration, /AFTER INSERT OR UPDATE OR DELETE ON public\.user_state/,
+  "Shared appearance reconciliation must also broadcast on preference deletion");
+const sharedAppearanceHook = read("src/hooks/use-shared-appearance.tsx");
+assert.match(sharedAppearanceHook, /const reconcileTimer = window\.setInterval\([\s\S]*document\.visibilityState === "visible"[\s\S]*reconcile\(\)[\s\S]*60_000/,
+  "Cross-account shared appearance must recover missed Realtime events with a bounded visible-tab refresh");
+assert.match(sharedAppearanceHook, /window\.clearInterval\(reconcileTimer\)/,
+  "The shared appearance fallback timer must be cleaned up on account switch");
+const appearanceSharingSettings = read("src/components/AppearanceSharingSettings.tsx");
+assert.match(appearanceSharingSettings, /const onConsentChange = \(\) => \{[\s\S]*isLegalCategoryAllowed\("sync_cloud"\)[\s\S]*refresh\(\)/,
+  "Appearance share controls must refresh when cloud consent changes or is withdrawn");
+const wallpaperHook = read("src/hooks/use-wallpaper.tsx");
+const themeToggle = read("src/components/VisualThemeToggle.tsx");
+const settingsRoute = read("src/routes/settings.tsx");
+const rootRoute = read("src/routes/__root.tsx");
+assert.match(wallpaperHook, /storage\.from\("pace-wallpapers"\)\.upload[\s\S]*storage\.from\("pace-wallpapers"\)\.download/,
+  "Custom wallpaper bytes must be stored in private Storage and downloaded by object path");
+assert.match(wallpaperHook, /setCustom: async \(file: File\): Promise<boolean> =>[\s\S]*const saveLocally = async \(\)[\s\S]*setChoice\(\{ kind: "custom", dataUrl \}\)[\s\S]*return false;[\s\S]*if \(!user\?\.id \|\| !isLegalCategoryAllowed\("sync_cloud"\)\)[\s\S]*return saveLocally\(\)[\s\S]*uploadWallpaper\(file, user\.id\)/,
+  "Custom wallpaper uploads must remain local unless the authenticated user explicitly enabled cloud sync");
+assert.match(wallpaperHook, /file\.size > 3 \* 1024 \* 1024[\s\S]*stockage du navigateur/,
+  "Local-only base64 wallpapers must stay below browser local-storage limits");
+assert.ok(
+  engine.includes("function isInlineWallpaperValue(key: string, value: unknown)") &&
+    engine.includes('typeof wallpaper.dataUrl === "string"') &&
+    engine.includes("function isSyncableRecord(key: string, value: unknown, userId: string)"),
+  "The sync engine must identify inline wallpaper image bytes before they enter the cloud outbox",
+);
+assert.ok(engine.includes('typeof wallpaper.localPath === "string"'),
+  "Native local filesystem wallpaper paths must never enter the shared user_state outbox");
+assert.match(engine, /items[\s\S]*filter\(\(item\) => isSyncableRecord\(item\.key, item\.value, userId\)/,
+  "Previously queued base64 wallpapers must be filtered out when reading the account outbox");
+assert.match(engine, /function queueItem\(item: QueueItem, userId: string\)[\s\S]*!isSyncableRecord\(item\.key, item\.value, userId\)/,
+  "No bootstrap or migration path may enqueue inline wallpaper image bytes");
+assert.match(engine, /const pushItem = async \(item: QueueItem\) => \{[\s\S]*!isSyncableRecord\(item\.key, item\.value, user\.id\)/,
+  "No queued inline wallpaper image may be uploaded even if it predates the consent guard");
+assert.match(read("src/components/WallpaperSettings.tsx"), /const synced = await setCustom\(f\)[\s\S]*enregistré sur cet appareil/,
+  "Wallpaper settings must distinguish local-only saves from cloud-synchronized uploads");
+assert.match(wallpaperHook, /setChoice\(\{ kind: "custom", storagePath \}\)/,
+  "Only a small per-user Storage path, never base64 image bytes, may enter account sync");
+assert.match(wallpaperHook, /finally\(\(\) => \{[\s\S]*legacyWallpaperMigrations\.get\(migrationKey\) === migration[\s\S]*legacyWallpaperMigrations\.delete\(migrationKey\)/,
+  "Completed legacy wallpaper migrations must release data URLs retained as Map keys");
+assert.match(wallpaperHook, /function releaseWallpaperObjectUrl\(path: string \| undefined\)[\s\S]*wallpaperObjectUrls\.delete\(path\)[\s\S]*URL\.revokeObjectURL\(url\)/,
+  "Inactive custom wallpaper ObjectURLs must be revoked when the selection changes");
+assert.match(wallpaperHook, /let wallpaperRenderVersion = 0;[\s\S]*const renderVersion = \+\+wallpaperRenderVersion[\s\S]*renderVersion !== wallpaperRenderVersion/,
+  "Late wallpaper downloads must not override a newer selection after rapid background changes");
+assert.match(wallpaperHook, /let request: Promise<string>;[\s\S]*wallpaperObjectUrls\.get\(path\) === request[\s\S]*wallpaperObjectUrls\.delete\(path\)/,
+  "A stale failed download must not evict a newer cached request for the same wallpaper path");
+assert.match(wallpaperHook, /purgeWallpaperCacheForOwner\(ownerId: string\)[\s\S]*wallpaperObjectUrls\.keys\(\)[\s\S]*caches\.open\("pace-wallpaper-v1"\)[\s\S]*cache\.keys\(\)[\s\S]*cache\.delete\(request\)/,
+  "Revoking or replacing a cross-account share must purge its owner-scoped in-memory and persistent browser wallpaper cache");
+assert.match(read("src/hooks/use-shared-appearance.tsx"), /lastAppliedSharedOwnerId[\s\S]*purgeWallpaperCacheForOwner\(previousSharedOwnerId\)/,
+  "The shared appearance overlay must purge the previous source account cache when the share is removed or replaced");
+assert.match(wallpaperHook, /export async function purgeWallpaperCacheForPath\(path: string\)[\s\S]*wallpaperObjectUrls\.get\(path\)[\s\S]*await pending[\s\S]*cache\.delete\(request\)/,
+  "Replacing a shared background must revoke and delete only the previous wallpaper path from the browser cache");
+assert.match(read("src/hooks/use-shared-appearance.tsx"), /lastAppliedSharedWallpaperPath[\s\S]*purgeWallpaperCacheForPath\(previousSharedWallpaperPath\)[\s\S]*applyWallpaper/,
+  "The Web shared appearance overlay must purge the old object when the same owner selects a different background");
+
+const wallpaperApplyStart = wallpaperHook.indexOf("export function applyWallpaper(");
+const wallpaperApplyEnd = wallpaperHook.indexOf("/** Read choice synchronously", wallpaperApplyStart);
+const wallpaperApply = wallpaperHook.slice(wallpaperApplyStart, wallpaperApplyEnd);
+assert.ok(
+  wallpaperApplyStart >= 0 &&
+    wallpaperApplyEnd > wallpaperApplyStart &&
+    wallpaperApply.includes("const isStillSelected = root.dataset.wallpaperPath === choice.storagePath;") &&
+    wallpaperApply.indexOf("if (!isStillSelected)") < wallpaperApply.indexOf("if (renderVersion !== wallpaperRenderVersion) return;"),
+  "Repeated renders of the same wallpaper must not revoke the ObjectURL still used by the current render",
+);
+
+assert.match(themeToggle, /persistLocalPreference\(VISUAL_THEME_KEY, theme\)/,
+  "Changing visual theme must immediately enqueue the account preference for cloud sync");
+assert.match(settingsRoute, /persistLocalPreference\("pace\.dark", v \? "1" : "0"\)/,
+  "Changing dark mode must immediately enqueue the account preference for cloud sync");
+assert.match(storage, /export function persistLocalPreference[\s\S]*CustomEvent<LocalWriteDetail>\(LOCAL_WRITE_EVENT/,
+  "Appearance preferences must use the same durable local-write event as the rest of cloud sync");
+assert.match(rootRoute, /onRemoteAppearance[\s\S]*applyEffectiveAppearance\(user\?\.id\)/,
+  "Remote theme and dark-mode updates must be applied to the document without a manual reload");
+assert.match(appearanceSyncMigration, /pace-wallpapers[\s\S]*CREATE POLICY "pace_wallpapers_select_own"[\s\S]*auth\.uid\(\)/,
+  "Custom wallpaper objects must live in a private, per-user Storage bucket");
+assert.doesNotMatch(appearanceSyncMigration, /'pace\.dark'[\s\S]*'pace\.visual-theme'[\s\S]*'pace\.wallpaper'/,
+  "Realtime must broadcast account appearance keys rather than excluding them");
+
+const flutterAppAppearance = read("pace_flutter/lib/app/pace_app.dart");
+const visualThemeStart = flutterAppAppearance.indexOf("Future<void> setVisualTheme(String theme) async {");
+const visualThemeEnd = flutterAppAppearance.indexOf("void dispose()", visualThemeStart);
+const visualThemeHandler = flutterAppAppearance.slice(visualThemeStart, visualThemeEnd);
+assert.ok(visualThemeStart >= 0 && visualThemeEnd > visualThemeStart &&
+  !visualThemeHandler.includes("write('pace.dark'"),
+  "Selecting Glass must force dark presentation without overwriting the user's separate dark-mode preference");
+const flutterThemeAppearance = read("pace_flutter/lib/ui/pace_theme.dart");
+const flutterSettingsAppearance = read("pace_flutter/lib/features/more/more_page.dart");
+const flutterAppearanceSharing = read("pace_flutter/lib/core/appearance/appearance_sharing_service.dart");
+
+assert.match(flutterThemeAppearance, /static Future<void> purgeSharedWallpaperPath\(String path\)[\s\S]*_downloads\.remove\(path\)[\s\S]*await pending[\s\S]*cachedFile\.delete/,
+  "Flutter must purge the exact superseded shared wallpaper from memory and persistent cache");
+assert.match(flutterThemeAppearance, /identical\(_downloads\[path\], request\)/,
+  "An older failed wallpaper download must not evict a newer request for the same shared object");
+assert.match(flutterAppAppearance, /_lastSharedWallpaperPath[\s\S]*purgeSharedWallpaperPath\(previousWallpaperPath\)/,
+  "Flutter must purge the previous wallpaper path when the same owner changes the shared background");
+
+assert.ok(
+  flutterAppearanceSharing.includes("get_shared_appearance") &&
+    flutterAppearanceSharing.includes("create_appearance_share_invite") &&
+    flutterAppearanceSharing.includes("accept_appearance_share_invite") &&
+    flutterAppearanceSharing.includes("list_appearance_shares") &&
+    flutterAppearanceSharing.includes("revoke_appearance_share") &&
+    flutterAppearanceSharing.includes("pace-appearance-share:$userId") &&
+    flutterAppearanceSharing.includes("PaceComplianceService(value).hasConsent('sync_cloud')"),
+  "Flutter must use the authenticated one-time invitation, recipient-only Realtime channel and explicit cloud-sync consent for cross-account appearance sharing",
+);
+assert.ok(
+  !flutterAppearanceSharing.includes("localStore.write") &&
+    !flutterAppearanceSharing.includes("persistLocalPreference") &&
+    !flutterAppearanceSharing.includes("localStorage"),
+  "A remote appearance overlay must never overwrite the recipient's personal preferences",
+);
+assert.ok(
+  flutterAppAppearance.includes("AppearanceSharingService") &&
+    flutterAppAppearance.includes("_appearanceSharing.isFollowing") &&
+    flutterAppAppearance.includes("wallpaperOverride:") &&
+    flutterAppAppearance.includes("sharedWallpaperOwnerId:"),
+  "Flutter must apply the account appearance as a reversible UI overlay rather than writing it into the recipient's LocalStore",
+);
+assert.ok(
+  flutterSettingsAppearance.includes("_createAppearanceInvite") &&
+    flutterSettingsAppearance.includes("_acceptAppearanceInvite") &&
+    flutterSettingsAppearance.includes("_revokeAppearanceShare") &&
+    flutterSettingsAppearance.includes("_followingSharedAppearance ? null :"),
+  "Flutter settings must expose invitation creation, acceptance, revocation and lock local appearance controls while following another account",
+);
+
+assert.ok(
+  flutterThemeAppearance.includes("'aurora'") && flutterThemeAppearance.includes("'orchid'") &&
+    flutterSettingsAppearance.includes("for (final preset in paceWallpaperPresets)"),
+  "Native Flutter must render the same synchronized wallpaper preset IDs as Web/PWA",
+);
+
+assert.match(flutterThemeAppearance, /class PaceWallpaperBackground[\s\S]*static Future<void> purgeSharedWallpaperCache\(String ownerId\)[\s\S]*static Future<Uint8List> _loadStorageWallpaper/,
+  "Flutter wallpaper background must define one coherent cache-purge method before its storage loader");
+assert.match(flutterThemeAppearance, /purgeSharedWallpaperCache[\s\S]*directory\.list\(followLinks: false\)[\s\S]*entity\.delete\(\)/,
+  "Flutter must remove owner-scoped cached wallpaper files when a share is revoked or replaced");
+assert.match(flutterAppAppearance, /purgeSharedWallpaperCache\(previousOwnerId\)/,
+  "Flutter account appearance changes must purge cached files for the previous shared owner");
+
+const visualThemeCss = read("src/visual-theme.css");
+assert.ok(!visualThemeCss.includes("Pace Glass — legacy implementation kept as annotation."),
+  "The malformed nested legacy Glass comment must not be reintroduced by appearance changes");
+assert.match(visualThemeCss, /Uniform Liquid Glass material[\s\S]*--lg-material-fill: var\(--lg-fill\)[\s\S]*--lg-material-blur: 22px/,
+  "Liquid Glass must define one shared material fill, transparency and blur level");
+assert.match(visualThemeCss, /\.glass-card[\s\S]*\.glass-thin[\s\S]*\.glass-icon[\s\S]*\[role="dialog"\][\s\S]*input[\s\S]*background: var\(--lg-material-fill\)[\s\S]*backdrop-filter: blur\(var\(--lg-material-blur\)\)/,
+  "Cards, controls, dialogs and navigation chrome must share the same Liquid Glass material");
+assert.ok(visualThemeCss.includes('[data-visual-theme="glass"] [data-slot="card"]') &&
+  visualThemeCss.includes('--lg-material-blur: 5px') &&
+  visualThemeCss.includes('--lg-material-blur: 0px'),
+  "All card implementations must follow the shared blur variable at every glass quality level");
+assert.match(visualThemeCss, /data-lg-refract\][\s\S]*blur\(var\(--lg-material-blur\)\)/,
+  "Chromium refraction must not introduce a separate blur level");
+
 const nutritionRealtimeMigration = read("supabase/migrations/20261111220000_enable_food_log_realtime_sync.sql");
 const domainStore = read("src/lib/domain-store.ts");
-const wallpaperKeys = [
-  "pace.wallpaper",
-  "pace.domain.wallpaper",
-  "lt.wallpaper",
-  "lt.domain.wallpaper",
-];
-assert.ok(
-  engine.includes("const WALLPAPER_SYNC_KEYS = [") &&
-    wallpaperKeys.every((key) => engine.includes(`"${key}"`)),
-  "Web must explicitly identify every canonical and legacy wallpaper key",
-);
+assert.doesNotMatch(engine, /WALLPAPER_SYNC_KEYS/,
+  "Web cloud sync must not classify account wallpaper metadata as device-local");
 assert.ok(
   engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)'),
   "Web must filter device-local state in PostgREST before downloading JSONB values",
@@ -266,7 +450,7 @@ assert.match(
 );
 assert.ok(
   engine.includes("const DEVICE_LOCAL_SYNC_KEYS = [") &&
-    ["pace.sport.active","pace.legal.consent","pace.billing.device_id","pace.watch.last_metrics","pace.ai.conversations","pace.ai.deleted_conversations","pace.dark","pace.visual-theme","pace.domain.outbox"]
+    ["pace.sport.active","pace.legal.consent","pace.billing.device_id","pace.watch.last_metrics","pace.ai.conversations","pace.ai.deleted_conversations","pace.domain.outbox"]
       .every((key) => engine.includes(`"${key}"`)) &&
     engine.includes("const DEVICE_LOCAL_SYNC_PREFIXES = [") &&
     ["pace.__","pace.ai.pending:","pace.ai.debug","pace.local-ai.","pace.ai.local.","pace.privacy.","pace.finance.","pace.ble.","pace.import."]
@@ -280,6 +464,40 @@ assert.equal(`^${"pace.__".replaceAll(".", "[.]")}`, "^pace[.]__",
   "The internal-key regex must treat underscores literally instead of as SQL LIKE wildcards");
 assert.match(engine, /function isSyncableKey\(key: string\)[\s\S]*!isDeviceLocalSyncKey\(key\)/,
   "Web pushes, queues and bootstrap must reject device-local keys");
+const wallpaperGuardStart = engine.indexOf("function isInlineWallpaperValue(");
+const wallpaperGuardEnd = engine.indexOf("function isSyncableRecord", wallpaperGuardStart);
+const wallpaperGuard = engine.slice(wallpaperGuardStart, wallpaperGuardEnd);
+assert.ok(
+  wallpaperGuardStart >= 0 &&
+    wallpaperGuardEnd > wallpaperGuardStart &&
+    wallpaperGuard.includes('typeof wallpaper.storagePath !== "string"') &&
+    wallpaperGuard.includes("wallpaper.storagePath.trim().length === 0"),
+  "Web may sync custom wallpapers only as non-empty private Storage object paths",
+);
+assert.ok(
+  engine.includes("if (!isSyncableRecord(key, row.value, user.id)) continue;"),
+  "Web remote pulls must reject inline image data, device-local paths and malformed custom wallpaper records",
+);
+assert.ok(
+  engine.includes("const ownerPrefix = `\u0024{userId}/`;") &&
+    engine.includes("const objectName = storagePath.slice(ownerPrefix.length);") &&
+    engine.includes("/^[A-Za-z0-9._-]+$/.test(objectName)"),
+  "Web must reject wallpaper object paths outside the account folder or containing nested, traversal-like, or encoded names",
+);
+const webWallpaperPreserveStart = engine.indexOf("const localWallpaperOverride =");
+const webWallpaperPreserveEnd = engine.indexOf("const localIsEmpty", webWallpaperPreserveStart);
+const webWallpaperPreserve = engine.slice(webWallpaperPreserveStart, webWallpaperPreserveEnd);
+assert.ok(
+  webWallpaperPreserveStart >= 0 &&
+    webWallpaperPreserveEnd > webWallpaperPreserveStart &&
+    webWallpaperPreserve.includes("isInlineWallpaperValue(key, localStoredValue)") &&
+    webWallpaperPreserve.includes("isInlineWallpaperValue(key, localDomain.value)") &&
+    webWallpaperPreserve.includes("meta[key] = updatedAt") &&
+    webWallpaperPreserve.includes("continue;"),
+  "Web remote pulls must preserve a device-local custom wallpaper fallback until upload or explicit replacement",
+);
+
+
 assert.ok(
   engine.includes("for (const prefix of ALL_DEVICE_LOCAL_SYNC_PREFIXES)") &&
     engine.includes('.not("key", "in", DEVICE_LOCAL_PULL_FILTER)') &&
@@ -289,10 +507,10 @@ assert.ok(
   "Web PostgREST pulls must exclude device-local keys and legacy prefixes before downloading JSONB values",
 );
 assert.ok(
-  engine.includes("...WALLPAPER_SYNC_KEYS") &&
+  !engine.includes("...WALLPAPER_SYNC_KEYS") &&
     engine.includes("...DEVICE_LOCAL_SYNC_KEYS") &&
     engine.includes("const EXCLUDED = new Set<string>"),
-  "Web sync must retain wallpaper and explicit device-local exclusions",
+  "Web sync must allow account wallpaper metadata while retaining unrelated device-local exclusions",
 );
 
 
@@ -306,8 +524,90 @@ assert.match(
 const flutterNutrition = read("pace_flutter/lib/features/nutrition/nutrition_page.dart");
 const flutterApp = read("pace_flutter/lib/app/pace_app.dart");
 const flutterSettings = read("pace_flutter/lib/features/more/more_page.dart");
+const flutterConsentLoadStart = flutterSettings.indexOf("Future<void> _loadConsent() async {");
+const flutterConsentLoadEnd = flutterSettings.indexOf("Future<void> _setConsent", flutterConsentLoadStart);
+const flutterConsentLoad = flutterSettings.slice(flutterConsentLoadStart, flutterConsentLoadEnd);
+assert.ok(
+  flutterConsentLoadStart >= 0 &&
+    flutterConsentLoadEnd > flutterConsentLoadStart &&
+    flutterConsentLoad.includes("await _migrateLocalWallpaperToCloud();") &&
+    flutterConsentLoad.includes("catch (_) {}") &&
+    flutterConsentLoad.indexOf("await widget.sync.syncNow();") > flutterConsentLoad.indexOf("catch (_) {}"),
+  "A missing private wallpaper bucket must not block theme and preset synchronization on startup",
+);
+assert.ok(
+  flutterSettings.includes("String _wallpaperSubtitle()") &&
+    flutterSettings.includes("choice['localPath'] is String") &&
+    flutterSettings.includes("image conservée sur cet appareil"),
+  "Native settings must not claim a local-only custom wallpaper is already cloud-synchronized",
+);
+
 const flutterLocalStore = read("pace_flutter/lib/core/storage/local_store.dart");
 const flutterLocalStoreTest = read("pace_flutter/test/local_store_account_scope_test.dart");
+const flutterTest = read("pace_flutter/test/cloud_sync_contract_test.dart");
+const flutterTheme = read("pace_flutter/lib/ui/pace_theme.dart");
+assert.match(flutterSync, /static bool isSyncableValue\([\s\S]*required String userId[\s\S]*isLocalOnlyWallpaperValue[\s\S]*storagePath\.startsWith\('\$userId\/'\)/,
+  "Flutter may synchronize only portable wallpaper Storage paths owned by the active account");
+assert.ok(flutterSync.includes("SyncService.isSyncableValue(key, localStore.read(key), userId: userId)") &&
+  flutterSync.includes("SyncService.isSyncableValue(key, operation['value'], userId: userId)") &&
+  flutterSync.includes("SyncService.isSyncableValue(key, row['value'], userId: userId)"),
+  "Flutter push, outbox and remote-pull paths must all validate wallpaper ownership against the active account");
+assert.ok(flutterTest.includes("another-user/wallpaper.jpg") &&
+  flutterTest.includes("user-id/nested/wallpaper.jpg"),
+  "Flutter unit tests must reject wallpaper object paths owned by another user or nested outside the expected object namespace");
+assert.ok(
+  flutterSync.includes("static bool isLocalOnlyWallpaperValue(String key, dynamic value)") &&
+    flutterSync.includes("candidate['dataUrl'] is String || candidate['localPath'] is String") &&
+    flutterSync.includes("candidate['storagePath']"),
+  "Flutter must identify device-local custom wallpaper overrides separately from portable Storage paths",
+);
+const nativeWallpaperPreserveStart = flutterSync.indexOf("if (SyncService.isLocalOnlyWallpaperValue(");
+const nativeWallpaperPreserveEnd = flutterSync.indexOf("final localUpdatedAt", nativeWallpaperPreserveStart);
+const nativeWallpaperPreserve = flutterSync.slice(nativeWallpaperPreserveStart, nativeWallpaperPreserveEnd);
+assert.ok(
+  nativeWallpaperPreserveStart >= 0 &&
+    nativeWallpaperPreserveEnd > nativeWallpaperPreserveStart &&
+    nativeWallpaperPreserve.includes("localStore.markSyncedAt(key, remoteUpdatedAt)") &&
+    nativeWallpaperPreserve.includes("continue;"),
+  "Flutter remote pulls must not replace a local custom wallpaper while its Storage upload is unavailable",
+);
+
+assert.match(flutterSettings, /ImagePicker\(\)[\s\S]*ImageSource\.gallery[\s\S]*pace-wallpapers[\s\S]*storagePath/,
+  "Flutter settings must support choosing a custom wallpaper and uploading it to private Storage when consent is enabled");
+assert.ok(
+  flutterSettings.includes("Image locale. Active la synchronisation pour la partager.") &&
+    flutterSettings.includes("choice['localPath'] is String"),
+  "Flutter must keep a local wallpaper usable without cloud consent and explain how to share it",
+);
+assert.ok(
+  flutterApp.includes("pace.visual-theme") &&
+    flutterApp.includes("pace.dark") &&
+    flutterApp.includes("addChangeListener") &&
+    flutterApp.includes("_onLocalStoreChange"),
+  "Flutter must apply account-synced visual theme and dark-mode changes immediately after local or remote writes",
+);
+assert.ok(
+  flutterTheme.includes("class PaceWallpaperBackground") &&
+    flutterTheme.includes("pace-wallpapers") &&
+    flutterTheme.includes("Image.file(") &&
+    flutterTheme.includes("Image.memory("),
+  "Flutter must render local and private-Storage wallpapers behind the native application",
+);
+assert.ok(
+  flutterTheme.includes("localStore.currentAccountId == userId") &&
+    flutterTheme.includes("storagePath.startsWith('$userId/')") &&
+    flutterTheme.includes("storagePath.startsWith('$ownerId/')") &&
+    flutterTheme.includes("pathOwnerId != null") &&
+    flutterThemeAppearance.includes("RegExp(r'^[A-Za-z0-9._-]+") &&
+    flutterThemeAppearance.includes("hasMatch(filename)"),
+  "Flutter must authorize either the active account's own wallpaper or the exact owner-scoped shared object path before downloading it",
+);
+assert.match(flutterTheme, /final neutral = glass \|\| visualTheme == 'signal'[\s\S]*seedColor: neutral \? const Color\(0xFF777777\)/,
+  "Flutter Signal and Liquid Glass must use the neutral grayscale palette across devices");
+assert.match(flutterTheme, /Uri\.encodeComponent\(path\)[\s\S]*pace_wallpaper_\$cacheName\.cache/,
+  "Flutter private wallpaper cache filenames must remain stable across app launches");
+assert.match(flutterLocalStore, /Future<void> applyRemote\([\s\S]*_notifyChange\(key\)/,
+  "Remote theme and wallpaper updates must notify the Flutter UI without requiring an app restart");
 const syncSchedulerStart = flutterSync.indexOf("void _scheduleSync()");
 const syncSchedulerEnd = flutterSync.indexOf("/// A durable local write", syncSchedulerStart);
 assert.ok(
@@ -349,7 +649,7 @@ assert.match(flutterSync, /_cloudSyncConsent = null/, "A failed consent lookup m
 assert.match(flutterNutrition, /impossible de vérifier le consentement cloud/, "Nutrition must explain when consent lookup is unavailable instead of falsely claiming consent was denied");
 assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*userId == null[\s\S]*localStore\.currentAccountId != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not push local outbox mutations without an authenticated matching account and sync_cloud consent");
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*localStore\.currentAccountId != userId[\s\S]*client\?\.auth\.currentUser\?\.id != userId[\s\S]*!_hasCachedCloudSyncConsent\(userId\)[\s\S]*\{\s*return;/, "Flutter must not pull remote state for a mismatched account or without sync_cloud consent");
-assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.wallpaper\x27[\s\S]*\x27pace\.domain\.wallpaper\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native sync must keep both canonical wallpaper keys device-local");
+assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native sync must keep AI transcripts and finance PINs device-local");
 assert.match(flutterSync, /static String get excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeys\.map\(\(key\) =>/,
   "Native PostgREST exact-key filter must be generated from the canonical device-local exclusion set");
 assert.doesNotMatch(flutterSync, /onPostgresChanges\([\s\S]{0,300}table: 'user_state'/,
@@ -370,7 +670,7 @@ assert.match(flutterLocalStore, /__local_store_version': 2[\s\S]*__accounts/, "F
 assert.match(flutterLocalStore, /void addMutationListener\(LocalMutationListener listener\)[\s\S]*_notifyMutation\(key\)/, "Durable native local mutations must expose a sync notification without coupling storage to Supabase");
 const mutationListenerIndex = flutterSync.indexOf("localStore.addMutationListener(_onLocalMutation)");
 const localMutationHandlerIndex = flutterSync.indexOf("void _onLocalMutation(String key)");
-const deviceLocalCheckIndex = flutterSync.indexOf("!SyncService.isSyncableKey(key)", localMutationHandlerIndex);
+const deviceLocalCheckIndex = flutterSync.indexOf("!SyncService.isSyncableValue(key, localStore.read(key), userId: userId)", localMutationHandlerIndex);
 const discardDeviceLocalIndex = flutterSync.indexOf("discardOperationForAccount(userId, operation)", deviceLocalCheckIndex);
 const scheduleEligibleMutationIndex = flutterSync.indexOf("_scheduleSync();", discardDeviceLocalIndex);
 assert.ok(
@@ -381,10 +681,10 @@ assert.ok(
     scheduleEligibleMutationIndex > discardDeviceLocalIndex,
   "Flutter must immediately sync eligible local writes and purge device-local outbox items without uploading them",
 );
-assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.wallpaper\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native user_state writes must explicitly exclude AI transcripts, wallpapers and finance PIN keys");
+assert.match(flutterSync, /static const Set<String> excludedSyncKeys = \{[\s\S]*\x27pace\.ai\.conversations\x27[\s\S]*\x27pace\.finance\.pin\.hash\x27/, "Native user_state writes must explicitly exclude AI transcripts and finance PIN keys");
 assert.match(flutterSync, /Future<void> _pullRemote\(\)[\s\S]*excludedRemotePullKeysFilter[\s\S]*excludedRemotePullKeyPatterns/, "Native pulls must exclude canonical/legacy device-local keys in PostgREST before downloading rows");
 assert.match(flutterSync, /localStore\.read\('__cloud_sync_last_pull_at'\)[\s\S]*query\.gt\([\s\S]*'updated_at'[\s\S]*localStore\.write\([\s\S]*'__cloud_sync_last_pull_at'[\s\S]*enqueueSync: false/, "Native cloud pulls must persist an account-scoped cursor and fetch only recently changed user_state rows after the initial bootstrap");
-assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableKey\(key\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys must be removed from the owning outbox without reaching Supabase");
+assert.match(flutterSync, /Future<void> _pushPending\(\)[\s\S]*!SyncService\.isSyncableValue\(key, operation\['value'\], userId: userId\)[\s\S]*discardOperationForAccount\(userId, operation\)/, "Previously queued device-local keys and foreign-owner wallpaper paths must be removed from the owning outbox without reaching Supabase");
 assert.match(flutterLocalStore, /Future<void> discardOperationForAccount\([\s\S]*final scope = \x27account:\$userId\x27[\s\S]*snapshot\[\x27__outbox\x27\] = outbox/, "Device-local outbox cleanup must update the originating account only");
 assert.ok(
   flutterApp.includes("Timer.periodic(") &&
@@ -708,7 +1008,7 @@ assert.match(engine, /const offLocal = onLocalWrite\([\s\S]*queueItem\(\{ key, v
 assert.match(engine, /if \(!isSyncableKey\(key\) \|\| grouped\.has\(key\)\) continue;/,
   "Legacy raw app-state bootstrap must use the shared device-local sync predicate");
 assert.ok(
-  ["pace.legal.consent","pace.billing.device_id","pace.watch.last_metrics","pace.dark","pace.visual-theme"]
+  ["pace.legal.consent","pace.billing.device_id","pace.watch.last_metrics"]
     .every((key) => engine.includes(`"${key}"`)),
   "Device-bound consent, billing, watch and appearance settings must remain device-local",
 );
@@ -975,7 +1275,51 @@ const nutritionPhoto = read("src/lib/nutrition-photo.ts");
 assert.ok(nutritionPhoto.includes("const MAX_UPLOAD_BYTES = 6.5 * 1024 * 1024;"),
   "Both nutrition photo entry points must share the 6.5 MiB compressed upload target");
 
-console.log("cloud-sync-contract-test: PASS");
 
 assert.match(engine, /pruneEquivalentConflicts\(\);\s*if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
 assert.match(engine, /remainingConflicts = currentConflicts\.filter\(\(item\) => item\.key !== key\)/, "queued equivalent values must clear stale conflicts");
+
+
+const appearanceSyncEngine = engine;
+assert.match(
+  appearanceSyncEngine,
+  /if \(!Number\.isFinite\(previousPullTime\)\) \{[\s\S]*Bootstrap pre-existing local domain state/,
+  "The broad local-state bootstrap must run only on a complete first pull, never on an incremental pull",
+);
+assert.match(
+  appearanceSyncEngine,
+  /const APPEARANCE_BOOTSTRAP_KEY = "pace\.__appearance_sync_bootstrapped:v1"/,
+  "Appearance preference migration must be tracked once per account and version",
+);
+assert.match(
+  appearanceSyncEngine,
+  /const APPEARANCE_SYNC_KEY_FAMILIES = \[[\s\S]*pace\.visual-theme[\s\S]*pace\.dark[\s\S]*pace\.wallpaper/,
+  "The legacy appearance bootstrap must cover theme, dark mode and wallpaper preference",
+);
+assert.match(
+  appearanceSyncEngine,
+  /\.select\("key"\)[\s\S]*\.in\("key", appearanceRemoteKeys\)/,
+  "Appearance bootstrap must check existing canonical and legacy rows with a lightweight key-only query",
+);
+assert.match(
+  appearanceSyncEngine,
+  /family\.remoteKeys\.some\(\(key\) => existingAppearanceKeys\.has\(key\)\)/,
+  "An existing canonical or legacy server preference must never be overwritten by a stale local copy",
+);
+assert.match(
+  appearanceSyncEngine,
+  /!isSyncableRecord\(family\.localKey, value, user\.id\)/,
+  "Appearance bootstrap must retain the wallpaper path ownership and inline-image safety filters",
+);
+assert.match(
+  appearanceSyncEngine,
+  /if \(seededAppearanceKeys\.size > 0\) \{[\s\S]*await flushQueue\(\)/,
+  "Missing appearance preferences must be sent through the normal acknowledged outbox",
+);
+assert.match(
+  appearanceSyncEngine,
+  /remainingQueueKeys[\s\S]*localStorage\.setItem\(appearanceBootstrapMarker, "done"\)/,
+  "The appearance bootstrap marker must not be completed while a seeded preference remains queued",
+);
+
+console.log("cloud-sync-contract-test: PASS");

@@ -18,6 +18,8 @@ import { BleDeviceManager } from "@/components/BleDeviceManager";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { PrivacyDataSection } from "@/components/PrivacyDataSection";
 import { WallpaperSettings } from "@/components/WallpaperSettings";
+import { AppearanceSharingSettings } from "@/components/AppearanceSharingSettings";
+import { isFollowingSharedAppearance } from "@/hooks/use-shared-appearance";
 import { AiSettings } from "@/components/AiSettings";
 import { AiLocalModeSettings } from "@/components/AiLocalModeSettings";
 import { HealthSourcesSection } from "@/components/HealthSourcesSection";
@@ -25,6 +27,7 @@ import { DailyPrioritySettings } from "@/components/DailyPrioritySettings";
 import { VisualThemeToggle } from "@/components/VisualThemeToggle";
 import { createBillingCheckout, createBillingPortal, getBillingStatus } from "@/lib/billing.functions";
 import { PLAN_CATALOG, type PlanId, type EntitlementPlan } from "@/lib/billing";
+import { persistLocalPreference, readLocalPreference } from "@/lib/storage";
 
 const NATIVE_ANDROID_APK_URL = "https://github.com/ok-krp/pace0s/releases/download/android-application-latest/app-debug.apk";
 
@@ -41,7 +44,19 @@ function SettingsPage() {
   const [dark, setDark] = useState(false);
   const [signal, setSignal] = useState(false);
   const [glass, setGlass] = useState(false);
+  const [followingSharedAppearance, setFollowingSharedAppearance] = useState(() => isFollowingSharedAppearance());
   const push = usePush();
+  useEffect(() => {
+    const updateFollowing = (event?: Event) => {
+      const active = event
+        ? (event as CustomEvent<{ active?: boolean }>).detail?.active === true
+        : isFollowingSharedAppearance();
+      setFollowingSharedAppearance(active);
+    };
+    window.addEventListener("pace.shared-appearance.change", updateFollowing);
+    updateFollowing();
+    return () => window.removeEventListener("pace.shared-appearance.change", updateFollowing);
+  }, []);
   const [sending, setSending] = useState(false);
   const [billing, setBilling] = useState<{ plan: EntitlementPlan; status: string; currentPeriodEnd: string | null; cancelAtPeriodEnd: boolean; stripeConfigured: boolean; trialEndsAt: string | null; trialActive: boolean } | null>(null);
   const [billingLoading, setBillingLoading] = useState(true);
@@ -54,38 +69,50 @@ function SettingsPage() {
   const handleSendTest = async () => { setSending(true); try { const res = await sendTest({ data: { title: "Test Pace", message: "Notification reçue avec succès 🎉" } }); if (res.ok) toast.success(`Notification envoyée (${res.recipients} appareil${res.recipients === 1 ? "" : "s"})`); else toast.error(`Échec : ${res.error}`); } catch (e) { toast.error((e as Error).message); } finally { setSending(false); } };
   useEffect(() => { let deviceId = localStorage.getItem("pace.billing.device_id"); if (!deviceId) { deviceId = crypto.randomUUID() + "-" + crypto.randomUUID(); localStorage.setItem("pace.billing.device_id", deviceId); } getBilling({ data: { deviceId } }).then(setBilling).catch((error) => console.error("billing status failed", error)).finally(() => setBillingLoading(false)); }, [getBilling]);
   useEffect(() => {
-    const activeSignal = localStorage.getItem("pace.visual-theme") === "signal";
-    const activeGlass = localStorage.getItem("pace.visual-theme") === "glass";
-    const stored = localStorage.getItem("pace.dark") === "1";
+    const following = isFollowingSharedAppearance();
+    const effectiveTheme = following
+      ? document.documentElement.dataset.visualTheme
+      : readLocalPreference<string>("pace.visual-theme", "default");
+    const activeSignal = effectiveTheme === "signal";
+    const activeGlass = effectiveTheme === "glass";
+    const stored = following
+      ? document.documentElement.classList.contains("dark")
+      : readLocalPreference<string>("pace.dark", "0") === "1";
     setSignal(activeSignal);
     setGlass(activeGlass);
     setDark(activeGlass || stored);
-    if (activeSignal || activeGlass) {
-      document.documentElement.dataset.visualTheme = activeSignal ? "signal" : "glass";
-      document.documentElement.classList.toggle("dark", activeGlass || stored);
-    } else {
-      delete document.documentElement.dataset.visualTheme;
-      document.documentElement.classList.toggle("dark", stored);
+    if (!following) {
+      if (activeSignal || activeGlass) {
+        document.documentElement.dataset.visualTheme = activeSignal ? "signal" : "glass";
+        document.documentElement.classList.toggle("dark", activeGlass || stored);
+      } else {
+        delete document.documentElement.dataset.visualTheme;
+        document.documentElement.classList.toggle("dark", stored);
+      }
     }
     setThemeColor(activeGlass || stored, activeSignal, activeGlass);
 
     const handleVisualThemeChange = (event: Event) => {
-      const theme = (event as CustomEvent<{ theme?: string; signal?: boolean }>).detail?.theme;
-      const nextSignal = theme === "signal" || (!theme && (event as CustomEvent<{ signal?: boolean }>).detail?.signal === true);
+      const detail = (event as CustomEvent<{ theme?: string; signal?: boolean; shared?: boolean; dark?: boolean }>).detail;
+      const theme = detail?.theme;
+      const nextSignal = theme === "signal" || (!theme && detail?.signal === true);
       const nextGlass = theme === "glass";
       setSignal(nextSignal);
       setGlass(nextGlass);
-      setDark(nextGlass || localStorage.getItem("pace.dark") === "1");
+      setDark(nextGlass || (detail?.shared
+        ? detail.dark === true
+        : readLocalPreference<string>("pace.dark", "0") === "1"));
     };
     window.addEventListener("pace.visual-theme.change", handleVisualThemeChange);
     return () => window.removeEventListener("pace.visual-theme.change", handleVisualThemeChange);
   }, []);
   const downloadNativeAndroidApp = () => { window.open(NATIVE_ANDROID_APK_URL, "_blank", "noopener,noreferrer"); toast.success("Téléchargement de l'application Android Pace lancé."); };
   const toggleDark = (v: boolean) => {
+    if (followingSharedAppearance) return;
     setDark(v);
     document.documentElement.classList.toggle("dark", v);
-    localStorage.setItem("pace.dark", v ? "1" : "0");
-    setThemeColor(v, localStorage.getItem("pace.visual-theme") === "signal", localStorage.getItem("pace.visual-theme") === "glass");
+    persistLocalPreference("pace.dark", v ? "1" : "0");
+    setThemeColor(v, readLocalPreference<string>("pace.visual-theme", "default") === "signal", readLocalPreference<string>("pace.visual-theme", "default") === "glass");
   };
   const exportData = () => { const data: Record<string, unknown> = {}; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => { try { data[k] = JSON.parse(localStorage.getItem(k) ?? "null"); } catch {} }); const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement("a"); a.href = url; a.download = `lifetracker-${new Date().toISOString().slice(0, 10)}.json`; a.click(); URL.revokeObjectURL(url); toast.success("Export téléchargé"); };
   const reset = () => { if (!confirm("Réinitialiser TOUTES vos données ?")) return; Object.keys(localStorage).filter((k) => k.startsWith("pace.")).forEach((k) => localStorage.removeItem(k)); toast.success("Données effacées"); setTimeout(() => location.reload(), 600); };
@@ -93,8 +120,7 @@ function SettingsPage() {
   return (
     <div className="settings-page">
       <PageHeader title="Paramètres" subtitle="Réglages, IA et compte réunis dans une interface stable." />
-      <style>{`\n        .settings-panel { overflow: hidden; }\n        .settings-accordion > [data-slot=accordion-item] { border-bottom: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-accordion > [data-slot=accordion-item]:last-child { border-bottom: 0; }\n        .settings-accordion [data-slot=accordion-trigger] { min-height: 56px; padding: 10px 8px; font-size: 14px; font-weight: 600; }\n        .settings-accordion [data-slot=accordion-content] > div { padding: 4px 8px 16px; }\n        .settings-row { min-height: 52px; border-radius: 12px; }\n        .settings-row:hover { background: color-mix(in oklab, var(--foreground) 4%, transparent); }\\n        .settings-subsection { padding-top: 14px; }
-        .settings-subsection + .settings-subsection { margin-top: 14px; border-top: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-subtitle { margin-bottom: 10px; font-size: 12px; font-weight: 600; color: var(--muted-foreground); }\n      `}</style>
+      <style>{`\n        .settings-panel { overflow: hidden; }\n        .settings-accordion > [data-slot=accordion-item] { border-bottom: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-accordion > [data-slot=accordion-item]:last-child { border-bottom: 0; }\n        .settings-accordion [data-slot=accordion-trigger] { min-height: 56px; padding: 10px 8px; font-size: 14px; font-weight: 600; }\n        .settings-accordion [data-slot=accordion-content] > div { padding: 4px 8px 16px; }\n        .settings-row { min-height: 52px; border-radius: 12px; }\n        .settings-row:hover { background: color-mix(in oklab, var(--foreground) 4%, transparent); }\n        .settings-subsection { padding-top: 14px; }\n        .settings-subsection + .settings-subsection { margin-top: 14px; border-top: 1px solid color-mix(in oklab, var(--foreground) 8%, transparent); }\n        .settings-subtitle { margin-bottom: 10px; font-size: 12px; font-weight: 600; color: var(--muted-foreground); }\n      `}</style>
       <Tabs defaultValue="settings" className="space-y-4">
         <TabsList>
           <TabsTrigger value="settings">Paramètres</TabsTrigger>
@@ -108,11 +134,12 @@ function SettingsPage() {
                 <AccordionTrigger>Apparence & appareil</AccordionTrigger>
                 <AccordionContent>
                   <Row icon={<Sparkles className="size-4" />} label="Style visuel" desc="Cycle entre les styles Pace, Signal et Premium Glass">
-                    <VisualThemeToggle compact={false} />
+                    <VisualThemeToggle compact={false} disabled={followingSharedAppearance} />
                   </Row>
-                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} disabled={glass} /></Row>
+                  <Row icon={dark ? <Moon className="size-4" /> : <Sun className="size-4" />} label="Mode sombre" desc="Économie de batterie et lecture nocturne"><Switch checked={dark} onCheckedChange={toggleDark} disabled={glass || followingSharedAppearance} /></Row>
                   <Row icon={<Smartphone className="size-4" />} label="Application Android" desc="Télécharger la version native de PaceOS"><Button variant="secondary" size="sm" onClick={downloadNativeAndroidApp} className="rounded-xl">Télécharger</Button></Row>
-                  <WallpaperSettings />
+                  <WallpaperSettings disabled={followingSharedAppearance} />
+                  <AppearanceSharingSettings />
                 </AccordionContent>
               </AccordionItem>
               <AccordionItem value="health">

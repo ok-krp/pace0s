@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:material_ui/material_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../core/appearance/appearance_sharing_service.dart';
 import '../core/storage/local_store.dart';
 import '../core/supabase/pace_supabase.dart';
 import '../core/sync/sync_service.dart';
@@ -26,47 +27,130 @@ class PaceApp extends StatefulWidget {
 
 class _PaceAppState extends State<PaceApp> {
   ThemeMode _themeMode = ThemeMode.system;
+  String _visualTheme = 'default';
+  late final AppearanceSharingService _appearanceSharing;
+  StreamSubscription<AuthState>? _appearanceAuthSubscription;
 
   @override
   void initState() {
     super.initState();
-    _themeMode = _themeModeFromValue(widget.localStore.read('pace.settings.theme'));
+    _appearanceSharing = AppearanceSharingService(widget.auth.client);
+    _appearanceSharing.addListener(_onSharedAppearanceChange);
+    _appearanceAuthSubscription = widget.auth.authStateChanges.listen((state) {
+      unawaited(_appearanceSharing.activate(state.session?.user.id));
+    });
+    unawaited(_appearanceSharing.activate(widget.auth.currentUser?.id));
+    _readAppearance();
+    widget.localStore.addChangeListener(_onLocalStoreChange);
   }
 
-  ThemeMode _themeModeFromValue(dynamic value) {
-    switch (value) {
-      case 'light':
-        return ThemeMode.light;
-      case 'dark':
-        return ThemeMode.dark;
-      default:
-        return ThemeMode.system;
+  void _readAppearance() {
+    if (_appearanceSharing.isFollowing &&
+        _appearanceSharing.activeUserId == widget.auth.currentUser?.id) {
+      _visualTheme = _appearanceSharing.effectiveVisualTheme;
+      _themeMode = _visualTheme == 'glass' || _appearanceSharing.effectiveDarkMode
+          ? ThemeMode.dark
+          : ThemeMode.light;
+      return;
     }
+    final storedTheme = widget.localStore.read('pace.visual-theme');
+    final visualTheme = storedTheme is String &&
+            const {'default', 'signal', 'glass'}.contains(storedTheme)
+        ? storedTheme
+        : 'default';
+    final storedDark = widget.localStore.read('pace.dark');
+    final legacyTheme = widget.localStore.read('pace.settings.theme');
+    final dark = visualTheme == 'glass' ||
+        (storedDark != null
+            ? storedDark == '1' || storedDark == true
+            : legacyTheme == 'dark');
+    _visualTheme = visualTheme;
+    _themeMode = dark ? ThemeMode.dark : ThemeMode.light;
+  }
+
+  String? _lastSharedWallpaperOwnerId;
+  String? _lastSharedWallpaperPath;
+
+  void _onSharedAppearanceChange() {
+    if (!mounted) return;
+    final nextOwnerId = _appearanceSharing.sharedOwnerUserId;
+    final sharedWallpaper = _appearanceSharing.sharedWallpaper;
+    final pathValue = sharedWallpaper?['storagePath'];
+    final nextWallpaperPath = pathValue is String ? pathValue : null;
+    final previousOwnerId = _lastSharedWallpaperOwnerId;
+    final previousWallpaperPath = _lastSharedWallpaperPath;
+
+    if (previousOwnerId != null && previousOwnerId != nextOwnerId) {
+      unawaited(PaceWallpaperBackground.purgeSharedWallpaperCache(previousOwnerId));
+    } else if (
+      previousOwnerId != null &&
+      previousWallpaperPath != null &&
+      previousWallpaperPath != nextWallpaperPath
+    ) {
+      unawaited(PaceWallpaperBackground.purgeSharedWallpaperPath(previousWallpaperPath));
+    }
+
+    _lastSharedWallpaperOwnerId = nextOwnerId;
+    _lastSharedWallpaperPath = nextWallpaperPath;
+    setState(_readAppearance);
+  }
+
+  void _onLocalStoreChange(String key) {
+    if (key != '*' &&
+        key != 'pace.visual-theme' &&
+        key != 'pace.dark' &&
+        key != 'pace.wallpaper') {
+      return;
+    }
+    if (!mounted) return;
+    setState(_readAppearance);
   }
 
   Future<void> setThemeMode(ThemeMode mode) async {
-    setState(() => _themeMode = mode);
-    await widget.localStore.write('pace.settings.theme', switch (mode) {
-      ThemeMode.light => 'light',
-      ThemeMode.dark => 'dark',
-      ThemeMode.system => 'system',
+    if (_appearanceSharing.isFollowing) return;
+    final effectiveMode = _visualTheme == 'glass' ? ThemeMode.dark : mode;
+    setState(() => _themeMode = effectiveMode);
+    await widget.localStore.write(
+      'pace.dark',
+      effectiveMode == ThemeMode.dark ? '1' : '0',
+    );
+  }
+
+  Future<void> setVisualTheme(String theme) async {
+    if (_appearanceSharing.isFollowing) return;
+    if (!const {'default', 'signal', 'glass'}.contains(theme)) return;
+    setState(() {
+      _visualTheme = theme;
+      if (theme == 'glass') _themeMode = ThemeMode.dark;
     });
-    // LocalStore's durable mutation listener starts the sync cycle.
+    await widget.localStore.write('pace.visual-theme', theme);
+  }
+
+  @override
+  void dispose() {
+    widget.localStore.removeChangeListener(_onLocalStoreChange);
+    _appearanceAuthSubscription?.cancel();
+    _appearanceSharing.removeListener(_onSharedAppearanceChange);
+    _appearanceSharing.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Pace',
         debugShowCheckedModeBanner: false,
-        theme: PaceTheme.light(),
-        darkTheme: PaceTheme.dark(),
+        theme: PaceTheme.light(visualTheme: _visualTheme),
+        darkTheme: PaceTheme.dark(visualTheme: _visualTheme),
         themeMode: _themeMode,
         home: _AuthGate(
           localStore: widget.localStore,
           auth: widget.auth,
           sync: widget.sync,
+          appearanceSharing: _appearanceSharing,
           onThemeChanged: setThemeMode,
+          onVisualThemeChanged: setVisualTheme,
           themeMode: _themeMode,
+          visualTheme: _visualTheme,
         ),
       );
 }
@@ -76,14 +160,20 @@ class _AuthGate extends StatefulWidget {
     required this.localStore,
     required this.auth,
     required this.sync,
+    required this.appearanceSharing,
     required this.onThemeChanged,
+    required this.onVisualThemeChanged,
     required this.themeMode,
+    required this.visualTheme,
   });
   final LocalStore localStore;
   final PaceAuthService auth;
   final SyncService sync;
+  final AppearanceSharingService appearanceSharing;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<String> onVisualThemeChanged;
   final ThemeMode themeMode;
+  final String visualTheme;
 
   @override
   State<_AuthGate> createState() => _AuthGateState();
@@ -178,8 +268,11 @@ class _AuthGateState extends State<_AuthGate> {
         localStore: widget.localStore,
         sync: widget.sync,
         auth: widget.auth,
+        appearanceSharing: widget.appearanceSharing,
         onThemeChanged: widget.onThemeChanged,
+        onVisualThemeChanged: widget.onVisualThemeChanged,
         themeMode: widget.themeMode,
+        visualTheme: widget.visualTheme,
       );
     }
     if (_activationError != null) {
@@ -202,8 +295,11 @@ class _AuthGateState extends State<_AuthGate> {
             localStore: widget.localStore,
             sync: widget.sync,
             auth: widget.auth,
+            appearanceSharing: widget.appearanceSharing,
             onThemeChanged: widget.onThemeChanged,
+            onVisualThemeChanged: widget.onVisualThemeChanged,
             themeMode: widget.themeMode,
+            visualTheme: widget.visualTheme,
           )
         : AuthPage(auth: widget.auth);
   }
@@ -215,14 +311,20 @@ class PaceShell extends StatefulWidget {
     required this.localStore,
     required this.sync,
     required this.auth,
+    required this.appearanceSharing,
     required this.onThemeChanged,
+    required this.onVisualThemeChanged,
     required this.themeMode,
+    required this.visualTheme,
   });
   final LocalStore localStore;
   final SyncService sync;
   final PaceAuthService auth;
+  final AppearanceSharingService appearanceSharing;
   final ValueChanged<ThemeMode> onThemeChanged;
+  final ValueChanged<String> onVisualThemeChanged;
   final ThemeMode themeMode;
+  final String visualTheme;
 
   @override
   State<PaceShell> createState() => _PaceShellState();
@@ -246,6 +348,7 @@ class _PaceShellState extends State<PaceShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(widget.sync.syncNow().catchError((Object _) {}));
+      unawaited(widget.appearanceSharing.reconcile());
     }
   }
 
@@ -267,11 +370,20 @@ class _PaceShellState extends State<PaceShell> with WidgetsBindingObserver {
         localStore: widget.localStore,
         sync: widget.sync,
         auth: widget.auth,
+        appearanceSharing: widget.appearanceSharing,
         themeMode: widget.themeMode,
+        visualTheme: widget.visualTheme,
         onThemeChanged: widget.onThemeChanged,
+        onVisualThemeChanged: widget.onVisualThemeChanged,
       ),
     ];
-    return Scaffold(
+    return PaceWallpaperBackground(
+      localStore: widget.localStore,
+      client: widget.auth.client,
+      wallpaperOverride: widget.appearanceSharing.sharedWallpaper,
+      sharedWallpaperOwnerId: widget.appearanceSharing.sharedOwnerUserId,
+      child: Scaffold(
+      backgroundColor: Colors.transparent,
       body: SafeArea(child: IndexedStack(index: _index, children: pages)),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
@@ -283,6 +395,7 @@ class _PaceShellState extends State<PaceShell> with WidgetsBindingObserver {
           NavigationDestination(icon: Icon(Icons.bedtime_outlined), selectedIcon: Icon(Icons.bedtime), label: 'Sommeil'),
           NavigationDestination(icon: Icon(Icons.apps_outlined), selectedIcon: Icon(Icons.apps), label: 'Plus'),
         ],
+      ),
       ),
     );
   }

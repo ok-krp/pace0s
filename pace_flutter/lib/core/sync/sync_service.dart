@@ -30,7 +30,7 @@ class SyncService {
   void _onLocalMutation(String key) {
     final userId = client?.auth.currentUser?.id;
     if (userId == null || localStore.currentAccountId != userId) return;
-    if (!SyncService.isSyncableKey(key)) {
+    if (!SyncService.isSyncableValue(key, localStore.read(key), userId: userId)) {
       final obsolete = localStore.pendingOperations()
           .where((operation) => operation['key'] == key)
           .toList();
@@ -67,15 +67,11 @@ class SyncService {
     'pace.sport.active',
     'pace.ai.conversations',
     'pace.ai.deleted_conversations',
-    'pace.wallpaper',
-    'pace.domain.wallpaper',
     'pace.finance.pin.hash',
     'pace.ai.debug',
     'pace.billing.device_id',
     'pace.watch.last_metrics',
     'pace.legal.consent',
-    'pace.dark',
-    'pace.visual-theme',
     'pace.domain.outbox',
   };
 
@@ -142,6 +138,65 @@ class SyncService {
       !key.startsWith('pace.__sync_') &&
       !key.startsWith('pace.__nutrition_cache:') &&
       !isDeviceLocalKey(key);
+
+  /// Identifies a custom wallpaper that exists only on this device. Preserve
+  /// it locally if cloud Storage is unavailable; never upload its bytes/path.
+  static bool isLocalOnlyWallpaperValue(String key, dynamic value) {
+    final canonicalKey = key.startsWith('lt.')
+        ? 'pace.${key.substring(3)}'
+        : key;
+    if (canonicalKey != 'pace.wallpaper' &&
+        canonicalKey != 'pace.domain.wallpaper') {
+      return false;
+    }
+    dynamic candidate = value;
+    while (candidate is Map &&
+        candidate['version'] == 1 &&
+        candidate['updatedAt'] is String &&
+        candidate.containsKey('value')) {
+      candidate = candidate['value'];
+    }
+    if (candidate is! Map || candidate['kind'] != 'custom') return false;
+    if (candidate['dataUrl'] is String || candidate['localPath'] is String) {
+      return true;
+    }
+    final storagePath = candidate['storagePath'];
+    return storagePath is! String || storagePath.trim().isEmpty;
+  }
+
+  /// Only private Storage object paths owned by this account are portable.
+  static bool isSyncableValue(
+    String key,
+    dynamic value, {
+    required String userId,
+  }) {
+    if (!isSyncableKey(key) || isLocalOnlyWallpaperValue(key, value)) {
+      return false;
+    }
+    final canonicalKey = key.startsWith('lt.')
+        ? 'pace.${key.substring(3)}'
+        : key;
+    if (canonicalKey != 'pace.wallpaper' &&
+        canonicalKey != 'pace.domain.wallpaper') {
+      return true;
+    }
+    dynamic candidate = value;
+    while (candidate is Map &&
+        candidate['version'] == 1 &&
+        candidate['updatedAt'] is String &&
+        candidate.containsKey('value')) {
+      candidate = candidate['value'];
+    }
+    if (candidate is! Map || candidate['kind'] != 'custom') return true;
+    final storagePath = candidate['storagePath'];
+    if (storagePath is! String || !storagePath.startsWith('$userId/')) {
+      return false;
+    }
+    // Uploaded wallpaper paths always have exactly one user folder and one
+    // immutable object filename; reject nested or traversal-like paths.
+    return storagePath.substring(userId.length + 1).isNotEmpty &&
+        !storagePath.substring(userId.length + 1).contains('/');
+  }
 
 
   Future<bool> _hasCloudSyncConsent(String userId) async {
@@ -479,7 +534,8 @@ class SyncService {
       }
       try {
         final key = operation['key'];
-        if (key is! String || !SyncService.isSyncableKey(key)) {
+        if (key is! String ||
+            !SyncService.isSyncableValue(key, operation['value'], userId: userId)) {
           await localStore.discardOperationForAccount(userId, operation);
           continue;
         }
@@ -910,13 +966,24 @@ class SyncService {
       }
       final row = Map<String, dynamic>.from(raw);
       final key = row['key'] as String;
-      if (!SyncService.isSyncableKey(key) ||
+      if (!SyncService.isSyncableValue(key, row['value'], userId: userId) ||
           SyncService.excludedRemotePullKeys.contains(key)) {
         continue;
       }
       final remoteUpdatedAt = row['updated_at'] as String?;
       if (remoteUpdatedAt == null ||
           localStore.pendingOperations().any((op) => op['key'] == key)) {
+        continue;
+      }
+
+      // Preserve a local-only custom image while its upload is unavailable.
+      // Remember the observed cloud version to avoid reprocessing it on every
+      // pull, but never replace the device-local image with that older pointer.
+      if (SyncService.isLocalOnlyWallpaperValue(
+        key,
+        localStore.read(key),
+      )) {
+        await localStore.markSyncedAt(key, remoteUpdatedAt);
         continue;
       }
 

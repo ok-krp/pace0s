@@ -1,8 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pace/core/compliance/compliance_service.dart';
 import 'package:pace/core/sync/sync_service.dart';
+import 'package:pace/core/storage/wallpaper_presets.dart';
+import 'package:pace/ui/pace_theme.dart';
 
 void main() {
+  group('Native appearance palette parity', () {
+    test('Signal uses the same neutral grayscale primary as Liquid Glass', () {
+      final pace = PaceTheme.light();
+      final signal = PaceTheme.light(visualTheme: 'signal');
+      final glass = PaceTheme.light(visualTheme: 'glass');
+
+      expect(signal.colorScheme.primary, glass.colorScheme.primary);
+      expect(signal.colorScheme.primary, isNot(pace.colorScheme.primary));
+    });
+  });
+
   group('Native Nutrition projection concurrency', () {
     test('preserves local rows created while food_log was being queried', () {
       final newPendingId = newFoodLogUuid();
@@ -122,10 +135,8 @@ void main() {
   });
 
   group('Flutter device-local sync exclusions', () {
-    test('keeps wallpapers, finance PINs and device-only records out of user_state', () {
+    test('keeps finance PINs and device-only records out of user_state', () {
       for (final key in [
-        'pace.wallpaper',
-        'lt.wallpaper',
         'pace.finance.pin.hash',
         'pace.privacy.pin.hash',
         'pace.ble.devices',
@@ -145,16 +156,150 @@ void main() {
       expect(SyncService.isSyncableKey('pace.nutrition.items'), isTrue);
     });
 
+    test('synchronizes theme and wallpaper metadata for the same account', () {
+      for (final key in [
+        'pace.wallpaper',
+        'pace.domain.wallpaper',
+        'pace.dark',
+        'pace.visual-theme',
+      ]) {
+        expect(SyncService.isSyncableKey(key), isTrue, reason: key);
+        expect(SyncService.excludedRemotePullKeys, isNot(contains(key)), reason: key);
+      }
+    });
+
+    test('native wallpaper presets use the same IDs as the Web/PWA app', () {
+      expect(
+        paceWallpaperPresets.map((preset) => preset.$1).toList(),
+        ['aurora', 'ocean', 'sunset', 'forest', 'graphite', 'orchid'],
+      );
+    });
+
+    test('preserves local-only custom wallpaper choices until Storage migration succeeds', () {
+      expect(
+        SyncService.isLocalOnlyWallpaperValue('pace.wallpaper', {
+          'kind': 'custom',
+          'localPath': '/private/device/wallpaper.jpg',
+        }),
+        isTrue,
+      );
+      expect(
+        SyncService.isLocalOnlyWallpaperValue('pace.wallpaper', {
+          'kind': 'custom',
+          'dataUrl': 'data:image/jpeg;base64,AAAA',
+        }),
+        isTrue,
+      );
+      expect(
+        SyncService.isLocalOnlyWallpaperValue('pace.wallpaper', {
+          'kind': 'custom',
+          'storagePath': 'user-id/wallpaper.jpg',
+        }),
+        isFalse,
+      );
+      expect(
+        SyncService.isLocalOnlyWallpaperValue('pace.wallpaper', {'id': 'graphite'}),
+        isFalse,
+      );
+      expect(
+        SyncService.isLocalOnlyWallpaperValue('pace.domain.wallpaper', {
+          'version': 1,
+          'updatedAt': '2026-11-27T12:00:00.000Z',
+          'mutationId': 'local-wallpaper',
+          'value': {
+            'kind': 'custom',
+            'localPath': '/private/device/wallpaper.jpg',
+          },
+        }),
+        isTrue,
+      );
+    });
+
+    test('only synchronizes portable wallpaper object paths, never local files or inline bytes', () {
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {
+          'kind': 'custom',
+          'localPath': '/private/device/wallpaper.jpg',
+        }, userId: 'user-id'),
+        isFalse,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {
+          'kind': 'custom',
+          'dataUrl': 'data:image/jpeg;base64,AAAA',
+        }, userId: 'user-id'),
+        isFalse,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {
+          'kind': 'custom',
+          'storagePath': 'user-id/wallpaper.jpg',
+        }, userId: 'user-id'),
+        isTrue,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {'id': 'graphite'}, userId: 'user-id'),
+        isTrue,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {
+          'kind': 'custom',
+          'storagePath': 'another-user/wallpaper.jpg',
+        }, userId: 'user-id'),
+        isFalse,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.wallpaper', {
+          'kind': 'custom',
+          'storagePath': 'user-id/nested/wallpaper.jpg',
+        }, userId: 'user-id'),
+        isFalse,
+      );
+    });
+
+    test('unwraps legacy domain envelopes before excluding inline wallpaper bytes', () {
+      const wrappedInline = {
+        'version': 1,
+        'updatedAt': '2026-11-27T12:00:00.000Z',
+        'mutationId': 'legacy-wallpaper',
+        'value': {
+          'kind': 'custom',
+          'dataUrl': 'data:image/jpeg;base64,AAAA',
+        },
+      };
+      const wrappedStoragePath = {
+        'version': 1,
+        'updatedAt': '2026-11-27T12:00:00.000Z',
+        'mutationId': 'portable-wallpaper',
+        'value': {
+          'kind': 'custom',
+          'storagePath': 'user-id/wallpaper.jpg',
+        },
+      };
+
+      expect(
+        SyncService.isSyncableValue('pace.domain.wallpaper', wrappedInline, userId: 'user-id'),
+        isFalse,
+      );
+      expect(
+        SyncService.isSyncableValue('pace.domain.wallpaper', wrappedStoragePath, userId: 'user-id'),
+        isTrue,
+      );
+    });
+
     test('filters canonical and legacy device-local aliases before a remote pull', () {
-      expect(SyncService.excludedRemotePullKeys, contains('pace.wallpaper'));
-      expect(SyncService.excludedRemotePullKeys, contains('lt.wallpaper'));
       expect(SyncService.excludedRemotePullKeys, contains('pace.domain.outbox'));
       expect(SyncService.excludedRemotePullKeys, contains('lt.domain.outbox'));
       expect(SyncService.excludedRemotePullKeys, contains('pace.domain.legal.consent'));
       expect(SyncService.excludedRemotePullKeys, contains('lt.domain.legal.consent'));
-      expect(SyncService.excludedRemotePullKeysFilter, contains('"pace.wallpaper"'));
-      expect(SyncService.excludedRemotePullKeysFilter, contains('"lt.wallpaper"'));
       expect(SyncService.excludedRemotePullKeysFilter, contains('"pace.domain.outbox"'));
+      for (final key in [
+        'pace.domain.wallpaper',
+        'pace.domain.dark',
+        'pace.domain.visual-theme',
+      ]) {
+        expect(SyncService.isDeviceLocalKey(key), isFalse, reason: key);
+      }
       expect(SyncService.excludedRemotePullKeyPatterns, hasLength(10));
       for (final pattern in [
         r'^(pace|lt)\.__',
@@ -185,7 +330,6 @@ void main() {
         'pace.domain.import.log',
         'pace.domain.legal.consent',
         'lt.domain.legal.consent',
-        'pace.domain.dark',
         'pace.domain.__sync_meta',
         'pace.domain.ai.debug.trace',
         'lt.domain.ai.debug.trace',
