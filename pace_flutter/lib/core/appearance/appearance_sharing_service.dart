@@ -17,6 +17,7 @@ class AppearanceSharingService extends ChangeNotifier {
 
   String? _userId;
   int _generation = 0;
+  int _refreshRequest = 0;
   RealtimeChannel? _channel;
   Timer? _reconcileTimer;
   Map<String, dynamic>? _appearance;
@@ -132,6 +133,11 @@ class AppearanceSharingService extends ChangeNotifier {
       if (!consent || value.auth.currentUser?.id != userId) {
         _reconcileTimer?.cancel();
         _reconcileTimer = null;
+        if (!consent && !_disposed && generation == _generation && _userId == userId) {
+          _appearance = null;
+          await _removeChannel();
+          _notifyIfCurrent(generation);
+        }
         return;
       }
 
@@ -198,6 +204,7 @@ class AppearanceSharingService extends ChangeNotifier {
     final value = client;
     final userId = _userId;
     final generation = _generation;
+    final request = ++_refreshRequest;
     if (_disposed || value == null || userId == null ||
         value.auth.currentUser?.id != userId) {
       return;
@@ -207,6 +214,7 @@ class AppearanceSharingService extends ChangeNotifier {
       final consent = await PaceComplianceService(value).hasConsent('sync_cloud');
       if (_disposed ||
           generation != _generation ||
+          request != _refreshRequest ||
           value.auth.currentUser?.id != userId) {
         return;
       }
@@ -215,13 +223,16 @@ class AppearanceSharingService extends ChangeNotifier {
         _reconcileTimer?.cancel();
         _reconcileTimer = null;
         await _removeChannel();
-        _notifyIfCurrent(generation);
+        if (!_disposed && generation == _generation && request == _refreshRequest) {
+          _notifyIfCurrent(generation);
+        }
         return;
       }
 
       final data = await value.rpc('get_shared_appearance');
       if (_disposed ||
           generation != _generation ||
+          request != _refreshRequest ||
           value.auth.currentUser?.id != userId) {
         return;
       }
