@@ -1279,3 +1279,46 @@ console.log("cloud-sync-contract-test: PASS");
 
 assert.match(engine, /pruneEquivalentConflicts\(\);\s*if \(!navigator\.onLine\)/, "syncNow must prune equivalent conflicts before queue flush");
 assert.match(engine, /remainingConflicts = currentConflicts\.filter\(\(item\) => item\.key !== key\)/, "queued equivalent values must clear stale conflicts");
+
+
+const appearanceSyncEngine = engine;
+assert.match(
+  appearanceSyncEngine,
+  /if \(!Number\.isFinite\(previousPullTime\)\) \{[\s\S]*Bootstrap pre-existing local domain state/,
+  "The broad local-state bootstrap must run only on a complete first pull, never on an incremental pull",
+);
+assert.match(
+  appearanceSyncEngine,
+  /const APPEARANCE_BOOTSTRAP_KEY = "pace\.__appearance_sync_bootstrapped:v1"/,
+  "Appearance preference migration must be tracked once per account and version",
+);
+assert.match(
+  appearanceSyncEngine,
+  /const APPEARANCE_SYNC_KEY_FAMILIES = \[[\s\S]*pace\.visual-theme[\s\S]*pace\.dark[\s\S]*pace\.wallpaper/,
+  "The legacy appearance bootstrap must cover theme, dark mode and wallpaper preference",
+);
+assert.match(
+  appearanceSyncEngine,
+  /\.select\("key"\)[\s\S]*\.in\("key", appearanceRemoteKeys\)/,
+  "Appearance bootstrap must check existing canonical and legacy rows with a lightweight key-only query",
+);
+assert.match(
+  appearanceSyncEngine,
+  /family\.remoteKeys\.some\(\(key\) => existingAppearanceKeys\.has\(key\)\)/,
+  "An existing canonical or legacy server preference must never be overwritten by a stale local copy",
+);
+assert.match(
+  appearanceSyncEngine,
+  /!isSyncableRecord\(family\.localKey, value, user\.id\)/,
+  "Appearance bootstrap must retain the wallpaper path ownership and inline-image safety filters",
+);
+assert.match(
+  appearanceSyncEngine,
+  /if \(seededAppearanceKeys\.size > 0\) \{[\s\S]*await flushQueue\(\)/,
+  "Missing appearance preferences must be sent through the normal acknowledged outbox",
+);
+assert.match(
+  appearanceSyncEngine,
+  /remainingQueueKeys[\s\S]*localStorage\.setItem\(appearanceBootstrapMarker, "done"\)/,
+  "The appearance bootstrap marker must not be completed while a seeded preference remains queued",
+);

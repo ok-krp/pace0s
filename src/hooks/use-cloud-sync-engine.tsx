@@ -64,6 +64,21 @@ const META_KEY = "pace.__sync_meta";
 const DEVICE_KEY = "pace.__sync_device_id";
 const DEVICE_ID = getDeviceId();
 const CONFLICTS_KEY = "pace.__sync_conflicts";
+const APPEARANCE_BOOTSTRAP_KEY = "pace.__appearance_sync_bootstrapped:v1";
+const APPEARANCE_SYNC_KEY_FAMILIES = [
+  {
+    localKey: "pace.visual-theme",
+    remoteKeys: ["pace.visual-theme", "pace.domain.visual-theme", "lt.visual-theme", "lt.domain.visual-theme"],
+  },
+  {
+    localKey: "pace.dark",
+    remoteKeys: ["pace.dark", "pace.domain.dark", "lt.dark", "lt.domain.dark"],
+  },
+  {
+    localKey: "pace.wallpaper",
+    remoteKeys: ["pace.wallpaper", "pace.domain.wallpaper", "lt.wallpaper", "lt.domain.wallpaper"],
+  },
+] as const;
 
 type SyncMeta = Record<string, string>;
 export type SyncStatus = "idle" | "syncing" | "ok" | "error" | "offline";
@@ -621,44 +636,114 @@ export function useCloudSyncEngineInternal() {
             } catch {}
           }
         }
-        // Bootstrap pre-existing local domain state that has no cloud row yet.
-        try {
-          for (const storageKey of Object.keys(localStorage)) {
-            if (!storageKey.startsWith(DOMAIN_PREFIX)) continue;
-            const domain = storageKey.slice(DOMAIN_PREFIX.length);
-            if (!domain || domain.startsWith("__")) continue;
-            const key = PACE_PREFIX + domain;
-            if (!isSyncableKey(key) || grouped.has(key)) continue;
-            const localDomain = readDomainRecord(key);
-            if (!localDomain || isEmptyRecoveredValue(localDomain.value)) continue;
-            queueItem({
-              key,
-              value: localDomain.value,
-              updatedAt: localDomain.updatedAt,
-              mutationId: localDomain.mutationId,
-            }, user.id);
-            meta[key] = localDomain.updatedAt;
-            newest = newest && Date.parse(newest) > Date.parse(localDomain.updatedAt) ? newest : localDomain.updatedAt;
-          }
-        } catch {}
+        // Incremental pulls contain only rows newer than the cursor. Local-state
+        // recovery must therefore run only during the first complete account pull;
+        // otherwise an older, already-synced row would look absent and be overwritten
+        // by stale local values on every 60-second reconciliation.
+        if (!Number.isFinite(previousPullTime)) {
+          // Bootstrap pre-existing local domain state that has no cloud row yet.
+          try {
+            for (const storageKey of Object.keys(localStorage)) {
+              if (!storageKey.startsWith(DOMAIN_PREFIX)) continue;
+              const domain = storageKey.slice(DOMAIN_PREFIX.length);
+              if (!domain || domain.startsWith("__")) continue;
+              const key = PACE_PREFIX + domain;
+              if (!isSyncableKey(key) || grouped.has(key)) continue;
+              const localDomain = readDomainRecord(key);
+              if (!localDomain || isEmptyRecoveredValue(localDomain.value)) continue;
+              queueItem({
+                key,
+                value: localDomain.value,
+                updatedAt: localDomain.updatedAt,
+                mutationId: localDomain.mutationId,
+              }, user.id);
+              meta[key] = localDomain.updatedAt;
+              newest = newest && Date.parse(newest) > Date.parse(localDomain.updatedAt) ? newest : localDomain.updatedAt;
+            }
+          } catch {}
+  
+          // Recover pre-existing local app state written by useLocalState (raw
+          // pace.* keys). A key is bootstrapped only when no cloud/legacy row
+          // exists, so this cannot overwrite an existing server snapshot.
+          try {
+            for (const key of Object.keys(localStorage)) {
+              if (!key.startsWith(PACE_PREFIX) || key.startsWith(INTERNAL_PREFIX) || key.startsWith(DOMAIN_PREFIX)) continue;
+              if (!isSyncableKey(key) || grouped.has(key) || getQueued(key, user.id) || readDomainRecord(key)) continue;
+              let value: unknown;
+              try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { continue; }
+              if (isEmptyRecoveredValue(value)) continue;
+              const updatedAt = new Date().toISOString();
+              const mutationId = `local-bootstrap-${updatedAt}-${key}`;
+              queueItem({ key, value, updatedAt, mutationId }, user.id);
+              meta[key] = updatedAt;
+              newest = newest && Date.parse(newest) > Date.parse(updatedAt) ? newest : updatedAt;
+            }
+          } catch {}
+  
+        }
 
-        // Recover pre-existing local app state written by useLocalState (raw
-        // pace.* keys). A key is bootstrapped only when no cloud/legacy row
-        // exists, so this cannot overwrite an existing server snapshot.
-        try {
-          for (const key of Object.keys(localStorage)) {
-            if (!key.startsWith(PACE_PREFIX) || key.startsWith(INTERNAL_PREFIX) || key.startsWith(DOMAIN_PREFIX)) continue;
-            if (!isSyncableKey(key) || grouped.has(key) || getQueued(key, user.id) || readDomainRecord(key)) continue;
+        // Appearance preferences may predate cloud sync or this browser origin.
+        // Query only their small key set (not the full user_state payload) and seed
+        // local values only when no canonical or legacy server row exists.
+        const appearanceBootstrapMarker =
+          `${APPEARANCE_BOOTSTRAP_KEY}:${encodeURIComponent(user.id)}`;
+        if (localStorage.getItem(appearanceBootstrapMarker) !== "done") {
+          const appearanceRemoteKeys = APPEARANCE_SYNC_KEY_FAMILIES.flatMap(
+            (family) => family.remoteKeys,
+          );
+          const { data: appearanceRows, error: appearanceError } = await supabase
+            .from("user_state")
+            .select("key")
+            .eq("user_id", user.id)
+            .in("key", appearanceRemoteKeys);
+          if (appearanceError) throw appearanceError;
+
+          const existingAppearanceKeys = new Set(
+            (appearanceRows ?? []).map((row) => row.key),
+          );
+          const queuedAppearanceKeys = new Set(
+            readQueue(user.id).map((item) => item.key),
+          );
+          const seededAppearanceKeys = new Set<string>();
+
+          for (const family of APPEARANCE_SYNC_KEY_FAMILIES) {
+            if (family.remoteKeys.some((key) => existingAppearanceKeys.has(key))) continue;
+            if (queuedAppearanceKeys.has(family.localKey)) continue;
+            const raw = localStorage.getItem(family.localKey);
+            if (raw === null) continue;
+
             let value: unknown;
-            try { value = JSON.parse(localStorage.getItem(key) ?? "null"); } catch { continue; }
-            if (isEmptyRecoveredValue(value)) continue;
+            try {
+              value = JSON.parse(raw);
+            } catch {
+              value = raw;
+            }
+            // In particular, custom wallpapers with inline bytes or another
+            // device's Storage path are never promoted to cloud user_state.
+            if (!isSyncableRecord(family.localKey, value, user.id)) continue;
+
             const updatedAt = new Date().toISOString();
-            const mutationId = `local-bootstrap-${updatedAt}-${key}`;
-            queueItem({ key, value, updatedAt, mutationId }, user.id);
-            meta[key] = updatedAt;
-            newest = newest && Date.parse(newest) > Date.parse(updatedAt) ? newest : updatedAt;
+            const mutationId = typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `appearance-bootstrap-${updatedAt}-${family.localKey}`;
+            queueItem(
+              { key: family.localKey, value, updatedAt, mutationId },
+              user.id,
+            );
+            seededAppearanceKeys.add(family.localKey);
           }
-        } catch {}
+
+          if (seededAppearanceKeys.size > 0) {
+            await flushQueue();
+          }
+          const remainingQueueKeys = new Set(
+            readQueue(user.id).map((item) => item.key),
+          );
+          if (![...seededAppearanceKeys].some((key) => remainingQueueKeys.has(key))) {
+            localStorage.setItem(appearanceBootstrapMarker, "done");
+          }
+        }
+
         writeMeta(meta, user.id);
         localStorage.setItem(pullCursorKey, new Date(pullStartedAt).toISOString());
         if (newest) localStorage.setItem("pace.__last_sync_at", newest);
